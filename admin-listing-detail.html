@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>YUSTAM Admin • Listing Detail</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet" />
+  <style>
+    :root {
+      --emerald: #004d40;
+      --emerald-dark: #00695c;
+      --orange: #f3731e;
+      --orange-dark: #d95f12;
+      --beige: #eadccf;
+      --white: #ffffff;
+      --ink: #111111;
+      --shadow-soft: 0 16px 40px rgba(0, 0, 0, 0.08);
+      --radius-lg: 20px;
+      --radius-md: 16px;
+      --transition: all 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: "Inter", sans-serif;
+      color: var(--ink);
+      background: linear-gradient(180deg, rgba(234, 220, 207, 0.65), rgba(255, 255, 255, 0.85));
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      background: linear-gradient(135deg, var(--emerald), var(--emerald-dark));
+      color: var(--white);
+      box-shadow: 0 4px 18px rgba(0, 0, 0, 0.15);
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px clamp(16px, 4vw, 40px);
+    }
+
+    .brand {
+      font-family: "Anton", sans-serif;
+      letter-spacing: 0.08em;
+      font-size: clamp(20px, 4vw, 28px);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand span {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.15);
+    }
+
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .icon-btn {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: var(--white);
+      cursor: pointer;
+      transition: var(--transition);
+    }
+
+    .icon-btn:hover {
+      background: rgba(255, 255, 255, 0.24);
+      transform: translateY(-2px);
+    }
+
+    .accent-strip {
+      height: 4px;
+      background: linear-gradient(90deg, var(--orange), #ff9a4d);
+    }
+
+    main {
+      flex: 1;
+      padding: clamp(20px, 4vw, 48px) clamp(16px, 5vw, 80px);
+      display: flex;
+      justify-content: center;
+    }
+
+    .page-wrapper {
+      width: min(100%, 960px);
+      display: grid;
+      gap: 24px;
+      position: relative;
+      padding-bottom: 120px;
+    }
+
+    h1, h2, h3, h4 {
+      font-family: "Anton", sans-serif;
+      letter-spacing: 0.03em;
+      color: var(--emerald);
+    }
+
+    .card {
+      background: rgba(255, 255, 255, 0.82);
+      backdrop-filter: blur(16px);
+      border-radius: var(--radius-lg);
+      padding: clamp(20px, 3vw, 32px);
+      box-shadow: var(--shadow-soft);
+      position: relative;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.4);
+      animation: fadeUp 420ms ease forwards;
+      opacity: 0;
+      transform: translateY(16px);
+    }
+
+    .card::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      border: 1px solid rgba(255, 255, 255, 0.4);
+      pointer-events: none;
+    }
+
+    @keyframes fadeUp {
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* <!-- Gallery --> */
+    .gallery {
+      display: grid;
+      gap: 16px;
+    }
+
+    .main-image {
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      border-radius: var(--radius-lg);
+      object-fit: cover;
+      background: rgba(0, 0, 0, 0.08);
+      box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.04);
+    }
+
+    .thumbnails {
+      display: flex;
+      gap: 12px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+
+    .thumbnail {
+      flex: 0 0 92px;
+      height: 72px;
+      border-radius: var(--radius-md);
+      object-fit: cover;
+      border: 2px solid transparent;
+      cursor: pointer;
+      transition: var(--transition);
+      background: rgba(0, 0, 0, 0.05);
+    }
+
+    .thumbnail.active {
+      border-color: var(--orange);
+      transform: translateY(-2px);
+    }
+
+    .thumbnails::-webkit-scrollbar {
+      height: 6px;
+    }
+
+    .thumbnails::-webkit-scrollbar-thumb {
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 999px;
+    }
+
+    /* <!-- Listing Details --> */
+    .details-grid {
+      display: grid;
+      gap: 16px;
+    }
+
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+      flex-wrap: wrap;
+      font-size: clamp(14px, 2.4vw, 16px);
+    }
+
+    .detail-label {
+      font-weight: 600;
+      color: rgba(0, 0, 0, 0.6);
+    }
+
+    .price-tag {
+      font-size: clamp(22px, 4vw, 28px);
+      color: var(--orange);
+      font-weight: 700;
+    }
+
+    .status-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      padding: 6px 16px;
+      font-weight: 600;
+      font-size: 0.85rem;
+      background: rgba(0, 0, 0, 0.06);
+    }
+
+    .status-pending {
+      color: #b25d00;
+      background: rgba(243, 115, 30, 0.18);
+    }
+
+    .status-approved {
+      color: var(--emerald);
+      background: rgba(0, 77, 64, 0.18);
+    }
+
+    .status-rejected {
+      color: #d84315;
+      background: rgba(216, 67, 21, 0.18);
+    }
+
+    .section-title {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 18px;
+      position: relative;
+    }
+
+    .section-title::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      bottom: -6px;
+      width: 52px;
+      height: 3px;
+      border-radius: 2px;
+      background: var(--orange);
+    }
+
+    .description {
+      white-space: pre-wrap;
+      line-height: 1.6;
+      color: rgba(0, 0, 0, 0.78);
+    }
+
+    /* <!-- Vendor Info --> */
+    .vendor-card {
+      background: rgba(234, 220, 207, 0.7);
+      border-radius: var(--radius-lg);
+      padding: clamp(20px, 3vw, 28px);
+      box-shadow: var(--shadow-soft);
+      border: 1px solid rgba(255, 255, 255, 0.6);
+      display: grid;
+      gap: 18px;
+    }
+
+    .vendor-grid {
+      display: grid;
+      gap: 12px 24px;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      font-size: clamp(14px, 2.4vw, 16px);
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 6px 14px;
+      border-radius: 999px;
+      font-weight: 600;
+      font-size: 0.85rem;
+      border: 1px solid rgba(0, 0, 0, 0.08);
+    }
+
+    .plan-free { background: rgba(0, 0, 0, 0.05); }
+    .plan-plus { background: rgba(243, 115, 30, 0.14); color: #c8500d; }
+    .plan-pro { background: rgba(0, 77, 64, 0.16); color: var(--emerald); }
+    .plan-premium { background: linear-gradient(120deg, rgba(243, 115, 30, 0.18), rgba(0, 77, 64, 0.16)); color: var(--emerald); }
+
+    .status-active { color: var(--emerald); background: rgba(0, 77, 64, 0.15); }
+    .status-suspended { color: #d84315; background: rgba(216, 67, 21, 0.16); }
+
+    .outline-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 12px 18px;
+      border-radius: 14px;
+      border: 1.5px solid var(--emerald);
+      color: var(--emerald);
+      font-weight: 600;
+      transition: var(--transition);
+      cursor: pointer;
+      background: rgba(255, 255, 255, 0.6);
+    }
+
+    .outline-btn:hover {
+      background: rgba(0, 77, 64, 0.08);
+      transform: translateY(-1px);
+    }
+
+    /* <!-- Feedback History --> */
+    .timeline {
+      display: grid;
+      gap: 16px;
+      padding-left: 12px;
+      border-left: 3px solid rgba(243, 115, 30, 0.5);
+    }
+
+    .timeline-item {
+      background: rgba(255, 255, 255, 0.9);
+      border-radius: var(--radius-md);
+      padding: 16px 20px;
+      box-shadow: 0 12px 24px rgba(0, 0, 0, 0.06);
+      animation: fadeUp 420ms ease forwards;
+      opacity: 0;
+      transform: translateY(10px);
+    }
+
+    .timeline-item strong {
+      color: var(--emerald);
+    }
+
+    .timeline-meta {
+      margin-top: 8px;
+      font-size: 0.82rem;
+      color: rgba(0, 0, 0, 0.55);
+    }
+
+    /* <!-- Action Panel --> */
+    .actions-panel {
+      position: fixed;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: min(100% - 32px, 420px);
+      display: flex;
+      gap: 12px;
+      background: rgba(255, 255, 255, 0.92);
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 18px 36px rgba(0, 0, 0, 0.12);
+      backdrop-filter: blur(20px);
+      z-index: 10;
+    }
+
+    .actions-panel button {
+      flex: 1;
+      border: none;
+      border-radius: 14px;
+      padding: 14px 16px;
+      font-weight: 600;
+      font-size: clamp(14px, 2.8vw, 16px);
+      cursor: pointer;
+      transition: var(--transition);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      color: var(--white);
+    }
+
+    .btn-approve { background: var(--emerald); }
+    .btn-approve:hover { background: var(--emerald-dark); }
+
+    .btn-reject { background: var(--orange); }
+    .btn-reject:hover { background: var(--orange-dark); }
+
+    .btn-delete {
+      background: rgba(216, 67, 21, 0.15);
+      color: #d84315;
+    }
+
+    .btn-delete:hover {
+      background: rgba(216, 67, 21, 0.25);
+    }
+
+    @media (min-width: 900px) {
+      .page-wrapper {
+        padding-bottom: 0;
+      }
+
+      .actions-panel {
+        position: sticky;
+        bottom: unset;
+        top: 120px;
+        left: auto;
+        transform: none;
+        width: auto;
+        flex-direction: column;
+        align-self: start;
+      }
+
+      .actions-panel button {
+        width: 220px;
+      }
+    }
+
+    footer {
+      padding: 40px 20px 24px;
+      text-align: center;
+      font-size: 0.9rem;
+      color: rgba(0, 0, 0, 0.6);
+    }
+
+    /* <!-- Modals --> */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(17, 17, 17, 0.45);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      backdrop-filter: blur(6px);
+      z-index: 30;
+    }
+
+    .modal-backdrop.active {
+      display: flex;
+      animation: fadeIn 200ms ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    .modal {
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: var(--radius-lg);
+      width: min(100%, 480px);
+      padding: 28px;
+      box-shadow: 0 24px 48px rgba(0, 0, 0, 0.18);
+      display: grid;
+      gap: 18px;
+      transform: translateY(10px);
+      animation: slideUp 240ms ease forwards;
+    }
+
+    @keyframes slideUp {
+      to {
+        transform: translateY(0);
+      }
+    }
+
+    .modal textarea {
+      min-height: 120px;
+      border-radius: 14px;
+      border: 1px solid rgba(0, 0, 0, 0.12);
+      padding: 12px 14px;
+      font-family: inherit;
+      font-size: 0.95rem;
+      resize: vertical;
+    }
+
+    .modal textarea:focus {
+      outline: 2px solid rgba(0, 77, 64, 0.3);
+    }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .modal button {
+      border: none;
+      border-radius: 12px;
+      padding: 12px 20px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: var(--transition);
+    }
+
+    .btn-outline {
+      background: transparent;
+      border: 1.5px solid rgba(0, 0, 0, 0.2);
+      color: var(--ink);
+    }
+
+    .btn-outline:hover {
+      background: rgba(0, 0, 0, 0.05);
+    }
+
+    .btn-primary {
+      background: var(--orange);
+      color: var(--white);
+    }
+
+    .btn-primary:hover {
+      background: var(--orange-dark);
+    }
+
+    .btn-danger {
+      background: #d84315;
+      color: var(--white);
+    }
+
+    .btn-danger:hover {
+      background: #b3320c;
+    }
+
+    .checklist {
+      display: grid;
+      gap: 8px;
+    }
+
+    .checklist label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.92rem;
+      color: rgba(0, 0, 0, 0.75);
+    }
+
+    /* <!-- Toasts & Loader --> */
+    .toast {
+      position: fixed;
+      bottom: 32px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--emerald);
+      color: var(--white);
+      padding: 14px 24px;
+      border-radius: 999px;
+      box-shadow: 0 14px 28px rgba(0, 0, 0, 0.18);
+      display: none;
+      align-items: center;
+      gap: 10px;
+      z-index: 40;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+    }
+
+    .toast.error { background: #d84315; }
+
+    .toast.show {
+      display: inline-flex;
+      animation: toastPop 260ms ease;
+    }
+
+    @keyframes toastPop {
+      from { transform: translate(-50%, 20px); opacity: 0; }
+      to { transform: translate(-50%, 0); opacity: 1; }
+    }
+
+    .loader-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 77, 64, 0.92);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 18px;
+      color: var(--white);
+      font-family: "Anton", sans-serif;
+      letter-spacing: 0.12em;
+      z-index: 50;
+      text-transform: uppercase;
+    }
+
+    .loader-ring {
+      width: 62px;
+      height: 62px;
+      border-radius: 50%;
+      border: 4px solid rgba(255, 255, 255, 0.3);
+      border-top-color: var(--orange);
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .hidden { display: none !important; }
+
+    .muted {
+      color: rgba(0, 0, 0, 0.55);
+    }
+
+    .empty-state {
+      padding: 28px;
+      text-align: center;
+      color: rgba(0, 0, 0, 0.55);
+      border: 1.5px dashed rgba(0, 0, 0, 0.12);
+      border-radius: var(--radius-lg);
+    }
+
+    .gallery-empty {
+      display: grid;
+      place-items: center;
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      border-radius: var(--radius-lg);
+      background: repeating-linear-gradient(135deg, rgba(0, 0, 0, 0.04), rgba(0, 0, 0, 0.04) 18px, rgba(255, 255, 255, 0.1) 18px, rgba(255, 255, 255, 0.1) 36px);
+      color: rgba(0, 0, 0, 0.4);
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+
+    .small-label {
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: rgba(0, 0, 0, 0.45);
+      margin-bottom: 4px;
+    }
+
+    .metadata-grid {
+      display: grid;
+      gap: 12px 24px;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    }
+
+    .metadata-item {
+      display: grid;
+      gap: 4px;
+    }
+
+    .badge-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      font-size: 0.85rem;
+    }
+
+    @media (max-width: 640px) {
+      .thumbnails {
+        gap: 8px;
+      }
+
+      .thumbnail {
+        flex-basis: 72px;
+        height: 60px;
+      }
+
+      .vendor-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .actions-panel {
+        gap: 10px;
+        padding: 14px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Auth Guard Loader -->
+  <div id="authLoader" class="loader-overlay">
+    <div class="loader-ring"></div>
+    <p>Verifying Admin Access…</p>
+  </div>
+
+  <!-- Header -->
+  <header>
+    <div class="topbar">
+      <a href="admin-listings.html" class="brand" aria-label="Go back to listings">
+        <span><i class="ri-arrow-left-line"></i></span>
+        YUSTAM Admin
+      </a>
+      <div class="top-actions">
+        <button id="logoutBtn" class="icon-btn" type="button" aria-label="Sign out">
+          <i class="ri-logout-box-r-line"></i>
+        </button>
+      </div>
+    </div>
+    <div class="accent-strip"></div>
+  </header>
+
+  <main>
+    <div class="page-wrapper">
+      <!-- Gallery -->
+      <section id="galleryCard" class="card" aria-label="Listing gallery">
+        <h2 class="section-title"><i class="ri-image-2-line"></i> Listing Gallery</h2>
+        <div id="galleryWrapper" class="gallery">
+          <div id="galleryPlaceholder" class="gallery-empty">No images provided.</div>
+          <img id="mainImage" class="main-image hidden" alt="Listing image preview" />
+          <div id="thumbnailRow" class="thumbnails hidden" aria-label="Listing image thumbnails"></div>
+        </div>
+      </section>
+
+      <!-- Listing Details -->
+      <section id="detailsCard" class="card" aria-label="Listing details">
+        <div class="section-title"><i class="ri-file-list-3-line"></i> Listing Overview</div>
+        <div class="details-grid">
+          <div class="detail-row">
+            <div>
+              <div class="small-label">Title</div>
+              <h1 id="listingTitle">—</h1>
+            </div>
+            <div>
+              <div class="small-label">Price</div>
+              <div id="listingPrice" class="price-tag">—</div>
+            </div>
+          </div>
+          <div class="metadata-grid">
+            <div class="metadata-item">
+              <div class="small-label">Category</div>
+              <div id="listingCategory">—</div>
+            </div>
+            <div class="metadata-item">
+              <div class="small-label">Condition</div>
+              <div id="listingCondition">—</div>
+            </div>
+            <div class="metadata-item">
+              <div class="small-label">Posted On</div>
+              <div id="listingDate">—</div>
+            </div>
+            <div class="metadata-item">
+              <div class="small-label">Status</div>
+              <div id="listingStatus" class="status-chip status-pending">Pending</div>
+            </div>
+          </div>
+          <div>
+            <div class="small-label">Description</div>
+            <p id="listingDescription" class="description muted">—</p>
+          </div>
+          <div id="feedbackBlock" class="badge-group hidden">
+            <span class="small-label">Feedback</span>
+            <span id="feedbackChip" class="status-chip status-rejected">No feedback yet</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Vendor Info -->
+      <section id="vendorCard" class="vendor-card" aria-label="Vendor information">
+        <div class="section-title"><i class="ri-user-star-line"></i> Vendor Information</div>
+        <div class="vendor-grid">
+          <div>
+            <div class="small-label">Vendor Name</div>
+            <div id="vendorName">—</div>
+          </div>
+          <div>
+            <div class="small-label">Business Name</div>
+            <div id="vendorBusiness">—</div>
+          </div>
+          <div>
+            <div class="small-label">Email</div>
+            <div id="vendorEmail">—</div>
+          </div>
+          <div>
+            <div class="small-label">Phone</div>
+            <div id="vendorPhone">—</div>
+          </div>
+          <div>
+            <div class="small-label">Plan</div>
+            <div id="vendorPlan" class="chip plan-free">—</div>
+          </div>
+          <div>
+            <div class="small-label">Status</div>
+            <div id="vendorStatus" class="chip status-active">—</div>
+          </div>
+          <div>
+            <div class="small-label">Joined On</div>
+            <div id="vendorJoin">—</div>
+          </div>
+        </div>
+        <button id="viewVendorBtn" class="outline-btn" type="button">
+          <i class="ri-external-link-line"></i> View Vendor Profile
+        </button>
+      </section>
+
+      <!-- Feedback History -->
+      <section id="feedbackHistoryCard" class="card" aria-label="Feedback history">
+        <div class="section-title"><i class="ri-chat-quote-line"></i> Feedback History</div>
+        <div id="feedbackTimeline" class="timeline"></div>
+        <div id="feedbackEmpty" class="empty-state">No previous feedback.</div>
+      </section>
+    </div>
+  </main>
+
+  <!-- Action Panel -->
+  <aside class="actions-panel" aria-label="Listing actions">
+    <button id="approveBtn" class="btn-approve" type="button"><i class="ri-check-line"></i> Approve</button>
+    <button id="rejectBtn" class="btn-reject" type="button"><i class="ri-close-line"></i> Reject</button>
+    <button id="deleteBtn" class="btn-delete" type="button"><i class="ri-delete-bin-line"></i> Delete</button>
+  </aside>
+
+  <!-- Feedback Modal -->
+  <div id="feedbackModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="feedbackModalTitle">
+    <div class="modal">
+      <h3 id="feedbackModalTitle">Reject Listing</h3>
+      <p class="muted">Provide a detailed explanation so the vendor can resolve the issues quickly.</p>
+      <textarea id="feedbackReason" placeholder="Explain why this listing was rejected or what should be corrected."></textarea>
+      <div class="checklist">
+        <label><input type="checkbox" value="Incomplete details" /> Incomplete details</label>
+        <label><input type="checkbox" value="Poor images" /> Poor images</label>
+        <label><input type="checkbox" value="Wrong category" /> Wrong category</label>
+        <label><input type="checkbox" value="Disallowed item" /> Disallowed item</label>
+        <label><input type="checkbox" value="Other" /> Other</label>
+      </div>
+      <div class="modal-actions">
+        <button data-close="feedback" class="btn-outline" type="button">Cancel</button>
+        <button id="sendFeedbackBtn" class="btn-primary" type="button">Send Feedback</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete Modal -->
+  <div id="deleteModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="deleteModalTitle">
+    <div class="modal">
+      <h3 id="deleteModalTitle">Delete Listing</h3>
+      <p class="muted">This will permanently remove this listing from YUSTAM.</p>
+      <div class="modal-actions">
+        <button data-close="delete" class="btn-outline" type="button">Cancel</button>
+        <button id="confirmDeleteBtn" class="btn-danger" type="button">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast" class="toast" role="status"></div>
+
+  <footer>
+    © 2025 YUSTAM — Built for Nigeria.
+  </footer>
+
+  <!-- Firebase Logic -->
+  
+    <script type="module" src="admin-listing-detail.js"></script>
+<script type="module" src="firebase.js"></script>
+</body>
+</html>
+
+

@@ -1,0 +1,5 @@
+deployment:
+  tasks:
+    - export DEPLOYPATH=/home2/yustamco/public_html/
+    - export REPOPATH=/home2/yustamco/repositories/yustam/
+    - /bin/cp -R $REPOPATH* $DEPLOYPATH

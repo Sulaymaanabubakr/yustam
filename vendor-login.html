@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vendor Login | YUSTAM Marketplace</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --emerald: #004d40;
+        --orange: #f3731e;
+        --beige: #eadccf;
+        --white: #ffffff;
+        --ink: #111111;
+        --error: #c62828;
+        --border: rgba(0, 77, 64, 0.08);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+          sans-serif;
+        background: linear-gradient(145deg, rgba(234, 220, 207, 0.95), #f5ede5);
+        color: var(--ink);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .auth-wrapper {
+        width: 100%;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 32px 16px 24px;
+      }
+
+      .auth-card {
+        width: 100%;
+        max-width: 420px;
+        background: var(--white);
+        border-radius: 20px;
+        padding: 32px 28px;
+        box-shadow: 0 20px 45px rgba(0, 0, 0, 0.08);
+        position: relative;
+        overflow: hidden;
+      }
+
+      .auth-card::before {
+        content: '';
+        position: absolute;
+        inset: -80px -80px auto auto;
+        width: 180px;
+        height: 180px;
+        background: radial-gradient(circle at center, rgba(243, 115, 30, 0.25), transparent 70%);
+        z-index: 0;
+      }
+
+      .auth-card::after {
+        content: '';
+        position: absolute;
+        inset: auto auto -120px -100px;
+        width: 220px;
+        height: 220px;
+        background: radial-gradient(circle at center, rgba(0, 77, 64, 0.18), transparent 75%);
+        z-index: 0;
+      }
+
+      .auth-content {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+      }
+
+      h1 {
+        margin: 0;
+        font-family: 'Anton', sans-serif;
+        font-size: clamp(2rem, 6vw, 2.6rem);
+        letter-spacing: 0.02em;
+        color: var(--emerald);
+        text-align: center;
+      }
+
+      .subtitle {
+        margin: 0;
+        text-align: center;
+        color: rgba(17, 17, 17, 0.7);
+        font-weight: 500;
+      }
+
+      form {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+      }
+
+      .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .form-meta {
+        display: flex;
+        justify-content: flex-end;
+        gap: 12px;
+      }
+
+      .link-button {
+        background: none;
+        border: none;
+        color: var(--emerald);
+        font-size: 0.85rem;
+        font-weight: 600;
+        cursor: pointer;
+        padding: 0;
+      }
+
+      .link-button:hover,
+      .link-button:focus {
+        text-decoration: underline;
+      }
+
+      label {
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: rgba(17, 17, 17, 0.75);
+      }
+
+      input {
+        width: 100%;
+        height: 48px;
+        padding: 0 16px;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        font-size: 1rem;
+        transition: border-color 180ms ease, box-shadow 180ms ease;
+        background: rgba(255, 255, 255, 0.96);
+      }
+
+      input:focus {
+        outline: none;
+        border-color: rgba(0, 77, 64, 0.4);
+        box-shadow: 0 0 0 3px rgba(0, 77, 64, 0.15);
+      }
+
+      button {
+        height: 52px;
+        border-radius: 12px;
+        border: none;
+        font-size: 1.05rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: transform 180ms ease, box-shadow 200ms ease, background 200ms ease;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+      }
+
+      button:disabled {
+        cursor: not-allowed;
+        opacity: 0.7;
+        box-shadow: none;
+        transform: none;
+      }
+
+      .primary-btn {
+        background: var(--orange);
+        color: var(--white);
+        box-shadow: 0 12px 22px rgba(243, 115, 30, 0.25);
+      }
+
+      .primary-btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 16px 28px rgba(243, 115, 30, 0.28);
+      }
+
+      .primary-btn.loading {
+        position: relative;
+        color: transparent;
+      }
+
+      .primary-btn.loading::after {
+        content: '';
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        border: 3px solid rgba(255, 255, 255, 0.6);
+        border-top-color: var(--white);
+        animation: spin 0.9s linear infinite;
+        position: absolute;
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      .divider {
+        position: relative;
+        text-align: center;
+        font-size: 0.9rem;
+        color: rgba(17, 17, 17, 0.6);
+        margin: 4px 0;
+      }
+
+      .divider::before,
+      .divider::after {
+        content: '';
+        position: absolute;
+        top: 50%;
+        width: 40%;
+        height: 1px;
+        background: rgba(17, 17, 17, 0.08);
+      }
+
+      .divider::before {
+        left: 0;
+      }
+
+      .divider::after {
+        right: 0;
+      }
+
+      .google-btn {
+        background: var(--white);
+        border: 1px solid rgba(17, 17, 17, 0.08);
+        color: var(--ink);
+        box-shadow: 0 8px 18px rgba(0, 0, 0, 0.08);
+      }
+
+      .google-btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 12px 22px rgba(0, 0, 0, 0.12);
+      }
+
+      .google-icon {
+        width: 20px;
+        height: 20px;
+      }
+
+      .cta-text {
+        font-size: 0.9rem;
+        text-align: center;
+        color: rgba(17, 17, 17, 0.7);
+      }
+
+      .cta-text a {
+        color: var(--emerald);
+        font-weight: 600;
+        text-decoration: none;
+        position: relative;
+      }
+
+      .cta-text a::after {
+        content: '';
+        position: absolute;
+        left: 0;
+        bottom: -2px;
+        width: 100%;
+        height: 2px;
+        background: rgba(0, 77, 64, 0.3);
+        transform: scaleX(0);
+        transform-origin: left;
+        transition: transform 200ms ease;
+      }
+
+      .cta-text a:hover::after {
+        transform: scaleX(1);
+      }
+
+      .error-message {
+        min-height: 20px;
+        color: var(--error);
+        font-size: 0.85rem;
+        text-align: center;
+      }
+
+      .error-message.success {
+        color: var(--emerald);
+      }
+
+      footer {
+        width: 100%;
+        padding: 12px 16px 24px;
+        text-align: center;
+        font-size: 0.85rem;
+        color: rgba(17, 17, 17, 0.55);
+      }
+
+      @media (min-width: 600px) {
+        .auth-card {
+          padding: 40px 48px;
+        }
+
+        .auth-wrapper {
+          padding: 40px 16px 32px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="auth-wrapper">
+      <div class="auth-card">
+        <div class="auth-content">
+          <!-- Header Logo -->
+          <header>
+            <h1>YUSTAM</h1>
+            <p class="subtitle">Vendor Access Portal</p>
+          </header>
+
+          <!-- Login Form -->
+          <form id="loginForm" novalidate>
+            <div class="form-group">
+              <label for="email">Email address</label>
+              <input
+                type="email"
+                id="email"
+                name="email"
+                placeholder="vendor@example.com"
+                autocomplete="email"
+                required
+              />
+            </div>
+            <div class="form-group">
+              <label for="password">Password</label>
+              <input
+                type="password"
+                id="password"
+                name="password"
+                placeholder="Enter your password"
+                autocomplete="current-password"
+                required
+              />
+            </div>
+            <div class="form-meta">
+              <button type="button" class="link-button" id="forgotPasswordBtn">Forgot password?</button>
+            </div>
+            <div class="error-message" id="formError" role="alert" aria-live="polite"></div>
+            <button type="submit" class="primary-btn" id="loginBtn">Sign In</button>
+          </form>
+
+          <div class="divider">or</div>
+
+          <button type="button" class="google-btn" id="googleBtn">
+            <svg
+              class="google-icon"
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 533.5 544.3"
+              aria-hidden="true"
+            >
+              <path
+                fill="#4285f4"
+                d="M533.5 278.4c0-17.4-1.6-34.1-4.6-50.4H272.1v95.3h146.9c-6.3 34-25.2 62.8-53.6 82.1v68.2h86.7c50.8-46.8 81.4-115.6 81.4-195.2z"
+              />
+              <path
+                fill="#34a853"
+                d="M272.1 544.3c72.9 0 134-24.1 178.6-65.7l-86.7-68.2c-24.1 16.3-55 26-91.9 26-70.5 0-130.3-47.6-151.6-111.4H31.6v69.9c44.7 88.5 136.8 148 240.5 148z"
+              />
+              <path
+                fill="#fbbc04"
+                d="M120.5 325c-10.9-32.5-10.9-67.6 0-100.1V155H31.6c-44.7 88.5-44.7 193.7 0 282.2L120.5 325z"
+              />
+              <path
+                fill="#ea4335"
+                d="M272.1 107.7c39.6 0 75.3 13.6 103.4 40.2l77.6-77.6C405.9 24.1 345 0 272.1 0 168.4 0 76.3 59.5 31.6 148l88.9 69.9c21.3-63.8 81.1-110.2 151.6-110.2z"
+              />
+            </svg>
+            Sign in with Google
+          </button>
+
+          <p class="cta-text">
+            Don't have a vendor account?
+            <a href="vendor-register.html">Create one</a>
+          </p>
+        </div>
+      </div>
+    </div>
+    <footer>© 2025 YUSTAM</footer>
+
+    <!-- Firebase Logic -->
+    <script type="module" src="vendor-login.js"></script>
+  </body>
+</html>

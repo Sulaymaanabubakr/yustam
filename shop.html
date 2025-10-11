@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>YUSTAM Marketplace &mdash; Shop</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet" />
+  <style>
+    :root {
+      --emerald: #004d40;
+      --emerald-deep: #00352d;
+      --orange: #f3731e;
+      --orange-dark: #e25f10;
+      --beige: #eadccf;
+      --white: #ffffff;
+      --ink: #111111;
+      --shadow: 0 18px 40px -20px rgba(0, 0, 0, 0.45);
+      --radius-lg: 20px;
+      --radius-md: 14px;
+      --transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Inter", sans-serif;
+      background: linear-gradient(165deg, rgba(234, 220, 207, 0.9), rgba(255, 255, 255, 0.95));
+      color: var(--ink);
+      min-height: 100vh;
+      padding-top: 88px;
+    }
+
+    h1, h2, h3, h4 {
+      font-family: "Anton", sans-serif;
+      letter-spacing: 0.02em;
+      margin: 0;
+      color: var(--ink);
+    }
+
+    a {
+      text-decoration: none;
+      color: inherit;
+    }
+
+    button {
+      font-family: inherit;
+    }
+
+    .page-shell {
+      width: min(1200px, 92vw);
+      margin: 0 auto 80px;
+    }
+
+    /* Header */
+    /* --------------------------------------------- */
+    header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 1000;
+      background: rgba(255, 255, 255, 0.86);
+      backdrop-filter: blur(16px);
+      box-shadow: 0 6px 22px rgba(0, 0, 0, 0.12);
+      border-bottom: 2px solid rgba(243, 115, 30, 0.2);
+    }
+
+    .header-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: min(1200px, 92vw);
+      margin: 0 auto;
+      padding: 18px 0;
+      gap: 16px;
+    }
+
+    .logo {
+      font-family: "Anton", sans-serif;
+      font-size: clamp(20px, 4vw, 26px);
+      color: var(--emerald);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .page-title {
+      font-size: clamp(18px, 4vw, 24px);
+      color: var(--ink);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .icon-btn {
+      width: 42px;
+      height: 42px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      border: none;
+      background: rgba(255, 255, 255, 0.9);
+      box-shadow: 0 10px 25px -18px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(0, 77, 64, 0.08);
+      color: var(--emerald);
+      cursor: pointer;
+      transition: var(--transition);
+    }
+
+    .icon-btn:hover {
+      transform: translateY(-2px) scale(1.04);
+      background: rgba(243, 115, 30, 0.12);
+      color: var(--orange);
+    }
+
+    /* Filters */
+    /* --------------------------------------------- */
+    .filters-card {
+      margin-top: 28px;
+      background: rgba(234, 220, 207, 0.75);
+      border-radius: var(--radius-lg);
+      padding: 22px;
+      backdrop-filter: blur(12px);
+      box-shadow: var(--shadow);
+      display: grid;
+      gap: 16px;
+    }
+
+    .filters-card h2 {
+      font-size: clamp(18px, 3vw, 24px);
+      color: var(--emerald);
+      text-transform: uppercase;
+      letter-spacing: 0.2em;
+    }
+
+    .filter-grid {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      align-items: end;
+    }
+
+    .input-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    label {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      font-weight: 600;
+      letter-spacing: 0.16em;
+      color: rgba(17, 17, 17, 0.68);
+    }
+
+    input[type="text"],
+    select {
+      padding: 12px 14px;
+      border-radius: var(--radius-md);
+      border: 1px solid rgba(0, 77, 64, 0.18);
+      background: rgba(255, 255, 255, 0.92);
+      color: var(--ink);
+      font-size: 0.98rem;
+      outline: none;
+      transition: var(--transition);
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.04);
+      appearance: none;
+    }
+
+    input[type="text"]:focus,
+    select:focus {
+      border-color: var(--orange);
+      box-shadow: 0 0 0 3px rgba(243, 115, 30, 0.18);
+    }
+
+    .filter-actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 12px 18px;
+      border-radius: var(--radius-md);
+      border: none;
+      font-weight: 600;
+      font-size: 0.98rem;
+      cursor: pointer;
+      transition: var(--transition);
+      color: var(--white);
+      background: linear-gradient(135deg, var(--orange), #ff8a3c);
+      box-shadow: 0 14px 28px -18px rgba(243, 115, 30, 0.8);
+      gap: 8px;
+    }
+
+    .btn:hover {
+      transform: translateY(-2px) scale(1.02);
+      box-shadow: 0 12px 24px -14px rgba(243, 115, 30, 0.88);
+    }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--emerald);
+      border: 1px solid rgba(0, 77, 64, 0.22);
+      box-shadow: none;
+    }
+
+    .btn-ghost:hover {
+      background: rgba(0, 77, 64, 0.08);
+    }
+
+    /* Product Grid */
+    /* --------------------------------------------- */
+    .grid-card {
+      margin-top: 36px;
+      padding: 24px;
+      background: rgba(255, 255, 255, 0.9);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(18px);
+    }
+
+    .grid-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .grid-header h3 {
+      font-size: clamp(20px, 3.2vw, 28px);
+      color: var(--emerald);
+    }
+
+    .grid-header span {
+      font-size: 0.95rem;
+      color: rgba(17, 17, 17, 0.62);
+    }
+
+    .products {
+      display: grid;
+      gap: 20px;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    }
+
+    .product-card {
+      background: rgba(255, 255, 255, 0.88);
+      border-radius: 18px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 18px 32px -24px rgba(0, 0, 0, 0.45);
+      border: 1px solid rgba(0, 77, 64, 0.08);
+      transition: var(--transition);
+      position: relative;
+      animation: fadeUp 0.6s ease forwards;
+      opacity: 0;
+    }
+
+    .product-card:hover {
+      transform: translateY(-6px) scale(1.02);
+      box-shadow: 0 24px 44px -24px rgba(243, 115, 30, 0.55);
+    }
+
+    .product-card img {
+      width: 100%;
+      height: 180px;
+      object-fit: cover;
+    }
+
+    .product-body {
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      flex: 1;
+    }
+
+    .product-title {
+      font-weight: 600;
+      font-size: 1rem;
+      line-height: 1.4;
+      min-height: 46px;
+      color: var(--ink);
+    }
+
+    .product-price {
+      font-weight: 700;
+      font-size: 1.15rem;
+      color: var(--orange);
+    }
+
+    .product-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.85rem;
+      color: rgba(17, 17, 17, 0.6);
+    }
+
+    .product-actions {
+      margin-top: auto;
+      display: grid;
+      gap: 10px;
+    }
+
+    .product-actions a,
+    .product-actions button {
+      width: 100%;
+    }
+
+    .btn-outline {
+      background: rgba(0, 77, 64, 0.96);
+      color: var(--white);
+      border: none;
+      box-shadow: 0 16px 30px -18px rgba(0, 77, 64, 0.7);
+    }
+
+    .btn-outline:hover {
+      background: var(--emerald-deep);
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 80px 24px;
+      color: rgba(17, 17, 17, 0.6);
+      display: none;
+    }
+
+    .empty-state i {
+      font-size: 48px;
+      color: rgba(0, 77, 64, 0.25);
+      margin-bottom: 12px;
+      display: block;
+    }
+
+    /* Pagination */
+    /* --------------------------------------------- */
+    .pagination {
+      margin-top: 32px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .pagination small {
+      color: rgba(17, 17, 17, 0.6);
+    }
+
+    /* WhatsApp FAB */
+    /* --------------------------------------------- */
+    .whatsapp-fab {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      border: none;
+      background: #25d366;
+      color: var(--white);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 18px 32px -22px rgba(0, 0, 0, 0.5);
+      transition: var(--transition);
+      z-index: 999;
+    }
+
+    .whatsapp-fab:hover {
+      transform: translateY(-4px) scale(1.05);
+    }
+
+    .whatsapp-fab span {
+      position: absolute;
+      bottom: 70px;
+      right: 0;
+      background: rgba(0, 0, 0, 0.8);
+      color: var(--white);
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      white-space: nowrap;
+      opacity: 0;
+      transform: translateY(6px);
+      pointer-events: none;
+      transition: var(--transition);
+    }
+
+    .whatsapp-fab:hover span {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* Footer */
+    /* --------------------------------------------- */
+    footer {
+      background: rgba(234, 220, 207, 0.85);
+      backdrop-filter: blur(14px);
+      padding: 48px 0 32px;
+      margin-top: 80px;
+    }
+
+    .footer-inner {
+      width: min(1200px, 92vw);
+      margin: 0 auto;
+      display: grid;
+      gap: 24px;
+    }
+
+    .footer-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px 24px;
+      font-weight: 500;
+      color: rgba(17, 17, 17, 0.7);
+    }
+
+    .footer-links a:hover {
+      color: var(--orange);
+    }
+
+    .social-icons {
+      display: flex;
+      gap: 14px;
+      font-size: 1.2rem;
+      color: var(--emerald);
+    }
+
+    .social-icons a:hover {
+      color: var(--orange);
+    }
+
+    .footer-copy {
+      font-size: 0.85rem;
+      color: rgba(17, 17, 17, 0.6);
+    }
+
+    /* Animations */
+    @keyframes fadeUp {
+      from {
+        transform: translateY(20px);
+        opacity: 0;
+      }
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+
+    @media (max-width: 768px) {
+      body {
+        padding-top: 78px;
+      }
+
+      .header-inner {
+        padding: 14px 0;
+      }
+
+      .filters-card {
+        padding: 18px;
+      }
+
+      .filter-grid {
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      }
+
+      .grid-card {
+        padding: 20px 18px;
+      }
+
+      .product-card img {
+        height: 160px;
+      }
+    }
+
+    @media (max-width: 540px) {
+      .products {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .filters-card {
+        padding: 16px;
+      }
+
+      .filter-grid {
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <header>
+    <div class="header-inner">
+      <a class="logo" href="index.html" aria-label="Go to YUSTAM homepage">YUSTAM</a>
+      <div class="page-title">Marketplace</div>
+      <div class="header-actions" aria-label="Marketplace actions">
+        <a class="icon-btn" href="vendor-login.html" aria-label="Vendor login">
+          <i class="ri-user-line"></i>
+        </a>
+        <a class="icon-btn" href="post.html" aria-label="Post a listing">
+          <i class="ri-add-box-line"></i>
+        </a>
+        <a class="icon-btn" href="listings.html" aria-label="Browse listings">
+          <i class="ri-store-2-line"></i>
+        </a>
+        <a class="icon-btn" href="contact.html" aria-label="Get support">
+          <i class="ri-customer-service-2-line"></i>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <main class="page-shell">
+    <!-- Filters -->
+    <section class="filters-card" aria-labelledby="filters-title">
+      <h2 id="filters-title">Find your next great deal</h2>
+      <div class="filter-grid">
+        <div class="input-group" style="grid-column: span 2;">
+          <label for="searchInput">Search</label>
+          <input type="text" id="searchInput" placeholder="Search for products, vendors, or categories…" />
+        </div>
+        <div class="input-group">
+          <label for="categoryFilter">Category</label>
+          <select id="categoryFilter">
+            <option value="all">All Categories</option>
+            <option value="Phones &amp; Tablets">Phones &amp; Tablets</option>
+            <option value="Electronics">Electronics</option>
+            <option value="Computing">Computing</option>
+            <option value="Fashion">Fashion</option>
+            <option value="Beauty &amp; Self-Care">Beauty &amp; Self-Care</option>
+            <option value="Home &amp; Kitchen">Home &amp; Kitchen</option>
+            <option value="Furniture">Furniture</option>
+            <option value="Vehicles">Vehicles</option>
+            <option value="Property">Property</option>
+            <option value="Power Solutions">Power Solutions</option>
+            <option value="Food &amp; Groceries">Food &amp; Groceries</option>
+            <option value="Services">Services</option>
+            <option value="Others">Others</option>
+          </select>
+        </div>
+        <div class="input-group">
+          <label for="locationFilter">Location</label>
+          <select id="locationFilter">
+            <option value="all">All Nigeria</option>
+            <option value="Abia">Abia</option>
+            <option value="Abuja FCT">Abuja FCT</option>
+            <option value="Adamawa">Adamawa</option>
+            <option value="Akwa Ibom">Akwa Ibom</option>
+            <option value="Anambra">Anambra</option>
+            <option value="Bauchi">Bauchi</option>
+            <option value="Bayelsa">Bayelsa</option>
+            <option value="Benue">Benue</option>
+            <option value="Borno">Borno</option>
+            <option value="Cross River">Cross River</option>
+            <option value="Delta">Delta</option>
+            <option value="Ebonyi">Ebonyi</option>
+            <option value="Edo">Edo</option>
+            <option value="Ekiti">Ekiti</option>
+            <option value="Enugu">Enugu</option>
+            <option value="Gombe">Gombe</option>
+            <option value="Imo">Imo</option>
+            <option value="Jigawa">Jigawa</option>
+            <option value="Kaduna">Kaduna</option>
+            <option value="Kano">Kano</option>
+            <option value="Katsina">Katsina</option>
+            <option value="Kebbi">Kebbi</option>
+            <option value="Kogi">Kogi</option>
+            <option value="Kwara">Kwara</option>
+            <option value="Lagos">Lagos</option>
+            <option value="Nasarawa">Nasarawa</option>
+            <option value="Niger">Niger</option>
+            <option value="Ogun">Ogun</option>
+            <option value="Ondo">Ondo</option>
+            <option value="Osun">Osun</option>
+            <option value="Oyo">Oyo</option>
+            <option value="Plateau">Plateau</option>
+            <option value="Rivers">Rivers</option>
+            <option value="Sokoto">Sokoto</option>
+            <option value="Taraba">Taraba</option>
+            <option value="Yobe">Yobe</option>
+            <option value="Zamfara">Zamfara</option>
+          </select>
+        </div>
+        <div class="input-group">
+          <label for="priceFilter">Price Range</label>
+          <select id="priceFilter">
+            <option value="all">All</option>
+            <option value="0-10000">₦0 – ₦10k</option>
+            <option value="10000-50000">₦10k – ₦50k</option>
+            <option value="50000-150000">₦50k – ₦150k</option>
+            <option value="150000-500000">₦150k – ₦500k</option>
+            <option value="500000+">₦500k+</option>
+          </select>
+        </div>
+        <div class="input-group">
+          <label for="sortFilter">Sort By</label>
+          <select id="sortFilter">
+            <option value="newest">Newest</option>
+            <option value="priceLowHigh">Price: Low to High</option>
+            <option value="priceHighLow">Price: High to Low</option>
+          </select>
+        </div>
+      </div>
+      <div class="filter-actions">
+        <button class="btn" id="filterBtn" type="button"><i class="ri-equalizer-line"></i> Apply Filters</button>
+        <button class="btn btn-ghost" id="resetBtn" type="button">Reset</button>
+      </div>
+    </section>
+
+    <!-- Product Grid -->
+    <section class="grid-card" aria-labelledby="products-title">
+      <div class="grid-header">
+        <h3 id="products-title">Featured Marketplace Picks</h3>
+        <span id="resultsCount">Loading listings…</span>
+      </div>
+      <div id="productGrid" class="products" role="list"></div>
+      <div class="empty-state" id="emptyState">
+        <i class="ri-shopping-bag-line"></i>
+        <p>No products found for your filters. Try adjusting your search.</p>
+      </div>
+      <!-- Pagination -->
+      <div class="pagination" id="pagination">
+        <button class="btn" id="loadMoreBtn" type="button">Load More</button>
+        <small id="showingText">Showing 0 items</small>
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer>
+    <div class="footer-inner">
+      <div class="footer-links">
+        <a href="index.html#about">About</a>
+        <a href="help.html#faq-heading">Help &amp; FAQ</a>
+        <a href="privacy.html">Privacy</a>
+        <a href="vendor-plans.html">Vendor Plans</a>
+        <a href="contact.html#support-form">Contact</a>
+      </div>
+      <div class="social-icons">
+        <a href="https://wa.me/2348012345678" target="_blank" rel="noopener" aria-label="Chat on WhatsApp"><i class="ri-whatsapp-line"></i></a>
+        <a href="https://instagram.com/yustam" target="_blank" rel="noopener" aria-label="Visit Instagram"><i class="ri-instagram-line"></i></a>
+        <a href="https://facebook.com/yustam" target="_blank" rel="noopener" aria-label="Visit Facebook"><i class="ri-facebook-circle-line"></i></a>
+      </div>
+      <div class="footer-copy">© 2025 YUSTAM Marketplace — Built for Nigeria.</div>
+    </div>
+  </footer>
+
+  <button class="whatsapp-fab" type="button" aria-label="Chat with YUSTAM Support" onclick="window.open('https://wa.me/2348012345678','_blank')">
+    <i class="ri-whatsapp-line"></i>
+    <span>Chat with YUSTAM Support</span>
+  </button>
+
+  
+    <script src="shop.js"></script>
+<script type="module" src="firebase.js"></script>
+</body>
+</html>
+

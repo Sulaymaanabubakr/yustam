@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>YUSTAM Admin Listings</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" />
+  <style>
+    :root {
+      --emerald: #004d40;
+      --emerald-light: #0d6d5b;
+      --orange: #f3731e;
+      --beige: #eadccf;
+      --white: #ffffff;
+      --ink: #111111;
+      --pending: #ffb300;
+      --rejected: #d84315;
+      --radius-lg: 20px;
+      --radius-md: 16px;
+      --shadow-soft: 0 12px 32px rgba(0, 0, 0, 0.12);
+      --shadow-card: 0 10px 24px rgba(0, 0, 0, 0.1);
+      --blur-surface: blur(18px);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: linear-gradient(180deg, rgba(0, 77, 64, 0.08), rgba(234, 220, 207, 0.7));
+      color: var(--ink);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    button {
+      font-family: inherit;
+      border: none;
+      cursor: pointer;
+      transition: transform 0.22s cubic-bezier(.2,.8,.2,1), box-shadow 0.22s cubic-bezier(.2,.8,.2,1);
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      background: linear-gradient(135deg, rgba(0, 77, 64, 0.95), rgba(0, 121, 107, 0.92));
+      backdrop-filter: blur(16px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px clamp(16px, 4vw, 40px);
+      color: var(--white);
+    }
+
+    .topbar-left {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .logo-img {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      object-fit: cover;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+    }
+
+    .topbar h1 {
+      font-family: 'Anton', sans-serif;
+      font-size: clamp(20px, 4vw, 28px);
+      letter-spacing: 1px;
+    }
+
+    .topbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .icon-btn {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--white);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+    }
+
+    .icon-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 22px rgba(0, 0, 0, 0.18);
+    }
+
+    .accent-bar {
+      height: 6px;
+      background: var(--orange);
+      box-shadow: 0 6px 18px rgba(243, 115, 30, 0.4);
+    }
+
+    main {
+      flex: 1;
+      padding: clamp(20px, 4vw, 48px) clamp(16px, 5vw, 56px);
+      display: flex;
+      flex-direction: column;
+      gap: clamp(24px, 5vw, 40px);
+    }
+
+    .page-header {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      animation: fadeUp 0.6s ease both;
+    }
+
+    .page-header h2 {
+      font-family: 'Anton', sans-serif;
+      font-size: clamp(24px, 5vw, 36px);
+      letter-spacing: 0.6px;
+    }
+
+    .page-header p {
+      color: rgba(17, 17, 17, 0.72);
+      max-width: 560px;
+    }
+
+    .controls-bar {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      background: rgba(255, 255, 255, 0.7);
+      backdrop-filter: blur(14px);
+      border-radius: var(--radius-lg);
+      padding: 18px;
+      box-shadow: var(--shadow-card);
+      border: 1px solid rgba(255, 255, 255, 0.5);
+      animation: fadeUp 0.6s ease 0.05s both;
+    }
+
+    .control-row {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .control-row .field {
+      position: relative;
+      flex: 1;
+    }
+
+    .control-row input,
+    .control-row select {
+      width: 100%;
+      padding: 14px 16px 14px 44px;
+      border-radius: 14px;
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      background: rgba(255, 255, 255, 0.9);
+      font-size: 15px;
+      color: var(--ink);
+      transition: border 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .control-row input:focus,
+    .control-row select:focus {
+      border-color: rgba(0, 77, 64, 0.4);
+      box-shadow: 0 0 0 4px rgba(0, 77, 64, 0.16);
+      outline: none;
+    }
+
+    .control-row .field i {
+      position: absolute;
+      top: 50%;
+      left: 16px;
+      transform: translateY(-50%);
+      color: rgba(17, 17, 17, 0.4);
+      font-size: 18px;
+    }
+
+    .actions {
+      display: flex;
+      gap: 12px;
+    }
+
+    .btn-refresh {
+      padding: 14px 18px;
+      border-radius: 14px;
+      background: var(--emerald);
+      color: var(--white);
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 600;
+    }
+
+    .btn-refresh:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 12px 24px rgba(0, 77, 64, 0.25);
+    }
+
+    .listings-wrapper {
+      background: rgba(255, 255, 255, 0.82);
+      backdrop-filter: blur(12px);
+      border-radius: var(--radius-lg);
+      padding: 24px 0;
+      box-shadow: var(--shadow-soft);
+      border: 1px solid rgba(255, 255, 255, 0.55);
+      animation: fadeUp 0.6s ease 0.1s both;
+    }
+
+    .table-wrapper {
+      overflow-x: auto;
+    }
+
+    .listings-table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 900px;
+    }
+
+    .listings-table thead {
+      text-align: left;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      background: rgba(0, 77, 64, 0.08);
+    }
+
+    .listings-table th,
+    .listings-table td {
+      padding: 16px 24px;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+    }
+
+    .listings-table tbody tr {
+      transition: background 0.2s ease;
+    }
+
+    .listings-table tbody tr:hover {
+      background: rgba(0, 77, 64, 0.04);
+    }
+
+    .thumb {
+      width: 56px;
+      height: 56px;
+      border-radius: 16px;
+      object-fit: cover;
+      background: rgba(0, 0, 0, 0.08);
+    }
+
+    .status-chip {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 999px;
+      padding: 6px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--white);
+    }
+
+    .status-pending {
+      background: var(--pending);
+    }
+
+    .status-approved {
+      background: var(--emerald);
+    }
+
+    .status-rejected {
+      background: var(--rejected);
+    }
+
+    .action-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .btn-sm {
+      padding: 10px 14px;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-approve {
+      background: var(--emerald);
+      color: var(--white);
+    }
+
+    .btn-reject {
+      background: var(--orange);
+      color: var(--white);
+    }
+
+    .btn-delete {
+      background: transparent;
+      color: var(--rejected);
+      border: 1px solid rgba(216, 67, 21, 0.4);
+    }
+
+    .btn-view {
+      background: rgba(0, 77, 64, 0.1);
+      color: var(--emerald);
+    }
+
+    .btn-sm:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 10px 20px rgba(0, 0, 0, 0.12);
+    }
+
+    .mobile-card {
+      display: none;
+      flex-direction: column;
+      gap: 16px;
+      background: rgba(255, 255, 255, 0.92);
+      padding: 20px;
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-card);
+      border: 1px solid rgba(255, 255, 255, 0.6);
+      animation: fadeUp 0.45s ease both;
+    }
+
+    .mobile-card-header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .mobile-card h4 {
+      font-family: 'Anton', sans-serif;
+      font-size: clamp(16px, 4vw, 20px);
+    }
+
+    .mobile-meta {
+      display: grid;
+      gap: 6px;
+      font-size: 14px;
+      color: rgba(17, 17, 17, 0.72);
+    }
+
+    .mobile-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 36px 16px;
+      color: rgba(17, 17, 17, 0.6);
+      font-size: 15px;
+    }
+
+    .loader {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 40px 16px;
+      color: rgba(17, 17, 17, 0.7);
+    }
+
+    .loader span {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--emerald);
+      animation: bounce 0.8s infinite alternate;
+    }
+
+    .loader span:nth-child(2) {
+      animation-delay: 0.15s;
+    }
+
+    .loader span:nth-child(3) {
+      animation-delay: 0.3s;
+    }
+
+    .pagination {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      padding: 24px 16px 8px;
+    }
+
+    .pagination button {
+      padding: 12px 18px;
+      border-radius: 12px;
+      background: rgba(0, 77, 64, 0.12);
+      color: var(--emerald);
+      font-weight: 600;
+    }
+
+    .pagination button:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+
+    .pagination span {
+      font-weight: 600;
+    }
+
+    footer {
+      background: var(--beige);
+      padding: 24px 16px;
+      text-align: center;
+      color: rgba(17, 17, 17, 0.7);
+      font-size: 14px;
+      margin-top: auto;
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(120%);
+      background: rgba(0, 77, 64, 0.92);
+      color: var(--white);
+      padding: 16px 22px;
+      border-radius: 16px;
+      box-shadow: var(--shadow-soft);
+      font-weight: 600;
+      opacity: 0;
+      transition: transform 0.32s ease, opacity 0.32s ease;
+      z-index: 40;
+    }
+
+    .toast.show {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+    }
+
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(12, 24, 21, 0.45);
+      backdrop-filter: blur(6px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 30;
+      padding: 16px;
+    }
+
+    .modal-backdrop.active {
+      display: flex;
+      animation: fadeIn 0.32s ease;
+    }
+
+    .modal {
+      width: min(480px, 100%);
+      background: rgba(255, 255, 255, 0.96);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      box-shadow: var(--shadow-soft);
+      border: 1px solid rgba(243, 115, 30, 0.4);
+      transform: translateY(-12px);
+      animation: slideDown 0.38s ease both;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .modal h3 {
+      font-family: 'Anton', sans-serif;
+      font-size: clamp(20px, 4vw, 24px);
+      color: var(--emerald);
+    }
+
+    .modal textarea {
+      width: 100%;
+      min-height: 120px;
+      border-radius: 14px;
+      border: 1px solid rgba(0, 0, 0, 0.1);
+      padding: 14px;
+      resize: vertical;
+      font-family: inherit;
+      font-size: 15px;
+    }
+
+    .modal textarea:focus {
+      outline: none;
+      border-color: rgba(0, 77, 64, 0.4);
+      box-shadow: 0 0 0 4px rgba(0, 77, 64, 0.18);
+    }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .btn-outline {
+      background: transparent;
+      border: 1px solid rgba(0, 77, 64, 0.35);
+      color: var(--emerald);
+      padding: 12px 18px;
+      border-radius: 12px;
+      font-weight: 600;
+    }
+
+    .btn-accent {
+      background: var(--orange);
+      color: var(--white);
+      padding: 12px 20px;
+      border-radius: 12px;
+      font-weight: 600;
+    }
+
+    .btn-danger {
+      background: var(--rejected);
+      color: var(--white);
+      padding: 12px 20px;
+      border-radius: 12px;
+      font-weight: 600;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    @keyframes fadeUp {
+      from {
+        opacity: 0;
+        transform: translateY(24px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes bounce {
+      to {
+        transform: translateY(-6px);
+        opacity: 0.4;
+      }
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+      }
+      to {
+        opacity: 1;
+      }
+    }
+
+    @keyframes slideDown {
+      from {
+        opacity: 0;
+        transform: translateY(-24px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @media (min-width: 720px) {
+      .control-row {
+        flex-direction: row;
+      }
+      .control-row .field {
+        max-width: 360px;
+      }
+      .actions {
+        justify-content: flex-end;
+      }
+    }
+
+    @media (min-width: 900px) {
+      .listings-container {
+        overflow-x: auto;
+      }
+    }
+
+    @media (max-width: 899px) {
+      .listings-table {
+        display: none;
+      }
+      .mobile-card {
+        display: flex;
+      }
+      .listings-wrapper {
+        padding-inline: clamp(16px, 4vw, 32px);
+      }
+    }
+
+    @media (min-width: 900px) {
+      .mobile-card {
+        display: none !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <header>
+    <div class="topbar">
+      <div class="topbar-left">
+        <a href="admin.html" class="icon-btn" aria-label="Go back to Admin Overview">
+          <i class="ri-arrow-left-line"></i>
+        </a>
+        <img src="logo.jpeg" alt="YUSTAM logo" class="logo-img">
+        <h1>YUSTAM Admin</h1>
+      </div>
+      <div class="topbar-actions">
+        <button class="icon-btn" id="notificationsBtn" aria-label="View notifications">
+          <i class="ri-notification-3-line"></i>
+          <span id="notificationBadge" class="hidden" style="position:absolute;top:12px;right:12px;width:10px;height:10px;border-radius:50%;background:#f3731e;"></span>
+        </button>
+        <button class="icon-btn" id="logoutBtn" aria-label="Logout">
+          <i class="ri-logout-box-r-line"></i>
+        </button>
+      </div>
+    </div>
+    <div class="accent-bar"></div>
+  </header>
+
+  <main>
+    <section class="page-header">
+      <h2>All Listings</h2>
+      <p>Manage every listing across the YUSTAM marketplace. Search, filter, moderate, and keep quality high for our community.</p>
+    </section>
+
+    <!-- Filters -->
+    <section class="controls-bar" aria-label="Listings controls">
+      <div class="control-row">
+        <div class="field">
+          <i class="ri-search-2-line" aria-hidden="true"></i>
+          <input type="search" id="searchInput" placeholder="Search by title or vendor name…" aria-label="Search listings" />
+        </div>
+      </div>
+      <div class="control-row">
+        <div class="field">
+          <i class="ri-grid-line" aria-hidden="true"></i>
+          <select id="categoryFilter" aria-label="Filter by category">
+            <option value="all">All Categories</option>
+            <option>Phones &amp; Tablets</option>
+            <option>Electronics</option>
+            <option>Computing</option>
+            <option>Fashion</option>
+            <option>Beauty &amp; Self-Care</option>
+            <option>Home &amp; Kitchen</option>
+            <option>Furniture</option>
+            <option>Vehicles</option>
+            <option>Property</option>
+            <option>Power Solutions</option>
+            <option>Food &amp; Groceries</option>
+            <option>Services</option>
+            <option>Others</option>
+          </select>
+        </div>
+        <div class="field">
+          <i class="ri-filter-3-line" aria-hidden="true"></i>
+          <select id="statusFilter" aria-label="Filter by status">
+            <option value="all">All Status</option>
+            <option value="pending">Pending</option>
+            <option value="approved">Approved</option>
+            <option value="rejected">Rejected</option>
+          </select>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn-refresh" id="refreshBtn">
+          <i class="ri-refresh-line"></i>
+          Refresh
+        </button>
+      </div>
+    </section>
+
+    <!-- Listings Table -->
+    <section class="listings-wrapper">
+      <div id="loader" class="loader">
+        <span></span>
+        <span></span>
+        <span></span>
+        <p>Loading listings…</p>
+      </div>
+      <div id="listingsContainer" class="listings-container hidden">
+        <div class="table-wrapper">
+          <table class="listings-table" aria-describedby="tableDescription">
+            <caption id="tableDescription" class="hidden">All listings table</caption>
+            <thead>
+              <tr>
+                <th scope="col">Listing</th>
+                <th scope="col">Category</th>
+                <th scope="col">Vendor</th>
+                <th scope="col">Plan</th>
+                <th scope="col">Status</th>
+                <th scope="col">Date Added</th>
+                <th scope="col">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+          </table>
+        </div>
+        <div id="cardsContainer" class="cards-container"></div>
+        <div id="emptyState" class="empty-state hidden">No listings match your current filters. Try adjusting your search.</div>
+        <div id="pagination" class="pagination hidden">
+          <button id="prevPage" disabled>Previous</button>
+          <span id="pageIndicator">Page 1</span>
+          <button id="nextPage" disabled>Next</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Feedback Modal -->
+  <div id="feedbackModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="modal">
+      <h3>Reject Listing</h3>
+      <p>Enter detailed reason for rejection or what the vendor should fix.</p>
+      <textarea id="feedbackMessage" placeholder="Enter detailed reason for rejection or what to fix"></textarea>
+      <div class="modal-actions">
+        <button class="btn-outline" id="cancelFeedback">Cancel</button>
+        <button class="btn-accent" id="submitFeedback">Send Feedback</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete Modal -->
+  <div id="deleteModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="modal">
+      <h3>Delete Listing</h3>
+      <p>Are you sure you want to permanently delete this listing?</p>
+      <div class="modal-actions">
+        <button class="btn-outline" id="cancelDelete">Cancel</button>
+        <button class="btn-danger" id="confirmDelete">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <footer>
+    © 2025 YUSTAM — Built for Nigeria.
+  </footer>
+
+  <!-- Firebase Logic -->
+  
+    <script type="module" src="admin-listings.js"></script>
+<script type="module" src="firebase.js"></script>
+</body>
+</html>
+

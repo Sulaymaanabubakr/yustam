@@ -1,0 +1,649 @@
+<?php
+ini_set('session.save_path', '/home2/yustamco/tmp');
+session_start();
+
+require_once __DIR__ . '/db.php';
+
+if (!isset($_SESSION['vendor_id'])) {
+    if (isset($_GET['format']) && $_GET['format'] === 'json') {
+        header('Content-Type: application/json');
+        http_response_code(401);
+        echo json_encode(['success' => false, 'message' => 'You must sign in to view this profile.']);
+        exit;
+    }
+    header('Location: vendor-login.html');
+    exit;
+}
+
+$vendorId = (int)$_SESSION['vendor_id'];
+$db = get_db_connection();
+
+$stmt = $db->prepare('SELECT * FROM ' . YUSTAM_USERS_TABLE . ' WHERE id = ? LIMIT 1');
+$stmt->bind_param('i', $vendorId);
+$stmt->execute();
+$result = $stmt->get_result();
+$vendor = $result->fetch_assoc();
+$stmt->close();
+
+if (!$vendor) {
+    if (isset($_GET['format']) && $_GET['format'] === 'json') {
+        header('Content-Type: application/json');
+        http_response_code(404);
+        echo json_encode(['success' => false, 'message' => 'We could not find your vendor record.']);
+        exit;
+    }
+    header('Location: logout.php');
+    exit;
+}
+
+$nameColumn = yustam_users_column('name');
+$profile = [
+    'name' => $vendor[$nameColumn] ?? '',
+    'businessName' => yustam_users_table_has_column('business_name') ? ($vendor['business_name'] ?? '') : '',
+    'email' => $vendor['email'] ?? '',
+    'phone' => yustam_users_table_has_column('phone') ? ($vendor['phone'] ?? '') : '',
+    'address' => yustam_users_table_has_column('business_address') ? ($vendor['business_address'] ?? '') : '',
+    'state' => yustam_users_table_has_column('state') ? ($vendor['state'] ?? '') : '',
+    'plan' => yustam_users_table_has_column('plan') ? ($vendor['plan'] ?? 'Free') : 'Free',
+    'joined' => (yustam_users_table_has_column('created_at') && isset($vendor['created_at'])) ? date('j M Y', strtotime($vendor['created_at'])) : '—',
+    'profilePhoto' => yustam_users_table_has_column('profile_photo') ? ($vendor['profile_photo'] ?? '') : '',
+];
+
+if (isset($_GET['format']) && $_GET['format'] === 'json') {
+    header('Content-Type: application/json');
+    echo json_encode(['success' => true, 'profile' => $profile], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    exit;
+}
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>YUSTAM Vendor Profile</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet" />
+  <style>
+    :root {
+      --emerald: #004d40;
+      --orange: #f3731e;
+      --beige: #eadccf;
+      --white: #ffffff;
+      --ink: #111111;
+      --glass: rgba(255, 255, 255, 0.8);
+      --shadow: 0 20px 40px rgba(17, 17, 17, 0.08);
+    }
+
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Inter", sans-serif;
+      background: radial-gradient(circle at top right, rgba(0, 77, 64, 0.12), transparent 55%),
+        radial-gradient(circle at bottom left, rgba(243, 115, 30, 0.12), transparent 50%),
+        var(--beige);
+      color: var(--ink);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      background: rgba(0, 77, 64, 0.95);
+      color: var(--white);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 20px;
+      backdrop-filter: blur(6px);
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+    }
+
+    header h1 {
+      font-family: "Anton", sans-serif;
+      font-size: clamp(20px, 4vw, 26px);
+      letter-spacing: 0.5px;
+      margin: 0;
+    }
+
+    .header-btn {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      border: none;
+      background: rgba(255, 255, 255, 0.14);
+      color: var(--white);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      cursor: pointer;
+      transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
+        background 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
+        box-shadow 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+
+    .header-btn:hover,
+    .header-btn:focus-visible {
+      transform: translateY(-2px) scale(1.02);
+      background: rgba(255, 255, 255, 0.22);
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+    }
+
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 80px 16px 48px;
+      gap: 24px;
+    }
+
+    .loader {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      color: var(--emerald);
+      font-weight: 600;
+      padding: 12px 20px;
+      background: rgba(255, 255, 255, 0.7);
+      border-radius: 999px;
+      box-shadow: var(--shadow);
+      animation: float 3s ease-in-out infinite;
+    }
+
+    .loader span {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--emerald);
+      animation: pulse 1s ease-in-out infinite;
+    }
+
+    .loader span:nth-child(2) {
+      animation-delay: 0.15s;
+    }
+
+    .loader span:nth-child(3) {
+      animation-delay: 0.3s;
+    }
+
+    .profile-card {
+      width: min(100%, 480px);
+      background: var(--glass);
+      backdrop-filter: blur(12px);
+      border-radius: 24px;
+      padding: 28px 24px;
+      box-shadow: var(--shadow);
+      position: relative;
+      overflow: hidden;
+      transform-origin: top;
+      transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+        opacity 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+
+    .profile-card.hidden {
+      opacity: 0;
+      transform: translateY(20px);
+      pointer-events: none;
+      visibility: hidden;
+    }
+
+    .profile-card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0));
+      pointer-events: none;
+    }
+
+    .card-header {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .avatar-wrap {
+      position: relative;
+      width: 110px;
+      height: 110px;
+    }
+
+    .avatar-wrap img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      border-radius: 50%;
+      border: 4px solid rgba(0, 77, 64, 0.15);
+      box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12);
+      background: var(--white);
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      background: rgba(0, 77, 64, 0.08);
+      color: var(--emerald);
+    }
+
+    .info-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 18px;
+    }
+
+    .info-item {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .info-item label {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: rgba(17, 17, 17, 0.55);
+      font-weight: 600;
+    }
+
+    .info-item p {
+      margin: 0;
+      font-size: clamp(15px, 2.4vw, 16px);
+      font-weight: 600;
+      color: var(--ink);
+    }
+
+    .actions {
+      margin-top: 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      border: none;
+      border-radius: 14px;
+      font-size: 15px;
+      font-weight: 600;
+      padding: 14px 20px;
+      cursor: pointer;
+      transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
+        box-shadow 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
+        filter 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+
+    .btn:disabled {
+      cursor: not-allowed;
+      opacity: 0.7;
+      transform: none;
+      box-shadow: none;
+    }
+
+    .btn:hover:not(:disabled),
+    .btn:focus-visible:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 16px 30px rgba(0, 0, 0, 0.12);
+    }
+
+    .btn-accent {
+      background: linear-gradient(135deg, #f3731e, #f58a43);
+      color: var(--white);
+    }
+
+    .btn-emerald {
+      background: var(--emerald);
+      color: var(--white);
+    }
+
+    .btn-outline {
+      background: rgba(0, 77, 64, 0.08);
+      color: var(--emerald);
+    }
+
+    .edit-form {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .form-row {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .form-row label {
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: rgba(17, 17, 17, 0.6);
+    }
+
+    .input-field,
+    .input-select {
+      width: 100%;
+      padding: 14px 16px;
+      border-radius: 14px;
+      border: 1px solid rgba(17, 17, 17, 0.12);
+      background: rgba(255, 255, 255, 0.9);
+      font-size: 15px;
+      transition: border 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .input-field:focus,
+    .input-select:focus {
+      outline: none;
+      border-color: rgba(0, 77, 64, 0.45);
+      box-shadow: 0 0 0 4px rgba(0, 77, 64, 0.12);
+    }
+
+    .input-field[disabled] {
+      background: rgba(17, 17, 17, 0.05);
+      color: rgba(17, 17, 17, 0.6);
+      cursor: not-allowed;
+    }
+
+    .upload-preview {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .upload-preview img {
+      width: 84px;
+      height: 84px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 3px solid rgba(0, 77, 64, 0.18);
+      background: var(--white);
+    }
+
+    .upload-preview button {
+      padding: 10px 16px;
+      border-radius: 12px;
+      border: 1px dashed rgba(0, 77, 64, 0.4);
+      background: rgba(0, 77, 64, 0.08);
+      color: var(--emerald);
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s ease, transform 0.2s ease;
+    }
+
+    .upload-preview button:hover,
+    .upload-preview button:focus-visible {
+      background: rgba(0, 77, 64, 0.18);
+      transform: translateY(-1px);
+    }
+
+    .edit-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: 32px;
+      transform: translate(-50%, 120%);
+      background: rgba(0, 77, 64, 0.95);
+      color: var(--white);
+      padding: 14px 22px;
+      border-radius: 16px;
+      font-weight: 600;
+      box-shadow: 0 18px 30px rgba(0, 0, 0, 0.22);
+      opacity: 0;
+      transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1),
+        opacity 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+      z-index: 40;
+    }
+
+    .toast.show {
+      transform: translate(-50%, 0);
+      opacity: 1;
+    }
+
+    footer {
+      margin-top: auto;
+      background: rgba(234, 220, 207, 0.85);
+      text-align: center;
+      padding: 24px 16px;
+      font-size: 14px;
+      color: rgba(17, 17, 17, 0.65);
+      backdrop-filter: blur(8px);
+    }
+
+    @media (min-width: 600px) {
+      main {
+        padding-top: 100px;
+      }
+
+      .profile-card {
+        padding: 36px 32px;
+      }
+
+      .edit-actions {
+        flex-direction: row;
+      }
+
+      .edit-actions .btn {
+        flex: 1;
+      }
+    }
+
+    @keyframes pulse {
+      0%,
+      100% {
+        transform: scale(0.9);
+        opacity: 0.6;
+      }
+
+      50% {
+        transform: scale(1.1);
+        opacity: 1;
+      }
+    }
+
+    @keyframes float {
+      0%,
+      100% {
+        transform: translateY(0);
+      }
+
+      50% {
+        transform: translateY(-6px);
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <header>
+    <button class="header-btn" aria-label="Back to dashboard" onclick="window.location.href='vendor-dashboard.php'">
+      <i class="ri-arrow-left-line" aria-hidden="true"></i>
+    </button>
+    <h1>My Profile</h1>
+    <button class="header-btn" aria-label="Logout" id="logoutBtn">
+      <i class="ri-logout-box-r-line" aria-hidden="true"></i>
+    </button>
+  </header>
+
+  <main>
+    <div class="loader" id="loadingState" role="status">
+      <span></span><span></span><span></span>
+      Preparing your profile…
+    </div>
+
+    <!-- View Mode -->
+    <section class="profile-card hidden" id="viewMode" aria-live="polite">
+      <div class="card-header">
+        <div class="avatar-wrap">
+          <img src="" alt="Vendor profile picture" id="viewAvatar" />
+        </div>
+        <div class="status-pill" id="planBadge">
+          <i class="ri-vip-crown-line" aria-hidden="true"></i>
+          <span id="planTypeText">Plan</span>
+        </div>
+      </div>
+      <div class="info-grid">
+        <div class="info-item">
+          <label>Vendor Name</label>
+          <p id="viewVendorName">—</p>
+        </div>
+        <div class="info-item">
+          <label>Business Name</label>
+          <p id="viewBusinessName">—</p>
+        </div>
+        <div class="info-item">
+          <label>Email</label>
+          <p id="viewEmail">—</p>
+        </div>
+        <div class="info-item">
+          <label>Phone Number</label>
+          <p id="viewPhone">—</p>
+        </div>
+        <div class="info-item">
+          <label>Business Address</label>
+          <p id="viewAddress">—</p>
+        </div>
+        <div class="info-item">
+          <label>State</label>
+          <p id="viewState">—</p>
+        </div>
+        <div class="info-item">
+          <label>Join Date</label>
+          <p id="viewJoinDate">—</p>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-accent" id="editBtn">
+          <i class="ri-edit-line" aria-hidden="true"></i>
+          Edit Profile
+        </button>
+      </div>
+    </section>
+
+    <!-- Edit Mode -->
+    <section class="profile-card hidden" id="editMode" aria-live="polite">
+      <form class="edit-form" id="profileForm">
+        <div class="form-row">
+          <label for="avatarInput">Profile Picture</label>
+          <div class="upload-preview">
+            <img src="" alt="Profile preview" id="editAvatarPreview" />
+            <div>
+              <button type="button" id="uploadTrigger">Upload New</button>
+              <input type="file" id="avatarInput" accept="image/*" hidden />
+              <p style="font-size: 12px; color: rgba(17, 17, 17, 0.55); margin: 8px 0 0;">PNG or JPG up to 2MB.</p>
+            </div>
+          </div>
+        </div>
+        <div class="form-row">
+          <label for="vendorNameInput">Vendor Name</label>
+          <input class="input-field" type="text" id="vendorNameInput" required />
+        </div>
+        <div class="form-row">
+          <label for="businessNameInput">Business Name</label>
+          <input class="input-field" type="text" id="businessNameInput" required />
+        </div>
+        <div class="form-row">
+          <label for="emailInput">Email</label>
+          <input class="input-field" type="email" id="emailInput" disabled />
+        </div>
+        <div class="form-row">
+          <label for="phoneInput">Phone Number</label>
+          <input class="input-field" type="tel" id="phoneInput" disabled />
+        </div>
+        <div class="form-row">
+          <label for="addressInput">Business Address</label>
+          <input class="input-field" type="text" id="addressInput" required />
+        </div>
+        <div class="form-row">
+          <label for="stateSelect">State</label>
+          <select class="input-select" id="stateSelect" required>
+            <option value="">Select State</option>
+            <option value="Abia">Abia</option>
+            <option value="Adamawa">Adamawa</option>
+            <option value="Akwa Ibom">Akwa Ibom</option>
+            <option value="Anambra">Anambra</option>
+            <option value="Bauchi">Bauchi</option>
+            <option value="Bayelsa">Bayelsa</option>
+            <option value="Benue">Benue</option>
+            <option value="Borno">Borno</option>
+            <option value="Cross River">Cross River</option>
+            <option value="Delta">Delta</option>
+            <option value="Ebonyi">Ebonyi</option>
+            <option value="Edo">Edo</option>
+            <option value="Ekiti">Ekiti</option>
+            <option value="Enugu">Enugu</option>
+            <option value="Gombe">Gombe</option>
+            <option value="Imo">Imo</option>
+            <option value="Jigawa">Jigawa</option>
+            <option value="Kaduna">Kaduna</option>
+            <option value="Kano">Kano</option>
+            <option value="Katsina">Katsina</option>
+            <option value="Kebbi">Kebbi</option>
+            <option value="Kogi">Kogi</option>
+            <option value="Kwara">Kwara</option>
+            <option value="Lagos">Lagos</option>
+            <option value="Nasarawa">Nasarawa</option>
+            <option value="Niger">Niger</option>
+            <option value="Ogun">Ogun</option>
+            <option value="Ondo">Ondo</option>
+            <option value="Osun">Osun</option>
+            <option value="Oyo">Oyo</option>
+            <option value="Plateau">Plateau</option>
+            <option value="Rivers">Rivers</option>
+            <option value="Sokoto">Sokoto</option>
+            <option value="Taraba">Taraba</option>
+            <option value="Yobe">Yobe</option>
+            <option value="Zamfara">Zamfara</option>
+            <option value="FCT Abuja">FCT Abuja</option>
+          </select>
+        </div>
+        <div class="edit-actions">
+          <button class="btn btn-emerald" type="submit" id="saveBtn">
+            <i class="ri-save-3-line" aria-hidden="true"></i>
+            Save Changes
+          </button>
+          <button class="btn btn-outline" type="button" id="cancelBtn">
+            <i class="ri-close-line" aria-hidden="true"></i>
+            Cancel
+          </button>
+        </div>
+      </form>
+    </section>
+  </main>
+
+  <footer>
+    © 2025 YUSTAM — Built for Nigeria.
+  </footer>
+
+  <div class="toast" id="toast" role="status" aria-live="assertive">Profile updated successfully.</div>
+
+  <script type="module" src="vendor-profile.js"></script>
+</body>
+</html>
+

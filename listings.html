@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YUSTAM Marketplace | All Listings</title>
+    <meta name="description" content="Browse all listings from verified YUSTAM Marketplace vendors across Nigeria.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
+    <style>
+        :root {
+            --emerald: #004D40;
+            --orange: #F3731E;
+            --orange-light: #FF8A3C;
+            --beige: #EADCCF;
+            --white: #FFFFFF;
+            --ink: #1A1A1A;
+            --glass-bg: rgba(255, 255, 255, 0.82);
+            --card-border: rgba(255, 255, 255, 0.24);
+            --radius-lg: 20px;
+            --radius-md: 16px;
+            --shadow-soft: 0 14px 34px rgba(0, 0, 0, 0.08);
+            --transition-base: all 240ms ease;
+            --page-padding: clamp(18px, 4vw, 32px);
+        }
+
+        *, *::before, *::after {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-size: 16px;
+            line-height: 1.6;
+            color: var(--ink);
+            background: linear-gradient(180deg, rgba(234, 220, 207, 0.55) 0%, rgba(255, 255, 255, 0.95) 50%, rgba(234, 220, 207, 0.45) 100%);
+            backdrop-filter: blur(2px);
+            -webkit-font-smoothing: antialiased;
+        }
+
+        img {
+            max-width: 100%;
+            display: block;
+            border-radius: var(--radius-md);
+        }
+
+        a {
+            color: inherit;
+            text-decoration: none;
+        }
+
+        button, select, input {
+            font: inherit;
+        }
+
+        main {
+            width: min(1200px, calc(100% - var(--page-padding) * 2));
+            margin: 0 auto;
+            padding: clamp(88px, 12vw, 120px) 0 clamp(80px, 10vw, 110px);
+        }
+
+        .glass-surface {
+            background: var(--glass-bg);
+            backdrop-filter: blur(14px);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-soft);
+        }
+
+        .section-title {
+            font-family: 'Anton', sans-serif;
+            font-size: clamp(2rem, 1.5rem + 2vw, 2.6rem);
+            letter-spacing: 0.5px;
+            color: var(--emerald);
+        }
+
+        .subtle-text {
+            color: rgba(17, 17, 17, 0.7);
+            font-size: 0.95rem;
+        }
+
+        .action-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            background: linear-gradient(135deg, var(--orange), var(--orange-light));
+            color: var(--white);
+            border: none;
+            border-radius: 14px;
+            padding: 12px 18px;
+            font-weight: 600;
+            box-shadow: 0 12px 24px rgba(243, 115, 30, 0.28);
+            transition: transform 220ms ease, box-shadow 220ms ease;
+            cursor: pointer;
+        }
+
+        .action-btn:hover {
+            transform: translateY(-2px) scale(1.01);
+            box-shadow: 0 16px 34px rgba(243, 115, 30, 0.32);
+        }
+
+        .action-btn:active {
+            transform: translateY(0);
+            box-shadow: 0 10px 18px rgba(243, 115, 30, 0.28);
+        }
+
+        /* Header */
+        header {
+            position: sticky;
+            top: 0;
+            z-index: 50;
+            backdrop-filter: blur(18px);
+            background: rgba(234, 220, 207, 0.86);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.4);
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.08);
+        }
+
+        .header-inner {
+            width: min(1200px, calc(100% - var(--page-padding)));
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: auto 1fr auto;
+            align-items: center;
+            gap: 16px;
+            padding: 18px 0;
+        }
+
+        .header-logo {
+            font-family: 'Anton', sans-serif;
+            font-size: 1.75rem;
+            color: var(--emerald);
+            letter-spacing: 1.4px;
+        }
+
+        .header-title {
+            justify-self: center;
+            font-family: 'Anton', sans-serif;
+            font-size: clamp(1.35rem, 1rem + 1vw, 1.8rem);
+            color: var(--emerald);
+            letter-spacing: 0.6px;
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .icon-pill {
+            width: 44px;
+            height: 44px;
+            display: grid;
+            place-items: center;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.85);
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.08);
+            color: var(--emerald);
+            transition: var(--transition-base);
+        }
+
+        .icon-pill:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 22px rgba(0, 0, 0, 0.12);
+        }
+
+        .header-underline {
+            height: 3px;
+            background: linear-gradient(90deg, rgba(243, 115, 30, 0.8), transparent 70%);
+            border-radius: 999px;
+            width: min(1200px, calc(100% - var(--page-padding)));
+            margin: 0 auto;
+        }
+
+        /* Filters */
+        .filters {
+            margin-top: clamp(26px, 6vw, 48px);
+            padding: clamp(18px, 4vw, 28px);
+            display: grid;
+            gap: 18px;
+        }
+
+        .filters form {
+            display: grid;
+            gap: 14px;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .filter-field {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .filter-field label {
+            font-weight: 600;
+            color: rgba(0, 77, 64, 0.85);
+            font-size: 0.88rem;
+        }
+
+        .filter-control {
+            width: 100%;
+            padding: 12px 14px;
+            border-radius: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            background: rgba(234, 220, 207, 0.8);
+            color: var(--emerald);
+            box-shadow: inset 0 1px 4px rgba(255, 255, 255, 0.4);
+            outline: none;
+            transition: var(--transition-base);
+        }
+
+        .filter-control:focus {
+            border-color: rgba(243, 115, 30, 0.6);
+            box-shadow: 0 0 0 3px rgba(243, 115, 30, 0.18);
+        }
+
+        .filter-control::placeholder {
+            color: rgba(0, 77, 64, 0.55);
+        }
+
+        .filter-actions {
+            display: grid;
+            gap: 12px;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .filter-actions button {
+            width: 100%;
+        }
+
+        /* Listings Grid */
+        .listings-section {
+            margin-top: clamp(30px, 6vw, 60px);
+            padding: clamp(20px, 5vw, 34px);
+            display: flex;
+            flex-direction: column;
+            gap: clamp(22px, 4vw, 34px);
+        }
+
+        .listings-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 14px;
+        }
+
+        .listing-card {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            border-radius: 18px;
+            overflow: hidden;
+            background: rgba(255, 255, 255, 0.88);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 18px 30px rgba(0, 0, 0, 0.06);
+            backdrop-filter: blur(12px);
+            transition: transform 240ms ease, box-shadow 240ms ease;
+            animation: fadeUp 520ms ease both;
+        }
+
+        .listing-card:hover {
+            transform: translateY(-6px);
+            box-shadow: 0 24px 38px rgba(243, 115, 30, 0.24);
+            border-color: rgba(243, 115, 30, 0.5);
+        }
+
+        .listing-thumb {
+            position: relative;
+            height: 190px;
+            overflow: hidden;
+        }
+
+        .listing-thumb img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 0;
+        }
+
+        .listing-body {
+            padding: 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .listing-title {
+            font-family: 'Anton', sans-serif;
+            font-size: 1.1rem;
+            letter-spacing: 0.4px;
+            color: var(--emerald);
+        }
+
+        .listing-price {
+            font-weight: 700;
+            color: var(--orange);
+            font-size: 1.05rem;
+        }
+
+        .listing-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px 16px;
+            font-size: 0.9rem;
+            color: rgba(26, 26, 26, 0.65);
+        }
+
+        .listing-meta span {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .listing-footer {
+            margin-top: auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .listing-footer .action-btn {
+            width: 100%;
+            padding: 11px;
+            font-size: 0.95rem;
+        }
+
+        .empty-state {
+            display: none;
+            text-align: center;
+            padding: 60px 20px;
+            border-radius: var(--radius-lg);
+            background: rgba(255, 255, 255, 0.8);
+            border: 1px dashed rgba(0, 77, 64, 0.24);
+        }
+
+        .empty-state.active {
+            display: block;
+        }
+
+        .empty-state img {
+            width: min(220px, 80%);
+            margin: 0 auto 18px;
+        }
+
+        .empty-state h3 {
+            font-family: 'Anton', sans-serif;
+            color: var(--emerald);
+            margin-bottom: 10px;
+            font-size: 1.5rem;
+        }
+
+        .empty-state p {
+            margin: 0;
+            color: rgba(26, 26, 26, 0.7);
+        }
+
+        /* Pagination */
+        .pagination {
+            margin-top: clamp(34px, 8vw, 56px);
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .pagination .action-btn {
+            min-width: 200px;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            border-top-color: var(--white);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        .showing-text {
+            font-size: 0.95rem;
+            color: rgba(17, 17, 17, 0.65);
+        }
+
+        /* WhatsApp Support */
+        .whatsapp-support {
+            position: fixed;
+            right: clamp(16px, 4vw, 32px);
+            bottom: clamp(16px, 4vw, 32px);
+            z-index: 40;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 10px;
+        }
+
+        .support-tooltip {
+            background: rgba(0, 77, 64, 0.88);
+            color: var(--white);
+            padding: 10px 14px;
+            border-radius: 14px;
+            font-size: 0.9rem;
+            box-shadow: 0 12px 18px rgba(0, 0, 0, 0.12);
+        }
+
+        .whatsapp-btn {
+            width: 58px;
+            height: 58px;
+            border-radius: 50%;
+            background: linear-gradient(140deg, #25D366, #1EBE54);
+            border: none;
+            color: var(--white);
+            display: grid;
+            place-items: center;
+            font-size: 1.6rem;
+            box-shadow: 0 16px 26px rgba(37, 211, 102, 0.35);
+            cursor: pointer;
+            transition: transform 240ms ease, box-shadow 240ms ease;
+        }
+
+        .whatsapp-btn:hover {
+            transform: translateY(-4px) scale(1.05);
+            box-shadow: 0 20px 32px rgba(37, 211, 102, 0.4);
+        }
+
+        /* Footer */
+        footer {
+            background: rgba(234, 220, 207, 0.92);
+            border-top: 1px solid rgba(255, 255, 255, 0.45);
+            backdrop-filter: blur(12px);
+            padding: clamp(34px, 8vw, 48px) var(--page-padding);
+        }
+
+        .footer-inner {
+            width: min(1200px, 100%);
+            margin: 0 auto;
+            display: grid;
+            gap: 28px;
+        }
+
+        .footer-links,
+        .footer-social {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 14px;
+        }
+
+        .footer-link {
+            color: rgba(0, 77, 64, 0.85);
+            font-weight: 500;
+            transition: color 200ms ease;
+        }
+
+        .footer-link:hover {
+            color: var(--orange);
+        }
+
+        .footer-social a {
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            display: grid;
+            place-items: center;
+            background: rgba(255, 255, 255, 0.88);
+            color: var(--emerald);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.08);
+            transition: var(--transition-base);
+        }
+
+        .footer-social a:hover {
+            transform: translateY(-3px);
+            color: var(--orange);
+        }
+
+        .footer-meta {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            color: rgba(0, 77, 64, 0.8);
+            font-size: 0.95rem;
+        }
+
+        /* Animations */
+        @keyframes fadeUp {
+            from {
+                opacity: 0;
+                transform: translateY(26px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Responsive */
+        @media (min-width: 640px) {
+            .filters form {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+
+            .filter-actions {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+                align-items: end;
+            }
+
+            .filter-actions .action-btn {
+                grid-column: span 3;
+            }
+        }
+
+        @media (min-width: 768px) {
+            main {
+                padding-top: clamp(110px, 12vw, 140px);
+            }
+
+            .filters form {
+                grid-template-columns: repeat(6, minmax(0, 1fr));
+                column-gap: 16px;
+                row-gap: 18px;
+            }
+
+            .filter-field.search {
+                grid-column: span 2;
+            }
+
+            .filter-field.category,
+            .filter-field.location,
+            .filter-field.price,
+            .filter-field.sort {
+                grid-column: span 1;
+            }
+
+            .filter-actions {
+                grid-template-columns: minmax(0, 1fr) auto;
+                align-items: center;
+                gap: 16px;
+                grid-column: span 6;
+            }
+
+            .filter-actions .action-btn {
+                grid-column: auto;
+                min-width: 190px;
+            }
+
+            .listings-grid {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+                gap: 18px;
+            }
+        }
+
+        @media (min-width: 1024px) {
+            .header-inner {
+                padding: 22px 0;
+            }
+
+            .filters {
+                padding: 32px;
+            }
+
+            .filters form {
+                grid-template-columns: 2fr repeat(4, 1fr) auto;
+                align-items: end;
+            }
+
+            .filter-actions {
+                grid-template-columns: auto;
+                grid-column: auto;
+            }
+
+            .filter-actions .action-btn {
+                width: auto;
+            }
+
+            .listings-grid {
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+                gap: 22px;
+            }
+        }
+
+        @media (max-width: 520px) {
+            .header-inner {
+                grid-template-columns: auto auto auto;
+            }
+
+            .header-title {
+                font-size: 1.3rem;
+            }
+
+            .filters form {
+                grid-template-columns: 1fr;
+            }
+
+            .filter-actions {
+                grid-template-columns: 1fr;
+            }
+
+            .listings-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .listing-thumb {
+                height: 170px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header>
+        <div class="header-inner">
+            <a href="index.html" class="header-logo">YUSTAM</a>
+            <div class="header-title">Marketplace Listings</div>
+            <div class="header-actions">
+                <a href="shop.html" class="icon-pill" aria-label="Browse categories"><i class="ri-store-2-line"></i></a>
+                <a href="post.html" class="icon-pill" aria-label="Post a listing"><i class="ri-add-box-line"></i></a>
+                <a href="vendor-login.html" class="icon-pill" aria-label="Vendor login"><i class="ri-user-line"></i></a>
+                <a href="contact.html" class="icon-pill" aria-label="Contact support"><i class="ri-customer-service-2-line"></i></a>
+            </div>
+        </div>
+        <div class="header-underline"></div>
+    </header>
+
+    <main>
+        <!-- Filters -->
+        <section class="filters glass-surface">
+            <form>
+                <div class="filter-field search">
+                    <label for="searchInput">Search</label>
+                    <input id="searchInput" type="search" class="filter-control" placeholder="Search listings&hellip;">
+                </div>
+                <div class="filter-field category">
+                    <label for="categoryFilter">Category</label>
+                    <select id="categoryFilter" class="filter-control">
+                        <option>All Categories</option>
+                        <option>Phones &amp; Tablets</option>
+                        <option>Electronics</option>
+                        <option>Fashion</option>
+                        <option>Property</option>
+                        <option>Food &amp; Groceries</option>
+                        <option>Beauty</option>
+                        <option>Home &amp; Kitchen</option>
+                        <option>Vehicles</option>
+                        <option>Computing</option>
+                        <option>Power Solutions</option>
+                        <option>Services</option>
+                    </select>
+                </div>
+                <div class="filter-field location">
+                    <label for="locationFilter">Location</label>
+                    <select id="locationFilter" class="filter-control">
+                        <option>All Nigeria</option>
+                    </select>
+                </div>
+                <div class="filter-field price">
+                    <label for="priceFilter">Price Range</label>
+                    <select id="priceFilter" class="filter-control">
+                        <option>All</option>
+                        <option>₦0–₦10k</option>
+                        <option>₦10k–₦50k</option>
+                        <option>₦50k–₦100k</option>
+                        <option>₦100k+</option>
+                    </select>
+                </div>
+                <div class="filter-field sort">
+                    <label for="sortFilter">Sort By</label>
+                    <select id="sortFilter" class="filter-control">
+                        <option>Newest</option>
+                        <option>Price: Low → High</option>
+                        <option>Price: High → Low</option>
+                    </select>
+                </div>
+                <div class="filter-actions">
+                    <button type="button" id="filterBtn" class="action-btn"><i class="ri-filter-line"></i>Filter Listings</button>
+                </div>
+            </form>
+        </section>
+
+        <!-- Listings Grid -->
+        <section class="listings-section glass-surface">
+            <div>
+                <div class="section-title">Explore All Listings</div>
+                <p class="subtle-text">Discover premium products from trusted vendors across Nigeria. Use the filters above to narrow down your search.</p>
+            </div>
+
+            <div id="listingGrid" class="listings-grid">
+                <article class="listing-card" style="animation-delay: 40ms;">
+                    <div class="listing-thumb">
+                        <img src="https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=800&q=80" alt="Samsung Galaxy S23 Ultra">
+                    </div>
+                    <div class="listing-body">
+                        <div class="listing-title">Samsung Galaxy S23 Ultra</div>
+                        <div class="listing-price">₦780,000</div>
+                        <div class="listing-meta">
+                            <span><i class="ri-price-tag-3-line"></i> Phones &amp; Tablets</span>
+                            <span><i class="ri-store-2-line"></i> Prime Gadgets NG</span>
+                            <span><i class="ri-map-pin-2-line"></i> Lagos, Nigeria</span>
+                        </div>
+                        <div class="listing-footer">
+                            <a class="action-btn" href="product.html?id=101">View Details</a>
+                        </div>
+                    </div>
+                </article>
+                <article class="listing-card" style="animation-delay: 120ms;">
+                    <div class="listing-thumb">
+                        <img src="https://images.unsplash.com/photo-1555529669-e69e7aa0ba9f?auto=format&fit=crop&w=800&q=80" alt="Luxury Leather Handbag">
+                    </div>
+                    <div class="listing-body">
+                        <div class="listing-title">Luxury Leather Handbag</div>
+                        <div class="listing-price">₦120,000</div>
+                        <div class="listing-meta">
+                            <span><i class="ri-price-tag-3-line"></i> Fashion</span>
+                            <span><i class="ri-store-2-line"></i> Adunni Couture</span>
+                            <span><i class="ri-map-pin-2-line"></i> Abuja, Nigeria</span>
+                        </div>
+                        <div class="listing-footer">
+                            <a class="action-btn" href="product.html?id=102">View Details</a>
+                        </div>
+                    </div>
+                </article>
+                <article class="listing-card" style="animation-delay: 200ms;">
+                    <div class="listing-thumb">
+                        <img src="https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&w=800&q=80" alt="Waterfront Apartment">
+                    </div>
+                    <div class="listing-body">
+                        <div class="listing-title">Waterfront Apartment</div>
+                        <div class="listing-price">₦22,500,000</div>
+                        <div class="listing-meta">
+                            <span><i class="ri-price-tag-3-line"></i> Property</span>
+                            <span><i class="ri-store-2-line"></i> Luxe Realtors</span>
+                            <span><i class="ri-map-pin-2-line"></i> Victoria Island, Lagos</span>
+                        </div>
+                        <div class="listing-footer">
+                            <a class="action-btn" href="product.html?id=103">View Details</a>
+                        </div>
+                    </div>
+                </article>
+                <article class="listing-card" style="animation-delay: 280ms;">
+                    <div class="listing-thumb">
+                        <img src="https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=800&q=80" alt="MacBook Pro 16">
+                    </div>
+                    <div class="listing-body">
+                        <div class="listing-title">MacBook Pro 16&quot; M3</div>
+                        <div class="listing-price">₦1,150,000</div>
+                        <div class="listing-meta">
+                            <span><i class="ri-price-tag-3-line"></i> Computing</span>
+                            <span><i class="ri-store-2-line"></i> ByteCraft Hub</span>
+                            <span><i class="ri-map-pin-2-line"></i> Port Harcourt, Nigeria</span>
+                        </div>
+                        <div class="listing-footer">
+                            <a class="action-btn" href="product.html?id=104">View Details</a>
+                        </div>
+                    </div>
+                </article>
+                <article class="listing-card" style="animation-delay: 360ms;">
+                    <div class="listing-thumb">
+                        <img src="https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=800&q=80" alt="Chef On-Demand Service">
+                    </div>
+                    <div class="listing-body">
+                        <div class="listing-title">Chef On-Demand Service</div>
+                        <div class="listing-price">₦45,000</div>
+                        <div class="listing-meta">
+                            <span><i class="ri-price-tag-3-line"></i> Services</span>
+                            <span><i class="ri-store-2-line"></i> Taste of Lagos</span>
+                            <span><i class="ri-map-pin-2-line"></i> Lekki, Lagos</span>
+                        </div>
+                        <div class="listing-footer">
+                            <a class="action-btn" href="product.html?id=105">View Details</a>
+                        </div>
+                    </div>
+                </article>
+                <article class="listing-card" style="animation-delay: 440ms;">
+                    <div class="listing-thumb">
+                        <img src="https://images.unsplash.com/photo-1516117172878-fd2c41f4a759?auto=format&fit=crop&w=800&q=80" alt="Smart Solar Kit">
+                    </div>
+                    <div class="listing-body">
+                        <div class="listing-title">Smart Solar Kit</div>
+                        <div class="listing-price">₦350,000</div>
+                        <div class="listing-meta">
+                            <span><i class="ri-price-tag-3-line"></i> Power Solutions</span>
+                            <span><i class="ri-store-2-line"></i> SunGrid Energy</span>
+                            <span><i class="ri-map-pin-2-line"></i> Kaduna, Nigeria</span>
+                        </div>
+                        <div class="listing-footer">
+                            <a class="action-btn" href="product.html?id=106">View Details</a>
+                        </div>
+                    </div>
+                </article>
+                <article class="listing-card" style="animation-delay: 520ms;">
+                    <div class="listing-thumb">
+                        <img src="https://images.unsplash.com/photo-1595433562696-19fb8e4d0edb?auto=format&fit=crop&w=800&q=80" alt="Organic Skincare Set">
+                    </div>
+                    <div class="listing-body">
+                        <div class="listing-title">Organic Skincare Set</div>
+                        <div class="listing-price">₦28,500</div>
+                        <div class="listing-meta">
+                            <span><i class="ri-price-tag-3-line"></i> Beauty</span>
+                            <span><i class="ri-store-2-line"></i> Glow Haven</span>
+                            <span><i class="ri-map-pin-2-line"></i> Ibadan, Nigeria</span>
+                        </div>
+                        <div class="listing-footer">
+                            <a class="action-btn" href="product.html?id=107">View Details</a>
+                        </div>
+                    </div>
+                </article>
+                <article class="listing-card" style="animation-delay: 600ms;">
+                    <div class="listing-thumb">
+                        <img src="https://images.unsplash.com/photo-1526045612212-70caf35c14df?auto=format&fit=crop&w=800&q=80" alt="Premium Dining Set">
+                    </div>
+                    <div class="listing-body">
+                        <div class="listing-title">Premium Dining Set</div>
+                        <div class="listing-price">₦420,000</div>
+                        <div class="listing-meta">
+                            <span><i class="ri-price-tag-3-line"></i> Home &amp; Kitchen</span>
+                            <span><i class="ri-store-2-line"></i> Heritage Furnishings</span>
+                            <span><i class="ri-map-pin-2-line"></i> Enugu, Nigeria</span>
+                        </div>
+                        <div class="listing-footer">
+                            <a class="action-btn" href="product.html?id=108">View Details</a>
+                        </div>
+                    </div>
+                </article>
+            </div>
+
+            <div class="empty-state" id="emptyState">
+                <img src="https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=800&q=80" alt="Empty search illustration">
+                <h3>No listings found.</h3>
+                <p>Try adjusting your filters to discover more exciting products.</p>
+            </div>
+        </section>
+
+        <!-- Pagination -->
+        <div class="pagination">
+            <button id="loadMoreBtn" class="action-btn">Load More</button>
+            <div class="showing-text">Showing 1–20 of 500+ listings</div>
+        </div>
+    </main>
+
+    <!-- WhatsApp Support Button -->
+    <div class="whatsapp-support">
+        <div class="support-tooltip">Chat with YUSTAM Support</div>
+        <a href="https://wa.me/2348100000000" class="whatsapp-btn" target="_blank" rel="noopener" aria-label="Chat with YUSTAM Support on WhatsApp">
+            <i class="ri-whatsapp-line"></i>
+        </a>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+        <div class="footer-inner">
+            <nav class="footer-links">
+                <a class="footer-link" href="index.html#about">About</a>
+                <a class="footer-link" href="help.html#faq-heading">Help &amp; FAQ</a>
+                <a class="footer-link" href="privacy.html">Privacy</a>
+                <a class="footer-link" href="vendor-plans.html">Vendor Plans</a>
+                <a class="footer-link" href="contact.html#support-form">Contact</a>
+            </nav>
+            <div class="footer-social">
+                <a href="https://wa.me/2348100000000" target="_blank" rel="noopener" aria-label="WhatsApp"><i class="ri-whatsapp-line"></i></a>
+                <a href="https://instagram.com/yustam" target="_blank" rel="noopener" aria-label="Instagram"><i class="ri-instagram-line"></i></a>
+                <a href="https://facebook.com/yustam" target="_blank" rel="noopener" aria-label="Facebook"><i class="ri-facebook-circle-line"></i></a>
+            </div>
+            <div class="footer-meta">
+                <span>© 2025 YUSTAM Marketplace — Built for Nigeria.</span>
+                <span>Premium experiences for verified vendors &amp; empowered buyers.</span>
+            </div>
+        </div>
+    </footer>
+    <script type="module" src="firebase.js"></script>
+</body>
+</html>

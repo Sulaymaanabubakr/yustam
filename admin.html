@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YUSTAM Admin Control Centre</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet">
+    <style>
+        :root {
+            --emerald: #004D40;
+            --orange: #F3731E;
+            --beige: #EADCCF;
+            --white: #FFFFFF;
+            --ink: #111111;
+            --shadow: 0 12px 30px rgba(17, 17, 17, 0.12);
+            --radius-lg: 20px;
+            --radius-md: 16px;
+        }
+
+        *, *::before, *::after {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            color: var(--ink);
+            background: linear-gradient(150deg, rgba(234, 220, 207, 0.95), rgba(255, 255, 255, 0.96));
+            min-height: 100vh;
+        }
+
+        h1, h2, h3, h4 {
+            font-family: 'Anton', sans-serif;
+            letter-spacing: 0.03em;
+            margin: 0;
+        }
+
+        a {
+            color: inherit;
+            text-decoration: none;
+        }
+
+        button {
+            font-family: inherit;
+        }
+
+        .app-shell {
+            display: grid;
+            min-height: 100vh;
+            grid-template-columns: 1fr;
+            background: transparent;
+        }
+
+        header.topbar {
+            position: sticky;
+            top: 0;
+            z-index: 40;
+            background: rgba(0, 77, 64, 0.95);
+            color: var(--white);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.85rem 1.25rem;
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
+            backdrop-filter: blur(12px);
+            grid-column: 1 / -1;
+        }
+
+        .brand {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .logo-img {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            object-fit: cover;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 0.65rem;
+            font-size: clamp(1.3rem, 4vw, 1.8rem);
+        }
+
+        .brand span {
+            font-family: 'Anton', sans-serif;
+            letter-spacing: 0.1em;
+        }
+
+        .menu-toggle {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            border: none;
+            background: rgba(255, 255, 255, 0.16);
+            color: var(--white);
+            cursor: pointer;
+            margin-right: 0.75rem;
+            transition: transform 0.2s ease, background 0.2s ease;
+        }
+
+        .menu-toggle:hover,
+        .menu-toggle:focus-visible,
+        .top-action:hover,
+        .top-action:focus-visible {
+            transform: translateY(-2px);
+            background: rgba(255, 255, 255, 0.26);
+        }
+
+        .top-actions {
+            display: flex;
+            gap: 0.65rem;
+            align-items: center;
+        }
+
+        .top-action {
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            border: none;
+            background: rgba(255, 255, 255, 0.16);
+            color: var(--white);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            position: relative;
+            transition: transform 0.2s ease, background 0.2s ease;
+        }
+
+        .badge {
+            position: absolute;
+            top: 6px;
+            right: 6px;
+            background: var(--orange);
+            color: var(--white);
+            font-size: 0.65rem;
+            padding: 2px 6px;
+            border-radius: 999px;
+            font-weight: 600;
+        }
+
+        .layout {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            min-height: calc(100vh - 72px);
+        }
+
+        aside.sidebar {
+            position: fixed;
+            top: 72px;
+            left: 0;
+            height: calc(100vh - 72px);
+            width: 260px;
+            background: rgba(255, 255, 255, 0.72);
+            backdrop-filter: blur(14px);
+            box-shadow: 6px 0 24px rgba(0, 0, 0, 0.1);
+            padding: 1.5rem 1.25rem;
+            transform: translateX(-110%);
+            transition: transform 0.3s cubic-bezier(.2,.8,.2,1);
+            z-index: 30;
+        }
+
+        aside.sidebar.active {
+            transform: translateX(0);
+        }
+
+        .sidebar-header {
+            font-family: 'Anton', sans-serif;
+            letter-spacing: 0.08em;
+            color: var(--emerald);
+            margin-bottom: 2rem;
+        }
+
+        .nav-links {
+            display: grid;
+            gap: 0.5rem;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem 0.9rem;
+            border-radius: 14px;
+            color: var(--emerald);
+            font-weight: 600;
+            background: rgba(255, 255, 255, 0.6);
+            box-shadow: inset 0 0 0 1px rgba(0, 77, 64, 0.1);
+            transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+        }
+
+        .nav-link:hover,
+        .nav-link:focus-visible,
+        .nav-link.active {
+            transform: translateX(4px);
+            background: rgba(0, 77, 64, 0.08);
+            box-shadow: inset 0 0 0 2px rgba(0, 77, 64, 0.25);
+        }
+
+        main {
+            padding: clamp(1.5rem, 3vw, 2.75rem) clamp(1rem, 5vw, 3rem);
+            margin-top: 72px;
+            display: grid;
+            gap: clamp(2rem, 4vw, 3.5rem);
+        }
+
+        .dashboard-content {
+            display: grid;
+            gap: clamp(1.5rem, 3vw, 2.5rem);
+        }
+
+        /* Loader */
+        .loading-overlay {
+            min-height: calc(100vh - 72px);
+            display: grid;
+            place-items: center;
+            padding: 2rem;
+        }
+
+        .loading-card {
+            background: rgba(255, 255, 255, 0.7);
+            padding: 2.4rem 2.2rem;
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow);
+            text-align: center;
+            backdrop-filter: blur(12px);
+        }
+
+        .spinner {
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            border: 4px solid rgba(0, 77, 64, 0.18);
+            border-top-color: var(--emerald);
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        /* Analytics Section */
+        .analytics-grid {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.78);
+            border-radius: var(--radius-md);
+            padding: 1.4rem 1.25rem;
+            position: relative;
+            box-shadow: var(--shadow);
+            border: 1px solid rgba(0, 77, 64, 0.08);
+            display: flex;
+            flex-direction: column;
+            gap: 0.65rem;
+            animation: fadeUp 0.6s ease forwards;
+        }
+
+        .stat-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            background: rgba(0, 77, 64, 0.12);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--emerald);
+            font-size: 1.4rem;
+        }
+
+        .stat-title {
+            font-weight: 600;
+            color: rgba(17, 17, 17, 0.7);
+        }
+
+        .stat-value {
+            font-size: clamp(1.6rem, 4vw, 2.1rem);
+            font-weight: 700;
+            color: var(--emerald);
+        }
+
+        .chart-wrapper {
+            margin-top: 1.5rem;
+            display: grid;
+            gap: 1.2rem;
+        }
+
+        .chart-card {
+            background: rgba(255, 255, 255, 0.75);
+            border-radius: var(--radius-md);
+            padding: 1.5rem;
+            min-height: 200px;
+            box-shadow: var(--shadow);
+            border: 1px solid rgba(0, 77, 64, 0.08);
+            display: grid;
+            place-items: center;
+            color: rgba(17, 17, 17, 0.65);
+            font-weight: 600;
+            letter-spacing: 0.02em;
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .section-header h2 {
+            font-size: clamp(1.4rem, 3.2vw, 2rem);
+            color: var(--emerald);
+        }
+
+        .link-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.55rem 1.1rem;
+            border-radius: 999px;
+            border: none;
+            background: rgba(0, 77, 64, 0.12);
+            color: var(--emerald);
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .link-button:hover,
+        .link-button:focus-visible {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.12);
+        }
+
+        /* Recent Listings */
+        .listing-grid {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .listing-card {
+            background: rgba(255, 255, 255, 0.84);
+            border-radius: var(--radius-md);
+            padding: 1rem 1.2rem;
+            box-shadow: var(--shadow);
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 0.9rem;
+            align-items: start;
+            border: 1px solid rgba(0, 77, 64, 0.08);
+            animation: fadeUp 0.6s ease forwards;
+        }
+
+        .listing-thumb {
+            width: 64px;
+            height: 64px;
+            border-radius: 16px;
+            object-fit: cover;
+            background: rgba(0, 0, 0, 0.08);
+        }
+
+        .listing-meta {
+            display: grid;
+            gap: 0.35rem;
+        }
+
+        .listing-meta h3 {
+            font-size: clamp(1.05rem, 2.4vw, 1.2rem);
+            color: var(--emerald);
+        }
+
+        .meta-line {
+            font-size: 0.9rem;
+            color: rgba(17, 17, 17, 0.7);
+        }
+
+        .status-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            border-radius: 999px;
+            padding: 0.25rem 0.75rem;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: capitalize;
+        }
+
+        .status-approved {
+            background: rgba(0, 128, 96, 0.15);
+            color: #006d4f;
+        }
+
+        .status-pending {
+            background: rgba(243, 115, 30, 0.16);
+            color: var(--orange);
+        }
+
+        .status-rejected {
+            background: rgba(220, 53, 69, 0.16);
+            color: #c0392b;
+        }
+
+        .listing-actions {
+            display: flex;
+            gap: 0.6rem;
+            margin-top: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            border: none;
+            border-radius: 12px;
+            padding: 0.45rem 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .btn:disabled {
+            opacity: 0.65;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-approve {
+            background: var(--emerald);
+            color: var(--white);
+        }
+
+        .btn-reject {
+            background: rgba(243, 115, 30, 0.12);
+            color: var(--orange);
+        }
+
+        .btn:hover:not(:disabled),
+        .btn:focus-visible:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 18px rgba(0, 0, 0, 0.12);
+        }
+
+        /* Recent Vendors */
+        .vendors-grid {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .vendor-card {
+            background: rgba(255, 255, 255, 0.84);
+            border-radius: var(--radius-md);
+            padding: 1rem 1.2rem;
+            box-shadow: var(--shadow);
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 0.9rem;
+            align-items: start;
+            border: 1px solid rgba(0, 77, 64, 0.08);
+        }
+
+        .vendor-avatar {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            object-fit: cover;
+            background: rgba(0, 0, 0, 0.08);
+        }
+
+        .vendor-meta {
+            display: grid;
+            gap: 0.3rem;
+        }
+
+        .plan-chip {
+            padding: 0.25rem 0.7rem;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            width: fit-content;
+            text-transform: uppercase;
+        }
+
+        .plan-free { background: rgba(0, 0, 0, 0.08); color: rgba(17,17,17,0.7); }
+        .plan-plus { background: rgba(243, 115, 30, 0.16); color: var(--orange); }
+        .plan-pro { background: rgba(0, 77, 64, 0.16); color: var(--emerald); }
+        .plan-premium { background: linear-gradient(90deg, rgba(0,77,64,0.22), rgba(243,115,30,0.22)); color: var(--emerald); }
+
+        /* Plans Snapshot */
+        .plans-snapshot {
+            background: rgba(255, 255, 255, 0.82);
+            border-radius: var(--radius-lg);
+            padding: 1.6rem 1.4rem;
+            box-shadow: var(--shadow);
+            border: 1px solid rgba(0, 77, 64, 0.08);
+            display: grid;
+            gap: 1.2rem;
+        }
+
+        .plans-grid {
+            display: grid;
+            gap: 0.75rem;
+        }
+
+        .plan-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            border-radius: 14px;
+            background: rgba(0, 77, 64, 0.06);
+            font-weight: 600;
+        }
+
+        .revenue-total {
+            font-size: clamp(1.4rem, 3vw, 1.9rem);
+            font-weight: 700;
+            color: var(--emerald);
+        }
+
+        .revenue-chart {
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.72);
+            padding: 1.3rem;
+            text-align: center;
+            font-weight: 600;
+            color: rgba(17, 17, 17, 0.6);
+        }
+
+        /* Notifications dropdown */
+        .notifications-panel {
+            position: absolute;
+            right: 0;
+            top: calc(100% + 12px);
+            width: min(320px, 85vw);
+            background: rgba(255, 255, 255, 0.96);
+            box-shadow: var(--shadow);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            display: none;
+            flex-direction: column;
+            gap: 0.8rem;
+            color: var(--ink);
+        }
+
+        .notifications-panel.active {
+            display: flex;
+        }
+
+        .notification-item {
+            display: grid;
+            gap: 0.35rem;
+            padding: 0.75rem;
+            border-radius: 12px;
+            background: rgba(0, 77, 64, 0.06);
+        }
+
+        .notification-item small {
+            color: rgba(17, 17, 17, 0.6);
+        }
+
+        /* Modal */
+        .modal-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(17, 17, 17, 0.4);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 1.5rem;
+            z-index: 60;
+        }
+
+        .modal-backdrop.active {
+            display: flex;
+        }
+
+        .modal-card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: var(--radius-lg);
+            padding: 1.8rem;
+            max-width: 420px;
+            width: 100%;
+            box-shadow: var(--shadow);
+            display: grid;
+            gap: 1rem;
+            animation: fadeUp 0.4s ease;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 120px;
+            border-radius: 12px;
+            border: 1px solid rgba(0, 77, 64, 0.18);
+            padding: 0.75rem;
+            font-family: inherit;
+            resize: vertical;
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+        }
+
+        .btn-outline {
+            background: transparent;
+            color: var(--emerald);
+            border: 1px solid rgba(0, 77, 64, 0.3);
+        }
+
+        .btn-accent {
+            background: var(--orange);
+            color: var(--white);
+        }
+
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%) translateY(120%);
+            background: rgba(0, 77, 64, 0.95);
+            color: var(--white);
+            padding: 0.9rem 1.4rem;
+            border-radius: 999px;
+            box-shadow: var(--shadow);
+            font-weight: 600;
+            transition: transform 0.35s ease;
+            z-index: 70;
+        }
+
+        .toast.show {
+            transform: translateX(-50%) translateY(0);
+        }
+
+        footer {
+            background: rgba(234, 220, 207, 0.9);
+            text-align: center;
+            padding: 1.2rem;
+            font-size: 0.9rem;
+            color: rgba(17, 17, 17, 0.65);
+            margin-top: 2rem;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(18px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @media (min-width: 768px) {
+            .app-shell {
+                grid-template-columns: 260px 1fr;
+            }
+
+            aside.sidebar {
+                position: sticky;
+                top: 72px;
+                height: calc(100vh - 72px);
+                transform: translateX(0);
+            }
+
+            .menu-toggle {
+                display: none;
+            }
+
+            .analytics-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .listing-grid,
+            .vendors-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @media (min-width: 1024px) {
+            .analytics-grid {
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+            }
+
+            .listing-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .vendors-grid {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+
+            .plans-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-shell">
+        <header class="topbar">
+            <div class="brand">
+                <button class="menu-toggle" aria-label="Toggle navigation"><i class="ri-menu-line"></i></button>
+                <img src="logo.jpeg" alt="YUSTAM logo" class="logo-img">
+                <span>YUSTAM Admin</span>
+            </div>
+            <div class="top-actions">
+                <div class="notifications-wrapper" style="position: relative;">
+                    <button class="top-action" id="notificationBtn" aria-haspopup="true" aria-expanded="false" aria-label="Notifications">
+                        <i class="ri-notification-3-line"></i>
+                        <span class="badge" id="notificationBadge" hidden>0</span>
+                    </button>
+                    <div class="notifications-panel" id="notificationsPanel" aria-label="Latest notifications"></div>
+                </div>
+                <button class="top-action" id="logoutBtn" aria-label="Sign out">
+                    <i class="ri-logout-box-r-line"></i>
+                </button>
+            </div>
+        </header>
+
+        <aside class="sidebar" id="sidebar" aria-label="Admin navigation">
+            <div class="sidebar-header">Control Centre</div>
+            <nav class="nav-links">
+                <a class="nav-link active" href="admin.html"><i class="ri-dashboard-line"></i> Dashboard</a>
+                <a class="nav-link" href="admin-listings.html"><i class="ri-store-2-line"></i> Listings</a>
+                <a class="nav-link" href="admin-vendors.html"><i class="ri-team-line"></i> Vendors</a>
+                <a class="nav-link" href="admin-plans.html"><i class="ri-bar-chart-2-line"></i> Plans &amp; Revenue</a>
+                <a class="nav-link" href="admin.html#settings"><i class="ri-settings-3-line"></i> Settings</a>
+            </nav>
+        </aside>
+
+        <main>
+            <div class="dashboard-content" id="dashboardContent" hidden>
+                <!-- Analytics Section -->
+                <section class="analytics-section">
+                    <div class="section-header">
+                        <h2>Platform Snapshot</h2>
+                    </div>
+                    <div class="analytics-grid">
+                        <article class="stat-card">
+                            <div class="stat-icon"><i class="ri-store-2-line"></i></div>
+                            <span class="stat-title">Total Listings</span>
+                            <span class="stat-value" data-stat="listings">0</span>
+                            <small>All listings ever created</small>
+                        </article>
+                        <article class="stat-card">
+                            <div class="stat-icon"><i class="ri-user-star-line"></i></div>
+                            <span class="stat-title">Total Vendors</span>
+                            <span class="stat-value" data-stat="vendors">0</span>
+                            <small>Registered vendor accounts</small>
+                        </article>
+                        <article class="stat-card">
+                            <div class="stat-icon"><i class="ri-flashlight-line"></i></div>
+                            <span class="stat-title">Active Paid Plans</span>
+                            <span class="stat-value" data-stat="activePlans">0</span>
+                            <small>Plus, Pro &amp; Premium vendors</small>
+                        </article>
+                        <article class="stat-card">
+                            <div class="stat-icon"><i class="ri-money-naira-circle-line"></i></div>
+                            <span class="stat-title">Monthly Revenue</span>
+                            <span class="stat-value" data-stat="revenue">₦0</span>
+                            <small>Estimated recurring revenue</small>
+                        </article>
+                    </div>
+                    <div class="chart-wrapper">
+                        <div class="chart-card">Weekly Listings Trend (placeholder)</div>
+                        <div class="chart-card">Vendor Growth (placeholder)</div>
+                    </div>
+                </section>
+
+                <!-- Recent Listings -->
+                <section class="recent-listings">
+                    <div class="section-header">
+                        <h2>Recent Listings</h2>
+                        <a class="link-button" href="admin-listings.html">View All Listings <i class="ri-arrow-right-up-line"></i></a>
+                    </div>
+                    <div class="listing-grid" id="recentListings"></div>
+                    <p id="noListings" style="display:none; color: rgba(17,17,17,0.6); font-weight: 600;">No listings yet. New submissions will appear here.</p>
+                </section>
+
+                <!-- Recent Vendors -->
+                <section class="recent-vendors">
+                    <div class="section-header">
+                        <h2>Recent Vendors</h2>
+                        <a class="link-button" href="admin-vendors.html">Manage Vendors <i class="ri-arrow-right-up-line"></i></a>
+                    </div>
+                    <div class="vendors-grid" id="recentVendors"></div>
+                    <p id="noVendors" style="display:none; color: rgba(17,17,17,0.6); font-weight: 600;">No vendors found yet.</p>
+                </section>
+
+                <!-- Plans & Revenue Snapshot -->
+                <section class="plans-revenue">
+                    <div class="section-header">
+                        <h2>Plans &amp; Revenue Snapshot</h2>
+                    </div>
+                    <div class="plans-snapshot">
+                        <div class="plans-grid">
+                            <div class="plan-row"><span>Free Vendors</span><span data-plan-count="free">0</span></div>
+                            <div class="plan-row"><span>Plus Vendors</span><span data-plan-count="plus">0</span></div>
+                            <div class="plan-row"><span>Pro Vendors</span><span data-plan-count="pro">0</span></div>
+                            <div class="plan-row"><span>Premium Vendors</span><span data-plan-count="premium">0</span></div>
+                        </div>
+                        <div>
+                            <span class="stat-title">Estimated Monthly Revenue</span>
+                            <div class="revenue-total" id="revenueTotal">₦0</div>
+                        </div>
+                        <div class="revenue-chart">Revenue Trend (placeholder)</div>
+                    </div>
+                </section>
+
+                <!-- Platform Settings -->
+                <section class="analytics-section" id="settings">
+                    <div class="section-header">
+                        <h2>Platform Controls</h2>
+                        <p>Review moderation, security, and automation settings at a glance.</p>
+                    </div>
+                    <div class="analytics-grid">
+                        <article class="stat-card">
+                            <h3>Moderation Mode</h3>
+                            <p>Manual reviews are enabled to keep marketplace listings accurate and fraud-free.</p>
+                            <a class="btn btn-outline" href="admin-listings.html">Manage Moderation</a>
+                        </article>
+                        <article class="stat-card">
+                            <h3>Vendor Access</h3>
+                            <p>Two-step verification is active for all vendor admins and elevated support staff.</p>
+                            <a class="btn btn-outline" href="admin-vendors.html">Review Access Logs</a>
+                        </article>
+                        <article class="stat-card">
+                            <h3>Automation Rules</h3>
+                            <p>Smart alerts notify you when revenue or dispute thresholds are crossed.</p>
+                            <a class="btn btn-outline" href="admin-plans.html">Configure Alerts</a>
+                        </article>
+                    </div>
+                </section>
+            </div>
+
+            <div class="loading-overlay" id="loader">
+                <div class="loading-card">
+                    <div class="spinner"></div>
+                    <h3 style="font-family:'Anton',sans-serif; letter-spacing:0.05em; color:var(--emerald);">Preparing your admin insights…</h3>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Feedback Modal -->
+    <div class="modal-backdrop" id="feedbackModal" role="dialog" aria-modal="true" aria-labelledby="feedbackTitle">
+        <div class="modal-card">
+            <h3 id="feedbackTitle" style="font-family:'Anton',sans-serif; color:var(--emerald);">Reject Listing</h3>
+            <p>Please share the reason for rejection so the vendor can fix it.</p>
+            <textarea id="feedbackReason" placeholder="Enter reason for rejection / what to fix"></textarea>
+            <div class="modal-actions">
+                <button class="btn btn-outline" id="cancelFeedback">Cancel</button>
+                <button class="btn btn-accent" id="sendFeedback">Send Feedback</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <footer>
+        © 2025 YUSTAM — Built for Nigeria. <a href="contact.html" style="color:inherit; font-weight:600;">Support</a>
+    </footer>
+
+    <!-- Firebase Logic -->
+    
+      <script type="module" src="admin.js"></script>
+<script type="module" src="firebase.js"></script>
+</body>
+</html>
+
+

@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>YUSTAM Vendor Registration</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet" />
+  <style>
+    :root {
+      --emerald: #004d40;
+      --emerald-dark: #003d34;
+      --orange: #f3731e;
+      --orange-deep: #e05e0e;
+      --beige: #eadccf;
+      --white: #ffffff;
+      --ink: #111111;
+      --error: #d84315;
+      --success: #1b8a5a;
+      --card-blur: blur(14px);
+      --shadow-soft: 0 18px 40px rgba(0, 0, 0, 0.16);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: "Inter", sans-serif;
+      min-height: 100vh;
+      background: linear-gradient(135deg, rgba(0, 77, 64, 0.92), rgba(0, 105, 92, 0.88));
+      color: var(--ink);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: clamp(24px, 5vw, 48px) clamp(16px, 4vw, 48px) 80px;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    body::before,
+    body::after {
+      content: "";
+      position: absolute;
+      width: 320px;
+      height: 320px;
+      background: radial-gradient(circle at center, rgba(243, 115, 30, 0.22), transparent 70%);
+      filter: blur(12px);
+      z-index: 0;
+    }
+
+    body::before {
+      top: -80px;
+      left: -120px;
+    }
+
+    body::after {
+      bottom: -120px;
+      right: -100px;
+    }
+
+    main {
+      width: 100%;
+      max-width: 1080px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: clamp(32px, 6vw, 48px);
+      position: relative;
+      z-index: 1;
+      animation: fadeUp 0.7s ease forwards;
+    }
+
+    header {
+      width: min(780px, 100%);
+      background: rgba(0, 77, 64, 0.72);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      backdrop-filter: blur(20px);
+      border-radius: 22px;
+      padding: clamp(20px, 4vw, 28px);
+      text-align: center;
+      color: var(--white);
+      box-shadow: 0 20px 48px rgba(0, 0, 0, 0.18);
+      position: relative;
+    }
+
+    header::after {
+      content: "";
+      position: absolute;
+      left: 24px;
+      right: 24px;
+      bottom: 0;
+      height: 4px;
+      border-radius: 999px 999px 0 0;
+      background: linear-gradient(90deg, rgba(243, 115, 30, 0.8), rgba(255, 138, 60, 0.9));
+      transform: translateY(50%);
+    }
+
+    .logo {
+      font-family: "Anton", sans-serif;
+      letter-spacing: 0.08em;
+      font-size: clamp(30px, 5vw, 40px);
+      text-transform: uppercase;
+    }
+
+    .subtext {
+      margin-top: 6px;
+      font-size: clamp(14px, 2.6vw, 16px);
+      color: rgba(255, 255, 255, 0.78);
+    }
+
+    .registration-card {
+      width: min(460px, 100%);
+      background: rgba(255, 255, 255, 0.88);
+      backdrop-filter: var(--card-blur);
+      border-radius: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.26);
+      padding: clamp(24px, 5vw, 36px);
+      box-shadow: var(--shadow-soft);
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .registration-card::before {
+      content: "";
+      position: absolute;
+      top: -120px;
+      right: -120px;
+      width: 240px;
+      height: 240px;
+      background: radial-gradient(circle at center, rgba(243, 115, 30, 0.28), transparent 75%);
+      transform: rotate(30deg);
+    }
+
+    .registration-card::after {
+      content: "";
+      position: absolute;
+      bottom: -140px;
+      left: -140px;
+      width: 260px;
+      height: 260px;
+      background: radial-gradient(circle at center, rgba(0, 77, 64, 0.18), transparent 70%);
+    }
+
+    .card-content {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .card-title {
+      font-family: "Anton", sans-serif;
+      font-size: clamp(26px, 4vw, 32px);
+      color: var(--emerald);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      text-align: center;
+    }
+
+    .card-subtitle {
+      font-size: clamp(14px, 2.4vw, 16px);
+      text-align: center;
+      color: rgba(17, 17, 17, 0.68);
+      margin-top: -8px;
+    }
+
+    form {
+      display: grid;
+      gap: 16px;
+    }
+
+    label {
+      font-weight: 600;
+      font-size: 0.92rem;
+      color: rgba(17, 17, 17, 0.72);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    input,
+    select {
+      width: 100%;
+      border: 1px solid rgba(0, 77, 64, 0.18);
+      border-radius: 14px;
+      padding: 14px 16px;
+      font-size: 1rem;
+      background: rgba(255, 255, 255, 0.95);
+      color: var(--ink);
+      transition: border 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
+    }
+
+    input:focus,
+    select:focus {
+      outline: none;
+      border-color: rgba(243, 115, 30, 0.6);
+      box-shadow: 0 0 0 3px rgba(243, 115, 30, 0.16);
+      transform: translateY(-2px);
+    }
+
+    input:hover,
+    select:hover {
+      transform: translateY(-1px);
+    }
+
+    .terms-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      margin-top: 4px;
+      font-size: 0.9rem;
+      color: rgba(17, 17, 17, 0.74);
+    }
+
+    .terms-row input[type="checkbox"] {
+      width: 20px;
+      height: 20px;
+      margin-top: 2px;
+      border-radius: 6px;
+      accent-color: var(--orange);
+    }
+
+    .primary-btn {
+      position: relative;
+      border: none;
+      border-radius: 14px;
+      background: linear-gradient(135deg, var(--orange), #ff8a3c);
+      color: var(--white);
+      font-weight: 600;
+      font-size: 1.05rem;
+      padding: 14px 18px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      cursor: pointer;
+      box-shadow: 0 18px 32px rgba(243, 115, 30, 0.34);
+      transition: transform 0.25s ease, box-shadow 0.25s ease, opacity 0.25s ease;
+    }
+
+    .primary-btn:hover:not(:disabled) {
+      transform: translateY(-2px) scale(1.02);
+      box-shadow: 0 22px 42px rgba(243, 115, 30, 0.42);
+    }
+
+    .primary-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+
+    .primary-btn .spinner {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      border: 3px solid rgba(255, 255, 255, 0.4);
+      border-top-color: var(--white);
+      animation: spin 0.8s linear infinite;
+      display: none;
+    }
+
+    .primary-btn.is-loading .spinner {
+      display: inline-flex;
+    }
+
+    .primary-btn.is-loading .btn-text {
+      opacity: 0.8;
+    }
+
+    .primary-btn.is-loading {
+      cursor: progress;
+    }
+
+    .account-link {
+      text-align: center;
+      font-size: 0.94rem;
+      color: rgba(17, 17, 17, 0.7);
+    }
+
+    .account-link a {
+      color: var(--orange);
+      font-weight: 600;
+      text-decoration: none;
+    }
+
+    .account-link a:hover {
+      text-decoration: underline;
+    }
+
+    /* Password tips */
+    .password-tips {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: -4px;
+      font-size: 0.88rem;
+      color: rgba(17, 17, 17, 0.58);
+    }
+
+    .password-tip {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: rgba(234, 220, 207, 0.55);
+      border: 1px solid rgba(234, 220, 207, 0.6);
+      transition: background 0.25s ease, color 0.25s ease, border 0.25s ease;
+    }
+
+    .password-tip i {
+      font-size: 1.1rem;
+      color: rgba(17, 17, 17, 0.35);
+      transition: color 0.25s ease;
+    }
+
+    .password-tip.valid {
+      background: rgba(243, 115, 30, 0.12);
+      border-color: rgba(243, 115, 30, 0.4);
+      color: rgba(243, 115, 30, 0.95);
+    }
+
+    .password-tip.valid i {
+      color: var(--orange);
+    }
+
+    footer {
+      margin-top: clamp(32px, 6vw, 60px);
+      width: min(780px, 100%);
+      background: rgba(234, 220, 207, 0.75);
+      backdrop-filter: blur(16px);
+      border-radius: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      text-align: center;
+      padding: clamp(18px, 4vw, 24px);
+      color: rgba(17, 17, 17, 0.74);
+      font-size: 0.95rem;
+      position: relative;
+      z-index: 1;
+    }
+
+    footer a {
+      color: var(--orange);
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    footer a:hover {
+      text-decoration: underline;
+    }
+
+    .toast-container {
+      position: fixed;
+      bottom: 28px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      z-index: 20;
+      pointer-events: none;
+    }
+
+    .toast {
+      min-width: 260px;
+      padding: 14px 18px;
+      border-radius: 16px;
+      color: var(--white);
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      box-shadow: 0 18px 32px rgba(0, 0, 0, 0.18);
+      opacity: 0;
+      transform: translateY(20px);
+      animation: toastIn 0.45s forwards;
+      backdrop-filter: blur(14px);
+    }
+
+    .toast.success {
+      background: linear-gradient(135deg, rgba(0, 120, 90, 0.9), rgba(0, 77, 64, 0.85));
+    }
+
+    .toast.error {
+      background: linear-gradient(135deg, rgba(216, 67, 21, 0.92), rgba(183, 28, 28, 0.88));
+    }
+
+    .toast i {
+      font-size: 1.2rem;
+    }
+
+    .floating-ornament {
+      position: absolute;
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      background: radial-gradient(circle at top, rgba(255, 255, 255, 0.65), transparent 70%);
+      top: -40px;
+      right: -40px;
+      z-index: 0;
+      animation: float 6s ease-in-out infinite;
+    }
+
+    @keyframes fadeUp {
+      from {
+        opacity: 0;
+        transform: translateY(16px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    @keyframes toastIn {
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes toastOut {
+      to {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+    }
+
+    @keyframes float {
+      0%,
+      100% {
+        transform: translateY(0);
+      }
+      50% {
+        transform: translateY(10px);
+      }
+    }
+
+    @media (max-width: 600px) {
+      body {
+        padding-top: 32px;
+      }
+
+      header,
+      footer {
+        border-radius: 18px;
+      }
+
+      .registration-card {
+        border-radius: 20px;
+        padding: 24px;
+      }
+
+      .terms-row {
+        font-size: 0.88rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="floating-ornament" aria-hidden="true"></div>
+  <main>
+    <!-- Header -->
+    <header>
+      <h1 class="logo">YUSTAM Vendor</h1>
+      <p class="subtext">Sell smarter. Manage easier. Grow faster.</p>
+    </header>
+
+    <section class="registration-card" aria-labelledby="registerHeading">
+      <div class="card-content">
+        <div>
+          <h2 id="registerHeading" class="card-title">Create Your Vendor Account</h2>
+          <p class="card-subtitle">Join Nigeria&apos;s trusted marketplace and reach thousands of ready buyers.</p>
+        </div>
+
+        <!-- Register Form -->
+        <form id="vendorRegisterForm" method="POST" novalidate>
+          <label for="fullNameInput">
+            Full Name
+            <input type="text" id="fullNameInput" name="fullName" placeholder="Adaeze Okafor" required autocomplete="name" />
+          </label>
+
+          <label for="emailInput">
+            Email Address
+            <input type="email" id="emailInput" name="email" placeholder="adaeze@yustam.com" required autocomplete="email" />
+          </label>
+
+          <label for="phoneInput">
+            Phone Number
+            <input type="tel" id="phoneInput" name="phone" placeholder="0801 234 5678" required inputmode="tel" autocomplete="tel" />
+          </label>
+
+          <label for="passwordInput">
+            Password
+            <input type="password" id="passwordInput" name="password" placeholder="Create a secure password" required minlength="6" />
+          </label>
+
+          <label for="confirmPasswordInput">
+            Confirm Password
+            <input type="password" id="confirmPasswordInput" name="confirmPassword" placeholder="Re-enter your password" required />
+          </label>
+
+          <!-- Password Tips -->
+          <div class="password-tips" aria-live="polite">
+            <div class="password-tip" id="tipLength">
+              <i class="ri-shield-check-line" aria-hidden="true"></i>
+              Must be at least 6 characters.
+            </div>
+            <div class="password-tip" id="tipMatch">
+              <i class="ri-lock-line" aria-hidden="true"></i>
+              Passwords must match exactly.
+            </div>
+          </div>
+
+          <label for="businessNameInput">
+            Business Name
+            <input type="text" id="businessNameInput" name="businessName" placeholder="Lagoon Tech Hub" required />
+          </label>
+
+          <label for="categoryInput">
+            Main Category
+            <select id="categoryInput" name="category" required>
+              <option value="" disabled selected>Select your focus category</option>
+              <option>Phones &amp; Tablets</option>
+              <option>Electronics</option>
+              <option>Fashion</option>
+              <option>Property</option>
+              <option>Food &amp; Groceries</option>
+              <option>Beauty</option>
+              <option>Vehicles</option>
+              <option>Home &amp; Kitchen</option>
+              <option>Power Solutions</option>
+              <option>Computing</option>
+              <option>Services</option>
+              <option>Others</option>
+            </select>
+          </label>
+
+          <div class="terms-row">
+            <input type="checkbox" id="termsCheckbox" name="terms" required />
+            <label for="termsCheckbox">
+              I agree to YUSTAM&apos;s <a href="privacy.html#policy-rights" title="Marketplace Policies">Marketplace Policies</a> &amp; <a href="privacy.html" title="Privacy Policy">Privacy Policy</a>.
+            </label>
+          </div>
+
+          <button type="submit" id="registerBtn" class="primary-btn" disabled>
+            <span class="spinner" aria-hidden="true"></span>
+            <span class="btn-text">Create Account</span>
+          </button>
+        </form>
+
+        <p class="account-link">Already have an account? <a href="vendor-login.html">Sign in</a></p>
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer>
+    © 2025 YUSTAM Marketplace — Vendor Platform · <a href="index.html">Back to Home</a>
+  </footer>
+
+  <div class="toast-container" role="status" aria-live="polite" aria-atomic="true"></div>
+
+  <script type="module" src="vendor-register.js"></script>
+</body>
+</html>

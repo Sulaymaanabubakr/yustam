@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contact YUSTAM Marketplace</title>
+    <meta name="description" content="Reach YUSTAM Marketplace for support, vendor onboarding, or business enquiries.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
+    <style>
+        :root {
+            --emerald: #004D40;
+            --emerald-deep: rgba(0, 77, 64, 0.85);
+            --orange: #F3731E;
+            --orange-bright: #FF8A3C;
+            --beige: #EADCCF;
+            --beige-soft: rgba(234, 220, 207, 0.75);
+            --ink: #0F1A17;
+            --white: #FFFFFF;
+            --glass-bg: rgba(255, 255, 255, 0.68);
+            --glass-border: rgba(255, 255, 255, 0.32);
+            --radius-lg: 20px;
+            --transition-base: all 220ms cubic-bezier(.2, .8, .2, 1);
+            --shadow-soft: 0 18px 42px rgba(0, 30, 25, 0.16);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            min-height: 100vh;
+            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            color: var(--ink);
+            background: linear-gradient(160deg, rgba(234, 220, 207, 0.82) 0%, rgba(255, 255, 255, 0.94) 55%, rgba(234, 220, 207, 0.75) 100%);
+            -webkit-font-smoothing: antialiased;
+            padding-bottom: 56px;
+        }
+
+        img {
+            max-width: 100%;
+            display: block;
+        }
+
+        a {
+            color: inherit;
+            text-decoration: none;
+        }
+
+        h1, h2, h3 {
+            font-family: 'Anton', sans-serif;
+            color: var(--emerald);
+            letter-spacing: 0.5px;
+        }
+
+        p {
+            line-height: 1.6;
+        }
+
+        .page-shell {
+            width: min(640px, 92%);
+            margin: 0 auto;
+        }
+
+        .glass-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(18px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-soft);
+        }
+
+        header {
+            position: sticky;
+            top: 0;
+            z-index: 40;
+            background: rgba(0, 77, 64, 0.9);
+            color: var(--white);
+            box-shadow: 0 12px 26px rgba(0, 0, 0, 0.12);
+        }
+
+        .header-inner {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 18px clamp(16px, 5vw, 32px);
+        }
+
+        .logo {
+            font-family: 'Anton', sans-serif;
+            font-size: clamp(1.4rem, 3vw, 1.8rem);
+            letter-spacing: 0.06em;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.6rem;
+            color: inherit;
+        }
+
+        .logo-img {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            object-fit: cover;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .fade-up {
+            opacity: 0;
+            transform: translateY(36px);
+            transition: opacity 480ms ease, transform 480ms ease;
+        }
+
+        .fade-up.in-view {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* Header */
+        header {
+            position: sticky;
+            top: 0;
+            z-index: 50;
+            background: linear-gradient(135deg, rgba(0, 77, 64, 0.95), rgba(0, 100, 83, 0.86));
+            backdrop-filter: blur(20px);
+            border-bottom: 3px solid var(--orange);
+            box-shadow: 0 10px 28px rgba(0, 45, 36, 0.28);
+        }
+
+        .header-inner {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 18px 20px;
+            max-width: 960px;
+            margin: 0 auto;
+        }
+
+        .logo {
+            font-family: 'Anton', sans-serif;
+            font-size: clamp(1.4rem, 3vw, 1.9rem);
+            color: var(--white);
+            letter-spacing: 1px;
+        }
+
+        .header-title {
+            font-size: clamp(1.2rem, 4vw, 1.8rem);
+            color: var(--white);
+        }
+
+        .icon-link {
+            width: 42px;
+            height: 42px;
+            border-radius: 14px;
+            display: grid;
+            place-items: center;
+            background: rgba(255, 255, 255, 0.18);
+            color: var(--white);
+            border: 1px solid rgba(255, 255, 255, 0.28);
+            transition: var(--transition-base);
+        }
+
+        .icon-link:hover,
+        .icon-link:focus-visible {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+            outline: none;
+        }
+
+        main {
+            padding: 36px 0 72px;
+        }
+
+        section + section {
+            margin-top: 28px;
+        }
+
+        /* Hero */
+        .hero-card {
+            position: relative;
+            overflow: hidden;
+            background: linear-gradient(135deg, rgba(0, 77, 64, 0.84), rgba(0, 120, 102, 0.78));
+            color: var(--white);
+            text-align: center;
+            padding: clamp(32px, 7vw, 48px) clamp(24px, 6vw, 38px);
+        }
+
+        .hero-card::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at top, rgba(255, 255, 255, 0.22), transparent 65%);
+            opacity: 0.45;
+        }
+
+        .hero-content {
+            position: relative;
+            z-index: 2;
+        }
+
+        .hero-icon {
+            width: 64px;
+            height: 64px;
+            border-radius: 20px;
+            margin: 0 auto 18px;
+            display: grid;
+            place-items: center;
+            background: rgba(255, 255, 255, 0.2);
+            color: var(--white);
+            font-size: 32px;
+            box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18);
+        }
+
+        .hero-heading {
+            font-size: clamp(2.1rem, 4.5vw, 2.9rem);
+            margin-bottom: 12px;
+        }
+
+        .hero-text {
+            font-size: clamp(1rem, 3.2vw, 1.12rem);
+            color: rgba(255, 255, 255, 0.86);
+        }
+
+        /* Form */
+        .form-card {
+            padding: clamp(28px, 6vw, 36px) clamp(22px, 6vw, 32px);
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+
+        .form-title {
+            font-size: clamp(1.55rem, 3.5vw, 2rem);
+            color: var(--emerald);
+        }
+
+        .form-description {
+            color: rgba(15, 26, 23, 0.78);
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        label {
+            font-weight: 600;
+            font-size: 0.95rem;
+            color: rgba(15, 26, 23, 0.85);
+        }
+
+        input,
+        textarea {
+            width: 100%;
+            padding: 12px 14px;
+            border-radius: 12px;
+            border: 1px solid rgba(0, 77, 64, 0.18);
+            background: rgba(255, 255, 255, 0.85);
+            color: var(--ink);
+            transition: var(--transition-base);
+            font-size: 1rem;
+            resize: vertical;
+        }
+
+        textarea {
+            min-height: 140px;
+        }
+
+        input:focus,
+        textarea:focus {
+            outline: none;
+            border-color: var(--orange);
+            box-shadow: 0 0 0 3px rgba(243, 115, 30, 0.18);
+        }
+
+        .form-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .btn-primary {
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+            padding: 14px 18px;
+            background: linear-gradient(135deg, var(--orange), var(--orange-bright));
+            color: var(--white);
+            border: none;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 1.02rem;
+            box-shadow: 0 12px 24px rgba(243, 115, 30, 0.35);
+            transition: transform 220ms ease, box-shadow 220ms ease;
+            cursor: pointer;
+        }
+
+        .btn-primary:hover,
+        .btn-primary:focus-visible {
+            transform: scale(1.03);
+            box-shadow: 0 16px 30px rgba(243, 115, 30, 0.45);
+            outline: none;
+        }
+
+        .form-note {
+            font-size: 0.92rem;
+            color: rgba(15, 26, 23, 0.68);
+            text-align: center;
+        }
+
+        .form-toast {
+            margin-top: -6px;
+            font-size: 0.92rem;
+            font-weight: 600;
+            text-align: center;
+            color: var(--emerald);
+            background: rgba(255, 255, 255, 0.68);
+            border-radius: 12px;
+            padding: 10px 14px;
+            border: 1px dashed rgba(0, 77, 64, 0.2);
+            opacity: 0.2;
+        }
+
+        /* Contact Info */
+        .info-card {
+            padding: clamp(26px, 6vw, 34px);
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+
+        .info-title {
+            font-size: clamp(1.4rem, 3.2vw, 1.85rem);
+        }
+
+        .info-grid {
+            display: grid;
+            gap: 16px;
+        }
+
+        .info-item {
+            display: grid;
+            grid-template-columns: 40px 1fr;
+            gap: 12px;
+            align-items: center;
+            padding: 14px;
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.62);
+            border: 1px solid rgba(0, 77, 64, 0.12);
+            transition: var(--transition-base);
+        }
+
+        .info-item:hover,
+        .info-item:focus-within {
+            border-color: rgba(243, 115, 30, 0.6);
+            box-shadow: 0 12px 20px rgba(243, 115, 30, 0.18);
+            transform: translateY(-3px);
+        }
+
+        .info-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 14px;
+            display: grid;
+            place-items: center;
+            background: rgba(0, 77, 64, 0.12);
+            color: var(--emerald);
+            font-size: 1.2rem;
+        }
+
+        .info-heading {
+            font-weight: 600;
+            color: var(--emerald);
+        }
+
+        .info-text a {
+            color: var(--emerald);
+            text-decoration: none;
+        }
+
+        .info-text a:hover,
+        .info-text a:focus-visible {
+            color: var(--orange);
+            outline: none;
+        }
+
+        /* Social Links */
+        .social-card {
+            padding: 22px 28px;
+            text-align: center;
+            display: grid;
+            gap: 12px;
+        }
+
+        .social-text {
+            font-weight: 600;
+            color: rgba(15, 26, 23, 0.78);
+        }
+
+        .social-links {
+            display: flex;
+            justify-content: center;
+            gap: 18px;
+        }
+
+        .social-link {
+            width: 46px;
+            height: 46px;
+            border-radius: 16px;
+            display: grid;
+            place-items: center;
+            background: rgba(255, 255, 255, 0.72);
+            border: 1px solid rgba(0, 77, 64, 0.16);
+            color: var(--emerald);
+            font-size: 1.2rem;
+            transition: var(--transition-base);
+        }
+
+        .social-link:hover,
+        .social-link:focus-visible {
+            color: var(--white);
+            background: linear-gradient(135deg, var(--orange), var(--orange-bright));
+            box-shadow: 0 16px 30px rgba(243, 115, 30, 0.32);
+            transform: translateY(-3px);
+            outline: none;
+        }
+
+        /* Footer */
+        footer {
+            margin-top: 48px;
+        }
+
+        .footer-shell {
+            width: min(960px, 92%);
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.68);
+            border: 1px solid rgba(0, 77, 64, 0.12);
+            border-radius: 20px;
+            backdrop-filter: blur(18px);
+            padding: 28px 20px;
+            box-shadow: 0 14px 30px rgba(0, 30, 25, 0.12);
+        }
+
+        .footer-links {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 18px;
+            margin-bottom: 12px;
+            font-weight: 500;
+        }
+
+        .footer-links a {
+            color: rgba(15, 26, 23, 0.7);
+            transition: color 180ms ease;
+        }
+
+        .footer-links a:hover,
+        .footer-links a:focus-visible {
+            color: var(--orange);
+            outline: none;
+        }
+
+        .footer-copy {
+            text-align: center;
+            font-size: 0.92rem;
+            color: rgba(15, 26, 23, 0.64);
+        }
+
+        @media (min-width: 768px) {
+            body {
+                padding-bottom: 72px;
+            }
+
+            .header-inner {
+                padding: 20px 32px;
+            }
+
+            main {
+                padding-top: 48px;
+            }
+
+            section + section {
+                margin-top: 32px;
+            }
+
+            .info-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header>
+        <div class="header-inner">
+            <a href="index.html" class="logo">
+                <img src="logo.jpeg" alt="YUSTAM logo" class="logo-img">
+                YUSTAM
+            </a>
+            <div class="header-title">Contact Us</div>
+            <a href="index.html" class="icon-link" aria-label="Back to home">
+                <i class="ri-home-4-line"></i>
+            </a>
+        </div>
+    </header>
+
+    <main>
+        <div class="page-shell">
+            <!-- Hero -->
+            <section class="hero-card glass-card fade-up">
+                <div class="hero-content">
+                    <div class="hero-icon" aria-hidden="true">
+                        <i class="ri-customer-service-2-line"></i>
+                    </div>
+                    <h1 class="hero-heading">We’re here to help.</h1>
+                    <p class="hero-text">Reach out to YUSTAM Marketplace — we’ll respond as soon as possible.</p>
+                </div>
+            </section>
+
+            <!-- Form -->
+            <section class="form-card glass-card fade-up" id="support-form" aria-labelledby="contactFormTitle">
+                <div>
+                    <h2 id="contactFormTitle" class="form-title">Send us a message</h2>
+                    <p class="form-description">Whether you need support, want to join as a vendor, or have a business enquiry, fill in the form and our team will get back to you shortly.</p>
+                </div>
+                <form class="contact-form" novalidate>
+                    <div class="form-group">
+                        <label for="nameInput">Full Name</label>
+                        <input type="text" id="nameInput" name="name" placeholder="Your name" autocomplete="name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="emailInput">Email Address</label>
+                        <input type="email" id="emailInput" name="email" placeholder="you@example.com" autocomplete="email" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="subjectInput">Subject</label>
+                        <input type="text" id="subjectInput" name="subject" placeholder="How can we help?" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="messageInput">Message</label>
+                        <textarea id="messageInput" name="message" placeholder="Tell us more about your request" required></textarea>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" id="sendBtn" class="btn-primary">Send Message</button>
+                        <p class="form-note">We typically reply within 24 hours.</p>
+                        <div class="form-toast" role="status" aria-live="polite">Message sent! We'll be in touch soon.</div>
+                    </div>
+                </form>
+            </section>
+
+            <!-- Contact Info -->
+            <section class="info-card glass-card fade-up" aria-labelledby="quickSupportTitle">
+                <div>
+                    <h2 id="quickSupportTitle" class="info-title">Quick support options</h2>
+                    <p class="form-description">Prefer to connect directly? Reach us through any of the channels below.</p>
+                </div>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <div class="info-icon" aria-hidden="true">
+                            <i class="ri-phone-line"></i>
+                        </div>
+                        <div class="info-text">
+                            <div class="info-heading">Phone</div>
+                            <a href="tel:+2349012345678">+234 901 234 5678</a>
+                        </div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-icon" aria-hidden="true">
+                            <i class="ri-whatsapp-line"></i>
+                        </div>
+                        <div class="info-text">
+                            <div class="info-heading">WhatsApp</div>
+                            <a href="https://wa.me/2349012345678" target="_blank" rel="noopener">Chat with us</a>
+                        </div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-icon" aria-hidden="true">
+                            <i class="ri-mail-line"></i>
+                        </div>
+                        <div class="info-text">
+                            <div class="info-heading">Email</div>
+                            <a href="mailto:support@yustam.com">support@yustam.com</a>
+                        </div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-icon" aria-hidden="true">
+                            <i class="ri-map-pin-2-line"></i>
+                        </div>
+                        <div class="info-text">
+                            <div class="info-heading">Location</div>
+                            <p>Ibadan, Nigeria</p>
+                        </div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-icon" aria-hidden="true">
+                            <i class="ri-time-line"></i>
+                        </div>
+                        <div class="info-text">
+                            <div class="info-heading">Business hours</div>
+                            <p>Mon–Sat, 9AM – 6PM</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Social Links -->
+            <section class="social-card glass-card fade-up" aria-labelledby="socialLinksTitle">
+                <h2 id="socialLinksTitle" class="info-title">Stay connected</h2>
+                <p class="social-text">Follow YUSTAM for updates and offers.</p>
+                <div class="social-links">
+                    <a class="social-link" href="https://instagram.com/yustam" target="_blank" rel="noopener" aria-label="YUSTAM on Instagram">
+                        <i class="ri-instagram-line"></i>
+                    </a>
+                    <a class="social-link" href="https://facebook.com/yustam" target="_blank" rel="noopener" aria-label="YUSTAM on Facebook">
+                        <i class="ri-facebook-circle-line"></i>
+                    </a>
+                    <a class="social-link" href="https://tiktok.com/@yustam" target="_blank" rel="noopener" aria-label="YUSTAM on TikTok">
+                        <i class="ri-tiktok-line"></i>
+                    </a>
+                    <a class="social-link" href="https://wa.me/2349012345678" target="_blank" rel="noopener" aria-label="YUSTAM on WhatsApp">
+                        <i class="ri-whatsapp-line"></i>
+                    </a>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer>
+        <div class="footer-shell">
+            <nav class="footer-links" aria-label="Footer">
+                <a href="index.html#about">About</a>
+                <a href="help.html#faq-heading">Help &amp; FAQ</a>
+                <a href="privacy.html">Privacy</a>
+                <a href="vendor-plans.html">Vendor Plans</a>
+            </nav>
+            <p class="footer-copy">© 2025 YUSTAM Marketplace — Built for Nigeria.</p>
+        </div>
+    </footer>
+
+    
+      <script src="contact.js"></script>
+<script type="module" src="firebase.js"></script>
+</body>
+</html>
+

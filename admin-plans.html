@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YUSTAM Admin | Plans & Revenue</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
+  <style>
+    :root {
+      --emerald:#004D40;
+      --emerald-deep:#00695C;
+      --orange:#F3731E;
+      --orange-dark:#E25F12;
+      --beige:#EADCCF;
+      --white:rgba(255,255,255,0.95);
+      --ink:#111111;
+      --radius-lg:20px;
+      --shadow-soft:0 6px 20px rgba(0,0,0,0.08);
+    }
+
+    * {
+      box-sizing:border-box;
+      margin:0;
+      padding:0;
+    }
+
+    body {
+      font-family:'Inter',sans-serif;
+      color:var(--ink);
+      background:linear-gradient(135deg,var(--emerald) 0%,var(--emerald-deep) 100%);
+      min-height:100vh;
+      backdrop-filter:blur(12px);
+      display:flex;
+      flex-direction:column;
+    }
+
+    header {
+      position:sticky;
+      top:0;
+      z-index:20;
+      backdrop-filter:blur(14px);
+    }
+
+    .topbar {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:16px 20px;
+      background:rgba(0,77,64,0.92);
+      border-bottom:1px solid rgba(255,255,255,0.15);
+      box-shadow:0 8px 24px rgba(0,0,0,0.18);
+    }
+
+    .topbar h1 {
+      font-family:'Anton',sans-serif;
+      font-size:clamp(20px,4vw,28px);
+      letter-spacing:0.02em;
+      color:#fff;
+      display:flex;
+      align-items:center;
+      gap:10px;
+    }
+
+    .topbar-actions {
+      display:flex;
+      align-items:center;
+      gap:12px;
+    }
+
+    .icon-btn {
+      width:42px;
+      height:42px;
+      border-radius:50%;
+      border:1px solid rgba(255,255,255,0.25);
+      background:rgba(255,255,255,0.12);
+      color:#fff;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      cursor:pointer;
+      transition:all 0.25s ease;
+    }
+
+    .icon-btn:hover {
+      transform:translateY(-2px) scale(1.05);
+      background:rgba(243,115,30,0.28);
+    }
+
+    .accent-strip {
+      height:4px;
+      background:var(--orange);
+      box-shadow:0 6px 16px rgba(243,115,30,0.45);
+    }
+
+    main {
+      flex:1;
+      width:100%;
+      max-width:1100px;
+      margin:0 auto;
+      padding:28px 20px 120px;
+      display:flex;
+      flex-direction:column;
+      gap:28px;
+      animation:fadeIn 0.6s ease forwards;
+    }
+
+    .page-title {
+      color:#fff;
+      text-shadow:0 6px 24px rgba(0,0,0,0.35);
+      display:flex;
+      flex-direction:column;
+      gap:12px;
+      align-items:flex-start;
+    }
+
+    .page-title h2 {
+      font-family:'Anton',sans-serif;
+      font-size:clamp(26px,5vw,42px);
+      letter-spacing:0.04em;
+      background:linear-gradient(90deg,#F3731E,#FF8A3C);
+      -webkit-background-clip:text;
+      -webkit-text-fill-color:transparent;
+    }
+
+    .page-title p {
+      font-size:clamp(14px,2.6vw,17px);
+      color:rgba(255,255,255,0.88);
+      max-width:520px;
+      line-height:1.6;
+    }
+
+    .page-title span {
+      width:80px;
+      height:2px;
+      background:var(--orange);
+      border-radius:8px;
+    }
+
+    .card-grid {
+      display:grid;
+      grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+      gap:18px;
+    }
+
+    .glass-card {
+      background:rgba(255,255,255,0.85);
+      border:1px solid rgba(255,255,255,0.18);
+      border-radius:var(--radius-lg);
+      box-shadow:var(--shadow-soft);
+      padding:24px;
+      backdrop-filter:blur(10px);
+      position:relative;
+      overflow:hidden;
+      transition:transform 0.25s ease,box-shadow 0.25s ease,border 0.25s ease;
+      display:flex;
+      flex-direction:column;
+      gap:12px;
+      cursor:pointer;
+    }
+
+    .glass-card:hover {
+      transform:translateY(-4px) scale(1.02);
+      box-shadow:0 12px 32px rgba(0,0,0,0.14);
+      border:1px solid rgba(243,115,30,0.35);
+    }
+
+    .glass-card h3 {
+      font-family:'Anton',sans-serif;
+      font-size:clamp(16px,3vw,22px);
+      letter-spacing:0.03em;
+      color:var(--emerald);
+    }
+
+    .plan-badge {
+      position:absolute;
+      top:18px;
+      right:18px;
+      padding:6px 14px;
+      border-radius:999px;
+      font-weight:600;
+      font-size:13px;
+      letter-spacing:0.04em;
+      text-transform:uppercase;
+    }
+
+    .metric-value {
+      font-size:clamp(28px,6vw,36px);
+      font-weight:700;
+      color:var(--ink);
+    }
+
+    .metric-sub {
+      font-size:14px;
+      color:#3b3b3b;
+      display:flex;
+      align-items:center;
+      gap:6px;
+    }
+
+    .plan-free {border-left:5px solid rgba(17,17,17,0.35);} 
+    .plan-plus {border-left:5px solid rgba(243,115,30,0.75);} 
+    .plan-pro {border-left:5px solid rgba(0,77,64,0.75);} 
+    .plan-premium {border-left:5px solid rgba(243,115,30,0.9); background:rgba(255,255,255,0.92);} 
+
+    .plan-premium .metric-value {
+      color:var(--orange);
+    }
+
+    .plan-badge.free {background:rgba(17,17,17,0.08); color:#333;}
+    .plan-badge.plus {background:rgba(243,115,30,0.15); color:var(--orange);}
+    .plan-badge.pro {background:rgba(0,77,64,0.15); color:var(--emerald);}
+    .plan-badge.premium {background:linear-gradient(135deg,#F3731E,#FF8A3C); color:#fff;}
+
+    .revenue-card {
+      cursor:default;
+    }
+
+    .revenue-card .metric-value {
+      font-size:clamp(30px,7vw,44px);
+      color:var(--orange);
+      text-shadow:0 4px 18px rgba(243,115,30,0.45);
+    }
+
+    .revenue-card strong {
+      color:var(--emerald);
+    }
+
+    .chart-wrapper {
+      background:rgba(255,255,255,0.88);
+      border-radius:var(--radius-lg);
+      box-shadow:var(--shadow-soft);
+      padding:24px;
+      display:grid;
+      gap:18px;
+    }
+
+    .chart-container {
+      position:relative;
+      width:100%;
+      max-width:360px;
+      margin:0 auto;
+    }
+
+    .chart-legend {
+      display:flex;
+      flex-wrap:wrap;
+      gap:12px;
+      justify-content:center;
+    }
+
+    .legend-item {
+      display:flex;
+      align-items:center;
+      gap:8px;
+      font-size:14px;
+      color:#333;
+    }
+
+    .legend-dot {
+      width:10px;
+      height:10px;
+      border-radius:50%;
+    }
+
+    .table-panel {
+      background:rgba(255,255,255,0.9);
+      border-radius:var(--radius-lg);
+      box-shadow:var(--shadow-soft);
+      padding:24px;
+      display:flex;
+      flex-direction:column;
+      gap:18px;
+      overflow:hidden;
+    }
+
+    .table-panel header {
+      position:relative;
+      background:transparent;
+      border:none;
+      box-shadow:none;
+      backdrop-filter:none;
+      padding:0;
+    }
+
+    .table-controls {
+      display:flex;
+      flex-wrap:wrap;
+      gap:12px;
+    }
+
+    .table-controls input,
+    .table-controls select {
+      padding:10px 14px;
+      border-radius:12px;
+      border:1px solid rgba(0,0,0,0.12);
+      background:rgba(255,255,255,0.9);
+      min-width:150px;
+      font-size:14px;
+      transition:border 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .table-controls input:focus,
+    .table-controls select:focus {
+      outline:none;
+      border:1px solid rgba(243,115,30,0.65);
+      box-shadow:0 0 0 3px rgba(243,115,30,0.2);
+    }
+
+    .refresh-btn {
+      padding:10px 16px;
+      border-radius:12px;
+      background:rgba(243,115,30,0.18);
+      color:var(--orange);
+      border:1px solid rgba(243,115,30,0.4);
+      display:flex;
+      align-items:center;
+      gap:6px;
+      cursor:pointer;
+      transition:all 0.25s ease;
+    }
+
+    .refresh-btn:hover {
+      background:rgba(243,115,30,0.32);
+      transform:translateY(-2px);
+    }
+
+    table {
+      width:100%;
+      border-collapse:collapse;
+      min-width:720px;
+    }
+
+    thead {
+      background:rgba(0,77,64,0.08);
+    }
+
+    th, td {
+      text-align:left;
+      padding:14px 16px;
+      font-size:14px;
+      border-bottom:1px solid rgba(0,0,0,0.06);
+    }
+
+    tbody tr:hover {
+      background:rgba(243,115,30,0.08);
+    }
+
+    .table-scroll {
+      overflow-x:auto;
+    }
+
+    .plan-chip {
+      padding:6px 12px;
+      border-radius:999px;
+      font-size:12px;
+      font-weight:600;
+      text-transform:capitalize;
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+    }
+
+    .chip-free {background:rgba(17,17,17,0.08); color:#333;}
+    .chip-plus {background:rgba(243,115,30,0.15); color:var(--orange);} 
+    .chip-pro {background:rgba(0,77,64,0.15); color:var(--emerald);} 
+    .chip-premium {background:linear-gradient(135deg,#F3731E,#FF8A3C); color:#fff;} 
+
+    .actions {
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+    }
+
+    .btn {
+      border:none;
+      border-radius:12px;
+      padding:8px 16px;
+      font-size:13px;
+      font-weight:600;
+      cursor:pointer;
+      transition:all 0.25s ease;
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+    }
+
+    .btn:hover {transform:translateY(-2px) scale(1.01);} 
+
+    .btn-orange {
+      background:linear-gradient(135deg,#F3731E,#FF8A3C);
+      color:#fff;
+      box-shadow:0 8px 16px rgba(243,115,30,0.35);
+    }
+
+    .btn-emerald {
+      background:linear-gradient(135deg,#00695C,#00A28A);
+      color:#fff;
+      box-shadow:0 8px 16px rgba(0,77,64,0.28);
+    }
+
+    .btn-outline {
+      background:transparent;
+      border:1px solid rgba(0,77,64,0.4);
+      color:var(--emerald);
+    }
+
+    .floating-export {
+      position:fixed;
+      bottom:24px;
+      right:24px;
+      padding:12px 22px;
+      border-radius:999px;
+      background:linear-gradient(135deg,#F3731E,#FF8A3C);
+      color:#fff;
+      display:flex;
+      align-items:center;
+      gap:10px;
+      font-weight:600;
+      box-shadow:0 10px 26px rgba(243,115,30,0.35);
+      cursor:pointer;
+      z-index:40;
+      transition:transform 0.25s ease;
+    }
+
+    .floating-export:hover {transform:translateY(-4px) scale(1.03);} 
+
+    footer {
+      margin-top:auto;
+      padding:24px;
+      text-align:center;
+      color:rgba(255,255,255,0.82);
+      background:rgba(234,220,207,0.12);
+      border-top:1px solid rgba(255,255,255,0.18);
+      backdrop-filter:blur(10px);
+      font-size:14px;
+    }
+
+    .modal-backdrop {
+      position:fixed;
+      inset:0;
+      background:rgba(0,0,0,0.48);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:20px;
+      z-index:200;
+      opacity:0;
+      pointer-events:none;
+      transition:opacity 0.3s ease;
+    }
+
+    .modal-backdrop.active {
+      opacity:1;
+      pointer-events:auto;
+    }
+
+    .modal {
+      width:100%;
+      max-width:420px;
+      background:rgba(255,255,255,0.95);
+      border-radius:18px;
+      padding:24px;
+      box-shadow:0 12px 32px rgba(0,0,0,0.2);
+      display:flex;
+      flex-direction:column;
+      gap:18px;
+      animation:scaleIn 0.28s ease;
+    }
+
+    .modal h3 {
+      font-family:'Anton',sans-serif;
+      font-size:24px;
+      color:var(--emerald);
+    }
+
+    .modal select {
+      padding:12px 14px;
+      border-radius:12px;
+      border:1px solid rgba(0,0,0,0.12);
+      font-size:14px;
+    }
+
+    .modal textarea {
+      min-height:120px;
+      padding:12px;
+      border-radius:12px;
+      border:1px solid rgba(0,0,0,0.12);
+      resize:vertical;
+      font-size:14px;
+    }
+
+    .modal-actions {
+      display:flex;
+      justify-content:flex-end;
+      gap:12px;
+    }
+
+    .toast {
+      position:fixed;
+      bottom:30px;
+      left:50%;
+      transform:translateX(-50%) translateY(40px);
+      padding:14px 24px;
+      border-radius:999px;
+      background:linear-gradient(135deg,#00695C,#00A28A);
+      color:#fff;
+      font-weight:600;
+      box-shadow:0 10px 24px rgba(0,0,0,0.18);
+      opacity:0;
+      pointer-events:none;
+      transition:transform 0.35s ease, opacity 0.35s ease;
+      z-index:300;
+    }
+
+    .toast.show {
+      opacity:1;
+      transform:translateX(-50%) translateY(0);
+    }
+
+    .loader-screen {
+      position:fixed;
+      inset:0;
+      background:linear-gradient(135deg,rgba(0,77,64,0.95),rgba(0,105,92,0.95));
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      gap:18px;
+      color:#fff;
+      font-family:'Inter',sans-serif;
+      z-index:999;
+    }
+
+    .loader-logo {
+      font-family:'Anton',sans-serif;
+      font-size:32px;
+      letter-spacing:0.08em;
+    }
+
+    .spinner {
+      width:48px;
+      height:48px;
+      border-radius:50%;
+      border:4px solid rgba(255,255,255,0.3);
+      border-top-color:#fff;
+      animation:spin 0.9s linear infinite;
+    }
+
+    @keyframes spin {to{transform:rotate(360deg);}}
+    @keyframes fadeIn {from{opacity:0; transform:translateY(12px);} to{opacity:1; transform:translateY(0);}}
+    @keyframes scaleIn {from{opacity:0; transform:scale(0.9);} to{opacity:1; transform:scale(1);}}
+
+    @media (max-width:768px){
+      main {padding-bottom:150px;}
+      .floating-export {right:16px; bottom:16px;}
+      .glass-card {padding:20px;}
+      .table-controls {flex-direction:column; align-items:flex-start;}
+      table {min-width:600px;}
+    }
+
+    @media (max-width:480px){
+      .topbar {padding:14px 16px;}
+      .glass-card {gap:10px;}
+      .metric-value {font-size:26px;}
+      .floating-export {padding:10px 18px; font-size:13px;}
+    }
+  </style>
+</head>
+<body>
+  <!-- Auth Guard Loader -->
+  <div class="loader-screen" id="authLoader">
+    <div class="spinner" aria-hidden="true"></div>
+    <div class="loader-logo">YUSTAM</div>
+    <p>Authorising admin…</p>
+  </div>
+
+  <!-- Header / Navbar -->
+  <header>
+    <div class="topbar">
+      <div style="display:flex; align-items:center; gap:12px;">
+        <button class="icon-btn" type="button" aria-label="Back to dashboard" id="backToDashboard">
+          <i class="ri-arrow-left-line"></i>
+        </button>
+        <h1>YUSTAM Admin</h1>
+      </div>
+      <div class="topbar-actions">
+        <button class="icon-btn" type="button" aria-label="Logout" id="logoutBtn">
+          <i class="ri-logout-box-r-line"></i>
+        </button>
+      </div>
+    </div>
+    <div class="accent-strip"></div>
+  </header>
+
+  <main>
+    <!-- Page Title -->
+    <section class="page-title">
+      <h2>Plans &amp; Revenue Dashboard</h2>
+      <span></span>
+      <p>Overview of active subscriptions, revenue performance, and plan distribution across the entire YUSTAM vendor ecosystem.</p>
+    </section>
+
+    <!-- Metric Cards -->
+    <section class="card-grid" id="planMetricCards">
+      <!-- cards rendered by JS -->
+    </section>
+
+    <!-- Revenue Summary -->
+    <section class="glass-card revenue-card" id="revenueSummary">
+      <h3>Revenue Summary</h3>
+      <p class="metric-value" id="totalRevenue">₦0</p>
+      <div class="metric-sub"><strong>Total Active Vendors:</strong> <span id="totalVendors">0</span></div>
+      <div class="metric-sub">Projected Annual Revenue: <span id="annualRevenue">₦0</span></div>
+      <div class="metric-sub">Average Revenue per Vendor: <span id="avgRevenue">₦0</span></div>
+    </section>
+
+    <!-- Distribution Chart -->
+    <section class="chart-wrapper">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+        <h3 style="font-family:'Anton',sans-serif; font-size:clamp(18px,3.5vw,26px); color:var(--emerald);">Plan Distribution</h3>
+        <small style="color:#555;">Data updates in real-time from Firestore.</small>
+      </div>
+      <div class="chart-container">
+        <canvas id="planChart" aria-label="Plan distribution chart"></canvas>
+      </div>
+      <div class="chart-legend" id="chartLegend"></div>
+    </section>
+
+    <!-- Vendor Table -->
+    <section class="table-panel">
+      <header>
+        <h3 style="font-family:'Anton',sans-serif; font-size:clamp(18px,3.5vw,26px); color:var(--emerald);">Vendors by Plan</h3>
+      </header>
+      <!-- Vendor Table Controls -->
+      <div class="table-controls" id="tableControls">
+        <!-- Controls inserted via JS -->
+      </div>
+      <div class="table-scroll">
+        <table aria-describedby="tableControls">
+          <thead>
+            <tr>
+              <th>Vendor</th>
+              <th>Email</th>
+              <th>Phone</th>
+              <th>Plan</th>
+              <th>Start Date</th>
+              <th>Expiry Date</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="vendorTableBody">
+            <!-- rows via JS -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    © 2025 YUSTAM Marketplace — Built for Nigeria
+  </footer>
+
+  <!-- Change Plan Modal -->
+  <div class="modal-backdrop" id="planModalBackdrop" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="modal" role="document">
+      <h3>Change Vendor Plan</h3>
+      <p id="planModalVendor"></p>
+      <label for="newPlanSelect" style="font-weight:600;">Select new plan</label>
+      <select id="newPlanSelect">
+        <option value="free">Free</option>
+        <option value="plus">Plus</option>
+        <option value="pro">Pro</option>
+        <option value="premium">Premium</option>
+      </select>
+      <div class="modal-actions">
+        <button class="btn btn-outline" type="button" id="cancelPlanChange">Cancel</button>
+        <button class="btn btn-orange" type="button" id="confirmPlanChange">Update Plan</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" role="status" aria-live="polite" id="toast"></div>
+
+  <!-- Floating Export -->
+  <button class="floating-export" type="button" id="exportCsvBtn">
+    <i class="ri-download-2-line"></i> Export CSV
+  </button>
+
+  <!-- Firebase Logic -->
+  
+    <script type="module" src="admin-plans.js"></script>
+<script type="module" src="firebase.js"></script>
+</body>
+</html>
+
+
