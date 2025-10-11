@@ -18,7 +18,7 @@ if (!isset($_SESSION['vendor_id'])) {
 $vendorId = (int)$_SESSION['vendor_id'];
 $db = get_db_connection();
 
-$stmt = $db->prepare('SELECT * FROM ' . YUSTAM_USERS_TABLE . ' WHERE id = ? LIMIT 1');
+$stmt = $db->prepare('SELECT * FROM users WHERE id = ? LIMIT 1');
 $stmt->bind_param('i', $vendorId);
 $stmt->execute();
 $result = $stmt->get_result();
