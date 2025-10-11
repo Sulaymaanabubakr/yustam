@@ -123,8 +123,43 @@ forgotPasswordBtn?.addEventListener('click', async () => {
   }
 });
 
+import { getAuth, GoogleAuthProvider, signInWithPopup }
+  from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
+
+const auth = getAuth();
+const provider = new GoogleAuthProvider();
+
 if (googleBtn) {
-  googleBtn.addEventListener('click', () => {
-    setMessage('Google sign-in is not available for vendor accounts yet.');
+  googleBtn.addEventListener('click', async () => {
+    setMessage('');
+    try {
+      // Sign in with Google popup
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+
+      // Prepare data for PHP backend
+      const formData = new FormData();
+      formData.append('email', user.email);
+      formData.append('name', user.displayName);
+      formData.append('google_id', user.uid);
+
+      const response = await fetch('/google-login.php', {
+        method: 'POST',
+        body: formData
+      });
+
+      const data = await response.json();
+
+      if (!data.success) {
+        setMessage(data.message || 'Google sign-in failed.');
+        return;
+      }
+
+      setMessage('Signed in successfully. Redirecting…', 'success');
+      window.location.href = data.redirect || 'vendor-dashboard.php';
+    } catch (error) {
+      console.error('Google sign-in error', error);
+      setMessage(error.message || 'Google sign-in failed.');
+    }
   });
 }
