@@ -1466,32 +1466,6 @@ const renderFields = (categoryKey) => {
     handleBrandChange(brandSelectRef.value).catch((error) => console.info('Brand initialise failed', error));
   }
 
-  // --- FIX: Ensure models load properly for Phones & Tablets ---
-if (categoryKey === 'Phones & Tablets' && brandSelectRef) {
-  brandSelectRef.addEventListener('focus', async () => {
-    if (
-      !phoneModelCatalog[brandSelectRef.value] ||
-      phoneModelCatalog[brandSelectRef.value].length === 0
-    ) {
-      await fetchBrandModelsFromApi(brandSelectRef.value);
-    }
-  });
-
-  brandSelectRef.addEventListener('change', () => {
-    if (brandSelectRef.value && phoneModelCatalog[brandSelectRef.value]) {
-      const models = phoneModelCatalog[brandSelectRef.value];
-      if (modelDatalist) {
-        modelDatalist.innerHTML = '';
-        models.forEach((m) => {
-          const opt = document.createElement('option');
-          opt.value = m;
-          modelDatalist.appendChild(opt);
-        });
-      }
-    }
-  });
-}
-
   updateWarrantyRequirement();
 };
 
