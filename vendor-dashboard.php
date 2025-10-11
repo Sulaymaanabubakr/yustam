@@ -36,18 +36,12 @@ if (!$vendor) {
     exit;
 }
 
-$nameColumn = yustam_users_column('name');
-$vendorName = $vendor[$nameColumn] ?? '';
-$businessName = yustam_users_table_has_column('business_name') ? ($vendor['business_name'] ?? '') : '';
-$phone = yustam_users_table_has_column('phone') ? ($vendor['phone'] ?? '') : '';
-$location = '';
-if (yustam_users_table_has_column('business_address') && !empty($vendor['business_address'])) {
-    $location = $vendor['business_address'];
-} elseif (yustam_users_table_has_column('state')) {
-    $location = $vendor['state'] ?? '';
-}
-$plan = yustam_users_table_has_column('plan') ? ($vendor['plan'] ?? 'Free') : 'Free';
-$createdAt = yustam_users_table_has_column('created_at') ? ($vendor['created_at'] ?? '') : '';
+$vendorName   = $vendor['full_name'] ?? '';
+$businessName = $vendor['business_name'] ?? '';
+$phone        = $vendor['phone'] ?? '';
+$location     = $vendor['state'] ?? '';
+$plan         = $vendor['plan'] ?? 'Free';
+$createdAt    = $vendor['created_at'] ?? '';
 $createdDisplay = $createdAt ? date('j M Y', strtotime($createdAt)) : '—';
 
 $listings = [];
