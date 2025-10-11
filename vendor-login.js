@@ -1,19 +1,14 @@
+// ---------- Imports ----------
+import { auth, provider, signInWithPopup } from './firebase.js';
+
+// ---------- DOM Elements ----------
 const loginForm = document.getElementById('loginForm');
 const loginBtn = document.getElementById('loginBtn');
 const forgotPasswordBtn = document.getElementById('forgotPasswordBtn');
 const formError = document.getElementById('formError');
 const googleBtn = document.getElementById('googleBtn');
 
-const params = new URLSearchParams(window.location.search);
-const statusMessage = params.get('message');
-const statusType = params.get('status');
-if (statusMessage) {
-  formError.textContent = statusMessage;
-  if (statusType === 'success') {
-    formError.classList.add('success');
-  }
-}
-
+// ---------- Utility Functions ----------
 const setMessage = (message = '', type = 'error') => {
   formError.textContent = message;
   if (!message) {
@@ -38,6 +33,7 @@ const setLoading = (loading) => {
   }
 };
 
+// ---------- EMAIL & PASSWORD LOGIN ----------
 loginForm?.addEventListener('submit', async (event) => {
   event.preventDefault();
   setMessage('');
@@ -53,18 +49,12 @@ loginForm?.addEventListener('submit', async (event) => {
 
   try {
     setLoading(true);
-    const response = await fetch('/login.php', {
-  method: 'POST',
-  body: formData,
-});
+    const response = await fetch('login.php', {
+      method: 'POST',
+      body: formData,
+    });
 
-    let data;
-    try {
-      data = await response.json();
-    } catch (parseError) {
-      console.error('Invalid login response', parseError);
-      throw new Error('Unable to sign in. Please try again.');
-    }
+    const data = await response.json();
 
     if (!response.ok || !data.success) {
       setMessage(data.message || 'Unable to sign in. Please try again.');
@@ -81,6 +71,7 @@ loginForm?.addEventListener('submit', async (event) => {
   }
 });
 
+// ---------- FORGOT PASSWORD ----------
 forgotPasswordBtn?.addEventListener('click', async () => {
   setMessage('');
   const email = (loginForm?.email?.value || '').trim().toLowerCase();
@@ -100,14 +91,8 @@ forgotPasswordBtn?.addEventListener('click', async () => {
       method: 'POST',
       body: formData,
     });
-    let data;
-    try {
-      data = await response.json();
-    } catch (parseError) {
-      console.error('Invalid forgot-password response', parseError);
-      throw new Error('Unable to send reset link.');
-    }
 
+    const data = await response.json();
     if (!response.ok || !data.success) {
       setMessage(data.message || 'Unable to send reset link.');
       return;
@@ -123,43 +108,35 @@ forgotPasswordBtn?.addEventListener('click', async () => {
   }
 });
 
-import { getAuth, GoogleAuthProvider, signInWithPopup }
-  from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
+// ---------- GOOGLE SIGN-IN ----------
+googleBtn?.addEventListener('click', async () => {
+  setMessage('Connecting to Google…', 'success');
 
-const auth = getAuth();
-const provider = new GoogleAuthProvider();
+  try {
+    const result = await signInWithPopup(auth, provider);
+    const user = result.user;
 
-if (googleBtn) {
-  googleBtn.addEventListener('click', async () => {
-    setMessage('');
-    try {
-      // Sign in with Google popup
-      const result = await signInWithPopup(auth, provider);
-      const user = result.user;
+    // Send Google user data to backend PHP
+    const formData = new FormData();
+    formData.append('email', user.email);
+    formData.append('name', user.displayName || '');
+    formData.append('provider', 'google');
 
-      // Prepare data for PHP backend
-      const formData = new FormData();
-      formData.append('email', user.email);
-      formData.append('name', user.displayName);
-      formData.append('google_id', user.uid);
+    const response = await fetch('google-login.php', {
+      method: 'POST',
+      body: formData,
+    });
 
-      const response = await fetch('/google-login.php', {
-        method: 'POST',
-        body: formData
-      });
+    const data = await response.json();
 
-      const data = await response.json();
-
-      if (!data.success) {
-        setMessage(data.message || 'Google sign-in failed.');
-        return;
-      }
-
-      setMessage('Signed in successfully. Redirecting…', 'success');
+    if (data.success) {
+      setMessage('Welcome back, redirecting…', 'success');
       window.location.href = data.redirect || 'vendor-dashboard.php';
-    } catch (error) {
-      console.error('Google sign-in error', error);
-      setMessage(error.message || 'Google sign-in failed.');
+    } else {
+      setMessage(data.message || 'Unable to sign in with Google.');
     }
-  });
-}
+  } catch (error) {
+    console.error('Google sign-in error:', error);
+    setMessage('Google sign-in failed. Please try again.');
+  }
+});
