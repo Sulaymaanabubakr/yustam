@@ -53,10 +53,10 @@ loginForm?.addEventListener('submit', async (event) => {
 
   try {
     setLoading(true);
-    const response = await fetch('login.php', {
-      method: 'POST',
-      body: formData,
-    });
+    const response = await fetch('/login.php', {
+  method: 'POST',
+  body: formData,
+});
 
     let data;
     try {
