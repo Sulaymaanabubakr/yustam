@@ -10,28 +10,54 @@ const loaderMessages = loader ? loader.querySelectorAll('p') : [];
 const header = qs('#dashboardHeader');
 const dashboard = qs('#dashboard');
 
+const escapeHTML = (value) => {
+  if (typeof value !== 'string') return value ?? '';
+  return value.replace(/[&<>'"]/g, (char) => {
+    const map = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      "'": '&#39;',
+      '"': '&quot;',
+    };
+    return map[char] || char;
+  });
+};
+
 const fillText = (id, value, fallback = '—') => {
   const el = document.getElementById(id);
   if (!el) return;
   el.textContent = value || fallback;
 };
 
-const formatNumber = (value) => {
-  return new Intl.NumberFormat('en-NG').format(Number(value || 0));
-};
+const formatNumber = (value) => new Intl.NumberFormat('en-NG').format(Number(value || 0));
 
 const hydrateProfile = () => {
-  fillText('vendorName', vendorData.name, '—');
-  fillText('businessName', vendorData.businessName, '—');
-  fillText('vendorPhone', vendorData.phone, '—');
-  fillText('vendorLocation', vendorData.location, '—');
-  fillText('vendorJoined', vendorData.joined, '—');
-
-  const planBadge = document.getElementById('planBadge');
+  const welcomeName = document.getElementById('welcomeName');
+  const headerGreeting = document.getElementById('headerGreeting');
   const currentPlan = document.getElementById('currentPlan');
-  if (planBadge) {
-    planBadge.innerHTML = `<i class="ri-vip-crown-line"></i> ${vendorData.plan || 'Free'} Plan`;
+
+  const name = vendorData.name || '';
+  const business = vendorData.businessName || '';
+  const location = vendorData.location || '';
+
+  if (welcomeName) {
+    const firstName = name.trim().split(' ')[0] || 'Vendor';
+    welcomeName.textContent = firstName;
   }
+
+  if (headerGreeting) {
+    if (business && location) {
+      headerGreeting.textContent = `${business} • ${location}`;
+    } else if (business) {
+      headerGreeting.textContent = business;
+    } else if (location) {
+      headerGreeting.textContent = `Serving ${location}`;
+    } else {
+      headerGreeting.textContent = 'Curated commerce, crafted by you.';
+    }
+  }
+
   if (currentPlan) {
     currentPlan.textContent = vendorData.plan || 'Free';
   }
@@ -48,12 +74,70 @@ const hydrateStats = () => {
   }
 };
 
+const buildListingCard = (item) => {
+  const card = document.createElement('article');
+  card.className = 'listing-card';
+
+  const top = document.createElement('div');
+  top.className = 'listing-top';
+
+  const thumb = document.createElement('div');
+  thumb.className = 'listing-thumb';
+  thumb.setAttribute('aria-hidden', 'true');
+  thumb.textContent = (item.title || 'Y')[0].toUpperCase();
+
+  const info = document.createElement('div');
+  info.className = 'listing-info';
+
+  const title = document.createElement('h3');
+  title.textContent = item.title || 'Untitled';
+
+  const metaLine = document.createElement('p');
+  metaLine.textContent = item.added_on ? `Added ${item.added_on}` : 'Recently added';
+
+  info.appendChild(title);
+  info.appendChild(metaLine);
+
+  top.appendChild(thumb);
+  top.appendChild(info);
+
+  const meta = document.createElement('div');
+  meta.className = 'listing-meta';
+
+  const price = document.createElement('span');
+  price.textContent = `₦${formatNumber(item.price)}`;
+
+  const status = document.createElement('span');
+  const statusValue = (item.status || '').toLowerCase();
+  status.className = `status-pill ${statusValue ? `status-${statusValue}` : 'status-draft'}`;
+  status.textContent = item.status || 'Draft';
+
+  meta.appendChild(price);
+  meta.appendChild(status);
+
+  const actions = document.createElement('div');
+  actions.className = 'listing-actions';
+
+  const viewLink = document.createElement('a');
+  viewLink.href = item.link || '#';
+  viewLink.textContent = 'View Listing';
+  viewLink.setAttribute('aria-label', `View listing ${escapeHTML(item.title || '')}`);
+
+  actions.appendChild(viewLink);
+
+  card.appendChild(top);
+  card.appendChild(meta);
+  card.appendChild(actions);
+
+  return card;
+};
+
 const hydrateListings = () => {
   const emptyState = document.getElementById('emptyState');
-  const tableBody = document.getElementById('listingTableBody');
+  const grid = document.getElementById('listingGrid');
 
-  if (tableBody) {
-    tableBody.innerHTML = '';
+  if (grid) {
+    grid.innerHTML = '';
   }
 
   if (!vendorListings.length) {
@@ -64,21 +148,26 @@ const hydrateListings = () => {
   if (emptyState) emptyState.hidden = true;
 
   vendorListings.forEach((item) => {
-    if (!tableBody) return;
-    const row = document.createElement('tr');
-    row.innerHTML = `
-      <td>${item.title || 'Untitled'}</td>
-      <td>₦${formatNumber(item.price)}</td>
-      <td>${item.status || '—'}</td>
-      <td>${item.added_on || '—'}</td>
-      <td><a class="btn btn-outline" href="${item.link || '#'}">View</a></td>
-    `;
-    tableBody.appendChild(row);
+    if (!grid) return;
+    grid.appendChild(buildListingCard(item));
   });
 };
 
 const bindActions = () => {
-  // ✅ Logout (backend handles the PHP logic)
+  const settingsBtn = document.getElementById('settingsBtn');
+  if (settingsBtn) {
+    settingsBtn.addEventListener('click', () => {
+      window.location.href = 'vendor-settings.php';
+    });
+  }
+
+  const profileBtn = document.getElementById('profileBtn');
+  if (profileBtn) {
+    profileBtn.addEventListener('click', () => {
+      window.location.href = 'vendor-profile.php';
+    });
+  }
+
   const logoutBtn = document.getElementById('logoutBtn');
   if (logoutBtn) {
     logoutBtn.addEventListener('click', () => {
@@ -86,7 +175,6 @@ const bindActions = () => {
     });
   }
 
-  // ✅ Floating “Add Listing” Button → post.html
   const fab = document.getElementById('fab');
   if (fab) {
     fab.addEventListener('click', () => {
@@ -94,46 +182,19 @@ const bindActions = () => {
     });
   }
 
-  // ✅ Profile & Plan buttons
-  const editProfile = document.getElementById('editProfile');
-  const upgradePlan = document.getElementById('openPlanModal');
   const renewPlan = document.getElementById('renewPlan');
-  const viewPricing = document.getElementById('viewPricing');
-
-  if (editProfile) {
-    editProfile.addEventListener('click', () => {
-      window.location.href = 'vendor-profile.php';
-    });
-  }
-
-  if (upgradePlan) {
-    upgradePlan.addEventListener('click', () => {
-      window.location.href = 'vendor-plans.php';
-    });
-  }
-
   if (renewPlan) {
     renewPlan.addEventListener('click', () => {
       window.location.href = 'vendor-plans.php#renew';
     });
   }
 
+  const viewPricing = document.getElementById('viewPricing');
   if (viewPricing) {
     viewPricing.addEventListener('click', () => {
-      window.location.href = 'vendor-plans.php#pricing';
+      window.location.href = 'vendor-plans.php';
     });
   }
-
-  // ✅ Close modal (if any are open)
-  qsa('[data-close-modal]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const backdrop = btn.closest('.modal-backdrop');
-      if (backdrop) {
-        backdrop.setAttribute('aria-hidden', 'true');
-        backdrop.classList.remove('is-visible');
-      }
-    });
-  });
 };
 
 const showDashboard = () => {
@@ -153,7 +214,7 @@ const fetchDashboardData = async () => {
   try {
     showLoaderMessage('Preparing your dashboard…', 'Fetching your latest stats.');
     const response = await fetch('vendor-dashboard.php?format=json', {
-      headers: { 'Accept': 'application/json' },
+      headers: { Accept: 'application/json' },
       credentials: 'same-origin',
     });
 
