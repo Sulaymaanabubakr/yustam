@@ -450,6 +450,10 @@
             padding: 64px 0;
         }
 
+        .trust h3 {
+            color: #F3731E;
+        }
+
         .trust h2 {
             color: var(--white);
         }
@@ -550,6 +554,10 @@
             gap: 16px;
         }
 
+        .newsletter h3 {
+            color: #F3731E;
+        }
+
         .newsletter form {
             display: grid;
             gap: 12px;
@@ -632,32 +640,52 @@
             color: rgba(255, 255, 255, 0.75);
         }
 
-        /* WhatsApp FAB */
-        .whatsapp-fab {
-            position: fixed;
-            bottom: 22px;
-            right: 22px;
-            width: 58px;
-            height: 58px;
-            border-radius: 50%;
-            background: var(--emerald);
-            color: var(--white);
-            display: grid;
-            place-items: center;
-            box-shadow: 0 12px 24px rgba(0, 77, 64, 0.35);
-            animation: pulse 2.4s infinite;
-            transition: transform 200ms ease;
-            z-index: 900;
+        footer {
+            text-align: center;
         }
 
-        .whatsapp-fab:hover {
-            transform: translateY(-4px) scale(1.02);
+        footer h4 {
+            color: #F3731E;
         }
 
-        @keyframes pulse {
-            0% { box-shadow: 0 0 0 0 rgba(0, 77, 64, 0.45); }
-            70% { box-shadow: 0 0 0 16px rgba(0, 77, 64, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(0, 77, 64, 0); }
+        footer a {
+            display: inline-block;
+            text-align: center;
+        }
+
+        /* Center the socials row */
+            footer .socials,
+            footer .social-links,
+            footer .footer-socials {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 12px;          /* space between icons/links */
+            flex-wrap: wrap;    /* wrap nicely on mobile */
+            margin-top: 8px;
+        }
+
+        /* If socials are inside a UL */
+            footer .socials ul,
+            footer .social-links ul,
+            footer .footer-socials ul {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 12px;
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        /* Make each social link behave like a centered pill/icon */
+            footer .socials a,
+            footer .social-links a,
+            footer .footer-socials a {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
         }
 
         /* Media Queries */
@@ -1174,9 +1202,17 @@
                         <a href="https://facebook.com/yustam" target="_blank" rel="noopener">Facebook</a>
                     </nav>
                     <div class="socials" aria-label="Follow YUSTAM">
-                        <a href="https://wa.me/2348012345678" target="_blank" rel="noopener" aria-label="WhatsApp"><i class="ri-whatsapp-line"></i></a>
-                        <a href="https://instagram.com/yustam" target="_blank" rel="noopener" aria-label="Instagram"><i class="ri-instagram-line"></i></a>
-                        <a href="https://facebook.com/yustam" target="_blank" rel="noopener" aria-label="Facebook"><i class="ri-facebook-circle-line"></i></a>
+                        <div class="footer-socials">
+                        <a href="https://facebook.com/yustam" target="_blank" rel="noopener" aria-label="Facebook">
+                        <i class="ri-facebook-circle-line"></i></a>
+                        <a href="https://instagram.com/yustam" target="_blank" rel="noopener" aria-label="Instagram">
+                        <i class="ri-instagram-line"></i></a>
+                        <a href="https://x.com/yustam" target="_blank" rel="noopener" aria-label="X (Twitter)">
+                        <i class="ri-twitter-x-line"></i></a>
+                        <a href="https://chat.whatsapp.com/your-vendor-group-link" target="_blank" rel="noopener" aria-label="WhatsApp Vendors Group">
+                        <i class="ri-whatsapp-line"></i></a>
+                    </div>
+
                     </div>
                 </div>
             </div>
