@@ -783,7 +783,8 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
                 </div>
                 <div class="profile-actions">
                     <a class="btn btn-outline" href="edit-vendor-profile.html">Edit Profile</a>
-                    <button class="btn btn-primary" type="button" onclick="window.location.href='vendor-plans.html'">Upgrade Plan</button>
+                    <button class="btn btn-primary" type="button" id="openPlanModal">Upgrade Plan</button>
+                </div>
             </div>
             <div class="plan-card">
                 <!-- Plan Details -->
@@ -792,17 +793,17 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
                     Upgrade to our Boosted or Premium plans to enjoy homepage placement, featured highlights, and access to smart analytics tailored to Nigerian buyers.
                 </div>
                 <div class="profile-actions">
-                    <button class="btn btn-accent" type="button" onclick="window.location.href='vendor-plans.html?renew=true'">Renew Current Plan</button>
-                    <button class="btn btn-outline" type="button" onclick="window.location.href='vendor-plans.html#pricing'">View Pricing</button>
+                    <button class="btn btn-accent" type="button" id="renewPlan">Renew Current Plan</button>
+                    <button class="btn btn-outline" type="button" id="viewPricing">View Pricing Deck</button>
                 </div>
             </div>
         </section>
     </main>
 
     <!-- Floating Action Button -->
-    <a href="post.html" class="fab" id="fab" aria-label="Add a new listing">
-    <i class="ri-add-line" aria-hidden="true"></i>
-    </a>
+    <button class="fab" id="fab" aria-label="Add a new listing">
+        <i class="ri-add-line" aria-hidden="true"></i>
+    </button>
 
     <!-- Upgrade Modal -->
     <div class="modal-backdrop" id="planModal" role="dialog" aria-modal="true" aria-labelledby="planModalTitle" aria-hidden="true">
