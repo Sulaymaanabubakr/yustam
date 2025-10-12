@@ -112,9 +112,9 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
             --beige: #EADCCF;
             --white: #FFFFFF;
             --ink: #111111;
-            --shadow-soft: 0 10px 30px rgba(0, 0, 0, 0.1);
+            --shadow-soft: 0 18px 38px rgba(17, 17, 17, 0.12);
             --radius-large: 20px;
-            --radius-medium: 16px;
+            --radius-medium: 18px;
         }
 
         * {
@@ -124,7 +124,7 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
         body {
             margin: 0;
             font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: linear-gradient(160deg, rgba(234, 220, 207, 0.9), rgba(255, 255, 255, 0.95));
+            background: radial-gradient(circle at top left, rgba(234, 220, 207, 0.9), rgba(255, 255, 255, 0.92));
             color: var(--ink);
             min-height: 100vh;
             display: flex;
@@ -137,360 +137,340 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
             color: var(--emerald);
         }
 
-        main {
-            flex: 1;
-            width: min(1180px, calc(100% - clamp(2rem, 6vw, 6.5rem)));
-            margin: 0 auto;
-            padding: clamp(1.75rem, 3vw, 3rem) 0 clamp(3rem, 5vw, 3.5rem);
-            display: flex;
-            flex-direction: column;
-            gap: clamp(1.6rem, 3vw, 2.6rem);
-            animation: fadeIn 600ms ease forwards;
+        a {
+            color: inherit;
         }
 
-        main > section + section {
-            margin-top: clamp(1.6rem, 3vw, 2.4rem);
-        }
-
-        header {
+        .dashboard-header {
             position: sticky;
             top: 0;
-            z-index: 50;
-            background: rgba(0, 77, 64, 0.94);
-            backdrop-filter: blur(12px);
-            color: var(--white);
+            z-index: 60;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 0.85rem 1.5rem;
-            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
+            padding: 0.95rem clamp(1.2rem, 4vw, 2.4rem);
+            backdrop-filter: blur(16px);
+            background: rgba(0, 77, 64, 0.94);
+            box-shadow: 0 14px 26px rgba(0, 0, 0, 0.22);
+            border-bottom: 2px solid rgba(243, 115, 30, 0.35);
+            color: var(--white);
         }
 
-        .header-title {
+        .header-brand {
             display: flex;
             align-items: center;
-            gap: 0.6rem;
+            gap: 0.9rem;
         }
 
-        .header-title span {
-            font-size: clamp(1.4rem, 4vw, 1.8rem);
+        .logo-img {
+            width: 48px;
+            height: 48px;
+            border-radius: 16px;
+            object-fit: cover;
+            box-shadow: 0 12px 22px rgba(0, 0, 0, 0.25);
+        }
+
+        .brand-text {
+            display: flex;
+            flex-direction: column;
+            gap: 0.15rem;
+        }
+
+        .brand-title {
+            font-size: clamp(1.45rem, 4vw, 1.9rem);
             font-family: 'Anton', sans-serif;
             letter-spacing: 0.08em;
         }
 
-        .logo-img {
-            width: 44px;
-            height: 44px;
-            border-radius: 12px;
-            object-fit: cover;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+        .brand-subtitle {
+            font-size: 0.85rem;
+            opacity: 0.78;
         }
 
         .header-actions {
             display: flex;
-            gap: 0.75rem;
+            gap: clamp(0.55rem, 2vw, 0.85rem);
         }
 
         .icon-button {
-            width: 42px;
-            height: 42px;
+            width: 46px;
+            height: 46px;
             border-radius: 50%;
-            border: none;
+            border: 1px solid rgba(255, 255, 255, 0.2);
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            background: rgba(255, 255, 255, 0.16);
+            background: rgba(255, 255, 255, 0.15);
             color: var(--white);
             cursor: pointer;
-            transition: transform 200ms ease, background 200ms ease, box-shadow 200ms ease;
+            transition: transform 200ms ease, box-shadow 200ms ease, background 200ms ease;
         }
 
         .icon-button:hover,
         .icon-button:focus-visible {
             transform: translateY(-2px);
-            background: rgba(255, 255, 255, 0.28);
-            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.12);
+            background: rgba(243, 115, 30, 0.35);
+            box-shadow: 0 12px 24px rgba(243, 115, 30, 0.35);
         }
 
-        .loader-wrapper {
-            min-height: 100vh;
-            display: grid;
-            place-items: center;
-            text-align: center;
-            padding: 2rem;
+        main {
+            flex: 1;
+            width: min(1180px, calc(100% - clamp(2rem, 6vw, 6.5rem)));
+            margin: 0 auto;
+            padding: clamp(1.8rem, 4vw, 3.2rem) 0 clamp(3.4rem, 5vw, 3.8rem);
+            display: flex;
+            flex-direction: column;
+            gap: clamp(1.6rem, 3vw, 2.5rem);
         }
 
-        .loader-card {
-            background: rgba(255, 255, 255, 0.7);
-            padding: 2.5rem 2rem;
+        .intro-card {
+            background: rgba(255, 255, 255, 0.78);
             border-radius: var(--radius-large);
+            padding: clamp(1.3rem, 4vw, 2rem);
             box-shadow: var(--shadow-soft);
-            backdrop-filter: blur(12px);
-            max-width: 320px;
-            width: 100%;
+            backdrop-filter: blur(18px);
+            display: flex;
+            flex-direction: column;
+            gap: 0.6rem;
+            animation: fadeUp 600ms ease 120ms both;
         }
 
-        .loader-spinner {
-            width: 48px;
-            height: 48px;
-            border-radius: 50%;
-            border: 4px solid rgba(0, 77, 64, 0.15);
-            border-top-color: var(--orange);
-            margin: 0 auto 1.2rem auto;
-            animation: spin 1s linear infinite;
+        .intro-card h1 {
+            margin: 0;
+            font-size: clamp(1.6rem, 5vw, 2.2rem);
+        }
+
+        .intro-card p {
+            margin: 0;
+            color: rgba(17, 17, 17, 0.64);
+            font-size: clamp(0.92rem, 2.6vw, 1rem);
+        }
+
+        .kpi-section {
+            animation: fadeUp 600ms ease 220ms both;
         }
 
         .kpi-grid {
             display: grid;
-            gap: clamp(1.2rem, 3vw, 1.75rem);
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: clamp(1.15rem, 3vw, 1.8rem);
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
         }
 
         .kpi-card {
-            background: rgba(255, 255, 255, 0.85);
+            background: rgba(255, 255, 255, 0.82);
             border-radius: var(--radius-medium);
-            padding: clamp(1rem, 2vw, 1.4rem);
+            padding: clamp(1.05rem, 2.6vw, 1.6rem);
             box-shadow: var(--shadow-soft);
-            backdrop-filter: blur(10px);
+            backdrop-filter: blur(16px);
             position: relative;
             overflow: hidden;
-            transform: translateY(0);
             transition: transform 250ms ease, box-shadow 250ms ease;
         }
 
         .kpi-card::after {
             content: '';
             position: absolute;
-            inset: auto 0 -55% 0;
-            height: 115%;
-            background: linear-gradient(120deg, rgba(243, 115, 30, 0.12), rgba(0, 77, 64, 0.04));
+            inset: auto -30% -45% 30%;
+            background: linear-gradient(135deg, rgba(243, 115, 30, 0.16), rgba(0, 77, 64, 0.08));
             pointer-events: none;
         }
 
         .kpi-card:hover {
             transform: translateY(-6px);
-            box-shadow: 0 20px 35px rgba(17, 17, 17, 0.12);
+            box-shadow: 0 24px 38px rgba(17, 17, 17, 0.14);
         }
 
         .kpi-icon {
-            font-size: 1.8rem;
+            font-size: 1.9rem;
             color: var(--orange);
-            margin-bottom: 0.6rem;
+            margin-bottom: 0.55rem;
         }
 
         .kpi-title {
-            font-size: clamp(0.9rem, 2vw, 1rem);
-            color: rgba(17, 17, 17, 0.68);
             margin: 0;
+            font-size: 0.95rem;
+            color: rgba(17, 17, 17, 0.6);
         }
 
         .kpi-value {
-            font-size: clamp(1.45rem, 2.8vw, 2rem);
             margin: 0.35rem 0 0;
+            font-size: clamp(1.5rem, 3vw, 2.1rem);
             font-weight: 700;
             color: var(--emerald);
+        }
+
+        .glass-section {
+            background: rgba(255, 255, 255, 0.82);
+            border-radius: var(--radius-large);
+            padding: clamp(1.4rem, 3.5vw, 2rem);
+            box-shadow: var(--shadow-soft);
+            backdrop-filter: blur(18px);
+            display: flex;
+            flex-direction: column;
+            gap: clamp(1rem, 2.5vw, 1.6rem);
         }
 
         .section-header {
             display: flex;
+            flex-wrap: wrap;
             align-items: center;
             justify-content: space-between;
-            margin-bottom: clamp(0.85rem, 2vw, 1.2rem);
-            gap: 1rem;
+            gap: 0.8rem;
         }
 
         .section-header h2 {
             margin: 0;
-            font-size: clamp(1.25rem, 3vw, 1.6rem);
+            font-size: clamp(1.35rem, 4vw, 1.65rem);
         }
 
-        .section-header p {
+        .section-subtitle {
             margin: 0;
-            color: rgba(17, 17, 17, 0.6);
+            color: rgba(17, 17, 17, 0.58);
             font-size: 0.95rem;
         }
 
-        .listings-section {
-            background: rgba(255, 255, 255, 0.85);
-            border-radius: var(--radius-large);
-            padding: clamp(1.2rem, 3vw, 1.8rem);
-            box-shadow: var(--shadow-soft);
-            backdrop-filter: blur(12px);
-            display: flex;
-            flex-direction: column;
-            gap: clamp(1rem, 2vw, 1.4rem);
-        }
-
-        .listings-table-wrapper {
-            display: none;
-            overflow-x: auto;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            min-width: 720px;
-        }
-
-        thead {
-            background: rgba(234, 220, 207, 0.6);
-        }
-
-        th, td {
-            padding: 0.85rem 1rem;
-            text-align: left;
-            font-size: 0.95rem;
-        }
-
-        tbody tr {
-            border-bottom: 1px solid rgba(17, 17, 17, 0.05);
-            transition: background 200ms ease;
-        }
-
-        tbody tr:hover {
-            background: rgba(234, 220, 207, 0.2);
-        }
-
-        .status-pill {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.4rem;
-            border-radius: 999px;
-            padding: 0.35rem 0.75rem;
-            font-size: 0.85rem;
-            font-weight: 600;
-        }
-
-        .status-active { background: rgba(0, 77, 64, 0.12); color: var(--emerald); }
-        .status-pending { background: rgba(243, 115, 30, 0.12); color: var(--orange); }
-        .status-rejected { background: rgba(255, 56, 96, 0.12); color: #ff3860; }
-
-        .action-buttons {
-            display: flex;
-            gap: 0.5rem;
-        }
-
-        .btn-icon {
-            border: none;
-            border-radius: 10px;
-            padding: 0.45rem 0.8rem;
-            cursor: pointer;
-            font-size: 0.85rem;
-            font-weight: 600;
-            display: inline-flex;
-            align-items: center;
-            gap: 0.35rem;
-            transition: transform 150ms ease, box-shadow 150ms ease;
-        }
-
-        .btn-icon.edit {
+        .badge {
             background: rgba(0, 77, 64, 0.12);
             color: var(--emerald);
+            border-radius: 999px;
+            padding: 0.35rem 0.9rem;
+            font-weight: 600;
+            font-size: 0.85rem;
         }
 
-        .btn-icon.delete {
-            background: rgba(243, 115, 30, 0.12);
-            color: var(--orange);
-        }
-
-        .btn-icon:hover,
-        .btn-icon:focus-visible {
-            transform: translateY(-1px);
-            box-shadow: 0 8px 14px rgba(0, 0, 0, 0.12);
-        }
-
-        .card-listings {
+        .listings-grid {
             display: grid;
-            gap: clamp(1.1rem, 3vw, 1.5rem);
+            gap: clamp(1rem, 3vw, 1.6rem);
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
         }
 
         .listing-card {
-            display: grid;
-            gap: 0.85rem;
-            background: rgba(255, 255, 255, 0.8);
+            background: rgba(255, 255, 255, 0.88);
             border-radius: var(--radius-medium);
-            padding: clamp(0.9rem, 2vw, 1.1rem);
-            box-shadow: var(--shadow-soft);
-            backdrop-filter: blur(10px);
-        }
-
-        .listing-card-header {
-            display: flex;
+            padding: clamp(1rem, 3vw, 1.4rem);
+            box-shadow: 0 16px 34px rgba(17, 17, 17, 0.12);
+            backdrop-filter: blur(18px);
+            display: grid;
             gap: 0.75rem;
+            transition: transform 220ms ease, box-shadow 220ms ease;
         }
 
-        .listing-card img {
-            width: 92px;
-            height: 92px;
-            object-fit: cover;
-            border-radius: 16px;
-            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.08);
+        .listing-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 24px 44px rgba(17, 17, 17, 0.16);
         }
 
-        .listing-card h3 {
+        .listing-top {
+            display: flex;
+            align-items: center;
+            gap: 0.85rem;
+        }
+
+        .listing-thumb {
+            width: 72px;
+            height: 72px;
+            border-radius: 18px;
+            background: linear-gradient(140deg, rgba(0, 77, 64, 0.16), rgba(243, 115, 30, 0.25));
+            display: grid;
+            place-items: center;
+            font-size: 2rem;
+            color: rgba(255, 255, 255, 0.92);
+            box-shadow: 0 12px 24px rgba(243, 115, 30, 0.18);
+        }
+
+        .listing-info h3 {
             margin: 0;
-            font-size: 1rem;
+            font-size: 1.05rem;
             color: var(--emerald);
         }
 
-        .listing-card .meta {
+        .listing-info p {
+            margin: 0.15rem 0 0;
             font-size: 0.9rem;
+            color: rgba(17, 17, 17, 0.58);
+        }
+
+        .listing-meta {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.6rem;
+            font-size: 0.85rem;
             color: rgba(17, 17, 17, 0.6);
         }
 
-        .listing-card .price {
-            font-weight: 700;
-            font-size: 1.05rem;
+        .status-pill {
+            padding: 0.35rem 0.75rem;
+            border-radius: 999px;
+            font-weight: 600;
+            text-transform: capitalize;
+        }
+
+        .status-active { background: rgba(0, 77, 64, 0.15); color: var(--emerald); }
+        .status-draft { background: rgba(234, 220, 207, 0.55); color: rgba(17, 17, 17, 0.7); }
+        .status-pending { background: rgba(243, 115, 30, 0.15); color: var(--orange); }
+
+        .listing-actions {
+            display: flex;
+            gap: 0.6rem;
+        }
+
+        .listing-actions a {
+            border-radius: 999px;
+            padding: 0.55rem 1.1rem;
+            background: rgba(0, 77, 64, 0.12);
+            color: var(--emerald);
+            font-weight: 600;
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: transform 200ms ease, box-shadow 200ms ease;
+        }
+
+        .listing-actions a:hover,
+        .listing-actions a:focus-visible {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 22px rgba(0, 0, 0, 0.12);
         }
 
         .empty-state {
             text-align: center;
-            padding: 2rem 1rem;
-            color: rgba(17, 17, 17, 0.6);
+            color: rgba(17, 17, 17, 0.58);
             font-size: 0.95rem;
+            padding: 1.4rem 0;
         }
 
-        .profile-plan {
+        .empty-state i {
+            font-size: 2.1rem;
+            display: block;
+            margin-bottom: 0.6rem;
+            color: rgba(0, 77, 64, 0.3);
+        }
+
+        .boost-section {
+            animation: fadeUp 600ms ease 320ms both;
+        }
+
+        .boost-body {
             display: grid;
-            gap: clamp(1.3rem, 3vw, 1.9rem);
-        }
-
-        .profile-card,
-        .plan-card {
-            background: rgba(255, 255, 255, 0.82);
-            border-radius: var(--radius-large);
-            padding: clamp(1.15rem, 3vw, 1.7rem);
-            box-shadow: var(--shadow-soft);
-            backdrop-filter: blur(14px);
-        }
-
-        .profile-info {
-            display: grid;
-            gap: 0.6rem;
+            gap: 1rem;
+            color: rgba(17, 17, 17, 0.62);
             font-size: 0.95rem;
+            line-height: 1.6;
         }
 
-        .profile-info span {
-            display: flex;
-            justify-content: space-between;
-            gap: 0.5rem;
-            font-weight: 500;
-        }
-
-        .profile-actions {
+        .boost-actions {
             display: flex;
             flex-wrap: wrap;
-            gap: clamp(0.6rem, 2vw, 0.9rem);
-            margin-top: 1rem;
+            gap: 0.8rem;
         }
 
         .btn {
             border: none;
             border-radius: 999px;
-            padding: 0.75rem 1.4rem;
+            padding: 0.78rem 1.6rem;
             font-weight: 600;
-            cursor: pointer;
             font-size: 0.95rem;
+            cursor: pointer;
             transition: transform 200ms ease, box-shadow 200ms ease, background 200ms ease;
         }
 
@@ -513,35 +493,42 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
         .btn:hover,
         .btn:focus-visible {
             transform: translateY(-2px);
-            box-shadow: 0 12px 22px rgba(0, 0, 0, 0.12);
+            box-shadow: 0 16px 28px rgba(0, 0, 0, 0.14);
         }
 
         .fab {
             position: fixed;
-            right: clamp(1.2rem, 5vw, 3rem);
-            bottom: clamp(1.2rem, 5vw, 3rem);
-            width: 58px;
-            height: 58px;
+            right: clamp(1.1rem, 5vw, 3rem);
+            bottom: clamp(1.2rem, 6vw, 3.4rem);
+            width: 60px;
+            height: 60px;
             border-radius: 50%;
             border: none;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            background: linear-gradient(135deg, #F3731E, #f58c47);
+            background: linear-gradient(145deg, #F3731E, #ff8d3d);
             color: var(--white);
             font-size: 1.8rem;
-            box-shadow: 0 20px 35px rgba(243, 115, 30, 0.35);
+            box-shadow: 0 18px 34px rgba(243, 115, 30, 0.35);
             cursor: pointer;
-            z-index: 60;
-            animation: pulse 2.6s infinite;
+            display: grid;
+            place-items: center;
+            transition: transform 200ms ease, box-shadow 200ms ease;
+            z-index: 70;
+        }
+
+        .fab:hover,
+        .fab:focus-visible {
+            transform: translateY(-3px) scale(1.02);
+            box-shadow: 0 26px 45px rgba(243, 115, 30, 0.45);
         }
 
         footer {
-            background: rgba(234, 220, 207, 0.8);
+            margin-top: auto;
             text-align: center;
-            padding: 1.4rem 1rem;
-            color: rgba(17, 17, 17, 0.6);
-            font-size: 0.9rem;
+            padding: 1.6rem 1rem 2.4rem;
+            color: var(--emerald);
+            font-size: 0.92rem;
+            background: rgba(234, 220, 207, 0.6);
+            backdrop-filter: blur(12px);
         }
 
         footer a {
@@ -550,164 +537,116 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
             text-decoration: none;
         }
 
-        .modal-backdrop {
-            position: fixed;
-            inset: 0;
-            background: rgba(17, 17, 17, 0.35);
-            display: none;
-            align-items: center;
-            justify-content: center;
-            z-index: 100;
-            padding: 1rem;
+        .loader-wrapper {
+            min-height: 100vh;
+            display: grid;
+            place-items: center;
+            padding: 2rem;
         }
 
-        .modal-backdrop.active {
-            display: flex;
-        }
-
-        .modal {
-            background: rgba(255, 255, 255, 0.95);
+        .loader-card {
+            background: rgba(255, 255, 255, 0.78);
             border-radius: var(--radius-large);
-            padding: 1.8rem;
-            width: min(420px, 100%);
-            box-shadow: 0 20px 45px rgba(0, 0, 0, 0.2);
-            animation: scaleIn 260ms cubic-bezier(.2, .8, .2, 1);
+            padding: 2.3rem 2rem;
+            box-shadow: var(--shadow-soft);
+            backdrop-filter: blur(14px);
+            text-align: center;
+            width: min(320px, 100%);
         }
 
-        .modal h3 {
-            margin: 0 0 1rem;
-            font-size: 1.2rem;
+        .loader-spinner {
+            width: 52px;
+            height: 52px;
+            border-radius: 50%;
+            border: 4px solid rgba(0, 77, 64, 0.18);
+            border-top-color: var(--orange);
+            margin: 0 auto 1.4rem;
+            animation: spin 1s linear infinite;
         }
 
-        .modal-actions {
-            display: flex;
-            justify-content: flex-end;
-            gap: 0.75rem;
-            margin-top: 1.5rem;
-        }
-
-        .badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.4rem;
-            padding: 0.35rem 0.75rem;
-            border-radius: 999px;
-            background: rgba(0, 77, 64, 0.12);
-            color: var(--emerald);
-            font-size: 0.85rem;
-            font-weight: 600;
-        }
-
-        .plan-card .plan-body {
-            margin: 1rem 0 1.5rem;
-            color: rgba(17, 17, 17, 0.65);
-            line-height: 1.6;
-            font-size: 0.95rem;
-        }
-
-        .toast {
-            position: fixed;
-            left: 50%;
-            bottom: clamp(1rem, 4vw, 2rem);
-            transform: translateX(-50%) translateY(20px);
-            background: rgba(17, 17, 17, 0.92);
-            color: var(--white);
-            padding: 0.85rem 1.4rem;
-            border-radius: 999px;
-            box-shadow: 0 20px 45px rgba(17, 17, 17, 0.25);
-            font-size: 0.9rem;
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 220ms ease, transform 220ms ease;
-            z-index: 120;
-        }
-
-        .toast.show {
-            opacity: 1;
-            transform: translateX(-50%) translateY(0);
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(18px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        @keyframes pulse {
-            0%, 100% { transform: scale(1); box-shadow: 0 20px 35px rgba(243, 115, 30, 0.35); }
-            50% { transform: scale(1.05); box-shadow: 0 25px 45px rgba(243, 115, 30, 0.45); }
-        }
-
-        @keyframes scaleIn {
-            from { opacity: 0; transform: scale(0.9); }
-            to { opacity: 1; transform: scale(1); }
-        }
-
-        @media (min-width: 768px) {
-            .listings-table-wrapper {
-                display: block;
+        @media (max-width: 768px) {
+            .dashboard-header {
+                padding: 0.85rem clamp(1rem, 4vw, 1.4rem);
             }
 
-            .card-listings {
+            .brand-subtitle {
                 display: none;
             }
 
-            .profile-plan {
-                grid-template-columns: repeat(2, minmax(0, 1fr));
+            .intro-card {
+                padding: 1.2rem;
+            }
+
+            .boost-actions {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .btn,
+            .boost-actions .btn {
+                width: 100%;
+                justify-content: center;
             }
         }
 
-        @media (max-width: 767px) {
-            main {
-                width: calc(100% - clamp(1.5rem, 6vw, 2.5rem));
-                padding-top: 1.5rem;
-            }
+        @keyframes spin {
+            to { transform: rotate(1turn); }
+        }
 
-            header {
-                padding: 0.75rem 1rem;
+        @keyframes fadeUp {
+            from {
+                opacity: 0;
+                transform: translateY(18px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
             }
         }
     </style>
 </head>
 <body>
-    <!-- Loader / Auth Guard -->
     <div class="loader-wrapper" id="loader">
-        <div class="loader-card">
+        <div class="loader-card" role="status" aria-live="polite">
             <div class="loader-spinner" aria-hidden="true"></div>
             <p style="margin:0; font-weight:600; color: var(--emerald);">Preparing your dashboard…</p>
-            <p style="margin:0.35rem 0 0; color: rgba(17,17,17,0.6); font-size:0.9rem;">Hold on while we fetch your listings and stats.</p>
+            <p style="margin:0.4rem 0 0; color: rgba(17,17,17,0.62); font-size:0.92rem;">Hold on while we fetch your listings and stats.</p>
         </div>
     </div>
 
-    <!-- Dashboard Content -->
-    <header id="dashboardHeader" style="display:none;">
-        <!-- Header Logo -->
-        <div class="header-title" role="banner">
+    <header id="dashboardHeader" class="dashboard-header" style="display:none;">
+        <div class="header-brand" role="banner">
             <img src="logo.jpeg" alt="YUSTAM logo" class="logo-img">
-            <span>YUSTAM Vendors</span>
+            <div class="brand-text">
+                <span class="brand-title">YUSTAM Vendors</span>
+                <span class="brand-subtitle" id="headerGreeting">Curated commerce, crafted by you.</span>
+            </div>
         </div>
         <div class="header-actions" aria-label="Dashboard navigation">
-            <a class="icon-button" href="index.html" aria-label="Back to homepage">
-                <i class="ri-home-4-line"></i>
-            </a>
-            <a class="icon-button" href="post.html" aria-label="Add new listing">
-                <i class="ri-add-box-line"></i>
-            </a>
-            <button class="icon-button" id="logoutBtn" type="button" aria-label="Logout">
-                <i class="ri-logout-box-r-line"></i>
+            <button class="icon-button" type="button" id="settingsBtn" aria-label="Vendor settings">
+                <i class="ri-settings-4-line"></i>
+            </button>
+            <button class="icon-button" type="button" id="profileBtn" aria-label="View profile">
+                <i class="ri-user-3-line"></i>
+            </button>
+            <button class="icon-button" type="button" id="logoutBtn" aria-label="Logout">
+                <i class="ri-logout-circle-r-line"></i>
             </button>
         </div>
     </header>
 
-    <main id="dashboard" aria-live="polite" style="display:none;">
-        <!-- KPI Cards -->
-        <section class="kpi-section">
+    <main id="dashboard" style="display:none;" aria-live="polite">
+        <section class="intro-card" aria-labelledby="welcomeTitle">
+            <h1 id="welcomeTitle">Welcome back, <span id="welcomeName">Vendor</span>!</h1>
+            <p>Your marketplace performance updates in real-time. Keep your catalog vibrant to stay ahead.</p>
+        </section>
+
+        <section class="kpi-section" aria-labelledby="snapshotTitle">
             <div class="section-header">
-                <h2>Performance Snapshot</h2>
-                <p>Key stats from the last 30 days.</p>
+                <div>
+                    <h2 id="snapshotTitle">Performance Snapshot</h2>
+                    <p class="section-subtitle">Fresh insights from your latest activity.</p>
+                </div>
             </div>
             <div class="kpi-grid" id="kpiGrid">
                 <article class="kpi-card" aria-live="polite">
@@ -733,111 +672,46 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
             </div>
         </section>
 
-        <!-- Listings Section -->
-        <section class="listings-section" aria-labelledby="listingsTitle">
+        <section class="glass-section" aria-labelledby="listingsTitle">
             <div class="section-header">
                 <div>
                     <h2 id="listingsTitle">Your Listings</h2>
-                    <p>Manage the products you&apos;ve shared with the marketplace.</p>
+                    <p class="section-subtitle">Manage the gems currently shining in the marketplace.</p>
                 </div>
                 <div class="badge" id="listingsBadge">0 Active</div>
             </div>
-
             <div class="empty-state" id="emptyState" hidden>
-                <i class="ri-inbox-archive-line" style="font-size:2rem; display:block; margin-bottom:0.5rem;"></i>
-                You haven&apos;t added any listings yet. Tap the orange plus button to get started!
+                <i class="ri-inbox-archive-line" aria-hidden="true"></i>
+                You haven’t added any listings yet. Tap the orange plus button to get started.
             </div>
-
-            <div class="card-listings" id="listingCards" aria-live="polite"></div>
-
-            <div class="listings-table-wrapper" aria-live="polite">
-                <table>
-                    <thead>
-                        <tr>
-                            <th scope="col">Product</th>
-                            <th scope="col">Price</th>
-                            <th scope="col">Status</th>
-                            <th scope="col">Date Added</th>
-                            <th scope="col">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="listingTableBody"></tbody>
-                </table>
-            </div>
+            <div class="listings-grid" id="listingGrid" aria-live="polite"></div>
         </section>
 
-        <!-- Account Overview -->
-        <section class="profile-plan" aria-labelledby="accountOverviewTitle">
-            <div class="profile-card">
-                <!-- Profile Card -->
-                <div class="section-header" style="margin-bottom:1rem;">
-                    <h2 id="accountOverviewTitle">Account Overview</h2>
-                    <span class="badge" id="planBadge"><i class="ri-vip-crown-line"></i> Free Plan</span>
-                </div>
-                <div class="profile-info" id="profileInfo">
-                    <span><strong>Name</strong><span id="vendorName">Loading…</span></span>
-                    <span><strong>Business</strong><span id="businessName">—</span></span>
-                    <span><strong>Phone</strong><span id="vendorPhone">—</span></span>
-                    <span><strong>Location</strong><span id="vendorLocation">—</span></span>
-                    <span><strong>Joined</strong><span id="vendorJoined">—</span></span>
-                </div>
-                <div class="profile-actions">
-                    <a class="btn btn-outline" href="edit-vendor-profile.html">Edit Profile</a>
-                    <button class="btn btn-primary" type="button" id="openPlanModal">Upgrade Plan</button>
+        <section class="glass-section boost-section" aria-labelledby="boostTitle">
+            <div class="section-header">
+                <div>
+                    <h2 id="boostTitle">Boost Your Reach</h2>
+                    <p class="section-subtitle">Unlock premium placement to reach more ready-to-buy customers.</p>
                 </div>
             </div>
-            <div class="plan-card">
-                <!-- Plan Details -->
-                <h2>Boost Your Reach</h2>
-                <div class="plan-body">
-                    Upgrade to our Boosted or Premium plans to enjoy homepage placement, featured highlights, and access to smart analytics tailored to Nigerian buyers.
-                </div>
-                <div class="profile-actions">
-                    <button class="btn btn-accent" type="button" id="renewPlan">Renew Current Plan</button>
-                    <button class="btn btn-outline" type="button" id="viewPricing">View Pricing Deck</button>
-                </div>
+            <div class="boost-body">
+                Elevate your storefront with curated campaigns, homepage features, and smart insights tuned for Nigerian shoppers. Ready when you are.
+            </div>
+            <div class="boost-actions">
+                <button class="btn btn-accent" type="button" id="renewPlan">Renew Current Plan</button>
+                <button class="btn btn-outline" type="button" id="viewPricing">View Pricing Deck</button>
             </div>
         </section>
     </main>
 
-    <!-- Floating Action Button -->
     <button class="fab" id="fab" aria-label="Add a new listing">
         <i class="ri-add-line" aria-hidden="true"></i>
     </button>
 
-    <!-- Upgrade Modal -->
-    <div class="modal-backdrop" id="planModal" role="dialog" aria-modal="true" aria-labelledby="planModalTitle" aria-hidden="true">
-        <div class="modal">
-            <h3 id="planModalTitle">Upgrade Your Plan</h3>
-            <p>Unlock Premium reach with Paystack secure payments. Choose a plan below to proceed:</p>
-            <ul style="padding-left:1.1rem; margin:0; line-height:1.6; color:rgba(17,17,17,0.7);">
-                <li><strong>Boosted</strong> — ₦9,500 / month (Featured spots + chat priority)</li>
-                <li><strong>Premium</strong> — ₦19,500 / month (Homepage banner + analytics)</li>
-            </ul>
-            <div class="modal-actions">
-                <button class="btn btn-outline" type="button" data-close-modal>Close</button>
-                <button class="btn btn-accent" type="button" id="launchPaystack">Continue to Paystack</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Delete Confirmation Modal -->
-    <div class="modal-backdrop" id="deleteModal" role="dialog" aria-modal="true" aria-labelledby="deleteModalTitle" aria-hidden="true">
-        <div class="modal">
-            <h3 id="deleteModalTitle">Delete Listing</h3>
-            <p id="deleteModalMessage">Are you sure you want to remove this listing? This action cannot be undone.</p>
-            <div class="modal-actions">
-                <button class="btn btn-outline" type="button" data-close-modal>Cancel</button>
-                <button class="btn btn-accent" type="button" id="confirmDelete">Delete</button>
-            </div>
-        </div>
-    </div>
-
     <footer>
-        © 2025 YUSTAM Marketplace · <a href="contact.html">Support</a>
+        © 2025 YUSTAM Marketplace — <a href="contact.html">Support</a>
     </footer>
 
     <script type="module" src="vendor-dashboard.js"></script>
 </body>
 </html>
-
