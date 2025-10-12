@@ -103,6 +103,21 @@ const fetchProfile = async () => {
 };
 
 const bindActions = () => {
+  const logoArea = document.querySelector('.logo-area');
+  if (logoArea) {
+    logoArea.addEventListener('click', () => {
+      window.location.href = '/index.html';
+    });
+  }
+
+  const notifIcon = document.querySelector('.notif-icon');
+  if (notifIcon) {
+    notifIcon.addEventListener('click', (event) => {
+      event.preventDefault();
+      window.location.href = 'vendor-notifications.php';
+    });
+  }
+
   editProfileBtn?.addEventListener('click', () => {
     window.location.href = 'vendor-edit-profile.php';
   });

@@ -434,11 +434,12 @@ if (!isset($_SESSION['vendor_id'])) {
 <body>
     <!-- Header -->
     <header>
-        <div class="header-left">
+        <div class="header-left logo-area">
             <img src="logo.jpeg" alt="YUSTAM Logo">
-            <span>Vendor</span>
+            <span role="link" tabindex="0">Vendor</span>
         </div>
         <div class="header-actions">
+            <a class="icon-button notif-icon" href="vendor-notifications.php" title="Notifications" aria-label="Notifications"><i class="ri-notification-3-line"></i></a>
             <a class="icon-button" href="vendor-dashboard.php" title="Dashboard"><i class="ri-home-4-line"></i></a>
             <a class="icon-button" href="vendor-plans.php" title="Plans"><i class="ri-vip-crown-line"></i></a>
             <a class="icon-button" href="logout.php" title="Logout"><i class="ri-logout-box-r-line"></i></a>

@@ -154,6 +154,20 @@ const hydrateListings = () => {
 };
 
 const bindActions = () => {
+  const logoArea = document.querySelector('.logo-area');
+  if (logoArea) {
+    logoArea.addEventListener('click', () => {
+      window.location.href = '/index.html';
+    });
+  }
+
+  const notificationsBtn = document.querySelector('.notif-icon');
+  if (notificationsBtn) {
+    notificationsBtn.addEventListener('click', () => {
+      window.location.href = 'vendor-notifications.php';
+    });
+  }
+
   const settingsBtn = document.getElementById('settingsBtn');
   if (settingsBtn) {
     settingsBtn.addEventListener('click', () => {

@@ -8,6 +8,21 @@ document.addEventListener('DOMContentLoaded', () => {
   const currentPlanStatus = document.getElementById('currentPlanStatus');
   const currentPlanExpiry = document.getElementById('currentPlanExpiry');
 
+  const logoArea = document.querySelector('.logo-area');
+  if (logoArea) {
+    logoArea.addEventListener('click', () => {
+      window.location.href = '/index.html';
+    });
+  }
+
+  const notifIcon = document.querySelector('.notif-icon');
+  if (notifIcon) {
+    notifIcon.addEventListener('click', (event) => {
+      event.preventDefault();
+      window.location.href = 'vendor-notifications.php';
+    });
+  }
+
   const currentPlan = { name: 'Starter', status: 'Active', expiry: '2026-01-10' };
   const discounts = {
     1: 0,
