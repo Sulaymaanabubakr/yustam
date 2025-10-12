@@ -60,20 +60,23 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>YUSTAM Vendor Profile</title>
+  <title>Vendor Profile | YUSTAM Marketplace</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet" />
   <style>
     :root {
-      --emerald: #004d40;
+      --emerald: #0f6a53;
+      --emerald-dark: #0c5441;
       --orange: #f3731e;
-      --beige: #eadccf;
-      --white: #ffffff;
-      --ink: #111111;
-      --glass: rgba(255, 255, 255, 0.8);
-      --shadow: 0 20px 40px rgba(17, 17, 17, 0.08);
+      --orange-light: #ff9448;
+      --beige: #f3ebe0;
+      --ink: #191919;
+      --muted: rgba(25, 25, 25, 0.6);
+      --glass-bg: rgba(255, 255, 255, 0.88);
+      --shadow: 0 30px 45px rgba(15, 106, 83, 0.12);
+      --radius-card: 24px;
     }
 
     *,
@@ -84,198 +87,285 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
 
     body {
       margin: 0;
-      font-family: "Inter", sans-serif;
-      background: radial-gradient(circle at top right, rgba(0, 77, 64, 0.12), transparent 55%),
+      font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background:
+        radial-gradient(circle at top right, rgba(15, 106, 83, 0.12), transparent 55%),
         radial-gradient(circle at bottom left, rgba(243, 115, 30, 0.12), transparent 50%),
         var(--beige);
-      color: var(--ink);
       min-height: 100vh;
+      color: var(--ink);
       display: flex;
       flex-direction: column;
     }
 
-    header {
+    .app-header {
       position: sticky;
       top: 0;
-      z-index: 20;
-      background: rgba(0, 77, 64, 0.95);
-      color: var(--white);
+      z-index: 30;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 14px 20px;
-      backdrop-filter: blur(6px);
-      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+      padding: 14px 18px;
+      background: rgba(15, 106, 83, 0.94);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+      color: #ffffff;
     }
 
-    header h1 {
-      font-family: "Anton", sans-serif;
-      font-size: clamp(20px, 4vw, 26px);
-      letter-spacing: 0.5px;
-      margin: 0;
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
     }
 
-    .header-btn {
+    .header-logo {
+      width: 44px;
+      height: 44px;
+      border-radius: 14px;
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.18);
+      display: grid;
+      place-items: center;
+      box-shadow: 0 10px 18px rgba(0, 0, 0, 0.25);
+    }
+
+    .header-logo img {
+      width: 40px;
+      height: 40px;
+      object-fit: cover;
+      border-radius: 12px;
+    }
+
+    .header-title {
+      font-family: 'Anton', sans-serif;
+      font-size: clamp(20px, 5vw, 26px);
+      letter-spacing: 0.08em;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .header-icon {
       width: 42px;
       height: 42px;
       border-radius: 50%;
       border: none;
-      background: rgba(255, 255, 255, 0.14);
-      color: var(--white);
+      background: rgba(255, 255, 255, 0.18);
+      color: #ffffff;
       display: inline-flex;
       align-items: center;
       justify-content: center;
       font-size: 20px;
       cursor: pointer;
-      transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
-        background 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
-        box-shadow 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+      text-decoration: none;
+      transition: transform 200ms ease, background 200ms ease, box-shadow 200ms ease;
     }
 
-    .header-btn:hover,
-    .header-btn:focus-visible {
-      transform: translateY(-2px) scale(1.02);
-      background: rgba(255, 255, 255, 0.22);
-      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+    .header-icon:hover,
+    .header-icon:focus-visible {
+      background: rgba(255, 255, 255, 0.28);
+      transform: translateY(-2px);
+      box-shadow: 0 14px 26px rgba(0, 0, 0, 0.22);
     }
 
     main {
       flex: 1;
+      padding: 72px 18px 48px;
+      display: flex;
+      justify-content: center;
+    }
+
+    .page-shell {
+      width: min(100%, 780px);
       display: flex;
       flex-direction: column;
-      align-items: center;
-      padding: 80px 16px 48px;
-      gap: 24px;
+      gap: 32px;
     }
 
-    .loader {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      color: var(--emerald);
-      font-weight: 600;
-      padding: 12px 20px;
-      background: rgba(255, 255, 255, 0.7);
-      border-radius: 999px;
+    .glass-card {
+      background: var(--glass-bg);
+      border-radius: var(--radius-card);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.6);
       box-shadow: var(--shadow);
-      animation: float 3s ease-in-out infinite;
-    }
-
-    .loader span {
-      display: inline-block;
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      background: var(--emerald);
-      animation: pulse 1s ease-in-out infinite;
-    }
-
-    .loader span:nth-child(2) {
-      animation-delay: 0.15s;
-    }
-
-    .loader span:nth-child(3) {
-      animation-delay: 0.3s;
+      padding: 24px;
     }
 
     .profile-card {
-      width: min(100%, 480px);
-      background: var(--glass);
-      backdrop-filter: blur(12px);
-      border-radius: 24px;
-      padding: 28px 24px;
-      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
       position: relative;
-      overflow: hidden;
-      transform-origin: top;
-      transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
-        opacity 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
-    }
-
-    .profile-card.hidden {
-      opacity: 0;
-      transform: translateY(20px);
-      pointer-events: none;
-      visibility: hidden;
     }
 
     .profile-card::before {
-      content: "";
+      content: '';
       position: absolute;
       inset: 0;
-      background: linear-gradient(135deg, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0));
+      border-radius: var(--radius-card);
+      background: linear-gradient(135deg, rgba(15, 106, 83, 0.12), rgba(243, 115, 30, 0.08));
+      mix-blend-mode: screen;
       pointer-events: none;
     }
 
-    .card-header {
+    .profile-header {
+      position: relative;
+      display: flex;
+      align-items: flex-start;
+      gap: 18px;
+      flex-wrap: wrap;
+    }
+
+    .initials-badge {
+      width: 88px;
+      height: 88px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      font-family: 'Anton', sans-serif;
+      font-size: 32px;
+      letter-spacing: 0.08em;
+      color: #ffffff;
+      background: linear-gradient(135deg, var(--emerald), var(--emerald-dark));
+      box-shadow: 0 18px 32px rgba(15, 106, 83, 0.28);
+    }
+
+    .identity-meta {
       display: flex;
       flex-direction: column;
-      align-items: center;
-      text-align: center;
-      gap: 12px;
-      margin-bottom: 24px;
+      gap: 10px;
+      min-width: 200px;
     }
 
-    .avatar-wrap {
-      position: relative;
-      width: 110px;
-      height: 110px;
+    .vendor-name {
+      margin: 0;
+      font-family: 'Anton', sans-serif;
+      font-size: clamp(26px, 6vw, 34px);
+      letter-spacing: 0.05em;
     }
 
-    .avatar-wrap img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      border-radius: 50%;
-      border: 4px solid rgba(0, 77, 64, 0.15);
-      box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12);
-      background: var(--white);
+    .business-name {
+      margin: 0;
+      font-weight: 600;
+      font-size: 16px;
+      color: var(--muted);
     }
 
-    .status-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
+    .plan-chip {
+      align-self: flex-start;
       padding: 6px 14px;
       border-radius: 999px;
-      font-size: 12px;
       font-weight: 600;
-      background: rgba(0, 77, 64, 0.08);
-      color: var(--emerald);
+      font-size: 13px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--emerald-dark);
+      background: rgba(15, 106, 83, 0.12);
+      border: 1px solid rgba(15, 106, 83, 0.25);
     }
 
-    .info-grid {
+    .plan-chip[data-plan="Free"] {
+      color: #b76a17;
+      background: rgba(243, 115, 30, 0.12);
+      border-color: rgba(243, 115, 30, 0.32);
+    }
+
+    .plan-chip[data-plan="Elite Seller"],
+    .plan-chip[data-plan="Power Vendor"] {
+      color: #0b4a3a;
+      background: rgba(15, 106, 83, 0.2);
+      border-color: rgba(15, 106, 83, 0.3);
+    }
+
+    .details-grid {
+      position: relative;
       display: grid;
-      grid-template-columns: 1fr;
       gap: 18px;
     }
 
-    .info-item {
+    @media (min-width: 720px) {
+      .details-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 20px 28px;
+      }
+    }
+
+    .detail-item {
       display: flex;
       flex-direction: column;
       gap: 6px;
     }
 
-    .info-item label {
-      font-size: 12px;
-      text-transform: uppercase;
+    .detail-label {
+      font-size: 13px;
       letter-spacing: 0.08em;
-      color: rgba(17, 17, 17, 0.55);
+      text-transform: uppercase;
+      color: var(--muted);
       font-weight: 600;
     }
 
-    .info-item p {
+    .detail-value {
       margin: 0;
-      font-size: clamp(15px, 2.4vw, 16px);
+      font-size: 16px;
       font-weight: 600;
       color: var(--ink);
     }
 
-    .actions {
-      margin-top: 28px;
+    .detail-value strong {
+      font-weight: inherit;
+    }
+
+    .upgrade-banner {
+      display: none;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      background: rgba(243, 115, 30, 0.12);
+      border: 1px dashed rgba(243, 115, 30, 0.45);
+      border-radius: 18px;
+      color: #b25a13;
+      font-weight: 600;
+    }
+
+    .upgrade-banner i {
+      font-size: 20px;
+    }
+
+    .upgrade-card {
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      position: relative;
+    }
+
+    .upgrade-card h2 {
+      margin: 0;
+      font-family: 'Anton', sans-serif;
+      font-size: clamp(22px, 5vw, 28px);
+      letter-spacing: 0.06em;
+      color: var(--emerald-dark);
+    }
+
+    .upgrade-card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.6;
+    }
+
+    .upgrade-actions {
       display: flex;
       flex-direction: column;
       gap: 12px;
+    }
+
+    @media (min-width: 640px) {
+      .upgrade-actions {
+        flex-direction: row;
+      }
     }
 
     .btn {
@@ -283,366 +373,234 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
       align-items: center;
       justify-content: center;
       gap: 8px;
-      border: none;
-      border-radius: 14px;
-      font-size: 15px;
+      border-radius: 999px;
       font-weight: 600;
-      padding: 14px 20px;
+      font-size: 15px;
+      padding: 12px 20px;
       cursor: pointer;
-      transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
-        box-shadow 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
-        filter 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+      border: none;
+      transition: transform 200ms ease, box-shadow 200ms ease, background 200ms ease;
+      text-decoration: none;
+      width: 100%;
     }
 
-    .btn:disabled {
-      cursor: not-allowed;
-      opacity: 0.7;
-      transform: none;
-      box-shadow: none;
+    .btn-primary {
+      background: linear-gradient(135deg, var(--orange), var(--orange-light));
+      color: #ffffff;
+      box-shadow: 0 18px 34px rgba(243, 115, 30, 0.35);
     }
 
-    .btn:hover:not(:disabled),
-    .btn:focus-visible:not(:disabled) {
+    .btn-primary:hover,
+    .btn-primary:focus-visible {
       transform: translateY(-2px);
-      box-shadow: 0 16px 30px rgba(0, 0, 0, 0.12);
-    }
-
-    .btn-accent {
-      background: linear-gradient(135deg, #f3731e, #f58a43);
-      color: var(--white);
-    }
-
-    .btn-emerald {
-      background: var(--emerald);
-      color: var(--white);
+      box-shadow: 0 24px 38px rgba(243, 115, 30, 0.42);
     }
 
     .btn-outline {
-      background: rgba(0, 77, 64, 0.08);
-      color: var(--emerald);
+      background: transparent;
+      color: var(--emerald-dark);
+      border: 1.5px solid rgba(15, 106, 83, 0.4);
     }
 
-    .edit-form {
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
+    .btn-outline:hover,
+    .btn-outline:focus-visible {
+      transform: translateY(-2px);
+      background: rgba(15, 106, 83, 0.08);
+      box-shadow: 0 16px 30px rgba(15, 106, 83, 0.22);
     }
 
-    .form-row {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-
-    .form-row label {
-      font-size: 13px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: rgba(17, 17, 17, 0.6);
-    }
-
-    .input-field,
-    .input-select {
-      width: 100%;
-      padding: 14px 16px;
-      border-radius: 14px;
-      border: 1px solid rgba(17, 17, 17, 0.12);
-      background: rgba(255, 255, 255, 0.9);
-      font-size: 15px;
-      transition: border 0.2s ease, box-shadow 0.2s ease;
-    }
-
-    .input-field:focus,
-    .input-select:focus {
-      outline: none;
-      border-color: rgba(0, 77, 64, 0.45);
-      box-shadow: 0 0 0 4px rgba(0, 77, 64, 0.12);
-    }
-
-    .input-field[disabled] {
-      background: rgba(17, 17, 17, 0.05);
-      color: rgba(17, 17, 17, 0.6);
-      cursor: not-allowed;
-    }
-
-    .upload-preview {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-    }
-
-    .upload-preview img {
-      width: 84px;
-      height: 84px;
-      border-radius: 50%;
-      object-fit: cover;
-      border: 3px solid rgba(0, 77, 64, 0.18);
-      background: var(--white);
-    }
-
-    .upload-preview button {
-      padding: 10px 16px;
-      border-radius: 12px;
-      border: 1px dashed rgba(0, 77, 64, 0.4);
-      background: rgba(0, 77, 64, 0.08);
-      color: var(--emerald);
-      font-weight: 600;
-      cursor: pointer;
-      transition: background 0.2s ease, transform 0.2s ease;
-    }
-
-    .upload-preview button:hover,
-    .upload-preview button:focus-visible {
-      background: rgba(0, 77, 64, 0.18);
-      transform: translateY(-1px);
-    }
-
-    .edit-actions {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-
-    .toast {
-      position: fixed;
-      left: 50%;
-      bottom: 32px;
-      transform: translate(-50%, 120%);
-      background: rgba(0, 77, 64, 0.95);
-      color: var(--white);
+    .btn-large {
+      margin-top: 6px;
+      font-size: 16px;
       padding: 14px 22px;
-      border-radius: 16px;
-      font-weight: 600;
-      box-shadow: 0 18px 30px rgba(0, 0, 0, 0.22);
-      opacity: 0;
-      transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1),
-        opacity 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
-      z-index: 40;
     }
 
-    .toast.show {
-      transform: translate(-50%, 0);
-      opacity: 1;
+    @media (min-width: 640px) {
+      .btn {
+        width: auto;
+        min-width: 180px;
+      }
     }
 
-    footer {
+    .footer {
       margin-top: auto;
-      background: rgba(234, 220, 207, 0.85);
+      padding: 28px 16px 36px;
+      background: rgba(234, 220, 207, 0.82);
       text-align: center;
-      padding: 24px 16px;
       font-size: 14px;
-      color: rgba(17, 17, 17, 0.65);
+      color: rgba(25, 25, 25, 0.7);
       backdrop-filter: blur(8px);
     }
 
-    @media (min-width: 600px) {
-      main {
-        padding-top: 100px;
-      }
+    .loading-state {
+      position: fixed;
+      inset: 0;
+      background: rgba(243, 235, 224, 0.65);
+      backdrop-filter: blur(6px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 25;
+    }
 
-      .profile-card {
-        padding: 36px 32px;
-      }
+    .loading-state.active {
+      display: flex;
+    }
 
-      .edit-actions {
-        flex-direction: row;
-      }
+    .loading-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 18px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.92);
+      color: var(--emerald-dark);
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      box-shadow: 0 16px 30px rgba(15, 106, 83, 0.22);
+    }
 
-      .edit-actions .btn {
-        flex: 1;
-      }
+    .loading-pill span {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: currentColor;
+      animation: pulse 1s ease-in-out infinite;
+    }
+
+    .loading-pill span:nth-child(2) {
+      animation-delay: 0.15s;
+    }
+
+    .loading-pill span:nth-child(3) {
+      animation-delay: 0.3s;
     }
 
     @keyframes pulse {
       0%,
       100% {
-        transform: scale(0.9);
-        opacity: 0.6;
+        transform: scale(0.8);
+        opacity: 0.5;
       }
-
       50% {
         transform: scale(1.1);
         opacity: 1;
       }
     }
 
-    @keyframes float {
-      0%,
-      100% {
-        transform: translateY(0);
+    @media (min-width: 960px) {
+      main {
+        padding-top: 96px;
       }
-
-      50% {
-        transform: translateY(-6px);
+      .page-shell {
+        gap: 48px;
       }
     }
   </style>
 </head>
 <body>
-  <!-- Header -->
-  <header>
-    <button class="header-btn" aria-label="Back to dashboard" onclick="window.location.href='vendor-dashboard.php'">
-      <i class="ri-arrow-left-line" aria-hidden="true"></i>
-    </button>
-    <h1>My Profile</h1>
-    <button class="header-btn" aria-label="Logout" id="logoutBtn">
-      <i class="ri-logout-box-r-line" aria-hidden="true"></i>
-    </button>
+  <div class="loading-state" id="profileLoader" role="status" aria-live="polite">
+    <div class="loading-pill">
+      Loading profile
+      <span></span>
+      <span></span>
+      <span></span>
+    </div>
+  </div>
+
+  <header class="app-header">
+    <div class="header-left">
+      <a class="header-logo" href="vendor-dashboard.php" aria-label="YUSTAM home">
+        <img src="logo.jpeg" alt="YUSTAM logo" />
+      </a>
+      <span class="header-title">Vendor</span>
+    </div>
+    <nav class="header-actions" aria-label="Vendor shortcuts">
+      <a class="header-icon" href="vendor-settings.php" aria-label="Settings">
+        <i class="ri-settings-3-line" aria-hidden="true"></i>
+      </a>
+      <a class="header-icon" href="vendor-plans.php" aria-label="Plans">
+        <i class="ri-vip-crown-line" aria-hidden="true"></i>
+      </a>
+      <a class="header-icon" href="logout.php" aria-label="Logout">
+        <i class="ri-logout-box-r-line" aria-hidden="true"></i>
+      </a>
+    </nav>
   </header>
 
   <main>
-    <div class="loader" id="loadingState" role="status">
-      <span></span><span></span><span></span>
-      Preparing your profile…
-    </div>
+    <div class="page-shell">
+      <section class="glass-card profile-card" aria-labelledby="profileTitle">
+        <div class="profile-header">
+          <div class="initials-badge" id="vendorInitials">YN</div>
+          <div class="identity-meta">
+            <h1 class="vendor-name" id="profileTitle">Vendor Name</h1>
+            <p class="business-name" id="businessName">Business Name</p>
+            <span class="plan-chip" id="planBadge" data-plan="Free">Free Plan</span>
+          </div>
+        </div>
+        <div class="upgrade-banner" id="upgradeBanner" role="status">
+          <i class="ri-rocket-line" aria-hidden="true"></i>
+          <span>Upgrade to unlock more tools and premium placement.</span>
+        </div>
+        <div class="details-grid" aria-live="polite">
+          <div class="detail-item">
+            <span class="detail-label">Vendor Name</span>
+            <p class="detail-value" id="vendorName">—</p>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Business Name</span>
+            <p class="detail-value" id="vendorBusiness">—</p>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Email</span>
+            <p class="detail-value" id="vendorEmail">—</p>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Phone Number</span>
+            <p class="detail-value" id="vendorPhone">—</p>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Business Address</span>
+            <p class="detail-value" id="vendorAddress">—</p>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">State</span>
+            <p class="detail-value" id="vendorState">—</p>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Join Date</span>
+            <p class="detail-value" id="vendorJoined">—</p>
+          </div>
+        </div>
+      </section>
 
-    <!-- View Mode -->
-    <section class="profile-card hidden" id="viewMode" aria-live="polite">
-      <div class="card-header">
-        <div class="avatar-wrap">
-          <img src="" alt="Vendor profile picture" id="viewAvatar" />
+      <section class="glass-card upgrade-card" aria-labelledby="upgradeTitle">
+        <h2 id="upgradeTitle">Upgrade Your Plan</h2>
+        <p>Boost your storefront visibility, unlock analytics, and access concierge support tailored for ambitious vendors.</p>
+        <div class="upgrade-actions">
+          <button class="btn btn-primary" id="upgradePlanBtn" type="button">
+            <i class="ri-rocket-2-line" aria-hidden="true"></i>
+            Upgrade Plan
+          </button>
+          <button class="btn btn-outline" id="viewPricingBtn" type="button">
+            <i class="ri-presentation-line" aria-hidden="true"></i>
+            View Pricing Deck
+          </button>
         </div>
-        <div class="status-pill" id="planBadge">
-          <i class="ri-vip-crown-line" aria-hidden="true"></i>
-          <span id="planTypeText">Plan</span>
-        </div>
-      </div>
-      <div class="info-grid">
-        <div class="info-item">
-          <label>Vendor Name</label>
-          <p id="viewVendorName">—</p>
-        </div>
-        <div class="info-item">
-          <label>Business Name</label>
-          <p id="viewBusinessName">—</p>
-        </div>
-        <div class="info-item">
-          <label>Email</label>
-          <p id="viewEmail">—</p>
-        </div>
-        <div class="info-item">
-          <label>Phone Number</label>
-          <p id="viewPhone">—</p>
-        </div>
-        <div class="info-item">
-          <label>Business Address</label>
-          <p id="viewAddress">—</p>
-        </div>
-        <div class="info-item">
-          <label>State</label>
-          <p id="viewState">—</p>
-        </div>
-        <div class="info-item">
-          <label>Join Date</label>
-          <p id="viewJoinDate">—</p>
-        </div>
-      </div>
-      <div class="actions">
-        <button class="btn btn-accent" id="editBtn">
+      </section>
+
+      <section class="glass-card" aria-label="Profile actions">
+        <button class="btn btn-primary btn-large" id="editProfileBtn" type="button">
           <i class="ri-edit-line" aria-hidden="true"></i>
           Edit Profile
         </button>
-      </div>
-    </section>
-
-    <!-- Edit Mode -->
-    <section class="profile-card hidden" id="editMode" aria-live="polite">
-      <form class="edit-form" id="profileForm">
-        <div class="form-row">
-          <label for="avatarInput">Profile Picture</label>
-          <div class="upload-preview">
-            <img src="" alt="Profile preview" id="editAvatarPreview" />
-            <div>
-              <button type="button" id="uploadTrigger">Upload New</button>
-              <input type="file" id="avatarInput" accept="image/*" hidden />
-              <p style="font-size: 12px; color: rgba(17, 17, 17, 0.55); margin: 8px 0 0;">PNG or JPG up to 2MB.</p>
-            </div>
-          </div>
-        </div>
-        <div class="form-row">
-          <label for="vendorNameInput">Vendor Name</label>
-          <input class="input-field" type="text" id="vendorNameInput" required />
-        </div>
-        <div class="form-row">
-          <label for="businessNameInput">Business Name</label>
-          <input class="input-field" type="text" id="businessNameInput" required />
-        </div>
-        <div class="form-row">
-          <label for="emailInput">Email</label>
-          <input class="input-field" type="email" id="emailInput" disabled />
-        </div>
-        <div class="form-row">
-          <label for="phoneInput">Phone Number</label>
-          <input class="input-field" type="tel" id="phoneInput" disabled />
-        </div>
-        <div class="form-row">
-          <label for="addressInput">Business Address</label>
-          <input class="input-field" type="text" id="addressInput" required />
-        </div>
-        <div class="form-row">
-          <label for="stateSelect">State</label>
-          <select class="input-select" id="stateSelect" required>
-            <option value="">Select State</option>
-            <option value="Abia">Abia</option>
-            <option value="Adamawa">Adamawa</option>
-            <option value="Akwa Ibom">Akwa Ibom</option>
-            <option value="Anambra">Anambra</option>
-            <option value="Bauchi">Bauchi</option>
-            <option value="Bayelsa">Bayelsa</option>
-            <option value="Benue">Benue</option>
-            <option value="Borno">Borno</option>
-            <option value="Cross River">Cross River</option>
-            <option value="Delta">Delta</option>
-            <option value="Ebonyi">Ebonyi</option>
-            <option value="Edo">Edo</option>
-            <option value="Ekiti">Ekiti</option>
-            <option value="Enugu">Enugu</option>
-            <option value="Gombe">Gombe</option>
-            <option value="Imo">Imo</option>
-            <option value="Jigawa">Jigawa</option>
-            <option value="Kaduna">Kaduna</option>
-            <option value="Kano">Kano</option>
-            <option value="Katsina">Katsina</option>
-            <option value="Kebbi">Kebbi</option>
-            <option value="Kogi">Kogi</option>
-            <option value="Kwara">Kwara</option>
-            <option value="Lagos">Lagos</option>
-            <option value="Nasarawa">Nasarawa</option>
-            <option value="Niger">Niger</option>
-            <option value="Ogun">Ogun</option>
-            <option value="Ondo">Ondo</option>
-            <option value="Osun">Osun</option>
-            <option value="Oyo">Oyo</option>
-            <option value="Plateau">Plateau</option>
-            <option value="Rivers">Rivers</option>
-            <option value="Sokoto">Sokoto</option>
-            <option value="Taraba">Taraba</option>
-            <option value="Yobe">Yobe</option>
-            <option value="Zamfara">Zamfara</option>
-            <option value="FCT Abuja">FCT Abuja</option>
-          </select>
-        </div>
-        <div class="edit-actions">
-          <button class="btn btn-emerald" type="submit" id="saveBtn">
-            <i class="ri-save-3-line" aria-hidden="true"></i>
-            Save Changes
-          </button>
-          <button class="btn btn-outline" type="button" id="cancelBtn">
-            <i class="ri-close-line" aria-hidden="true"></i>
-            Cancel
-          </button>
-        </div>
-      </form>
-    </section>
+      </section>
+    </div>
   </main>
 
-  <footer>
-    © 2025 YUSTAM - All Rights Reserved.
-  </footer>
+  <footer class="footer">© 2025 YUSTAM Marketplace · Support</footer>
 
-  <div class="toast" id="toast" role="status" aria-live="assertive">Profile updated successfully.</div>
-
-  <script type="module" src="vendor-profile.js"></script>
+  <script src="vendor-profile.js" defer></script>
 </body>
 </html>
