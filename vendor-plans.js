@@ -1,350 +1,282 @@
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js';
-      import { getAuth, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js';
-      import {
-        getFirestore,
-        doc,
-        getDoc,
-        setDoc,
-        updateDoc,
-      } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
-      import firebaseConfig from './firebase.js';
+// vendor-plans.js  (PHP-only, no Firebase)
 
-      const app = initializeApp(firebaseConfig);
-      const auth = getAuth(app);
-      const db = getFirestore(app);
+const loadingState = document.getElementById('loadingState');
+const plansContent = document.getElementById('plansContent');
 
-      const loadingState = document.getElementById('loadingState');
-      const plansContent = document.getElementById('plansContent');
-      const backBtn = document.getElementById('backBtn');
-      const logoutBtn = document.getElementById('logoutBtn');
-      const plansGrid = document.getElementById('plansGrid');
-      const toast = document.getElementById('toast');
-      const upgradeModal = document.getElementById('upgradeModal');
-      const modalTitle = document.getElementById('modalTitle');
-      const modalDescription = document.getElementById('modalDescription');
-      const cancelUpgradeBtn = document.getElementById('cancelUpgradeBtn');
-      const confirmUpgradeBtn = document.getElementById('confirmUpgradeBtn');
-      const currentPlanName = document.getElementById('currentPlanName');
-      const currentPlanDescription = document.getElementById('currentPlanDescription');
-      const currentPlanMeta = document.getElementById('currentPlanMeta');
-      const planStatusChip = document.getElementById('planStatusChip');
-      const currentPlanCard = document.getElementById('currentPlanCard');
+const backBtn = document.getElementById('backBtn');
+const logoutBtn = document.getElementById('logoutBtn');
 
-      let vendorDocRef = null;
-      let vendorData = null;
-      let selectedPlan = null;
+const plansGrid = document.getElementById('plansGrid');
 
-      const planDetails = {
-        Free: {
-          priceLabel: '₦0 / month',
-          price: 0,
-          description: 'Get started with essential tools to sell confidently on YUSTAM Marketplace.',
-          meta: 'Unlimited access · No expiry set',
-          status: 'Active',
-        },
-        Plus: {
-          priceLabel: '₦3,000 / month',
-          price: 3000,
-          description: 'Level up with more listings, priority placement, and verified vendor credibility.',
-          meta: 'Priority visibility · Monthly billing',
-          status: 'Active',
-        },
-        Pro: {
-          priceLabel: '₦5,000 / month',
-          price: 5000,
-          description: 'Expand your reach with analytics, homepage exposure, and premium support.',
-          meta: 'Category highlights · Monthly billing',
-          status: 'Active',
-        },
-        Premium: {
-          priceLabel: '₦7,000 / month',
-          price: 7000,
-          description: 'Command the spotlight with unlimited listings, dedicated support, and deep insights.',
-          meta: 'Maximum impact · Monthly billing',
-          status: 'Active',
-        },
-      };
+const toast = document.getElementById('toast');
 
-      const plans = [
-        {
-          name: 'Free',
-          price: 0,
-          buttonLabel: 'Activate Free Plan',
-          buttonClass: 'btn-outline',
-          features: [
-            'Up to 2 active listings',
-            'Basic vendor support',
-            'Standard search placement',
-            'No homepage feature',
-          ],
-        },
-        {
-          name: 'Plus',
-          price: 3000,
-          buttonLabel: 'Upgrade to Plus',
-          buttonClass: 'btn-orange',
-          features: [
-            'Up to 10 active listings',
-            'Priority listing placement',
-            'Verified vendor badge',
-            'Access to listing insights',
-          ],
-        },
-        {
-          name: 'Pro',
-          price: 5000,
-          buttonLabel: 'Upgrade to Pro',
-          buttonClass: 'btn-emerald',
-          features: [
-            'Up to 25 active listings',
-            'Homepage category exposure',
-            'Vendor analytics dashboard',
-            'Premium support response',
-          ],
-        },
-        {
-          name: 'Premium',
-          price: 7000,
-          buttonLabel: 'Upgrade to Premium',
-          buttonClass: 'btn-gradient',
-          features: [
-            'Unlimited listings',
-            'Homepage spotlight feature',
-            'Dedicated account manager',
-            'Advanced analytics & insights',
-            'Featured vendor badge',
-          ],
-        },
-      ];
+const upgradeModal = document.getElementById('upgradeModal');
+const modalTitle = document.getElementById('modalTitle');
+const modalDescription = document.getElementById('modalDescription');
+const cancelUpgradeBtn = document.getElementById('cancelUpgradeBtn');
+const confirmUpgradeBtn = document.getElementById('confirmUpgradeBtn');
 
-      const planDescriptions = Object.fromEntries(
-        Object.entries(planDetails).map(([plan, details]) => [plan, details.description])
-      );
+const currentPlanName = document.getElementById('currentPlanName');
+const currentPlanDescription = document.getElementById('currentPlanDescription');
+const currentPlanMeta = document.getElementById('currentPlanMeta');
+const planStatusChip = document.getElementById('planStatusChip');
+const currentPlanCard = document.getElementById('currentPlanCard');
 
-      const planMetaText = Object.fromEntries(
-        Object.entries(planDetails).map(([plan, details]) => [plan, details.meta])
-      );
+let selectedPlan = null;
 
-      const planPriceLookup = Object.fromEntries(
-        plans.map((plan) => [plan.name, plan.price])
-      );
+// ---------- Helpers ----------
+const showToast = (message) => {
+  if (!toast) return;
+  toast.textContent = message;
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 2600);
+};
 
-      const planPriceLabelLookup = Object.fromEntries(
-        Object.entries(planDetails).map(([plan, details]) => [plan, details.priceLabel])
-      );
+const toggleLoader = (show) => {
+  if (!loadingState) return;
+  loadingState.classList.toggle('hidden', !show);
+};
 
-      const showToast = (message) => {
-        toast.textContent = message;
-        toast.classList.add('show');
-        setTimeout(() => {
-          toast.classList.remove('show');
-        }, 2600);
-      };
+const toggleContent = (show) => {
+  if (!plansContent) return;
+  plansContent.hidden = !show;
+};
 
-      const toggleLoader = (show) => {
-        if (show) {
-          loadingState.classList.remove('hidden');
-        } else {
-          loadingState.classList.add('hidden');
-        }
-      };
+const toggleModal = (open = false) => {
+  if (!upgradeModal) return;
+  upgradeModal.classList.toggle('active', open);
+  upgradeModal.setAttribute('aria-hidden', open ? 'false' : 'true');
+};
 
-      const toggleContent = (show) => {
-        plansContent.hidden = !show;
-      };
+const naira = (n) =>
+  `₦${Number(n || 0).toLocaleString('en-NG', { maximumFractionDigits: 0 })}`;
 
-      const toggleModal = (open = false) => {
-        if (open) {
-          upgradeModal.classList.add('active');
-          upgradeModal.setAttribute('aria-hidden', 'false');
-        } else {
-          upgradeModal.classList.remove('active');
-          upgradeModal.setAttribute('aria-hidden', 'true');
-        }
-      };
+// ---------- UI Builders ----------
+const buildFeatureList = (features = []) =>
+  features
+    .map(
+      (f) => `
+      <li>
+        <i class="ri-checkbox-circle-line" aria-hidden="true"></i>
+        <span>${f}</span>
+      </li>`
+    )
+    .join('');
 
-      const payWithPaystack = async (planName) => {
-        await new Promise((resolve) => setTimeout(resolve, 1200));
-        return { status: 'success', reference: `mock_${planName.toLowerCase()}_${Date.now()}` };
-      };
+const renderPlans = (activePlanName, availablePlans = []) => {
+  plansGrid.innerHTML = '';
 
-      const buildFeatureList = (features) =>
-        features
-          .map(
-            (feature) => `
-              <li>
-                <i class="ri-checkbox-circle-line" aria-hidden="true"></i>
-                <span>${feature}</span>
-              </li>
-            `
-          )
-          .join('');
+  // Fallback demo plans if backend didn't provide any
+  const fallbackPlans = [
+    { name: 'Free', price: 0, features: ['Basic listing', 'Unlimited access'] },
+    { name: 'Boosted', price: 3000, features: ['Homepage placement', 'Extra visibility'] },
+    { name: 'Premium', price: 8000, features: ['Featured spots', 'Priority support'] },
+  ];
 
-      const renderPlans = (activePlan = 'Free') => {
-        plansGrid.innerHTML = '';
-        plans.forEach((plan) => {
-          const isCurrent = plan.name.toLowerCase() === (activePlan || 'Free').toLowerCase();
-          const planCard = document.createElement('article');
-          planCard.className = `plan-card ${isCurrent ? 'current' : ''}`.trim();
-          planCard.setAttribute('role', 'listitem');
-          planCard.dataset.plan = plan.name;
-          planCard.innerHTML = `
-            ${isCurrent ? '<span class="badge-current">Current Plan</span>' : ''}
-            <h3>${plan.name}</h3>
-            <p class="plan-price">${planPriceLabelLookup[plan.name]}</p>
-            <ul class="plan-features">${buildFeatureList(plan.features)}</ul>
-            <button
-              class="btn ${plan.buttonClass}"
-              data-plan="${plan.name}"
-              data-amount="${plan.price}"
-              ${isCurrent ? 'disabled' : ''}
-            >
-              ${isCurrent ? 'Current Plan' : plan.buttonLabel}
-            </button>
-          `;
-          plansGrid.appendChild(planCard);
-        });
-      };
+  const plans = Array.isArray(availablePlans) && availablePlans.length ? availablePlans : fallbackPlans;
 
-      const updateCurrentPlanSection = (plan = 'Free', status = 'Active', expiry = null) => {
-        const normalizedPlan = planDetails[plan] ? plan : 'Free';
-        currentPlanName.textContent = `${normalizedPlan} Plan`;
-        currentPlanDescription.textContent = planDescriptions[normalizedPlan];
-        currentPlanMeta.textContent = expiry
-          ? `Renews on ${new Date(expiry).toLocaleDateString('en-NG', {
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric',
-            })}`
-          : planMetaText[normalizedPlan];
+  plans.forEach((p) => {
+    const isCurrent = (p.name || '').toLowerCase() === (activePlanName || 'Free').toLowerCase();
 
-        const isExpired = (status || '').toLowerCase() === 'expired';
-        planStatusChip.textContent = `${isExpired ? 'Expired' : 'Active'} Plan`;
-        planStatusChip.classList.toggle('expired', isExpired);
-        planStatusChip.innerHTML = `
-          <i class="${isExpired ? 'ri-alarm-warning-line' : 'ri-shield-check-line'}" aria-hidden="true"></i>
-          ${isExpired ? 'Expired Plan' : 'Active Plan'}
-        `;
+    const card = document.createElement('article');
+    card.className = `plan-card ${isCurrent ? 'current' : ''}`;
+    card.setAttribute('role', 'listitem');
+    card.dataset.plan = p.name;
 
-        currentPlanCard.dataset.plan = normalizedPlan;
-      };
+    const priceLabel = `${naira(p.price)} / month`;
 
-      const prepareUpgradeModal = (planName) => {
-        const amountLabel = planPriceLabelLookup[planName] || '';
-        modalTitle.textContent = 'Confirm Upgrade';
-        modalDescription.textContent = `You're about to upgrade to the ${planName} plan for ${amountLabel}.`;
-        confirmUpgradeBtn.textContent = `Proceed · ${amountLabel}`;
-      };
+    card.innerHTML = `
+      ${isCurrent ? '<span class="badge-current">Current Plan</span>' : ''}
+      <h3>${p.name}</h3>
+      <p class="plan-price">${priceLabel}</p>
+      <ul class="plan-features">${buildFeatureList(p.features || [])}</ul>
+      <button class="btn ${isCurrent ? 'btn-outline' : 'btn-orange'}"
+              data-plan="${p.name}" data-amount="${p.price}"
+              ${isCurrent ? 'disabled' : ''}>
+        ${isCurrent ? 'Current Plan' : `Upgrade to ${p.name}`}
+      </button>
+    `;
 
-      const attachPlanListeners = () => {
-        plansGrid.querySelectorAll('button[data-plan]').forEach((button) => {
-          button.addEventListener('click', () => {
-            const planName = button.dataset.plan;
-            selectedPlan = planName;
-            prepareUpgradeModal(planName);
-            toggleModal(true);
-          });
-        });
-      };
+    plansGrid.appendChild(card);
+  });
 
-      const refreshUI = (data) => {
-        const plan = data?.planType || 'Free';
-        const status = data?.planStatus || 'Active';
-        const expiry = data?.planExpiry || null;
-        updateCurrentPlanSection(plan, status, expiry);
-        renderPlans(plan);
-        attachPlanListeners();
-      };
+  // Attach button listeners
+  plansGrid.querySelectorAll('button[data-plan]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      selectedPlan = btn.dataset.plan;
+      prepareUpgradeModal(selectedPlan, btn.dataset.amount);
+      toggleModal(true);
+    });
+  });
+};
 
-      backBtn.addEventListener('click', () => {
-        window.location.href = 'vendor-dashboard.html';
-      });
+const updateCurrentPlanSection = ({ currentPlan = 'Free', expiresAt = null, status = 'Active' }) => {
+  const descriptionMap = {
+    Free: 'Get started with essential tools to sell confidently on YUSTAM Marketplace.',
+    Boosted: 'Gain more visibility with homepage placement and extra promotion.',
+    Premium: 'Unlock featured spots and priority support to maximise sales.',
+  };
 
-      logoutBtn.addEventListener('click', async () => {
-        try {
-          await signOut(auth);
-          window.location.href = 'vendor-login.html';
-        } catch (error) {
-          console.error('Logout failed', error);
-          showToast('Unable to logout. Try again.');
-        }
-      });
+  const normalized = descriptionMap[currentPlan] ? currentPlan : 'Free';
 
-      cancelUpgradeBtn.addEventListener('click', () => {
-        toggleModal(false);
-        selectedPlan = null;
-      });
+  currentPlanName.textContent = `${normalized} Plan`;
+  currentPlanDescription.textContent = descriptionMap[normalized];
 
-      upgradeModal.addEventListener('click', (event) => {
-        if (event.target === upgradeModal) {
-          toggleModal(false);
-          selectedPlan = null;
-        }
-      });
+  if (expiresAt) {
+    const dt = new Date(expiresAt);
+    currentPlanMeta.textContent = `Renews on ${dt.toLocaleDateString('en-NG', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    })}`;
+  } else {
+    currentPlanMeta.textContent = normalized === 'Free' ? 'Unlimited access · No expiry set' : 'Active · Monthly renewal';
+  }
 
-      confirmUpgradeBtn.addEventListener('click', async () => {
-        if (!selectedPlan || !vendorDocRef) return;
-        confirmUpgradeBtn.disabled = true;
-        confirmUpgradeBtn.innerHTML = '<i class="ri-loader-4-line" aria-hidden="true"></i> Processing...';
+  const isExpired = (status || '').toLowerCase() === 'expired';
+  planStatusChip.innerHTML = `
+    <i class="${isExpired ? 'ri-alarm-warning-line' : 'ri-shield-check-line'}" aria-hidden="true"></i>
+    ${isExpired ? 'Expired Plan' : 'Active Plan'}
+  `;
+  planStatusChip.classList.toggle('expired', isExpired);
 
-        try {
-          const response = await payWithPaystack(selectedPlan);
-          if (response.status === 'success') {
-            await updateDoc(vendorDocRef, {
-              planType: selectedPlan,
-              planStatus: 'Active',
-              planUpdatedAt: new Date().toISOString(),
-            });
-            vendorData = { ...vendorData, planType: selectedPlan, planStatus: 'Active' };
-            refreshUI(vendorData);
-            showToast(`You have successfully upgraded to the ${selectedPlan} plan!`);
-          } else {
-            showToast('Upgrade was not completed.');
-          }
-        } catch (error) {
-          console.error('Upgrade error', error);
-          showToast('Unable to process upgrade.');
-        } finally {
-          confirmUpgradeBtn.disabled = false;
-          confirmUpgradeBtn.innerHTML = 'Proceed';
-          toggleModal(false);
-          selectedPlan = null;
-        }
-      });
+  currentPlanCard.dataset.plan = normalized;
+};
 
-      onAuthStateChanged(auth, async (user) => {
-        if (!user) {
-          window.location.href = 'vendor-login.html';
-          return;
-        }
+const prepareUpgradeModal = (planName, amount) => {
+  const label = `${naira(amount)} / month`;
+  modalTitle.textContent = 'Confirm Upgrade';
+  modalDescription.textContent = `You’re about to upgrade to the ${planName} plan for ${label}.`;
+  confirmUpgradeBtn.textContent = `Proceed · ${label}`;
+};
 
-        toggleLoader(true);
-        toggleContent(false);
+// ---------- Data Flow ----------
+const fetchPlans = async () => {
+  const res = await fetch('vendor-plans.php?format=json', {
+    headers: { Accept: 'application/json' },
+    credentials: 'same-origin',
+  });
 
-        try {
-          vendorDocRef = doc(db, 'vendors', user.uid);
-          const snapshot = await getDoc(vendorDocRef);
+  if (res.status === 401) {
+    // not signed in
+    window.location.href = 'vendor-login.html';
+    return null;
+  }
 
-          if (!snapshot.exists()) {
-            const defaultData = {
-              vendorName: user.displayName || '',
-              email: user.email || '',
-              planType: 'Free',
-              planStatus: 'Active',
-              createdAt: new Date().toISOString(),
-            };
-            await setDoc(vendorDocRef, defaultData, { merge: true });
-            vendorData = defaultData;
-          } else {
-            vendorData = snapshot.data();
-          }
+  let data;
+  try {
+    data = await res.json();
+  } catch {
+    throw new Error('Invalid response while loading plans.');
+  }
 
-          refreshUI(vendorData);
-          toggleContent(true);
-        } catch (error) {
-          console.error('Error loading vendor plan', error);
-          showToast('Unable to load plans. Please try again.');
-        } finally {
-          toggleLoader(false);
-        }
-      });
+  if (!res.ok || data.success !== true) {
+    throw new Error(data.message || 'Unable to load plans.');
+  }
+
+  return data.data || {};
+};
+
+const startPayment = async (planName) => {
+  const form = new FormData();
+  form.append('plan', planName);
+
+  const res = await fetch('create-payment.php', {
+    method: 'POST',
+    body: form,
+    credentials: 'same-origin',
+  });
+
+  let data;
+  try {
+    data = await res.json();
+  } catch {
+    throw new Error('Unable to start payment.');
+  }
+
+  if (!res.ok || data.success !== true || !data.auth_url) {
+    throw new Error(data.message || 'Unable to start payment.');
+  }
+
+  window.location.href = data.auth_url;
+};
+
+// ---------- Event wiring ----------
+backBtn?.addEventListener('click', () => {
+  window.location.href = 'vendor-dashboard.php';
+});
+
+logoutBtn?.addEventListener('click', () => {
+  window.location.href = 'logout.php';
+});
+
+cancelUpgradeBtn?.addEventListener('click', () => {
+  selectedPlan = null;
+  toggleModal(false);
+});
+
+upgradeModal?.addEventListener('click', (e) => {
+  if (e.target === upgradeModal) {
+    selectedPlan = null;
+    toggleModal(false);
+  }
+});
+
+confirmUpgradeBtn?.addEventListener('click', async () => {
+  if (!selectedPlan) return;
+  confirmUpgradeBtn.disabled = true;
+  confirmUpgradeBtn.innerHTML = '<i class="ri-loader-4-line" aria-hidden="true"></i> Redirecting…';
+
+  try {
+    await startPayment(selectedPlan);
+  } catch (err) {
+    console.error(err);
+    showToast(err.message || 'Something went wrong. Try again.');
+    confirmUpgradeBtn.disabled = false;
+    confirmUpgradeBtn.textContent = 'Proceed';
+    toggleModal(false);
+  }
+});
+
+// ---------- Init ----------
+(async function init() {
+  // Handle return from Paystack
+  const qp = new URLSearchParams(window.location.search);
+  const status = qp.get('status');
+  const plan = qp.get('plan');
+
+  if (status === 'success') {
+    showToast(`Payment successful! You’ve upgraded to ${plan || 'your new'} plan.`);
+  } else if (status === 'failed') {
+    showToast('Payment failed or was cancelled.');
+  }
+
+  try {
+    toggleLoader(true);
+    toggleContent(false);
+
+    const data = await fetchPlans();
+    if (!data) return; // redirected
+
+    // data format expected from vendor-plans.php:
+    // {
+    //   currentPlan: "Free",
+    //   expiresAt: null,
+    //   availablePlans: [{name, price, features: []}]
+    // }
+
+    updateCurrentPlanSection({
+      currentPlan: data.currentPlan || 'Free',
+      expiresAt: data.expiresAt || null,
+      status: data.status || 'Active',
+    });
+
+    renderPlans(data.currentPlan || 'Free', data.availablePlans || []);
+    toggleContent(true);
+  } catch (err) {
+    console.error(err);
+    showToast(err.message || 'Unable to load plans.');
+  } finally {
+    toggleLoader(false);
+  }
+})();

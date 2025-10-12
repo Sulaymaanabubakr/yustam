@@ -1,3 +1,25 @@
+<?php
+ini_set('session.save_path', '/home2/yustamco/tmp'); // your working session path
+session_start();
+require_once __DIR__ . '/db.php'; // adjust if needed
+
+// 🔒 Redirect if vendor not logged in
+if (!isset($_SESSION['vendor_id'])) {
+  header('Location: vendor-login.html');
+  exit;
+}
+
+$vendor_id = $_SESSION['vendor_id'];
+
+// 🔍 Fetch vendor's current plan from database
+$stmt = $pdo->prepare("SELECT plan_type, plan_expiry FROM vendors WHERE id = ?");
+$stmt->execute([$vendor_id]);
+$vendor = $stmt->fetch(PDO::FETCH_ASSOC);
+
+$currentPlan = $vendor['plan_type'] ?? 'Free';
+$expiresAt = $vendor['plan_expiry'] ?? null;
+?>
+
 <!DOCTYPE html>
 <html lang="en">
   <head>
