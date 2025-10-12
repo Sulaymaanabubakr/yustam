@@ -78,7 +78,6 @@ const hydrateListings = () => {
 };
 
 const bindActions = () => {
-  // ✅ Logout (backend handles the PHP logic)
   const logoutBtn = document.getElementById('logoutBtn');
   if (logoutBtn) {
     logoutBtn.addEventListener('click', () => {
@@ -86,7 +85,6 @@ const bindActions = () => {
     });
   }
 
-  // ✅ Floating “Add Listing” Button → post.html
   const fab = document.getElementById('fab');
   if (fab) {
     fab.addEventListener('click', () => {
@@ -94,37 +92,6 @@ const bindActions = () => {
     });
   }
 
-  // ✅ Profile & Plan buttons
-  const editProfile = document.getElementById('editProfile');
-  const upgradePlan = document.getElementById('openPlanModal');
-  const renewPlan = document.getElementById('renewPlan');
-  const viewPricing = document.getElementById('viewPricing');
-
-  if (editProfile) {
-    editProfile.addEventListener('click', () => {
-      window.location.href = 'vendor-profile.php';
-    });
-  }
-
-  if (upgradePlan) {
-    upgradePlan.addEventListener('click', () => {
-      window.location.href = 'vendor-plans.html';
-    });
-  }
-
-  if (renewPlan) {
-    renewPlan.addEventListener('click', () => {
-      window.location.href = 'vendor-plans.html#renew';
-    });
-  }
-
-  if (viewPricing) {
-    viewPricing.addEventListener('click', () => {
-      window.location.href = 'vendor-plans.html#pricing';
-    });
-  }
-
-  // ✅ Close modal (if any are open)
   qsa('[data-close-modal]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const backdrop = btn.closest('.modal-backdrop');
@@ -145,8 +112,12 @@ const showDashboard = () => {
 const showLoaderMessage = (title, subtitle) => {
   if (!loader) return;
   loader.style.display = 'flex';
-  if (loaderMessages[0] && title) loaderMessages[0].textContent = title;
-  if (loaderMessages[1]) loaderMessages[1].textContent = subtitle || '';
+  if (loaderMessages[0] && title) {
+    loaderMessages[0].textContent = title;
+  }
+  if (loaderMessages[1]) {
+    loaderMessages[1].textContent = subtitle || '';
+  }
 };
 
 const fetchDashboardData = async () => {
