@@ -164,7 +164,7 @@ const bindActions = () => {
   const profileBtn = document.getElementById('profileBtn');
   if (profileBtn) {
     profileBtn.addEventListener('click', () => {
-      window.location.href = 'vendor-profile.html';
+      window.location.href = 'vendor-profile.php';
     });
   }
 
