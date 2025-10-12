@@ -108,19 +108,19 @@ const bindActions = () => {
 
   if (upgradePlan) {
     upgradePlan.addEventListener('click', () => {
-      window.location.href = 'vendor-plans.html';
+      window.location.href = 'vendor-plans.php';
     });
   }
 
   if (renewPlan) {
     renewPlan.addEventListener('click', () => {
-      window.location.href = 'vendor-plans.html#renew';
+      window.location.href = 'vendor-plans.php#renew';
     });
   }
 
   if (viewPricing) {
     viewPricing.addEventListener('click', () => {
-      window.location.href = 'vendor-plans.html#pricing';
+      window.location.href = 'vendor-plans.php#pricing';
     });
   }
 
