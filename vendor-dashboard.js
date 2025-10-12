@@ -193,3 +193,27 @@ window.addEventListener('DOMContentLoaded', () => {
   bindActions();
   fetchDashboardData();
 });
+
+// =============================
+// YUSTAM | HOMEPAGE BUTTON LINKS
+// =============================
+document.addEventListener("DOMContentLoaded", () => {
+  // Select the Sign In button
+  const signInBtn = document.querySelector(".vendor-btn.primary");
+  // Select the Become a Vendor button
+  const becomeVendorBtn = document.querySelector(".vendor-btn.secondary");
+
+  // When "Sign In" is clicked → go to vendor-login.html
+  if (signInBtn) {
+    signInBtn.addEventListener("click", () => {
+      window.location.href = "vendor-login.html";
+    });
+  }
+
+  // When "Become a Vendor" is clicked → go to vendor-register.html
+  if (becomeVendorBtn) {
+    becomeVendorBtn.addEventListener("click", () => {
+      window.location.href = "vendor-register.html";
+    });
+  }
+});
