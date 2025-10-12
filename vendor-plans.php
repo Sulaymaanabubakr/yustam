@@ -480,7 +480,7 @@
         <div class="logo-shell">
           <img src="logo.jpeg" alt="YUSTAM logo" />
         </div>
-        <h1>YUSTAM Vendors</h1>
+        <h1>Vendor</h1>
       </div>
       <nav class="header-actions">
         <a class="icon-btn" href="vendor-dashboard.php" aria-label="Vendor dashboard">

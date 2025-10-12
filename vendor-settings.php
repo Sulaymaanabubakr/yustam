@@ -653,7 +653,7 @@
                 <img src="logo.jpeg" alt="YUSTAM Logo">
             </div>
             <div class="header-title">
-                <span>YUSTAM Vendors</span>
+                <span>Vendor</span>
             </div>
         </div>
         <div class="header-actions">

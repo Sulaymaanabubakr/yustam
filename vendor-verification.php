@@ -436,7 +436,7 @@ if (!isset($_SESSION['vendor_id'])) {
     <header>
         <div class="header-left">
             <img src="logo.jpeg" alt="YUSTAM Logo">
-            <span>YUSTAM Vendors</span>
+            <span>Vendor</span>
         </div>
         <div class="header-actions">
             <a class="icon-button" href="vendor-dashboard.php" title="Dashboard"><i class="ri-home-4-line"></i></a>

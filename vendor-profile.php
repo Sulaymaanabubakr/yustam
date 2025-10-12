@@ -646,4 +646,3 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
   <script type="module" src="vendor-profile.js"></script>
 </body>
 </html>
-
