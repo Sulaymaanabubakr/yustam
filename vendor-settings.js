@@ -11,6 +11,21 @@ document.addEventListener('DOMContentLoaded', () => {
         theme: "light"
     };
 
+    const logoArea = document.querySelector('.logo-area');
+    if (logoArea) {
+        logoArea.addEventListener('click', () => {
+            window.location.href = '/index.html';
+        });
+    }
+
+    const notifIcon = document.querySelector('.notif-icon');
+    if (notifIcon) {
+        notifIcon.addEventListener('click', (event) => {
+            event.preventDefault();
+            window.location.href = 'vendor-notifications.php';
+        });
+    }
+
     const body = document.body;
     const toggleIds = {
         notifApproved: document.getElementById('notifApproved'),

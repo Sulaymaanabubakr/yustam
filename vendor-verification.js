@@ -6,6 +6,21 @@ document.addEventListener('DOMContentLoaded', () => {
     const toast = document.getElementById('verificationToast');
     const toastText = toast ? toast.querySelector('span') : null;
 
+    const logoArea = document.querySelector('.logo-area');
+    if (logoArea) {
+        logoArea.addEventListener('click', () => {
+            window.location.href = '/index.html';
+        });
+    }
+
+    const notifIcon = document.querySelector('.notif-icon');
+    if (notifIcon) {
+        notifIcon.addEventListener('click', (event) => {
+            event.preventDefault();
+            window.location.href = 'vendor-notifications.php';
+        });
+    }
+
     const verification = {
         status: 'Pending',
         message: 'Your documents are under review.'
