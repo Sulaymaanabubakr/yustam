@@ -618,7 +618,7 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
         <div class="header-brand" role="banner">
             <img src="logo.jpeg" alt="YUSTAM logo" class="logo-img">
             <div class="brand-text">
-                <span class="brand-title">YUSTAM Vendors</span>
+                <span class="brand-title">Vendor</span>
                 <span class="brand-subtitle" id="headerGreeting">Curated commerce, crafted by you.</span>
             </div>
         </div>
