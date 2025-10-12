@@ -1,138 +1,86 @@
-const loadingState = document.getElementById('loadingState');
-const viewMode = document.getElementById('viewMode');
-const editMode = document.getElementById('editMode');
-const editBtn = document.getElementById('editBtn');
-const cancelBtn = document.getElementById('cancelBtn');
-const logoutBtn = document.getElementById('logoutBtn');
-const toast = document.getElementById('toast');
-
-const viewAvatar = document.getElementById('viewAvatar');
-const viewVendorName = document.getElementById('viewVendorName');
-const viewBusinessName = document.getElementById('viewBusinessName');
-const viewEmail = document.getElementById('viewEmail');
-const viewPhone = document.getElementById('viewPhone');
-const viewAddress = document.getElementById('viewAddress');
-const viewState = document.getElementById('viewState');
-const viewJoinDate = document.getElementById('viewJoinDate');
+const loader = document.getElementById('profileLoader');
+const initialsBadge = document.getElementById('vendorInitials');
+const profileTitle = document.getElementById('profileTitle');
+const businessNameHeading = document.getElementById('businessName');
 const planBadge = document.getElementById('planBadge');
-const planTypeText = document.getElementById('planTypeText');
+const upgradeBanner = document.getElementById('upgradeBanner');
+const vendorNameField = document.getElementById('vendorName');
+const businessField = document.getElementById('vendorBusiness');
+const emailField = document.getElementById('vendorEmail');
+const phoneField = document.getElementById('vendorPhone');
+const addressField = document.getElementById('vendorAddress');
+const stateField = document.getElementById('vendorState');
+const joinedField = document.getElementById('vendorJoined');
+const editProfileBtn = document.getElementById('editProfileBtn');
+const upgradePlanBtn = document.getElementById('upgradePlanBtn');
+const viewPricingBtn = document.getElementById('viewPricingBtn');
 
-const profileForm = document.getElementById('profileForm');
-const vendorNameInput = document.getElementById('vendorNameInput');
-const businessNameInput = document.getElementById('businessNameInput');
-const emailInput = document.getElementById('emailInput');
-const phoneInput = document.getElementById('phoneInput');
-const addressInput = document.getElementById('addressInput');
-const stateSelect = document.getElementById('stateSelect');
-const saveBtn = document.getElementById('saveBtn');
-
-const uploadTrigger = document.getElementById('uploadTrigger');
-const avatarInput = document.getElementById('avatarInput');
-const editAvatarPreview = document.getElementById('editAvatarPreview');
-
-const defaultAvatar = 'https://ui-avatars.com/api/?background=004d40&color=fff&name=YUSTAM';
-let currentProfile = {};
-let newAvatarFile = null;
-
-const showToast = (message) => {
-  if (!toast) return;
-  toast.textContent = message;
-  toast.classList.add('show');
-  setTimeout(() => toast.classList.remove('show'), 2200);
+const safeText = (value) => {
+  if (!value) return '—';
+  const trimmed = typeof value === 'string' ? value.trim() : value;
+  return trimmed && String(trimmed).length > 0 ? String(trimmed) : '—';
 };
 
-const toggleLoading = (show) => {
-  if (!loadingState) return;
-  loadingState.style.display = show ? 'flex' : 'none';
+const toggleLoader = (show) => {
+  if (!loader) return;
+  loader.classList.toggle('active', Boolean(show));
 };
 
-const toggleModes = (mode = 'view') => {
-  if (!viewMode || !editMode) return;
-  if (mode === 'edit') {
-    editMode.classList.remove('hidden');
-    viewMode.classList.add('hidden');
-  } else {
-    viewMode.classList.remove('hidden');
-    editMode.classList.add('hidden');
+const computeInitials = (name, business) => {
+  const fallback = 'Vendor';
+  const source = (name || business || fallback).trim();
+  if (!source) return fallback.slice(0, 2).toUpperCase();
+  const words = source.split(/\s+/).filter(Boolean).slice(0, 2);
+  const initials = words.map((word) => word.charAt(0)).join('');
+  return initials.toUpperCase() || fallback.slice(0, 2).toUpperCase();
+};
+
+const applyProfile = (profile) => {
+  const {
+    name = '',
+    businessName = '',
+    email = '',
+    phone = '',
+    address = '',
+    state = '',
+    plan = 'Free',
+    joined = '—',
+  } = profile || {};
+
+  const initials = computeInitials(name, businessName);
+  if (initialsBadge) initialsBadge.textContent = initials;
+  if (profileTitle) profileTitle.textContent = safeText(name);
+  if (businessNameHeading) businessNameHeading.textContent = safeText(businessName);
+
+  const planLabel = safeText(plan);
+  if (planBadge) {
+    planBadge.textContent = `${planLabel} Plan`;
+    planBadge.dataset.plan = planLabel;
   }
-};
 
-const hydrateView = () => {
-  const profile = currentProfile;
-  if (viewAvatar) viewAvatar.src = profile.profilePhoto || defaultAvatar;
-  if (editAvatarPreview) editAvatarPreview.src = profile.profilePhoto || defaultAvatar;
-  if (viewVendorName) viewVendorName.textContent = profile.name || '—';
-  if (viewBusinessName) viewBusinessName.textContent = profile.businessName || '—';
-  if (viewEmail) viewEmail.textContent = profile.email || '—';
-  if (viewPhone) viewPhone.textContent = profile.phone || '—';
-  if (viewAddress) viewAddress.textContent = profile.address || '—';
-  if (viewState) viewState.textContent = profile.state || '—';
-  if (viewJoinDate) viewJoinDate.textContent = profile.joined || '—';
-  if (planTypeText) planTypeText.textContent = `${profile.plan || 'Free'} Plan`;
-};
+  if (vendorNameField) vendorNameField.textContent = safeText(name);
+  if (businessField) businessField.textContent = safeText(businessName);
+  if (emailField) emailField.textContent = safeText(email);
+  if (phoneField) phoneField.textContent = safeText(phone);
+  if (addressField) addressField.textContent = safeText(address);
+  if (stateField) stateField.textContent = safeText(state);
+  if (joinedField) joinedField.textContent = safeText(joined);
 
-const hydrateEdit = () => {
-  vendorNameInput.value = currentProfile.name || '';
-  businessNameInput.value = currentProfile.businessName || '';
-  emailInput.value = currentProfile.email || '';
-  phoneInput.value = currentProfile.phone || '';
-  addressInput.value = currentProfile.address || '';
-  stateSelect.value = currentProfile.state || '';
-};
-
-const resetAvatarSelection = () => {
-  newAvatarFile = null;
-  if (avatarInput) avatarInput.value = '';
-  if (editAvatarPreview) editAvatarPreview.src = currentProfile.profilePhoto || defaultAvatar;
-};
-
-const handleAvatarSelect = (event) => {
-  const file = event.target.files?.[0];
-  if (!file) return;
-  if (!file.type.startsWith('image/')) {
-    showToast('Please choose an image file.');
-    resetAvatarSelection();
-    return;
-  }
-  if (file.size > 2 * 1024 * 1024) {
-    showToast('Image must be under 2MB.');
-    resetAvatarSelection();
-    return;
-  }
-  newAvatarFile = file;
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    if (editAvatarPreview) {
-      editAvatarPreview.src = e.target?.result || editAvatarPreview.src;
+  if (upgradeBanner) {
+    if (planLabel.toLowerCase() === 'free') {
+      upgradeBanner.style.display = 'flex';
+    } else {
+      upgradeBanner.style.display = 'none';
     }
-  };
-  reader.readAsDataURL(file);
-};
-
-const updateProfile = async (formData) => {
-  const response = await fetch('update-profile.php', {
-    method: 'POST',
-    body: formData,
-  });
-  let data;
-  try {
-    data = await response.json();
-  } catch (parseError) {
-    console.error('Invalid update-profile response', parseError);
-    throw new Error('Unable to update profile. Please try again.');
   }
-  if (!response.ok || !data.success) {
-    throw new Error(data.message || 'Unable to update profile.');
-  }
-  return data;
 };
 
 const fetchProfile = async () => {
   try {
-    toggleLoading(true);
+    toggleLoader(true);
     const response = await fetch('vendor-profile.php?format=json', {
-      headers: { 'Accept': 'application/json' },
       credentials: 'same-origin',
+      headers: { Accept: 'application/json' },
     });
 
     if (response.status === 401) {
@@ -140,90 +88,35 @@ const fetchProfile = async () => {
       return;
     }
 
-    let payload;
-    try {
-      payload = await response.json();
-    } catch (parseError) {
-      console.error('Invalid profile response', parseError);
-      throw new Error('We could not load your profile details.');
+    const payload = await response.json().catch(() => null);
+    if (!payload || !payload.success) {
+      throw new Error(payload?.message || 'Unable to load vendor profile.');
     }
 
-    if (!response.ok || !payload.success) {
-      throw new Error((payload && payload.message) || 'We could not load your profile details.');
-    }
-
-    currentProfile = payload.profile || {};
-    hydrateView();
-    hydrateEdit();
-    toggleModes('view');
+    applyProfile(payload.profile);
   } catch (error) {
-    console.error('Profile load error', error);
-    showToast(error.message || 'Unable to load your profile.');
+    console.error('Profile load error:', error);
+    if (profileTitle) profileTitle.textContent = 'Unable to load profile';
   } finally {
-    toggleLoading(false);
+    toggleLoader(false);
   }
 };
 
-const bindEvents = () => {
-  editBtn?.addEventListener('click', () => {
-    hydrateEdit();
-    toggleModes('edit');
+const bindActions = () => {
+  editProfileBtn?.addEventListener('click', () => {
+    window.location.href = 'vendor-edit-profile.php';
   });
 
-  cancelBtn?.addEventListener('click', () => {
-    resetAvatarSelection();
-    hydrateEdit();
-    toggleModes('view');
+  upgradePlanBtn?.addEventListener('click', () => {
+    window.location.href = 'vendor-plans.php';
   });
 
-  logoutBtn?.addEventListener('click', () => {
-    window.location.href = 'logout.php';
-  });
-
-  uploadTrigger?.addEventListener('click', () => avatarInput?.click());
-  avatarInput?.addEventListener('change', handleAvatarSelect);
-
-  profileForm?.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    if (!vendorNameInput.value.trim() || !businessNameInput.value.trim() || !addressInput.value.trim() || !stateSelect.value) {
-      showToast('Please complete all required fields.');
-      return;
-    }
-
-    saveBtn.disabled = true;
-    saveBtn.innerHTML = '<i class="ri-loader-4-line" aria-hidden="true"></i> Saving…';
-
-    try {
-      const formData = new FormData();
-      formData.append('name', vendorNameInput.value.trim());
-      formData.append('business_name', businessNameInput.value.trim());
-      formData.append('phone', phoneInput.value.trim());
-      formData.append('address', addressInput.value.trim());
-      formData.append('state', stateSelect.value);
-      if (newAvatarFile) {
-        formData.append('avatar', newAvatarFile);
-      }
-
-      const result = await updateProfile(formData);
-      currentProfile = { ...currentProfile, ...(result.profile || {}) };
-      hydrateView();
-      hydrateEdit();
-      toggleModes('view');
-      resetAvatarSelection();
-      showToast(result.message || 'Profile updated successfully.');
-    } catch (error) {
-      console.error('Profile update error', error);
-      showToast(error.message || 'Could not update profile.');
-    } finally {
-      saveBtn.disabled = false;
-      saveBtn.innerHTML = '<i class="ri-save-3-line" aria-hidden="true"></i> Save Changes';
-    }
+  viewPricingBtn?.addEventListener('click', () => {
+    window.location.href = 'vendor-plans.php#pricing';
   });
 };
 
-const initialise = () => {
-  bindEvents();
+document.addEventListener('DOMContentLoaded', () => {
+  bindActions();
   fetchProfile();
-};
-
-window.addEventListener('DOMContentLoaded', initialise);
+});
