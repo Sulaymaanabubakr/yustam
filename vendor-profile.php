@@ -638,7 +638,7 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
   </main>
 
   <footer>
-    © 2025 YUSTAM — Built for Nigeria.
+    © 2025 YUSTAM - All Rights Reserved.
   </footer>
 
   <div class="toast" id="toast" role="status" aria-live="assertive">Profile updated successfully.</div>
