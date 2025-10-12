@@ -1,17 +1,7 @@
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js';
-      import { getAuth, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js';
-      import {
-        getFirestore,
-        doc,
-        getDoc,
-        setDoc,
-        updateDoc,
-      } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
-      import firebaseConfig from './firebase.js';
-
-      const app = initializeApp(firebaseConfig);
-      const auth = getAuth(app);
-      const db = getFirestore(app);
+// ✅ Use the already-initialized Firebase instance
+      import { auth, db } from './firebase.js';
+      import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js';
+      import { doc, getDoc, setDoc, updateDoc } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
 
       const loadingState = document.getElementById('loadingState');
       const plansContent = document.getElementById('plansContent');
