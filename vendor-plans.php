@@ -476,13 +476,16 @@
   <body>
     <!-- Header -->
     <header>
-      <div class="header-left">
+      <div class="header-left logo-area">
         <div class="logo-shell">
           <img src="logo.jpeg" alt="YUSTAM logo" />
         </div>
-        <h1>Vendor</h1>
+        <h1 role="link" tabindex="0">Vendor</h1>
       </div>
       <nav class="header-actions">
+        <a class="icon-btn notif-icon" href="vendor-notifications.php" aria-label="Notifications" title="Notifications">
+          <i class="ri-notification-3-line"></i>
+        </a>
         <a class="icon-btn" href="vendor-dashboard.php" aria-label="Vendor dashboard">
           <i class="ri-home-4-line"></i>
         </a>

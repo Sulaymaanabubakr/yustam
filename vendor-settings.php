@@ -548,13 +548,16 @@
 </head>
 <body class="theme-light">
   <header class="app-header">
-    <div class="header-left">
-      <a class="header-logo" href="vendor-dashboard.php" aria-label="YUSTAM home">
+    <div class="header-left logo-area">
+      <a class="header-logo" href="/index.html" aria-label="YUSTAM home">
         <img src="logo.jpeg" alt="YUSTAM logo">
       </a>
-      <span class="header-title">Vendor</span>
+      <span class="header-title" role="link" tabindex="0">Vendor</span>
     </div>
     <nav class="header-actions" aria-label="Vendor shortcuts">
+      <a class="header-icon notif-icon" href="vendor-notifications.php" aria-label="Notifications" title="Notifications">
+        <i class="ri-notification-3-line" aria-hidden="true"></i>
+      </a>
       <a class="header-icon" href="vendor-plans.php" aria-label="Plans">
         <i class="ri-vip-crown-line" aria-hidden="true"></i>
       </a>

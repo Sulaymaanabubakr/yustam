@@ -615,7 +615,7 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
     </div>
 
     <header id="dashboardHeader" class="dashboard-header" style="display:none;">
-        <div class="header-brand" role="banner">
+        <div class="header-brand logo-area" role="banner">
             <img src="logo.jpeg" alt="YUSTAM logo" class="logo-img">
             <div class="brand-text">
                 <span class="brand-title">Vendor</span>
@@ -623,6 +623,9 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
             </div>
         </div>
         <div class="header-actions" aria-label="Dashboard navigation">
+            <button class="icon-button notif-icon" type="button" id="notificationsBtn" aria-label="Notifications" title="Notifications">
+                <i class="ri-notification-3-line"></i>
+            </button>
             <button class="icon-button" type="button" id="settingsBtn" aria-label="Vendor settings">
                 <i class="ri-settings-4-line"></i>
             </button>
