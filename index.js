@@ -52,27 +52,45 @@
         }
 
         // =============================
-        // YUSTAM | HOMEPAGE BUTTON LINKS
+        // YUSTAM | HEADER LOGIN DROPDOWN
         // =============================
-        document.addEventListener("DOMContentLoaded", () => {
-        // Select the Sign In button
-        const signInBtn = document.querySelector(".vendor-btn.primary");
-        // Select the Become a Vendor button
-        const becomeVendorBtn = document.querySelector(".vendor-btn.secondary");
+        document.addEventListener('DOMContentLoaded', () => {
+            const loginToggle = document.querySelector('.login-toggle');
+            const loginMenu = document.getElementById('loginMenu');
 
-        // When "Sign In" is clicked → go to vendor-login.html
-        if (signInBtn) {
-            signInBtn.addEventListener("click", () => {
-            window.location.href = "vendor-login.html";
-            });
-        }
+            if (!loginToggle || !loginMenu) {
+                return;
+            }
 
-        // When "Become a Vendor" is clicked → go to vendor-register.html
-        if (becomeVendorBtn) {
-            becomeVendorBtn.addEventListener("click", () => {
-            window.location.href = "vendor-register.html";
+            const hideMenu = () => {
+                loginMenu.classList.remove('is-visible');
+                loginMenu.setAttribute('aria-hidden', 'true');
+                loginToggle.setAttribute('aria-expanded', 'false');
+            };
+
+            loginToggle.addEventListener('click', (event) => {
+                event.stopPropagation();
+                const willOpen = !loginMenu.classList.contains('is-visible');
+                loginMenu.classList.toggle('is-visible', willOpen);
+                loginMenu.setAttribute('aria-hidden', willOpen ? 'false' : 'true');
+                loginToggle.setAttribute('aria-expanded', String(willOpen));
             });
-        }
+
+            loginMenu.addEventListener('click', (event) => {
+                event.stopPropagation();
+            });
+
+            document.addEventListener('click', (event) => {
+                if (!loginMenu.contains(event.target) && !loginToggle.contains(event.target)) {
+                    hideMenu();
+                }
+            });
+
+            document.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape') {
+                    hideMenu();
+                }
+            });
         });
 
 
