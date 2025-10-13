@@ -226,7 +226,7 @@ const bindActions = () => {
 const showDashboard = () => {
   if (loader) loader.style.display = 'none';
   if (header) header.style.display = 'flex';
-  if (dashboard) dashboard.style.display = 'block';
+  if (dashboard) dashboard.style.display = 'flex';
 };
 
 const showLoaderMessage = (title, subtitle) => {
