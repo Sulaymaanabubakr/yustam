@@ -22,6 +22,7 @@ $buyerName = $buyer['name'] ?? ($_SESSION['buyer_name'] ?? 'Buyer');
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css">
     <style>
         :root {
             --emerald: #004D40;
@@ -110,126 +111,94 @@ $buyerName = $buyer['name'] ?? ($_SESSION['buyer_name'] ?? 'Buyer');
             font-size: clamp(1.6rem, 4vw, 2.2rem);
         }
 
-        .grid {
+        .saved-grid {
             display: grid;
             gap: clamp(18px, 3vw, 28px);
-            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
         }
 
-        .listing-card {
+        .saved-card {
             background: var(--glass);
-            border-radius: 18px;
+            border-radius: 20px;
             border: 1px solid rgba(255, 255, 255, 0.6);
-            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12);
-            backdrop-filter: blur(16px);
-            display: flex;
-            flex-direction: column;
+            box-shadow: 0 16px 28px rgba(0, 0, 0, 0.12);
+            backdrop-filter: blur(18px);
             overflow: hidden;
-        }
-
-        .listing-card img {
-            width: 100%;
-            aspect-ratio: 4 / 3;
-            object-fit: cover;
-        }
-
-        .listing-body {
-            padding: 16px 18px 20px;
             display: grid;
-            gap: 12px;
+            gap: 16px;
+            padding: 18px;
         }
 
-        .listing-body h2 {
+        .saved-card img {
+            width: 100%;
+            height: 180px;
+            object-fit: cover;
+            border-radius: 16px;
+        }
+
+        .saved-card h3 {
             margin: 0;
             font-size: 1.05rem;
-            color: rgba(17, 17, 17, 0.88);
+            color: rgba(17, 17, 17, 0.9);
         }
 
-        .listing-body span {
-            font-size: 0.9rem;
-            color: var(--muted);
+        .saved-card .price {
+            font-weight: 600;
+            color: var(--emerald);
+            font-size: 0.95rem;
         }
 
-        .listing-actions {
+        .saved-card .actions {
             display: flex;
             align-items: center;
             justify-content: space-between;
             gap: 12px;
         }
 
-        .view-button {
+        .saved-card .btn {
             flex: 1;
-            padding: 12px 16px;
-            border-radius: 16px;
+            padding: 10px 16px;
+            border-radius: 14px;
             border: none;
             font-weight: 600;
-            letter-spacing: 0.02em;
-            background: linear-gradient(135deg, #F3731E, #FF8A3D);
+            background: linear-gradient(135deg, rgba(243, 115, 30, 0.95), rgba(255, 138, 60, 0.95));
             color: #fff;
-            cursor: pointer;
+            text-align: center;
             transition: transform 0.2s ease, box-shadow 0.2s ease;
         }
 
-        .view-button:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 16px 26px rgba(243, 115, 30, 0.28);
+        .saved-card .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 18px 32px rgba(243, 115, 30, 0.3);
         }
 
-        .save-toggle {
-            width: 44px;
-            height: 44px;
-            border-radius: 50%;
+        .remove-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
             border: none;
             background: rgba(255, 255, 255, 0.85);
-            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
-            font-size: 1.2rem;
+            border-radius: 14px;
+            padding: 10px 14px;
+            font-weight: 600;
+            color: rgba(217, 48, 37, 0.88);
             cursor: pointer;
-            transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+            transition: background 0.2s ease, transform 0.2s ease;
         }
 
-        .save-toggle.is-active {
-            background: rgba(243, 115, 30, 0.92);
-            color: #fff;
-        }
-
-        .save-toggle:hover {
+        .remove-btn:hover {
+            background: rgba(217, 48, 37, 0.14);
             transform: translateY(-2px);
         }
 
         .empty-state {
-            padding: 24px;
-            border-radius: 18px;
-            background: rgba(255, 255, 255, 0.78);
+            padding: 28px;
+            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.8);
             border: 1px dashed rgba(0, 77, 64, 0.28);
             text-align: center;
             font-weight: 600;
-            color: rgba(0, 77, 64, 0.72);
-        }
-
-        .toast {
-            position: fixed;
-            bottom: 32px;
-            left: 50%;
-            transform: translateX(-50%) translateY(120%);
-            min-width: 260px;
-            padding: 14px 18px;
-            border-radius: 18px;
-            background: rgba(0, 77, 64, 0.9);
-            color: #fff;
-            font-weight: 600;
-            text-align: center;
-            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.18);
-            backdrop-filter: blur(12px);
-            opacity: 0;
-            transition: opacity 0.3s ease, transform 0.3s ease;
-            z-index: 60;
-        }
-
-        .toast.is-error { background: rgba(217, 48, 37, 0.9); }
-
-        .toast.is-visible {
-            opacity: 1;
-            transform: translateX(-50%) translateY(0);
+            color: rgba(0, 77, 64, 0.76);
         }
 
         @media (max-width: 600px) {
@@ -266,11 +235,9 @@ $buyerName = $buyer['name'] ?? ($_SESSION['buyer_name'] ?? 'Buyer');
             <h1>Hello <?= htmlspecialchars(explode(' ', $buyerName)[0] ?? $buyerName) ?>,</h1>
             <p style="margin:0;font-size:1rem;color:var(--muted);">Here are the listings you’ve bookmarked.</p>
         </div>
-        <section class="grid" id="savedGrid" aria-live="polite"></section>
-        <div class="empty-state" id="savedEmpty" role="status" style="display:none;">No saved items yet. Explore products to save them for later!</div>
+        <section class="saved-grid" id="savedGrid" aria-live="polite"></section>
+        <div class="empty-state" id="emptyState" role="status" hidden>You haven’t saved any listings yet.</div>
     </main>
-
-    <div class="toast" id="savedToast" role="status" aria-live="polite"></div>
 
     <script type="module" src="buyer-saved.js"></script>
 </body>
