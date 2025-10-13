@@ -9,8 +9,8 @@ import {
 } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
 
 const dashboardShell = document.getElementById('buyerDashboard');
-const savedList = document.getElementById('recentSavedList');
-const savedEmpty = document.getElementById('savedEmptyState');
+const recentSavedGrid = document.getElementById('recentSavedGrid');
+const recentSavedEmpty = document.getElementById('recentSavedEmpty');
 const chatsList = document.getElementById('recentChatsList');
 const chatsEmpty = document.getElementById('chatsEmptyState');
 const toastEl = document.getElementById('buyerToast');
@@ -61,56 +61,52 @@ const formatRelativeTime = (timestamp) => {
   return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
 };
 
-function createSavedPreview(docSnap, index) {
+function createSavedPreview(docSnap) {
   const data = docSnap.data?.() || {};
   const productName = data.name || data.title || 'Marketplace listing';
-  const price = data.price;
+  const productId = data.productId || docSnap.id;
+  const priceRaw = data.price;
+  const price = typeof priceRaw === 'number' ? formatCurrency(priceRaw) : (priceRaw || 'View for price');
   const image = data.image || data.cover || 'https://images.unsplash.com/photo-1545239351-1141bd82e8a6?auto=format&fit=crop&w=240&q=80';
-  const card = document.createElement('article');
-  card.className = 'mini-card';
-  card.style.animationDelay = `${Math.min(index, 6) * 70}ms`;
+
+  const card = document.createElement('div');
+  card.className = 'mini-saved-card';
+  card.style.cursor = 'pointer';
+  card.title = `Open ${productName}`;
 
   const picture = document.createElement('img');
   picture.src = image;
   picture.alt = productName;
 
-  const meta = document.createElement('div');
-  meta.className = 'meta';
-
-  const nameEl = document.createElement('strong');
+  const nameEl = document.createElement('p');
   nameEl.textContent = productName;
 
   const priceEl = document.createElement('span');
-  priceEl.textContent = price ? formatCurrency(price) : 'Tap to view details';
-
-  meta.appendChild(nameEl);
-  meta.appendChild(priceEl);
-
-  const viewLink = document.createElement('a');
-  viewLink.href = data.productUrl || data.url || `product.html?id=${encodeURIComponent(data.productId || docSnap.id)}`;
-  viewLink.textContent = 'View';
-  viewLink.style.fontWeight = '600';
-  viewLink.style.color = 'var(--emerald)';
+  priceEl.textContent = price;
 
   card.appendChild(picture);
-  card.appendChild(meta);
-  card.appendChild(viewLink);
+  card.appendChild(nameEl);
+  card.appendChild(priceEl);
+
+  card.addEventListener('click', () => {
+    window.location.href = `product.php?id=${encodeURIComponent(productId)}`;
+  });
 
   return card;
 }
 
 function renderSaved(snapshot) {
-  if (!savedList) return;
-  savedList.innerHTML = '';
+  if (!recentSavedGrid) return;
+  recentSavedGrid.innerHTML = '';
   const docs = snapshot.docs || [];
   if (docs.length === 0) {
-    if (savedEmpty) savedEmpty.style.display = 'block';
+    if (recentSavedEmpty) recentSavedEmpty.hidden = false;
     return;
   }
-  if (savedEmpty) savedEmpty.style.display = 'none';
-  docs.forEach((docSnap, index) => {
-    const card = createSavedPreview(docSnap, index);
-    savedList.appendChild(card);
+  if (recentSavedEmpty) recentSavedEmpty.hidden = true;
+  docs.forEach((docSnap) => {
+    const card = createSavedPreview(docSnap);
+    recentSavedGrid.appendChild(card);
   });
 }
 
@@ -202,11 +198,12 @@ try {
   onSnapshot(savedQuery, renderSaved, (error) => {
     console.error('[buyer-dashboard] saved listings error', error);
     showToast('Unable to load saved listings right now.', 'error');
-    if (savedEmpty) savedEmpty.style.display = 'block';
+    if (recentSavedEmpty) recentSavedEmpty.hidden = false;
   });
 } catch (error) {
   console.error('[buyer-dashboard] saved setup failed', error);
   showToast('Unable to connect to saved listings.', 'error');
+  if (recentSavedEmpty) recentSavedEmpty.hidden = false;
 }
 
 try {

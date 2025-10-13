@@ -170,6 +170,75 @@ if (!empty($buyer['joined_at'])) {
             grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
         }
 
+        .recent-saved {
+            display: grid;
+            gap: 18px;
+        }
+
+        .recent-saved h2 {
+            font-size: 1.4rem;
+            margin: 0;
+        }
+
+        .recent-saved .head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        #recentSavedGrid {
+            display: grid;
+            gap: 14px;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        }
+
+        .mini-saved-card {
+            display: grid;
+            gap: 10px;
+            background: rgba(255, 255, 255, 0.86);
+            border-radius: 18px;
+            padding: 14px;
+            border: 1px solid rgba(0, 77, 64, 0.12);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.08);
+        }
+
+        .mini-saved-card img {
+            width: 100%;
+            height: 120px;
+            object-fit: cover;
+            border-radius: 14px;
+        }
+
+        .mini-saved-card p {
+            margin: 0;
+            font-weight: 600;
+            color: rgba(17, 17, 17, 0.85);
+        }
+
+        .mini-saved-card span {
+            color: rgba(0, 77, 64, 0.75);
+            font-weight: 600;
+        }
+
+        .btn-orange {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 10px 16px;
+            border-radius: 14px;
+            background: linear-gradient(135deg, rgba(243, 115, 30, 0.95), rgba(255, 138, 60, 0.95));
+            color: #fff;
+            font-weight: 600;
+            text-decoration: none;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .btn-orange:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 16px 26px rgba(243, 115, 30, 0.28);
+        }
+
         .section-title {
             display: flex;
             align-items: center;
@@ -324,13 +393,13 @@ if (!empty($buyer['joined_at'])) {
             <span class="badge">Buyer ID #<?= htmlspecialchars((string)$buyerId) ?></span>
         </section>
 
-        <section class="glass-card">
-            <div class="section-title">
-                <h2 style="font-size:1.4rem;">Recent saved listings</h2>
-                <a class="badge" href="buyer-saved.php">View all</a>
+        <section class="glass-card recent-saved">
+            <div class="head">
+                <h2>Recently Saved</h2>
+                <a class="btn-orange" href="buyer-saved.php">View All</a>
             </div>
-            <div class="recent-list" id="recentSavedList" aria-live="polite"></div>
-            <div class="empty-state" id="savedEmptyState" role="status" style="display:none;">You haven’t saved any items yet.</div>
+            <div id="recentSavedGrid" aria-live="polite"></div>
+            <div class="empty-state" id="recentSavedEmpty" role="status" hidden>You haven’t saved any listings yet.</div>
         </section>
 
         <section class="glass-card">
