@@ -12,7 +12,7 @@ import { getAuth, GoogleAuthProvider, signInWithPopup }
 // -------------------------------
 const firebaseConfig = {
   apiKey: "AIzaSyBQ74sMmOiYEvkxa26Movh0DAnmc0Jz60g",
-  authDomain: "auth.yustam.com.ng",
+  authDomain: "yustam-50819.firebaseapp.com",
   projectId: "yustam-50819",
   storageBucket: "yustam-50819.appspot.com",  // ✅ fixed ".app" to ".appspot.com"
   messagingSenderId: "472601563195",
