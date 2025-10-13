@@ -241,10 +241,10 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
             flex: 1;
             width: min(1180px, calc(100% - clamp(2rem, 6vw, 6.5rem)));
             margin: 0 auto;
-            padding: clamp(1.8rem, 4vw, 3.2rem) 0 clamp(3.4rem, 5vw, 3.8rem);
+            padding: clamp(2rem, 5vw, 3.4rem) 0 clamp(3.6rem, 6vw, 4.2rem);
             display: flex;
             flex-direction: column;
-            gap: clamp(1.6rem, 3vw, 2.5rem);
+            gap: clamp(2rem, 5vw, 3rem);
         }
 
         .intro-card {
@@ -276,7 +276,7 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
 
         .kpi-grid {
             display: grid;
-            gap: clamp(1.15rem, 3vw, 1.8rem);
+            gap: clamp(1.5rem, 5vw, 2.3rem);
             grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
         }
 
@@ -326,12 +326,12 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
         .glass-section {
             background: rgba(255, 255, 255, 0.82);
             border-radius: var(--radius-large);
-            padding: clamp(1.4rem, 3.5vw, 2rem);
+            padding: clamp(1.6rem, 4vw, 2.3rem);
             box-shadow: var(--shadow-soft);
             backdrop-filter: blur(18px);
             display: flex;
             flex-direction: column;
-            gap: clamp(1rem, 2.5vw, 1.6rem);
+            gap: clamp(1.3rem, 4vw, 2rem);
         }
 
         .section-header {
@@ -610,6 +610,25 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
             .boost-actions .btn {
                 width: 100%;
                 justify-content: center;
+            }
+        }
+
+        @media (max-width: 600px) {
+            main {
+                width: calc(100% - 2.8rem);
+                padding: 1.8rem 0 3.6rem;
+                gap: 2.6rem;
+            }
+
+            .intro-card,
+            .glass-section,
+            .kpi-card {
+                padding: 1.5rem 1.25rem;
+            }
+
+            .section-header {
+                align-items: flex-start;
+                gap: 1rem;
             }
         }
 
