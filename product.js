@@ -1,5 +1,78 @@
-const mainImage = document.getElementById('mainImage');
+import { db } from './firebase.js';
+import { deleteDoc, doc, getDoc, setDoc } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
+
+const mainImage = document.getElementById('productImage') || document.getElementById('mainImage');
 const thumbStrip = document.getElementById('thumbStrip');
+
+const saveBtn = document.getElementById('saveListingBtn');
+const buyerId = document.body?.dataset?.buyerId || '';
+const productIdInput = document.getElementById('productId');
+const productId = productIdInput?.value?.trim?.() || '';
+const productNameEl = document.getElementById('productName');
+const productPriceEl = document.getElementById('productPrice');
+const productImageEl = document.getElementById('productImage');
+
+const productName = productNameEl?.textContent?.trim?.() || '';
+const productPrice = productPriceEl?.textContent?.trim?.() || '';
+const productImageUrl = productImageEl?.src || '';
+
+const savedRef = buyerId && productId ? doc(db, `saved/${buyerId}/items/${productId}`) : null;
+
+function setSaveState(isSaved) {
+  if (!saveBtn) return;
+  if (isSaved) {
+    saveBtn.classList.add('active');
+    saveBtn.innerHTML = '<i class="ri-heart-fill" aria-hidden="true"></i> Saved';
+    saveBtn.setAttribute('aria-pressed', 'true');
+  } else {
+    saveBtn.classList.remove('active');
+    saveBtn.innerHTML = '<i class="ri-heart-line" aria-hidden="true"></i> Save';
+    saveBtn.setAttribute('aria-pressed', 'false');
+  }
+}
+
+async function toggleSave() {
+  if (!saveBtn) return;
+  if (!buyerId) {
+    alert('Please sign in to save listings.');
+    return;
+  }
+  if (!savedRef) return;
+
+  try {
+    const snapshot = await getDoc(savedRef);
+    if (snapshot.exists()) {
+      await deleteDoc(savedRef);
+      setSaveState(false);
+    } else {
+      await setDoc(savedRef, {
+        name: productName,
+        price: productPrice,
+        image: productImageUrl,
+        productId,
+        timestamp: Date.now(),
+      });
+      setSaveState(true);
+    }
+  } catch (error) {
+    console.error('[product] toggle save failed', error);
+    alert('We could not update your saved list. Please try again.');
+  }
+}
+
+if (saveBtn) {
+  saveBtn.addEventListener('click', toggleSave);
+
+  if (buyerId && savedRef) {
+    getDoc(savedRef)
+      .then((snapshot) => {
+        setSaveState(snapshot.exists());
+      })
+      .catch((error) => {
+        console.error('[product] unable to fetch saved state', error);
+      });
+  }
+}
 
 if (thumbStrip && mainImage) {
   thumbStrip.addEventListener('click', (event) => {

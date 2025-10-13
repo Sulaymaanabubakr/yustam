@@ -61,6 +61,34 @@ $chatId = $vendorId && $buyerId ? $vendorId . '_' . $buyerId . '_' . $productId 
             cursor: pointer;
         }
 
+        .save-btn {
+            background: rgba(255, 255, 255, 0.85);
+            border: 1px solid rgba(0, 77, 64, 0.2);
+            border-radius: 14px;
+            padding: 10px 16px;
+            font-weight: 600;
+            color: #004D40;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.25s ease;
+        }
+
+        .save-btn:hover {
+            background: linear-gradient(135deg, #F3731E, #FF8A3C);
+            color: #fff;
+        }
+
+        .save-btn.active {
+            background: linear-gradient(135deg, #F3731E, #FF8A3C);
+            color: #fff;
+        }
+
+        .save-btn.active i {
+            content: "\f004";
+        }
+
         .page-wrapper {
             width: 100%;
             max-width: 1100px;
@@ -669,7 +697,7 @@ $chatId = $vendorId && $buyerId ? $vendorId . '_' . $buyerId . '_' . $productId 
         }
     </style>
 </head>
-<body>
+<body data-buyer-id="<?= htmlspecialchars((string)$buyerId, ENT_QUOTES, 'UTF-8'); ?>">
     <!-- Header -->
     <header>
         <div class="topbar">
@@ -688,7 +716,7 @@ $chatId = $vendorId && $buyerId ? $vendorId . '_' . $buyerId . '_' . $productId 
         <!-- Gallery -->
         <section class="glass-card gallery" aria-label="Product image gallery">
             <div class="gallery-main">
-                <img id="mainImage" src="https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=1200&q=80" alt="Product main image">
+                <img id="productImage" src="https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=1200&q=80" alt="Product main image">
             </div>
             <div id="thumbStrip" class="thumb-strip" role="list">
                 <button class="active" data-image="https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=1200&q=80" aria-label="View image 1" role="listitem">
@@ -704,10 +732,14 @@ $chatId = $vendorId && $buyerId ? $vendorId . '_' . $buyerId . '_' . $productId 
         </section>
 
         <!-- Product Details Section -->
-        <section class="glass-card product-details" aria-labelledby="productTitle">
+        <section class="glass-card product-details" aria-labelledby="productName">
             <div class="product-header">
-                <h2 id="productTitle" class="product-title"><?= htmlspecialchars($productTitle, ENT_QUOTES, 'UTF-8'); ?></h2>
+                <h2 id="productName" class="product-title"><?= htmlspecialchars($productTitle, ENT_QUOTES, 'UTF-8'); ?></h2>
                 <p id="productPrice" class="price-tag">₦<?= number_format($productPrice); ?></p>
+                <button id="saveListingBtn" class="save-btn" type="button">
+                    <i class="ri-heart-line" aria-hidden="true"></i>
+                    Save
+                </button>
                 <span class="status-chip">In Stock</span>
                 <div class="category-line">
                     <i class="ri-smartphone-line"></i>
@@ -723,6 +755,7 @@ $chatId = $vendorId && $buyerId ? $vendorId . '_' . $buyerId . '_' . $productId 
                     <li><i class="ri-checkbox-circle-line" aria-hidden="true"></i> Available in Natural Titanium, Blue Titanium, and Black Titanium</li>
                 </ul>
             </div>
+            <input type="hidden" id="productId" value="<?= htmlspecialchars($productId, ENT_QUOTES, 'UTF-8'); ?>">
             <div class="cta-row">
                 <button id="addToCartBtn" class="btn-primary" type="button">Add to Cart</button>
                 <button id="whatsappBtn" class="btn-accent" type="button">
@@ -912,7 +945,7 @@ $chatId = $vendorId && $buyerId ? $vendorId . '_' . $buyerId . '_' . $productId 
 
     <!-- Firebase Logic placeholder -->
     
-      <script src="product.js"></script>
+      <script type="module" src="product.js"></script>
 <script type="module" src="firebase.js"></script>
 </body>
 </html>
