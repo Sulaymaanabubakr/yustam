@@ -156,8 +156,20 @@ const hydrateListings = () => {
 const bindActions = () => {
   const logoArea = document.querySelector('.logo-area');
   if (logoArea) {
-    logoArea.addEventListener('click', () => {
-      window.location.href = '/index.html';
+    const navigateToProfile = () => {
+      window.location.href = 'vendor-profile.php';
+    };
+    logoArea.addEventListener('click', (event) => {
+      if (event.target && event.target.closest('a')) {
+        return;
+      }
+      navigateToProfile();
+    });
+    logoArea.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        navigateToProfile();
+      }
     });
   }
 
@@ -175,10 +187,10 @@ const bindActions = () => {
     });
   }
 
-  const profileBtn = document.getElementById('profileBtn');
-  if (profileBtn) {
-    profileBtn.addEventListener('click', () => {
-      window.location.href = 'vendor-profile.php';
+  const chatBtn = document.getElementById('chatBtn');
+  if (chatBtn) {
+    chatBtn.addEventListener('click', () => {
+      window.location.href = 'vendor-chats.php';
     });
   }
 
