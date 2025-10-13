@@ -43,6 +43,8 @@ $location     = $vendor['state'] ?? '';
 $plan         = $vendor['plan'] ?? 'Free';
 $createdAt    = $vendor['created_at'] ?? '';
 $createdDisplay = $createdAt ? date('j M Y', strtotime($createdAt)) : '—';
+$profilePhoto = $vendor['profile_photo'] ?? '';
+$avatarFallback = 'https://res.cloudinary.com/demo/image/upload/v123456789/default_user.png';
 
 $listings = [];
 $stats = [
@@ -162,12 +164,34 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
             gap: 0.9rem;
         }
 
-        .logo-img {
-            width: 48px;
-            height: 48px;
-            border-radius: 16px;
+        .logo-area {
+            cursor: pointer;
+        }
+
+        .avatar-link {
+            display: inline-flex;
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.65);
+            padding: 2px;
+            background: rgba(255, 255, 255, 0.18);
+            box-shadow: 0 10px 18px rgba(0, 0, 0, 0.22);
+            transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
+        }
+
+        .avatar-link:hover,
+        .avatar-link:focus-visible {
+            transform: translateY(-1px);
+            border-color: rgba(243, 115, 30, 0.9);
+            box-shadow: 0 16px 28px rgba(243, 115, 30, 0.35);
+        }
+
+        .header-avatar {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
             object-fit: cover;
-            box-shadow: 0 12px 22px rgba(0, 0, 0, 0.25);
         }
 
         .brand-text {
@@ -615,8 +639,10 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
     </div>
 
     <header id="dashboardHeader" class="dashboard-header" style="display:none;">
-        <div class="header-brand logo-area" role="banner">
-            <img src="logo.jpeg" alt="YUSTAM logo" class="logo-img">
+        <div class="header-brand logo-area" role="banner" tabindex="0">
+            <a href="vendor-profile.php" class="avatar-link" aria-label="View profile">
+                <img src="<?php echo htmlspecialchars($profilePhoto ?: $avatarFallback); ?>" alt="Vendor profile photo" class="header-avatar">
+            </a>
             <div class="brand-text">
                 <span class="brand-title">Vendor</span>
                 <span class="brand-subtitle" id="headerGreeting">Curated commerce, crafted by you.</span>
@@ -629,8 +655,8 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
             <button class="icon-button" type="button" id="settingsBtn" aria-label="Vendor settings">
                 <i class="ri-settings-4-line"></i>
             </button>
-            <button class="icon-button" type="button" id="profileBtn" aria-label="View profile">
-                <i class="ri-user-3-line"></i>
+            <button class="icon-button" type="button" id="chatBtn" aria-label="Chats" title="Chats">
+                <i class="ri-chat-3-line"></i>
             </button>
             <button class="icon-button" type="button" id="logoutBtn" aria-label="Logout">
                 <i class="ri-logout-circle-r-line"></i>
