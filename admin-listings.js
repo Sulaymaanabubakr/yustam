@@ -102,12 +102,15 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.4/fireba
       return `<span class="${classMap[normalised] || classMap.pending}">${label}</span>`;
     }
 
-    function renderActions(id) {
+    function renderActions(id, status = 'pending', vendorId = '') {
+      const normalized = (status || 'pending').toLowerCase();
+      const reviewed = normalized !== 'pending';
+      const disabledAttr = reviewed ? 'disabled' : '';
       return `
-        <div class="action-buttons" data-id="${id}">
-          <button class="btn-sm btn-approve" data-action="approve"><i class="ri-check-line"></i>Approve</button>
-          <button class="btn-sm btn-reject" data-action="reject"><i class="ri-close-line"></i>Reject</button>
-          <button class="btn-sm btn-delete" data-action="delete"><i class="ri-delete-bin-6-line"></i>Delete</button>
+        <div class="action-buttons" data-id="${id}" data-vendor="${vendorId}">
+          <button class="btn-sm btn-approve" data-action="approve" data-id="${id}" data-vendor="${vendorId}" ${disabledAttr}><i class="ri-check-line"></i>Approve</button>
+          <button class="btn-sm btn-reject" data-action="reject" data-id="${id}" data-vendor="${vendorId}" ${disabledAttr}><i class="ri-close-line"></i>Reject</button>
+          <button class="btn-sm btn-delete" data-action="delete" data-id="${id}"><i class="ri-delete-bin-6-line"></i>Delete</button>
           <a class="btn-sm btn-view" href="admin-listing-detail.php?id=${id}" data-action="view"><i class="ri-external-link-line"></i>View</a>
         </div>
       `;
@@ -169,7 +172,7 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.4/fireba
             <td>${vendor.plan || item.plan || 'Free'}</td>
             <td>${renderStatusChip(item.status)}</td>
             <td>${formatDate(item.createdAt)}</td>
-            <td>${renderActions(item.id)}</td>
+            <td>${renderActions(item.id, item.status, item.vendorId || '')}</td>
           </tr>
         `;
       }).join('');
@@ -198,14 +201,45 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.4/fireba
               <span><strong>Date:</strong> ${formatDate(item.createdAt)}</span>
             </div>
             <div class="mobile-actions" data-id="${item.id}">
-              <button class="btn-sm btn-approve" data-action="approve"><i class="ri-check-line"></i>Approve</button>
-              <button class="btn-sm btn-reject" data-action="reject"><i class="ri-close-line"></i>Reject</button>
+              <button class="btn-sm btn-approve" data-action="approve" data-vendor="${item.vendorId || ''}" ${(item.status || 'pending').toLowerCase() !== 'pending' ? 'disabled' : ''}><i class="ri-check-line"></i>Approve</button>
+              <button class="btn-sm btn-reject" data-action="reject" data-vendor="${item.vendorId || ''}" ${(item.status || 'pending').toLowerCase() !== 'pending' ? 'disabled' : ''}><i class="ri-close-line"></i>Reject</button>
               <button class="btn-sm btn-delete" data-action="delete"><i class="ri-delete-bin-6-line"></i>Delete</button>
               <a class="btn-sm btn-view" href="admin-listing-detail.php?id=${item.id}" data-action="view"><i class="ri-external-link-line"></i>View</a>
             </div>
           </article>
         `;
       }).join('');
+    }
+
+    function setListingReviewedState(listingId, status) {
+      const label = status.charAt(0).toUpperCase() + status.slice(1);
+      const chipClass = status === 'approved' ? 'status-chip status-approved' : status === 'rejected' ? 'status-chip status-rejected' : 'status-chip status-pending';
+      document.querySelectorAll(`[data-id="${listingId}"]`).forEach(container => {
+        const approveBtn = container.querySelector('[data-action="approve"]');
+        const rejectBtn = container.querySelector('[data-action="reject"]');
+        if (approveBtn) approveBtn.disabled = true;
+        if (rejectBtn) rejectBtn.disabled = true;
+        const chip = container.querySelector('.status-chip');
+        if (chip) {
+          chip.className = chipClass;
+          chip.textContent = label;
+        }
+      });
+    }
+
+    function updateListingLocalState(listingId, status) {
+      const updateStatus = (list) => {
+        const found = list.find(item => item.id === listingId);
+        if (found) {
+          found.status = status;
+        }
+      };
+      updateStatus(allListings);
+      updateStatus(filteredListings);
+      setListingReviewedState(listingId, status);
+      if (statusFilter.value === 'pending') {
+        applyFilters();
+      }
     }
 
     function renderListings() {
@@ -248,6 +282,7 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.4/fireba
         const listingRef = doc(db, 'listings', listingId);
         await updateDoc(listingRef, { status: 'approved', reviewedAt: serverTimestamp() });
         showToast('Listing approved successfully.');
+        updateListingLocalState(listingId, 'approved');
       } catch (error) {
         console.error(error);
         showToast('Failed to approve listing.', 'error');
@@ -282,6 +317,7 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.4/fireba
         }
 
         showToast('Feedback sent to vendor.');
+        updateListingLocalState(activeListingId, 'rejected');
       } catch (error) {
         console.error(error);
         showToast('Failed to reject listing.', 'error');
@@ -295,6 +331,9 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.4/fireba
       try {
         await deleteDoc(doc(db, 'listings', activeDeleteId));
         showToast('Listing deleted permanently.');
+        allListings = allListings.filter(item => item.id !== activeDeleteId);
+        filteredListings = filteredListings.filter(item => item.id !== activeDeleteId);
+        renderListings();
       } catch (error) {
         console.error(error);
         showToast('Failed to delete listing.', 'error');
