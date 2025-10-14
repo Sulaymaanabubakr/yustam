@@ -50,6 +50,21 @@ import { app, auth, db } from './firebase.js';
     const mainImage = document.getElementById('mainImage');
     const thumbnailRow = document.getElementById('thumbnailRow');
 
+    const ensureSession = async () => {
+      try {
+        const response = await fetch('admin-session-status.php', {
+          method: 'GET',
+          credentials: 'same-origin',
+        });
+        if (!response.ok) throw new Error('Session invalid');
+        return await response.json();
+      } catch (error) {
+        console.error('Admin session validation failed:', error);
+        window.location.href = 'admin-login.php';
+        return null;
+      }
+    };
+
     let currentListingRef = null;
     let currentListingData = null;
     let currentVendorId = null;
@@ -69,9 +84,11 @@ import { app, auth, db } from './firebase.js';
     logoutBtn.addEventListener('click', async () => {
       try {
         await signOut(auth);
-        window.location.href = 'admin-login.html';
+        await fetch('admin-logout.php', { method: 'GET', credentials: 'same-origin' });
+        window.location.href = 'admin-login.php';
       } catch (error) {
-        showToast(error.message, true);
+        console.error(error);
+        showToast('Unable to logout.', true);
       }
     });
 
@@ -167,7 +184,7 @@ import { app, auth, db } from './firebase.js';
         closeModal(deleteModal);
         showToast('Listing deleted.');
         setTimeout(() => {
-          window.location.href = 'admin-listings.html';
+          window.location.href = 'admin-listings.php';
         }, 1000);
       } catch (error) {
         showToast(error.message, true);
@@ -238,7 +255,7 @@ import { app, auth, db } from './firebase.js';
       vendorStatus.textContent = data.status ? data.status.charAt(0).toUpperCase() + data.status.slice(1) : 'Active';
       vendorStatus.className = `chip status-${(data.status || 'active')}`;
       viewVendorBtn.onclick = () => {
-        window.location.href = `vendor-profile.html?id=${currentVendorId}`;
+        window.location.href = `vendor-profile.php?id=${currentVendorId}`;
       };
     }
 
@@ -325,7 +342,7 @@ import { app, auth, db } from './firebase.js';
         if (!listingSnap.exists()) {
           showToast('Listing not found.', true);
           setTimeout(() => {
-            window.location.href = 'admin-listings.html';
+            window.location.href = 'admin-listings.php';
           }, 1400);
           return;
         }
@@ -342,18 +359,23 @@ import { app, auth, db } from './firebase.js';
     }
 
     onAuthStateChanged(auth, async (user) => {
-      if (!user) {
-        window.location.href = 'admin-login.html';
+      const session = await ensureSession();
+      if (!session) {
         return;
       }
       try {
-        const adminDoc = await getDoc(doc(db, 'admins', user.uid));
-        const token = await getIdTokenResult(user);
-        const isAdmin = adminDoc.exists() || token.claims.isAdmin === true;
-        if (!isAdmin) {
-          await signOut(auth);
-          window.location.href = 'index.html';
-          return;
+        if (user) {
+          const adminDoc = await getDoc(doc(db, 'admins', user.uid));
+          const token = await getIdTokenResult(user);
+          const isAdmin = adminDoc.exists() || token.claims.isAdmin === true;
+          if (!isAdmin) {
+            await signOut(auth);
+            await fetch('admin-logout.php', { method: 'GET', credentials: 'same-origin' });
+            window.location.href = 'index.html';
+            return;
+          }
+        } else {
+          console.warn('Firebase admin user not available; continuing with PHP session only.');
         }
         await loadListingDetails();
       } catch (error) {
@@ -361,3 +383,5 @@ import { app, auth, db } from './firebase.js';
         authLoader.classList.add('hidden');
       }
     });
+
+

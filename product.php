@@ -820,10 +820,10 @@ $chatId = $vendorId && $buyerId ? $vendorId . '_' . $buyerId . '_' . $productId 
                 <p><strong>Member since:</strong> March 2023</p>
             </div>
             <div class="vendor-actions">
-                <a href="vendor-profile.html?id=sampleVendor" class="view-profile">View Vendor Profile</a>
+                <a href="vendor-profile.php?id=sampleVendor" class="view-profile">View Vendor Profile</a>
                 <a href="mailto:elitegadgets@yustam.com" class="email-vendor">Email Vendor</a>
             </div>
-            <small>If you are an administrator, <a href="admin-listing-detail.html?id=sampleListing">open this listing in admin view</a>.</small>
+            <small>If you are an administrator, <a href="admin-listing-detail.php?id=sampleListing">open this listing in admin view</a>.</small>
         </section>
 
         <!-- Quick Message Card -->
@@ -949,4 +949,5 @@ $chatId = $vendorId && $buyerId ? $vendorId . '_' . $buyerId . '_' . $productId 
 <script type="module" src="firebase.js"></script>
 </body>
 </html>
+
 

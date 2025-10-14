@@ -1,3 +1,7 @@
+<?php
+require_once __DIR__ . '/admin-session.php';
+require_admin_auth();
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -626,7 +630,7 @@
   <header>
     <div class="topbar">
       <div class="topbar-left">
-        <a href="admin.html" class="icon-btn" aria-label="Go back to Admin Overview">
+        <a href="admin-dashboard.php" class="icon-btn" aria-label="Go back to Admin Overview">
           <i class="ri-arrow-left-line"></i>
         </a>
         <img src="logo.jpeg" alt="YUSTAM logo" class="logo-img">

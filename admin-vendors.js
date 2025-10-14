@@ -50,6 +50,21 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.4/fireba
     const notifyBell = document.getElementById('notifyBell');
     const notifyBadge = document.getElementById('notifyBadge');
 
+    const ensureSession = async () => {
+      try {
+        const response = await fetch('admin-session-status.php', {
+          method: 'GET',
+          credentials: 'same-origin',
+        });
+        if (!response.ok) throw new Error('Session invalid');
+        return await response.json();
+      } catch (error) {
+        console.error('Admin session validation failed:', error);
+        window.location.href = 'admin-login.php';
+        return null;
+      }
+    };
+
     let vendorsState = {
       data: [],
     };
@@ -80,12 +95,18 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.4/fireba
     });
 
     backBtn.addEventListener('click', () => {
-      window.location.href = 'admin.html';
+      window.location.href = 'admin-dashboard.php';
     });
 
     logoutBtn.addEventListener('click', async () => {
-      await signOut(auth);
-      window.location.href = 'admin-login.html';
+      try {
+        await signOut(auth);
+        await fetch('admin-logout.php', { method: 'GET', credentials: 'same-origin' });
+      } catch (error) {
+        console.error('logout error', error);
+      } finally {
+        window.location.href = 'admin-login.php';
+      }
     });
 
     notifyBell.addEventListener('click', () => {
@@ -134,7 +155,7 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.4/fireba
         <td>${vendor.createdAtFormatted || '—'}</td>
         <td>
           <div class="actions">
-            <a class="view-btn" href="vendor-profile.html?id=${vendor.id}" title="View profile"><i class="ri-external-link-line"></i>View</a>
+            <a class="view-btn" href="vendor-profile.php?id=${vendor.id}" title="View profile"><i class="ri-external-link-line"></i>View</a>
             <button class="notify-btn" data-action="notify" data-id="${vendor.id}"><i class="ri-chat-3-line"></i>Notify</button>
             <button class="suspend-btn" data-action="suspend" data-status="${vendor.status}" data-id="${vendor.id}">${vendor.status === 'suspended' ? '<i class=\'ri-shield-check-line\'></i>Unsuspend' : '<i class=\'ri-shield-off-line\'></i>Suspend'}</button>
             <button class="delete-btn" data-action="delete" data-id="${vendor.id}"><i class="ri-delete-bin-6-line"></i>Delete</button>
@@ -162,7 +183,7 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.4/fireba
           <div><strong>Joined:</strong> ${vendor.createdAtFormatted || '—'}</div>
         </div>
         <div class="card-actions">
-          <a class="view-btn" href="vendor-profile.html?id=${vendor.id}"><i class="ri-external-link-line"></i>View</a>
+          <a class="view-btn" href="vendor-profile.php?id=${vendor.id}"><i class="ri-external-link-line"></i>View</a>
           <button class="notify-btn" data-action="notify" data-id="${vendor.id}"><i class="ri-chat-3-line"></i>Notify</button>
           <button class="suspend-btn" data-action="suspend" data-status="${vendor.status}" data-id="${vendor.id}">${vendor.status === 'suspended' ? '<i class=\'ri-shield-check-line\'></i>Unsuspend' : '<i class=\'ri-shield-off-line\'></i>Suspend'}</button>
           <button class="delete-btn" data-action="delete" data-id="${vendor.id}"><i class="ri-delete-bin-6-line"></i>Delete</button>
@@ -442,26 +463,32 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.4/fireba
     });
 
     onAuthStateChanged(auth, async (user) => {
-      if (!user) {
-        window.location.href = 'admin-login.html';
+      const session = await ensureSession();
+      if (!session) {
         return;
       }
       try {
-        const adminDoc = await getDoc(doc(db, 'admins', user.uid));
-        const claims = await getIdTokenResult(user);
-        const isAdmin = adminDoc.exists() || claims.claims.isAdmin === true;
-        if (!isAdmin) {
-          await signOut(auth);
-          window.location.href = 'index.html';
-          return;
+        if (user) {
+          const adminDoc = await getDoc(doc(db, 'admins', user.uid));
+          const claims = await getIdTokenResult(user);
+          const isAdmin = adminDoc.exists() || claims.claims.isAdmin === true;
+          if (!isAdmin) {
+            await signOut(auth);
+            await fetch('admin-logout.php', { method: 'GET', credentials: 'same-origin' });
+            window.location.href = 'index.html';
+            return;
+          }
+          await loadNotifications(user.uid);
+        } else {
+          console.warn('Firebase admin user not available; continuing with PHP session only.');
         }
         await fetchCounts();
-        await loadNotifications(user.uid);
         await loadVendors();
         authLoader.classList.add('hidden');
         mainContent.classList.add('ready');
       } catch (error) {
         console.error('Auth guard failed', error);
-        authLoader.querySelector('p').innerHTML = 'Access error. <a href="admin-login.html" style="color:var(--orange);">Return to login</a>';
+        authLoader.querySelector('p').innerHTML = 'Access error. <a href="admin-login.php" style="color:var(--orange);">Return to login</a>';
       }
     });
+

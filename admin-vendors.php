@@ -1,3 +1,7 @@
+<?php
+require_once __DIR__ . '/admin-session.php';
+require_admin_auth();
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -836,7 +840,7 @@
         </table>
         <div class="card-list" id="vendorCardList"></div>
         <div class="empty-state" id="emptyState" hidden>
-          <p>No vendors found for the current filters. <a href="admin.html">Back to dashboard</a></p>
+          <p>No vendors found for the current filters. <a href="admin-dashboard.php">Back to dashboard</a></p>
         </div>
       </div>
       <div class="pagination" id="pagination" hidden>

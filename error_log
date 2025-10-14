@@ -1,0 +1,490 @@
+[11-Oct-2025 11:17:11 UTC] Login error: Call to undefined function yustam_users_table_has_column()
+[11-Oct-2025 11:17:38 UTC] Login error: Call to undefined function yustam_users_table_has_column()
+[11-Oct-2025 11:17:42 UTC] Login error: Call to undefined function yustam_users_table_has_column()
+[11-Oct-2025 11:45:28 UTC] PHP Fatal error:  Uncaught Error: Undefined constant "YUSTAM_USERS_TABLE" in /home2/yustamco/public_html/vendor-dashboard.php:21
+Stack trace:
+#0 {main}
+  thrown in /home2/yustamco/public_html/vendor-dashboard.php on line 21
+[11-Oct-2025 11:46:21 UTC] PHP Fatal error:  Uncaught Error: Undefined constant "YUSTAM_USERS_TABLE" in /home2/yustamco/public_html/vendor-dashboard.php:21
+Stack trace:
+#0 {main}
+  thrown in /home2/yustamco/public_html/vendor-dashboard.php on line 21
+[11-Oct-2025 11:55:53 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function yustam_users_column() in /home2/yustamco/public_html/vendor-dashboard.php:39
+Stack trace:
+#0 {main}
+  thrown in /home2/yustamco/public_html/vendor-dashboard.php on line 39
+[11-Oct-2025 11:55:56 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function yustam_users_column() in /home2/yustamco/public_html/vendor-dashboard.php:39
+Stack trace:
+#0 {main}
+  thrown in /home2/yustamco/public_html/vendor-dashboard.php on line 39
+[11-Oct-2025 11:56:08 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function yustam_users_column() in /home2/yustamco/public_html/vendor-dashboard.php:39
+Stack trace:
+#0 {main}
+  thrown in /home2/yustamco/public_html/vendor-dashboard.php on line 39
+[11-Oct-2025 11:56:20 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function yustam_users_column() in /home2/yustamco/public_html/vendor-dashboard.php:39
+Stack trace:
+#0 {main}
+  thrown in /home2/yustamco/public_html/vendor-dashboard.php on line 39
+[11-Oct-2025 11:59:29 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function yustam_users_column() in /home2/yustamco/public_html/vendor-dashboard.php:39
+Stack trace:
+#0 {main}
+  thrown in /home2/yustamco/public_html/vendor-dashboard.php on line 39
+[11-Oct-2025 11:59:30 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function yustam_users_column() in /home2/yustamco/public_html/vendor-dashboard.php:39
+Stack trace:
+#0 {main}
+  thrown in /home2/yustamco/public_html/vendor-dashboard.php on line 39
+[11-Oct-2025 11:59:36 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function yustam_users_column() in /home2/yustamco/public_html/vendor-dashboard.php:39
+Stack trace:
+#0 {main}
+  thrown in /home2/yustamco/public_html/vendor-dashboard.php on line 39
+[11-Oct-2025 12:05:37 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function yustam_users_column() in /home2/yustamco/public_html/vendor-dashboard.php:39
+Stack trace:
+#0 {main}
+  thrown in /home2/yustamco/public_html/vendor-dashboard.php on line 39
+[11-Oct-2025 12:05:42 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function yustam_users_column() in /home2/yustamco/public_html/vendor-dashboard.php:39
+Stack trace:
+#0 {main}
+  thrown in /home2/yustamco/public_html/vendor-dashboard.php on line 39
+[11-Oct-2025 12:05:50 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function yustam_users_column() in /home2/yustamco/public_html/vendor-dashboard.php:39
+Stack trace:
+#0 {main}
+  thrown in /home2/yustamco/public_html/vendor-dashboard.php on line 39
+[11-Oct-2025 12:17:55 UTC] PHP Fatal error:  Uncaught Error: Call to undefined function yustam_users_column() in /home2/yustamco/public_html/vendor-dashboard.php:39
+Stack trace:
+#0 {main}
+  thrown in /home2/yustamco/public_html/vendor-dashboard.php on line 39
+[11-Oct-2025 12:49:55 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[11-Oct-2025 12:49:56 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[11-Oct-2025 12:50:21 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[11-Oct-2025 12:50:22 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[11-Oct-2025 12:52:29 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[11-Oct-2025 12:52:30 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[11-Oct-2025 12:53:04 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[11-Oct-2025 12:53:05 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[11-Oct-2025 13:48:39 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[11-Oct-2025 13:48:41 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[11-Oct-2025 14:08:44 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[11-Oct-2025 14:08:45 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[11-Oct-2025 14:10:00 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[11-Oct-2025 14:10:01 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[11-Oct-2025 14:47:41 UTC] PHP Warning:  require_once(/home2/yustamco/public_html/google-api/vendor/autoload.php): Failed to open stream: No such file or directory in /home2/yustamco/public_html/test-google.php on line 2
+[11-Oct-2025 14:47:41 UTC] PHP Fatal error:  Uncaught Error: Failed opening required '/home2/yustamco/public_html/google-api/vendor/autoload.php' (include_path='.:/opt/alt/php83/usr/share/pear:/opt/alt/php83/usr/share/php:/usr/share/pear:/usr/share/php') in /home2/yustamco/public_html/test-google.php:2
+Stack trace:
+#0 {main}
+  thrown in /home2/yustamco/public_html/test-google.php on line 2
+[11-Oct-2025 15:57:50 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[11-Oct-2025 15:57:51 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[11-Oct-2025 16:01:30 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[11-Oct-2025 16:01:32 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[11-Oct-2025 16:10:12 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[11-Oct-2025 16:10:13 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[11-Oct-2025 16:10:57 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[11-Oct-2025 16:10:58 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[11-Oct-2025 16:11:38 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[11-Oct-2025 16:11:39 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[11-Oct-2025 16:40:42 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[11-Oct-2025 16:40:43 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[11-Oct-2025 16:52:09 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[11-Oct-2025 16:52:10 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 04:18:32 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 04:18:33 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 04:39:49 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 04:39:50 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 04:40:01 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 04:40:02 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 04:40:07 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 04:40:08 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 04:40:14 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 04:40:15 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 04:51:23 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 04:51:24 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 04:52:02 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 04:52:03 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 04:52:06 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 04:52:06 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 04:52:09 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 04:52:10 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 04:52:16 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 04:52:17 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 05:16:56 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 05:16:57 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 05:18:13 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 05:18:13 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 05:18:56 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 05:18:57 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 05:19:02 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 05:19:02 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 05:19:22 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 05:19:23 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 05:19:43 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 05:19:44 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 05:20:25 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 05:20:26 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 05:23:45 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 05:23:46 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 05:24:40 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 05:24:41 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 05:24:54 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 05:24:55 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 05:26:35 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 05:26:36 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 05:27:09 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 05:27:09 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 05:32:08 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 05:32:09 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 05:32:15 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 05:32:15 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 05:33:29 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 05:33:30 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 05:33:36 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 05:33:36 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 05:33:55 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 05:33:55 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 05:34:08 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 05:34:08 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 05:34:21 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 05:34:22 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 05:43:39 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 05:43:40 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 05:43:56 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 05:43:56 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 05:44:02 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 05:44:03 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 05:44:10 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 05:44:11 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 08:34:01 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 08:34:01 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 09:17:39 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 09:17:44 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 09:56:53 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 09:56:54 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 10:40:13 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 10:40:15 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 12:23:45 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 12:23:46 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 12:24:02 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 12:24:03 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 12:25:21 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 12:25:21 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 12:25:27 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 12:25:27 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 13:07:41 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 13:07:42 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 13:07:50 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 13:07:51 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 13:09:29 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 13:09:30 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 13:09:36 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 13:09:36 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 13:30:48 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 13:30:48 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 13:30:51 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 13:30:51 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 13:31:21 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 13:31:21 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 13:31:23 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 13:31:25 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 13:31:34 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 13:31:35 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 13:32:59 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 13:33:18 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 13:33:20 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 13:39:04 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 13:39:05 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 13:39:14 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 13:39:14 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 13:43:03 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 13:43:04 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 13:44:30 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 13:44:31 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 13:48:46 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 13:48:46 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 13:48:47 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 13:48:47 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 14:23:17 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 14:23:18 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 14:23:30 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 14:23:31 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 14:23:39 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 14:23:39 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 14:23:57 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 14:23:57 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 14:24:26 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 14:24:26 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 14:24:37 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 14:24:38 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 14:30:09 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 14:30:12 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 15:44:31 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 15:44:32 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 15:44:51 UTC] PHP Warning:  Undefined variable $pdo in /home2/yustamco/public_html/vendor-plans.php on line 15
+[12-Oct-2025 15:44:51 UTC] PHP Fatal error:  Uncaught Error: Call to a member function prepare() on null in /home2/yustamco/public_html/vendor-plans.php:15
+Stack trace:
+#0 {main}
+  thrown in /home2/yustamco/public_html/vendor-plans.php on line 15
+[12-Oct-2025 15:45:27 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 15:45:27 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 16:02:36 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 16:02:37 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 16:02:43 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 16:02:44 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 16:05:44 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 16:05:46 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 16:33:45 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 16:33:47 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 16:53:43 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 16:53:45 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 16:53:50 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 16:53:52 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 16:58:47 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 16:58:48 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 17:01:17 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 17:01:18 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 17:01:36 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 17:01:36 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 17:01:53 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 17:01:54 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 17:02:17 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 17:02:18 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 17:02:48 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 17:02:48 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 17:05:55 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 17:05:56 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 17:06:18 UTC] PHP Fatal error:  Uncaught Error: Undefined constant "YUSTAM_USERS_TABLE" in /home2/yustamco/public_html/vendor-profile.php:21
+Stack trace:
+#0 {main}
+  thrown in /home2/yustamco/public_html/vendor-profile.php on line 21
+[12-Oct-2025 17:09:25 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 17:09:26 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 17:10:57 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 17:10:58 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 17:11:22 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 17:11:22 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 17:13:24 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 17:13:25 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 17:15:12 UTC] PHP Fatal error:  Uncaught Error: Undefined constant "YUSTAM_USERS_TABLE" in /home2/yustamco/public_html/vendor-profile.php:21
+Stack trace:
+#0 {main}
+  thrown in /home2/yustamco/public_html/vendor-profile.php on line 21
+[12-Oct-2025 17:15:20 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 17:15:20 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 17:15:23 UTC] PHP Fatal error:  Uncaught Error: Undefined constant "YUSTAM_USERS_TABLE" in /home2/yustamco/public_html/vendor-profile.php:21
+Stack trace:
+#0 {main}
+  thrown in /home2/yustamco/public_html/vendor-profile.php on line 21
+[12-Oct-2025 17:15:24 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 17:15:25 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 17:15:44 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 17:15:44 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 17:16:10 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 17:16:11 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 17:18:20 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 17:18:21 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 17:35:16 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 17:35:18 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 17:38:36 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 17:38:37 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 17:40:32 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 17:40:33 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 17:40:44 UTC] PHP Fatal error:  Uncaught Error: Undefined constant "YUSTAM_USERS_TABLE" in /home2/yustamco/public_html/vendor-profile.php:21
+Stack trace:
+#0 {main}
+  thrown in /home2/yustamco/public_html/vendor-profile.php on line 21
+[12-Oct-2025 17:41:14 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 17:41:15 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 17:41:16 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 17:41:17 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 17:41:20 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 17:41:20 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 17:45:50 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 17:45:51 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 17:46:33 UTC] PHP Fatal error:  Uncaught Error: Undefined constant "YUSTAM_USERS_TABLE" in /home2/yustamco/public_html/vendor-profile.php:21
+Stack trace:
+#0 {main}
+  thrown in /home2/yustamco/public_html/vendor-profile.php on line 21
+[12-Oct-2025 17:57:52 UTC] PHP Fatal error:  Uncaught mysqli_sql_exception: Table 'yustamco_yustam_users.vendors' doesn't exist in /home2/yustamco/public_html/vendor-profile.php:21
+Stack trace:
+#0 /home2/yustamco/public_html/vendor-profile.php(21): mysqli->prepare()
+#1 {main}
+  thrown in /home2/yustamco/public_html/vendor-profile.php on line 21
+[12-Oct-2025 17:57:54 UTC] PHP Fatal error:  Uncaught mysqli_sql_exception: Table 'yustamco_yustam_users.vendors' doesn't exist in /home2/yustamco/public_html/vendor-profile.php:21
+Stack trace:
+#0 /home2/yustamco/public_html/vendor-profile.php(21): mysqli->prepare()
+#1 {main}
+  thrown in /home2/yustamco/public_html/vendor-profile.php on line 21
+[12-Oct-2025 17:57:56 UTC] PHP Fatal error:  Uncaught mysqli_sql_exception: Table 'yustamco_yustam_users.vendors' doesn't exist in /home2/yustamco/public_html/vendor-profile.php:21
+Stack trace:
+#0 /home2/yustamco/public_html/vendor-profile.php(21): mysqli->prepare()
+#1 {main}
+  thrown in /home2/yustamco/public_html/vendor-profile.php on line 21
+[12-Oct-2025 17:58:23 UTC] PHP Fatal error:  Uncaught mysqli_sql_exception: Table 'yustamco_yustam_users.vendors' doesn't exist in /home2/yustamco/public_html/vendor-profile.php:21
+Stack trace:
+#0 /home2/yustamco/public_html/vendor-profile.php(21): mysqli->prepare()
+#1 {main}
+  thrown in /home2/yustamco/public_html/vendor-profile.php on line 21
+[12-Oct-2025 17:58:24 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 17:58:25 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 17:58:38 UTC] PHP Fatal error:  Uncaught mysqli_sql_exception: Table 'yustamco_yustam_users.vendors' doesn't exist in /home2/yustamco/public_html/vendor-profile.php:21
+Stack trace:
+#0 /home2/yustamco/public_html/vendor-profile.php(21): mysqli->prepare()
+#1 {main}
+  thrown in /home2/yustamco/public_html/vendor-profile.php on line 21
+[12-Oct-2025 18:00:57 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 18:00:57 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 18:03:28 UTC] Profile update error: Unknown column 'name' in 'field list'
+[12-Oct-2025 18:03:32 UTC] Profile update error: Unknown column 'name' in 'field list'
+[12-Oct-2025 18:03:46 UTC] Profile update error: Unknown column 'name' in 'field list'
+[12-Oct-2025 18:05:41 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 18:05:41 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 18:11:54 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 18:11:55 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 18:11:57 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 18:11:57 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 18:11:59 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 18:11:59 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 18:12:34 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 18:12:34 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 18:12:58 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 18:12:59 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 18:18:47 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 18:18:48 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 18:19:38 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 18:19:39 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 18:21:03 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 18:21:04 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 18:32:11 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 18:32:12 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 18:32:20 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 18:32:21 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 18:32:30 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 18:32:30 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 18:32:39 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 18:32:39 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 19:10:59 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 19:11:00 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 19:11:16 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 19:11:17 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 19:11:29 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 19:11:30 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 19:11:42 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[12-Oct-2025 19:11:43 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 03:14:43 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 03:14:46 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 04:16:17 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 04:16:17 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 04:55:08 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 04:55:09 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 05:04:14 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 05:06:12 UTC] PHP Warning:  ini_set(): Session ini settings cannot be changed when a session is active in /home2/yustamco/public_html/buyer-storage.php on line 2
+[13-Oct-2025 05:06:26 UTC] PHP Warning:  ini_set(): Session ini settings cannot be changed when a session is active in /home2/yustamco/public_html/buyer-storage.php on line 2
+[13-Oct-2025 05:10:10 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 05:10:12 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 05:18:34 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 05:18:35 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 05:18:51 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 05:18:51 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 05:18:57 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 05:18:58 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 05:37:43 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 05:37:44 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 06:41:27 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 06:41:28 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 06:46:34 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 06:46:35 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 06:48:11 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 06:48:12 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 07:33:56 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 07:33:57 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 07:38:55 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 07:39:28 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 10:08:09 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 10:08:20 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 11:28:07 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 11:28:08 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 11:28:30 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 11:28:31 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 12:10:21 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 12:10:25 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 12:10:25 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 13:19:20 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 13:19:21 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 13:19:44 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 13:19:45 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 13:24:40 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 13:24:40 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 14:25:14 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 14:25:15 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 14:25:47 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 14:25:48 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 14:27:14 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 14:27:15 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 14:31:30 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 14:31:30 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 14:31:34 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 14:31:35 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 14:31:37 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 14:31:38 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 14:31:57 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 14:31:58 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 14:50:53 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 14:50:54 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 14:51:45 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 14:51:46 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 16:16:01 UTC] PHP Warning:  ini_set(): Session ini settings cannot be changed when a session is active in /home2/yustamco/public_html/buyer-storage.php on line 2
+[13-Oct-2025 16:16:11 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 16:16:12 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 16:16:53 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 16:16:54 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 16:18:13 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 16:18:14 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 16:24:55 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 16:24:56 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 19:21:05 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 19:21:06 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 22:53:28 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[13-Oct-2025 22:53:29 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[14-Oct-2025 03:29:41 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[14-Oct-2025 03:29:42 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[14-Oct-2025 03:34:39 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[14-Oct-2025 03:34:40 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[14-Oct-2025 04:04:37 UTC] Profile update error: Unknown column 'name' in 'field list'
+[14-Oct-2025 04:24:20 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[14-Oct-2025 04:24:20 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[14-Oct-2025 04:51:23 UTC] PHP Fatal error:  Uncaught mysqli_sql_exception: Unknown column 'name' in 'field list' in /home2/yustamco/public_html/update-vendor-profile.php:51
+Stack trace:
+#0 /home2/yustamco/public_html/update-vendor-profile.php(51): mysqli->prepare()
+#1 {main}
+  thrown in /home2/yustamco/public_html/update-vendor-profile.php on line 51
+[14-Oct-2025 04:54:49 UTC] PHP Fatal error:  Uncaught mysqli_sql_exception: Unknown column 'state' in 'field list' in /home2/yustamco/public_html/update-vendor-profile.php:44
+Stack trace:
+#0 /home2/yustamco/public_html/update-vendor-profile.php(44): mysqli->prepare()
+#1 {main}
+  thrown in /home2/yustamco/public_html/update-vendor-profile.php on line 44
+[14-Oct-2025 04:58:16 UTC] PHP Fatal error:  Uncaught mysqli_sql_exception: Unknown column 'state' in 'field list' in /home2/yustamco/public_html/update-vendor-profile.php:61
+Stack trace:
+#0 /home2/yustamco/public_html/update-vendor-profile.php(61): mysqli->prepare()
+#1 {main}
+  thrown in /home2/yustamco/public_html/update-vendor-profile.php on line 61
+[14-Oct-2025 05:10:19 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[14-Oct-2025 05:10:20 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[14-Oct-2025 05:11:02 UTC] PHP Fatal error:  Uncaught mysqli_sql_exception: Unknown column 'state' in 'field list' in /home2/yustamco/public_html/update-vendor-profile.php:61
+Stack trace:
+#0 /home2/yustamco/public_html/update-vendor-profile.php(61): mysqli->prepare()
+#1 {main}
+  thrown in /home2/yustamco/public_html/update-vendor-profile.php on line 61
+[14-Oct-2025 15:17:07 UTC] PHP Fatal error:  Uncaught mysqli_sql_exception: Unknown column 'state' in 'field list' in /home2/yustamco/public_html/update-vendor-profile.php:61
+Stack trace:
+#0 /home2/yustamco/public_html/update-vendor-profile.php(61): mysqli->prepare()
+#1 {main}
+  thrown in /home2/yustamco/public_html/update-vendor-profile.php on line 61
+[14-Oct-2025 15:18:09 UTC] PHP Fatal error:  Uncaught mysqli_sql_exception: Unknown column 'state' in 'field list' in /home2/yustamco/public_html/update-vendor-profile.php:67
+Stack trace:
+#0 /home2/yustamco/public_html/update-vendor-profile.php(67): mysqli->prepare()
+#1 {main}
+  thrown in /home2/yustamco/public_html/update-vendor-profile.php on line 67
+[14-Oct-2025 15:19:03 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[14-Oct-2025 15:19:03 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[14-Oct-2025 15:19:36 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[14-Oct-2025 15:19:37 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[14-Oct-2025 15:19:48 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist
+[14-Oct-2025 15:19:48 UTC] Dashboard listing query failed: Table 'yustamco_yustam_users.listings' doesn't exist

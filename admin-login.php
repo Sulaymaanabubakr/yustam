@@ -1,3 +1,14 @@
+<?php
+require_once __DIR__ . '/admin-session.php';
+
+if (admin_is_authenticated()) {
+    header('Location: admin-dashboard.php');
+    exit;
+}
+
+$flashMessage = isset($_GET['message']) ? trim($_GET['message']) : '';
+$flashStatus = isset($_GET['status']) ? trim($_GET['status']) : '';
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -251,40 +262,6 @@
       }
     }
 
-    .google-btn {
-      height: 52px;
-      border-radius: 16px;
-      border: 1px solid rgba(0, 0, 0, 0.08);
-      background: #fff;
-      color: var(--ink);
-      font-weight: 600;
-      font-size: clamp(15px, 3vw, 18px);
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-      transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
-    }
-
-    .google-btn:hover:not(:disabled) {
-      transform: translateY(-1px);
-      border-color: rgba(0, 0, 0, 0.18);
-      box-shadow: 0 12px 24px rgba(0, 0, 0, 0.08);
-    }
-
-    .google-btn:disabled {
-      opacity: 0.65;
-      cursor: not-allowed;
-      transform: none;
-      box-shadow: none;
-    }
-
-    .google-btn i {
-      font-size: 1.2rem;
-      color: #ea4335;
-    }
-
     .error-message {
       color: #d84315;
       font-size: 0.88rem;
@@ -382,14 +359,14 @@
         <label for="adminPassword">Password
           <input type="password" id="adminPassword" name="adminPassword" placeholder="Enter your password" autocomplete="current-password" required />
         </label>
-        <div class="error-message" id="errorMessage" role="alert"></div>
+        <div class="error-message" id="errorMessage" role="alert">
+          <?php if ($flashMessage !== ''): ?>
+            <?= htmlspecialchars($flashMessage, ENT_QUOTES, 'UTF-8'); ?>
+          <?php endif; ?>
+        </div>
         <div class="form-actions">
           <button type="submit" id="loginBtn">
             <span class="btn-label">Login to Dashboard</span>
-          </button>
-          <button type="button" class="google-btn" id="googleLoginBtn">
-            <i class="ri-google-fill" aria-hidden="true"></i>
-            <span>Sign in with Google</span>
           </button>
         </div>
       </form>
@@ -400,7 +377,6 @@
 
   <!-- Firebase Logic -->
   <script type="module" src="admin-login.js"></script>
-  <script type="module" src="firebase.js"></script>
 </body>
 </html>
 

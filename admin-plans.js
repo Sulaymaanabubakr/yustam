@@ -25,6 +25,21 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.4/fireba
     const cancelPlanChange = document.getElementById('cancelPlanChange');
     const confirmPlanChange = document.getElementById('confirmPlanChange');
 
+    const ensureSession = async () => {
+      try {
+        const response = await fetch('admin-session-status.php', {
+          method: 'GET',
+          credentials: 'same-origin',
+        });
+        if (!response.ok) throw new Error('Session invalid');
+        return await response.json();
+      } catch (error) {
+        console.error('Admin session validation failed:', error);
+        window.location.href = 'admin-login.php';
+        return null;
+      }
+    };
+
     let activeFilters = { search:'', plan:'all' };
     let vendorData = [];
     let selectedVendor = null;
@@ -57,10 +72,16 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.4/fireba
       if(e.target === planModalBackdrop) closeModal();
     });
 
-    backToDashboard.addEventListener('click', ()=>{ window.location.href = 'admin.html'; });
-    logoutBtn.addEventListener('click', async ()=>{
-      await signOut(auth);
-      window.location.href = 'admin-login.html';
+    backToDashboard.addEventListener('click', ()=>{ window.location.href = 'admin-dashboard.php'; });
+    logoutBtn.addEventListener('click', async () => {
+      try {
+        await signOut(auth);
+        await fetch('admin-logout.php', { method: 'GET', credentials: 'same-origin' });
+      } catch (error) {
+        console.error('logout error', error);
+      } finally {
+        window.location.href = 'admin-login.php';
+      }
     });
 
     exportCsvBtn.addEventListener('click', ()=>{
@@ -289,7 +310,7 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.4/fireba
       if(action === 'change'){
         openChangePlanModal(vendor);
       } else if(action === 'view'){
-        window.location.href = `vendor-profile.html?id=${id}`;
+        window.location.href = `vendor-profile.php?id=${id}`;
       }
     });
 
@@ -320,18 +341,23 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.4/fireba
 
     // Auth Guard
     onAuthStateChanged(auth, async (user)=>{
-      if(!user){
-        window.location.href = 'admin-login.html';
+      const session = await ensureSession();
+      if(!session){
         return;
       }
       try {
-        const adminDoc = await getDoc(doc(db,'admins',user.uid));
-        const token = await getIdTokenResult(user);
-        const isAdmin = adminDoc.exists() || token.claims.isAdmin === true;
-        if(!isAdmin){
-          await signOut(auth);
-          window.location.href = 'index.html';
-          return;
+        if(user){
+          const adminDoc = await getDoc(doc(db,'admins',user.uid));
+          const token = await getIdTokenResult(user);
+          const isAdmin = adminDoc.exists() || token.claims.isAdmin === true;
+          if(!isAdmin){
+            await signOut(auth);
+            await fetch('admin-logout.php', { method: 'GET', credentials: 'same-origin' });
+            window.location.href = 'index.html';
+            return;
+          }
+        } else {
+          console.warn('Firebase admin user not available; continuing with PHP session only.');
         }
         if(!window.Chart){
           await loadChartJs();
@@ -353,3 +379,5 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.4/fireba
         document.body.appendChild(script);
       });
     }
+
+

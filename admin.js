@@ -336,20 +336,39 @@ import { auth, db } from './firebase.js';
             return null;
         };
 
+        const ensureSession = async () => {
+            try {
+                const response = await fetch('admin-session-status.php', {
+                    method: 'GET',
+                    credentials: 'same-origin'
+                });
+                if (!response.ok) throw new Error('Session invalid');
+                return await response.json();
+            } catch (error) {
+                console.error('Admin session validation failed:', error);
+                window.location.href = 'admin-login.php';
+                return null;
+            }
+        };
+
         const initAuth = () => {
             onAuthStateChanged(auth, async (user) => {
-                if (!user) {
-                    window.location.href = 'admin-login.html';
+                const session = await ensureSession();
+                if (!session) {
                     return;
                 }
 
                 try {
-                    const adminSnap = await withRetries(() => ensureAdminRecord(user), 3, 900);
+                    if (user) {
+                        const adminSnap = await withRetries(() => ensureAdminRecord(user), 3, 900);
 
-                    if (!adminSnap || !adminSnap.exists()) {
-                        console.warn('Admin record still missing after retries, redirecting to homepage.');
-                        window.location.href = 'index.html';
-                        return;
+                        if (!adminSnap || !adminSnap.exists()) {
+                            console.warn('Admin record still missing after retries, redirecting to homepage.');
+                            window.location.href = 'index.html';
+                            return;
+                        }
+                    } else {
+                        console.warn('Firebase admin user not available; continuing with PHP session only.');
                     }
 
                     loader.hidden = true;
@@ -410,7 +429,12 @@ import { auth, db } from './firebase.js';
             } catch (error) {
                 console.error('logout error', error);
             } finally {
-                window.location.href = 'admin-login.html';
+                try {
+                    await fetch('admin-logout.php', { method: 'GET', credentials: 'same-origin' });
+                } catch (logoutError) {
+                    console.error('Admin session logout failed:', logoutError);
+                }
+                window.location.href = 'admin-login.php';
             }
         });
 
@@ -435,3 +459,4 @@ import { auth, db } from './firebase.js';
         sendFeedback.addEventListener('click', rejectListing);
 
         initAuth();
+

@@ -1,3 +1,7 @@
+<?php
+require_once __DIR__ . '/admin-session.php';
+require_admin_auth();
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -732,11 +736,11 @@
         <aside class="sidebar" id="sidebar" aria-label="Admin navigation">
             <div class="sidebar-header">Control Centre</div>
             <nav class="nav-links">
-                <a class="nav-link active" href="admin.html"><i class="ri-dashboard-line"></i> Dashboard</a>
-                <a class="nav-link" href="admin-listings.html"><i class="ri-store-2-line"></i> Listings</a>
-                <a class="nav-link" href="admin-vendors.html"><i class="ri-team-line"></i> Vendors</a>
-                <a class="nav-link" href="admin-plans.html"><i class="ri-bar-chart-2-line"></i> Plans &amp; Revenue</a>
-                <a class="nav-link" href="admin.html#settings"><i class="ri-settings-3-line"></i> Settings</a>
+                <a class="nav-link active" href="admin-dashboard.php"><i class="ri-dashboard-line"></i> Dashboard</a>
+                <a class="nav-link" href="admin-listings.php"><i class="ri-store-2-line"></i> Listings</a>
+                <a class="nav-link" href="admin-vendors.php"><i class="ri-team-line"></i> Vendors</a>
+                <a class="nav-link" href="admin-plans.php"><i class="ri-bar-chart-2-line"></i> Plans &amp; Revenue</a>
+                <a class="nav-link" href="admin-dashboard.php#settings"><i class="ri-settings-3-line"></i> Settings</a>
             </nav>
         </aside>
 
@@ -783,7 +787,7 @@
                 <section class="recent-listings">
                     <div class="section-header">
                         <h2>Recent Listings</h2>
-                        <a class="link-button" href="admin-listings.html">View All Listings <i class="ri-arrow-right-up-line"></i></a>
+                        <a class="link-button" href="admin-listings.php">View All Listings <i class="ri-arrow-right-up-line"></i></a>
                     </div>
                     <div class="listing-grid" id="recentListings"></div>
                     <p id="noListings" style="display:none; color: rgba(17,17,17,0.6); font-weight: 600;">No listings yet. New submissions will appear here.</p>
@@ -793,7 +797,7 @@
                 <section class="recent-vendors">
                     <div class="section-header">
                         <h2>Recent Vendors</h2>
-                        <a class="link-button" href="admin-vendors.html">Manage Vendors <i class="ri-arrow-right-up-line"></i></a>
+                        <a class="link-button" href="admin-vendors.php">Manage Vendors <i class="ri-arrow-right-up-line"></i></a>
                     </div>
                     <div class="vendors-grid" id="recentVendors"></div>
                     <p id="noVendors" style="display:none; color: rgba(17,17,17,0.6); font-weight: 600;">No vendors found yet.</p>
@@ -829,17 +833,17 @@
                         <article class="stat-card">
                             <h3>Moderation Mode</h3>
                             <p>Manual reviews are enabled to keep marketplace listings accurate and fraud-free.</p>
-                            <a class="btn btn-outline" href="admin-listings.html">Manage Moderation</a>
+                            <a class="btn btn-outline" href="admin-listings.php">Manage Moderation</a>
                         </article>
                         <article class="stat-card">
                             <h3>Vendor Access</h3>
                             <p>Two-step verification is active for all vendor admins and elevated support staff.</p>
-                            <a class="btn btn-outline" href="admin-vendors.html">Review Access Logs</a>
+                            <a class="btn btn-outline" href="admin-vendors.php">Review Access Logs</a>
                         </article>
                         <article class="stat-card">
                             <h3>Automation Rules</h3>
                             <p>Smart alerts notify you when revenue or dispute thresholds are crossed.</p>
-                            <a class="btn btn-outline" href="admin-plans.html">Configure Alerts</a>
+                            <a class="btn btn-outline" href="admin-plans.php">Configure Alerts</a>
                         </article>
                     </div>
                 </section>
@@ -879,5 +883,6 @@
 <script type="module" src="firebase.js"></script>
 </body>
 </html>
+
 
 

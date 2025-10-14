@@ -66,7 +66,9 @@ $profile = [
     'state' => array_key_exists('state', $vendorData) ? ($vendorData['state'] ?? '') : '',
     'plan' => array_key_exists('plan', $vendorData) ? ($vendorData['plan'] ?? 'Free') : 'Free',
     'joined' => $joinedDisplay,
-    'profilePhoto' => array_key_exists('profile_photo', $vendorData) ? ($vendorData['profile_photo'] ?? '') : '',
+    'profilePhoto' => array_key_exists('profile_photo', $vendorData)
+        ? ($vendorData['profile_photo'] ?? '')
+        : (array_key_exists('avatar_url', $vendorData) ? ($vendorData['avatar_url'] ?? '') : ''),
 ];
 
 if (isset($_GET['format']) && $_GET['format'] === 'json') {

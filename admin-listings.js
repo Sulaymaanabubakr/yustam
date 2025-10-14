@@ -45,6 +45,21 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.4/fireba
     const notificationsBtn = document.getElementById('notificationsBtn');
     const notificationBadge = document.getElementById('notificationBadge');
 
+    const ensureSession = async () => {
+      try {
+        const response = await fetch('admin-session-status.php', {
+          method: 'GET',
+          credentials: 'same-origin',
+        });
+        if (!response.ok) throw new Error('Session invalid');
+        return await response.json();
+      } catch (error) {
+        console.error('Admin session validation failed:', error);
+        window.location.href = 'admin-login.php';
+        return null;
+      }
+    };
+
     const PAGE_SIZE = 20;
     let allListings = [];
     let filteredListings = [];
@@ -93,7 +108,7 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.4/fireba
           <button class="btn-sm btn-approve" data-action="approve"><i class="ri-check-line"></i>Approve</button>
           <button class="btn-sm btn-reject" data-action="reject"><i class="ri-close-line"></i>Reject</button>
           <button class="btn-sm btn-delete" data-action="delete"><i class="ri-delete-bin-6-line"></i>Delete</button>
-          <a class="btn-sm btn-view" href="admin-listing-detail.html?id=${id}" data-action="view"><i class="ri-external-link-line"></i>View</a>
+          <a class="btn-sm btn-view" href="admin-listing-detail.php?id=${id}" data-action="view"><i class="ri-external-link-line"></i>View</a>
         </div>
       `;
     }
@@ -186,7 +201,7 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.4/fireba
               <button class="btn-sm btn-approve" data-action="approve"><i class="ri-check-line"></i>Approve</button>
               <button class="btn-sm btn-reject" data-action="reject"><i class="ri-close-line"></i>Reject</button>
               <button class="btn-sm btn-delete" data-action="delete"><i class="ri-delete-bin-6-line"></i>Delete</button>
-              <a class="btn-sm btn-view" href="admin-listing-detail.html?id=${item.id}" data-action="view"><i class="ri-external-link-line"></i>View</a>
+              <a class="btn-sm btn-view" href="admin-listing-detail.php?id=${item.id}" data-action="view"><i class="ri-external-link-line"></i>View</a>
             </div>
           </article>
         `;
@@ -384,7 +399,8 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.4/fireba
     logoutBtn.addEventListener('click', async () => {
       try {
         await signOut(auth);
-        window.location.href = 'admin-login.html';
+        await fetch('admin-logout.php', { method: 'GET', credentials: 'same-origin' });
+        window.location.href = 'admin-login.php';
       } catch (error) {
         console.error(error);
         showToast('Unable to logout.', 'error');
@@ -423,22 +439,29 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.4/fireba
     attachActionListeners();
 
     onAuthStateChanged(auth, async (user) => {
-      if (!user) {
-        window.location.href = 'admin-login.html';
+      const session = await ensureSession();
+      if (!session) {
         return;
       }
       try {
-        const adminRef = doc(db, 'admins', user.uid);
-        const adminSnap = await getDoc(adminRef);
-        if (!adminSnap.exists()) {
-          window.location.href = 'index.html';
-          return;
+        if (user) {
+          const adminRef = doc(db, 'admins', user.uid);
+          const adminSnap = await getDoc(adminRef);
+          if (!adminSnap.exists()) {
+            window.location.href = 'index.html';
+            return;
+          }
+        } else {
+          console.warn('Firebase admin user not available; continuing with PHP session only.');
         }
         subscribeListings();
         fetchVendors();
-        subscribeNotifications(user.uid);
+        if (user) {
+          subscribeNotifications(user.uid);
+        }
       } catch (error) {
         console.error(error);
         window.location.href = 'index.html';
       }
     });
+
