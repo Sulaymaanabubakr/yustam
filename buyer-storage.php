@@ -1,5 +1,5 @@
 <?php
-ini_set('session.save_path', '/home2/yustamco/tmp');
+require_once __DIR__ . '/session-path.php';
 
 function yustam_buyers_db_path(): string
 {

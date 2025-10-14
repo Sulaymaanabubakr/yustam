@@ -1,5 +1,5 @@
 <?php
-ini_set('session.save_path', '/home2/yustamco/tmp');
+require_once __DIR__ . '/session-path.php';
 
 if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start();

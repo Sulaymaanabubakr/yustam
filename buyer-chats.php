@@ -1,5 +1,5 @@
 <?php
-ini_set('session.save_path', '/home2/yustamco/tmp');
+require_once __DIR__ . '/session-path.php';
 session_start();
 
 $buyerId = $_SESSION['buyer_id'] ?? '';
