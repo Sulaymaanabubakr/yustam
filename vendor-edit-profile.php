@@ -497,7 +497,7 @@ $profileJson = json_encode($profile, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNI
     </div>
   </header>
 
-  <form action="update-profile.php" method="POST" enctype="multipart/form-data">
+  <form action="update-vendor-profile.php" method="POST" enctype="multipart/form-data">
   <main>
     <!-- Profile Photo -->
     <section class="glass-card">
