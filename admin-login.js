@@ -1,10 +1,3 @@
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js';
-import { getAuth, signInWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js';
-import firebaseConfig from './firebase.js';
-
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-
 const loginForm = document.getElementById('adminLoginForm');
 const loginBtn = document.getElementById('loginBtn');
 const errorMessage = document.getElementById('errorMessage');
@@ -107,18 +100,10 @@ loginForm?.addEventListener('submit', async (event) => {
       return;
     }
 
-    let firebaseSignedIn = false;
-    try {
-      await signInWithEmailAndPassword(auth, email, password);
-      firebaseSignedIn = true;
-    } catch (firebaseError) {
-      console.error('Firebase admin sign-in failed:', firebaseError);
-    }
-
-    showToast(firebaseSignedIn ? 'Access granted. Redirecting...' : 'Access granted. Firebase sync unavailable.');
+    showToast('Access granted. Redirecting...');
     setTimeout(() => {
       window.location.href = data.redirect || 'admin-dashboard.php';
-    }, firebaseSignedIn ? 800 : 1000);
+    }, 800);
   } catch (error) {
     console.error('Admin login failed:', error);
     const message = 'Unable to sign in right now. Please try again.';
