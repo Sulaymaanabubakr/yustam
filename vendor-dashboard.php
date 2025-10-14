@@ -18,7 +18,11 @@ if (!isset($_SESSION['vendor_id'])) {
 $vendorId = (int)$_SESSION['vendor_id'];
 $db = get_db_connection();
 
-$stmt = $db->prepare('SELECT * FROM users WHERE id = ? LIMIT 1');
+$vendorTable = 'vendors';
+if (defined('YUSTAM_VENDORS_TABLE') && preg_match('/^[A-Za-z0-9_]+$/', YUSTAM_VENDORS_TABLE)) {
+    $vendorTable = YUSTAM_VENDORS_TABLE;
+}
+$stmt = $db->prepare(sprintf('SELECT * FROM %s WHERE id = ? LIMIT 1', $vendorTable));
 $stmt->bind_param('i', $vendorId);
 $stmt->execute();
 $result = $stmt->get_result();

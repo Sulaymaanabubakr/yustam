@@ -18,7 +18,11 @@ if (!isset($_SESSION['vendor_id'])) {
 $vendorId = (int)$_SESSION['vendor_id'];
 $db = get_db_connection();
 
-$stmt = $db->prepare('SELECT * FROM ' . YUSTAM_USERS_TABLE . ' WHERE id = ? LIMIT 1');
+$vendorTable = 'vendors';
+if (defined('YUSTAM_VENDORS_TABLE') && preg_match('/^[A-Za-z0-9_]+$/', YUSTAM_VENDORS_TABLE)) {
+    $vendorTable = YUSTAM_VENDORS_TABLE;
+}
+$stmt = $db->prepare(sprintf('SELECT * FROM %s WHERE id = ? LIMIT 1', $vendorTable));
 $stmt->bind_param('i', $vendorId);
 $stmt->execute();
 $result = $stmt->get_result();
@@ -36,17 +40,33 @@ if (!$vendor) {
     exit;
 }
 
-$nameColumn = yustam_users_column('name');
+$vendorData = is_array($vendor) ? $vendor : [];
+$nameColumn = 'name';
+foreach (['name', 'full_name', 'vendor_name'] as $candidate) {
+    if (array_key_exists($candidate, $vendorData)) {
+        $nameColumn = $candidate;
+        break;
+    }
+}
+
+$joinedDisplay = '—';
+if (array_key_exists('created_at', $vendorData) && !empty($vendorData['created_at'])) {
+    $timestamp = strtotime($vendorData['created_at']);
+    if ($timestamp) {
+        $joinedDisplay = date('j M Y', $timestamp);
+    }
+}
+
 $profile = [
-    'name' => $vendor[$nameColumn] ?? '',
-    'businessName' => yustam_users_table_has_column('business_name') ? ($vendor['business_name'] ?? '') : '',
-    'email' => $vendor['email'] ?? '',
-    'phone' => yustam_users_table_has_column('phone') ? ($vendor['phone'] ?? '') : '',
-    'address' => yustam_users_table_has_column('business_address') ? ($vendor['business_address'] ?? '') : '',
-    'state' => yustam_users_table_has_column('state') ? ($vendor['state'] ?? '') : '',
-    'plan' => yustam_users_table_has_column('plan') ? ($vendor['plan'] ?? 'Free') : 'Free',
-    'joined' => (yustam_users_table_has_column('created_at') && isset($vendor['created_at'])) ? date('j M Y', strtotime($vendor['created_at'])) : '—',
-    'profilePhoto' => yustam_users_table_has_column('profile_photo') ? ($vendor['profile_photo'] ?? '') : '',
+    'name' => $vendorData[$nameColumn] ?? '',
+    'businessName' => array_key_exists('business_name', $vendorData) ? ($vendorData['business_name'] ?? '') : '',
+    'email' => $vendorData['email'] ?? '',
+    'phone' => array_key_exists('phone', $vendorData) ? ($vendorData['phone'] ?? '') : '',
+    'address' => array_key_exists('business_address', $vendorData) ? ($vendorData['business_address'] ?? '') : '',
+    'state' => array_key_exists('state', $vendorData) ? ($vendorData['state'] ?? '') : '',
+    'plan' => array_key_exists('plan', $vendorData) ? ($vendorData['plan'] ?? 'Free') : 'Free',
+    'joined' => $joinedDisplay,
+    'profilePhoto' => array_key_exists('profile_photo', $vendorData) ? ($vendorData['profile_photo'] ?? '') : '',
 ];
 
 if (isset($_GET['format']) && $_GET['format'] === 'json') {
