@@ -1,6 +1,6 @@
 <?php
-// Start session and point to same tmp directory
-ini_set('session.save_path', '/home2/yustamco/tmp');
+// Start session and point to portable directory
+require_once __DIR__ . '/session-path.php';
 session_start();
 
 // Destroy all session data
