@@ -78,36 +78,45 @@ import { auth, db } from './firebase.js';
 
         const renderListings = (listings) => {
             recentListingsWrap.innerHTML = '';
-            if (!listings.length) {
+            const pendingListings = listings.filter((listing) => ((listing.data().status || 'pending').toLowerCase() === 'pending'));
+            if (!pendingListings.length) {
                 noListings.style.display = 'block';
                 return;
             }
             noListings.style.display = 'none';
-            listings.forEach((listing) => {
+            pendingListings.forEach((listing) => {
                 const data = listing.data();
                 const thumb = Array.isArray(data.images) && data.images.length ? data.images[0] : '';
-                const statusText = (data.status || 'pending');
-                const normalizedStatus = statusText.toLowerCase();
-                const statusLabel = normalizedStatus.charAt(0).toUpperCase() + normalizedStatus.slice(1);
                 const card = document.createElement('article');
                 card.className = 'listing-card';
+                card.dataset.id = listing.id;
                 card.innerHTML = `
                     <img class="listing-thumb" src="${thumb || 'https://via.placeholder.com/64x64?text=IMG'}" alt="${data.title || data.productName || 'Listing'} image">
                     <div class="listing-meta">
                         <div style="display:flex; justify-content:space-between; gap:0.75rem; align-items:flex-start; flex-wrap:wrap;">
                             <h3>${data.title || data.productName || 'Untitled listing'}</h3>
-                            <span class="${buildStatusClass(data.status)}">${statusLabel}</span>
+                            <span class="status-chip status-pending">Pending</span>
                         </div>
-                        <span class="meta-line"><i class="ri-stack-line"></i> ${data.category || 'â€”'} Â· ${data.subcategory || 'â€”'}</span>
+                        <span class="meta-line"><i class="ri-stack-line"></i> ${data.category || '—'} &middot; ${data.subcategory || '—'}</span>
                         <span class="meta-line"><i class="ri-user-smile-line"></i> ${data.vendorName || data.vendorEmail || 'Unknown vendor'}</span>
                         <div class="listing-actions">
-                            <button class="btn btn-approve" data-action="approve" data-id="${listing.id}" ${normalizedStatus === 'approved' ? 'disabled' : ''}>Approve</button>
+                            <button class="btn btn-approve" data-action="approve" data-id="${listing.id}" data-vendor="${data.vendorID || ''}">Approve</button>
                             <button class="btn btn-reject" data-action="reject" data-id="${listing.id}" data-vendor="${data.vendorID || ''}">Reject</button>
                         </div>
                     </div>
                 `;
                 recentListingsWrap.appendChild(card);
             });
+        };
+
+        const removeListingCard = (listingId) => {
+            const card = recentListingsWrap.querySelector(`[data-id="${listingId}"]`);
+            if (card) {
+                card.remove();
+            }
+            if (!recentListingsWrap.children.length) {
+                noListings.style.display = 'block';
+            }
         };
 
         const renderVendors = (vendors) => {
@@ -159,6 +168,7 @@ import { auth, db } from './firebase.js';
                     statusUpdatedAt: serverTimestamp()
                 });
                 showToast('Listing approved!');
+                removeListingCard(listingId);
             } catch (error) {
                 console.error('approveListing', error);
                 showToast('Could not approve listing.', 2500);
@@ -202,6 +212,7 @@ import { auth, db } from './firebase.js';
                     });
                 }
                 showToast('Feedback sent to vendor.');
+                removeListingCard(selectedListingId);
                 closeRejectModal();
             } catch (error) {
                 console.error('rejectListing', error);
@@ -256,15 +267,16 @@ import { auth, db } from './firebase.js';
             recentListingsWrap.addEventListener('click', (event) => {
                 const target = event.target;
                 if (!(target instanceof HTMLElement)) return;
-                const action = target.getAttribute('data-action');
-                if (!action) return;
-                const id = target.getAttribute('data-id');
-                if (!id) return;
+                const button = target.closest('button[data-action]');
+                if (!button) return;
+                const action = button.dataset.action;
+                const id = button.dataset.id || button.closest('[data-id]')?.dataset.id;
+                if (!action || !id) return;
                 if (action === 'approve') {
                     approveListing(id);
                 }
                 if (action === 'reject') {
-                    const vendorId = target.getAttribute('data-vendor') || null;
+                    const vendorId = button.dataset.vendor || button.closest('[data-vendor]')?.dataset.vendor || null;
                     openRejectModal(id, vendorId);
                 }
             });
