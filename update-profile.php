@@ -31,8 +31,15 @@ if ($name === '' || $businessName === '' || $address === '' || $state === '') {
 }
 
 $profilePhotoPath = null;
+$profilePhotoUrl = trim($_POST['profile_photo_url'] ?? '');
 
-if (!empty($_FILES['avatar']['name'])) {
+if ($profilePhotoUrl !== '') {
+    if (!filter_var($profilePhotoUrl, FILTER_VALIDATE_URL)) {
+        echo json_encode(['success' => false, 'message' => 'Please provide a valid profile photo URL.']);
+        exit;
+    }
+    $profilePhotoPath = $profilePhotoUrl;
+} elseif (!empty($_FILES['avatar']['name'])) {
     $file = $_FILES['avatar'];
     if ($file['error'] !== UPLOAD_ERR_OK) {
         echo json_encode(['success' => false, 'message' => 'We could not upload the selected image.']);
