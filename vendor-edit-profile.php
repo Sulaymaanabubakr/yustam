@@ -18,7 +18,11 @@ if (!isset($_SESSION['vendor_id'])) {
 $vendorId = (int)$_SESSION['vendor_id'];
 $db = get_db_connection();
 
-$stmt = $db->prepare('SELECT * FROM ' . YUSTAM_USERS_TABLE . ' WHERE id = ? LIMIT 1');
+$vendorTable = 'vendors';
+if (defined('YUSTAM_VENDORS_TABLE') && preg_match('/^[A-Za-z0-9_]+$/', YUSTAM_VENDORS_TABLE)) {
+    $vendorTable = YUSTAM_VENDORS_TABLE;
+}
+$stmt = $db->prepare(sprintf('SELECT * FROM %s WHERE id = ? LIMIT 1', $vendorTable));
 $stmt->bind_param('i', $vendorId);
 $stmt->execute();
 $result = $stmt->get_result();
@@ -36,11 +40,20 @@ if (!$vendor) {
     exit;
 }
 
-$nameColumn = yustam_users_column('name');
-$planStatusColumn = yustam_users_table_has_column('plan_status') ? 'plan_status' : null;
+$vendorData = is_array($vendor) ? $vendor : [];
+
+$nameColumn = 'name';
+foreach (['name', 'full_name', 'vendor_name'] as $candidate) {
+    if (array_key_exists($candidate, $vendorData)) {
+        $nameColumn = $candidate;
+        break;
+    }
+}
+
+$planStatusColumn = array_key_exists('plan_status', $vendorData) ? 'plan_status' : null;
 $planExpiryColumn = null;
 foreach (['plan_expires_at', 'plan_expiry', 'plan_expiration'] as $candidate) {
-    if (yustam_users_table_has_column($candidate)) {
+    if (array_key_exists($candidate, $vendorData)) {
         $planExpiryColumn = $candidate;
         break;
     }
@@ -55,16 +68,16 @@ if ($planExpiryColumn && !empty($vendor[$planExpiryColumn])) {
 }
 
 $profile = [
-    'name' => $vendor[$nameColumn] ?? '',
-    'email' => $vendor['email'] ?? '',
-    'businessName' => yustam_users_table_has_column('business_name') ? ($vendor['business_name'] ?? '') : '',
-    'businessAddress' => yustam_users_table_has_column('business_address') ? ($vendor['business_address'] ?? '') : '',
-    'phone' => yustam_users_table_has_column('phone') ? ($vendor['phone'] ?? '') : '',
-    'state' => yustam_users_table_has_column('state') ? ($vendor['state'] ?? '') : '',
-    'plan' => yustam_users_table_has_column('plan') ? ($vendor['plan'] ?? 'Free') : 'Free',
-    'planStatus' => $planStatusColumn ? ($vendor[$planStatusColumn] ?? 'Active') : 'Active',
+    'name' => $vendorData[$nameColumn] ?? '',
+    'email' => $vendorData['email'] ?? '',
+    'businessName' => array_key_exists('business_name', $vendorData) ? ($vendorData['business_name'] ?? '') : '',
+    'businessAddress' => array_key_exists('business_address', $vendorData) ? ($vendorData['business_address'] ?? '') : '',
+    'phone' => array_key_exists('phone', $vendorData) ? ($vendorData['phone'] ?? '') : '',
+    'state' => array_key_exists('state', $vendorData) ? ($vendorData['state'] ?? '') : '',
+    'plan' => array_key_exists('plan', $vendorData) ? ($vendorData['plan'] ?? 'Free') : 'Free',
+    'planStatus' => $planStatusColumn ? ($vendorData[$planStatusColumn] ?? 'Active') : 'Active',
     'planExpiry' => $planExpiry,
-    'profilePhoto' => yustam_users_table_has_column('profile_photo') ? ($vendor['profile_photo'] ?? '') : '',
+    'profilePhoto' => array_key_exists('profile_photo', $vendorData) ? ($vendorData['profile_photo'] ?? '') : '',
 ];
 
 if (isset($_GET['format']) && $_GET['format'] === 'json') {
