@@ -28,6 +28,7 @@ const planExpiryInput = document.getElementById('planExpiry');
 const fallbackAvatar = window.__PROFILE_AVATAR_FALLBACK__ || '';
 const profileEndpoint = window.__PROFILE_ENDPOINT__;
 const vendorId = window.__VENDOR_ID__ || '';
+const updateEndpoint = 'update-vendor-profile.php';
 
 let currentProfile = window.__INITIAL_PROFILE__ || {};
 let pendingPhotoFile = null;
@@ -186,7 +187,7 @@ const submitProfile = async () => {
       payload.append('profile_photo_url', uploadedPhotoUrl);
     }
 
-    const response = await fetch('update-profile.php', {
+    const response = await fetch(updateEndpoint, {
       method: 'POST',
       body: payload,
       credentials: 'same-origin',
