@@ -327,16 +327,16 @@ $profileJson = json_encode($profile, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNI
       left: 50%;
       bottom: clamp(14px, 5vw, 28px);
       transform: translateX(-50%);
-      width: min(420px, calc(100% - 32px));
+      width: min(340px, calc(100% - 36px));
       background: rgba(0, 77, 64, 0.96);
       color: var(--white);
-      padding: 14px 16px;
+      padding: 10px 12px;
       border-radius: 999px;
-      box-shadow: 0 28px 55px rgba(0, 0, 0, 0.24);
+      box-shadow: 0 24px 45px rgba(0, 0, 0, 0.22);
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 12px;
+      gap: 10px;
       z-index: 50;
     }
 
@@ -344,8 +344,8 @@ $profileJson = json_encode($profile, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNI
       width: 100%;
       border: none;
       border-radius: 999px;
-      padding: 12px 20px;
-      font-size: 1rem;
+      padding: 10px 18px;
+      font-size: 0.95rem;
       font-weight: 600;
       background: linear-gradient(135deg, var(--orange), #ff9338);
       color: var(--white);
@@ -364,7 +364,7 @@ $profileJson = json_encode($profile, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNI
 
     .save-button:not(:disabled):hover {
       transform: translateY(-2px);
-      box-shadow: 0 18px 34px rgba(243, 115, 30, 0.26);
+      box-shadow: 0 16px 30px rgba(243, 115, 30, 0.26);
     }
 
     .save-spinner {
@@ -460,7 +460,7 @@ $profileJson = json_encode($profile, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNI
       }
 
       .save-bar {
-        width: calc(100% - 32px);
+      width: calc(100% - 32px);
       }
 
       .profile-photo-wrapper {
@@ -497,14 +497,16 @@ $profileJson = json_encode($profile, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNI
     </div>
   </header>
 
+  <form action="update-profile.php" method="POST" enctype="multipart/form-data">
   <main>
+    <!-- Profile Photo -->
     <section class="glass-card">
       <h2 class="section-title">Profile Photo</h2>
       <div class="profile-photo-wrapper">
         <div class="photo-preview" id="photoPreview">
           <img src="<?php echo htmlspecialchars($profilePhoto, ENT_QUOTES, 'UTF-8'); ?>" alt="Vendor profile photo" />
         </div>
-        <input type="file" id="photoInput" accept="image/*" hidden />
+        <input type="file" id="photoInput" name="profile_photo" accept="image/*" hidden />
         <button class="save-button" id="changePhotoBtn" type="button" style="max-width: 220px;">
           <i class="ri-upload-2-line" aria-hidden="true"></i>
           Change Photo
@@ -515,44 +517,86 @@ $profileJson = json_encode($profile, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNI
       </div>
     </section>
 
+    <!-- Personal Info -->
     <section class="glass-card">
       <h2 class="section-title">Personal Information</h2>
       <div class="form-grid two-col">
         <div class="input-group">
           <label for="fullName">Full Name</label>
-          <input type="text" id="fullName" autocomplete="name" value="<?php echo htmlspecialchars($profile['name'], ENT_QUOTES, 'UTF-8'); ?>" required />
+          <input
+            type="text"
+            id="fullName"
+            name="name"
+            autocomplete="name"
+            value="<?php echo htmlspecialchars($profile['name'], ENT_QUOTES, 'UTF-8'); ?>"
+            required
+          />
         </div>
         <div class="input-group">
           <label for="email">Email</label>
-          <input type="email" id="email" value="<?php echo htmlspecialchars($profile['email'], ENT_QUOTES, 'UTF-8'); ?>" readonly />
+          <input
+            type="email"
+            id="email"
+            name="email"
+            value="<?php echo htmlspecialchars($profile['email'], ENT_QUOTES, 'UTF-8'); ?>"
+            readonly
+          />
         </div>
       </div>
+
       <div class="form-grid two-col">
         <div class="input-group">
           <label for="phone">Phone Number</label>
-          <input type="tel" id="phone" autocomplete="tel" value="<?php echo htmlspecialchars($profile['phone'], ENT_QUOTES, 'UTF-8'); ?>" required />
+          <input
+            type="tel"
+            id="phone"
+            name="phone"
+            autocomplete="tel"
+            value="<?php echo htmlspecialchars($profile['phone'], ENT_QUOTES, 'UTF-8'); ?>"
+            required
+          />
         </div>
         <div class="input-group">
           <label for="state">State / Region</label>
-          <input type="text" id="state" placeholder="State of operation" value="<?php echo htmlspecialchars($profile['state'], ENT_QUOTES, 'UTF-8'); ?>" required />
+          <input
+            type="text"
+            id="state"
+            name="state"
+            placeholder="State of operation"
+            value="<?php echo htmlspecialchars($profile['state'], ENT_QUOTES, 'UTF-8'); ?>"
+            required
+          />
         </div>
       </div>
     </section>
 
+    <!-- Business Info -->
     <section class="glass-card">
       <h2 class="section-title">Business Information</h2>
       <div class="form-grid two-col">
         <div class="input-group">
           <label for="businessName">Business Name</label>
-          <input type="text" id="businessName" value="<?php echo htmlspecialchars($profile['businessName'], ENT_QUOTES, 'UTF-8'); ?>" required />
+          <input
+            type="text"
+            id="businessName"
+            name="business_name"
+            value="<?php echo htmlspecialchars($profile['businessName'], ENT_QUOTES, 'UTF-8'); ?>"
+            required
+          />
         </div>
         <div class="input-group">
           <label for="businessAddress">Business Address</label>
-          <textarea id="businessAddress" placeholder="Where can customers find you?" required><?php echo htmlspecialchars($profile['businessAddress'], ENT_QUOTES, 'UTF-8'); ?></textarea>
+          <textarea
+            id="businessAddress"
+            name="business_address"
+            placeholder="Where can customers find you?"
+            required
+          ><?php echo htmlspecialchars($profile['businessAddress'], ENT_QUOTES, 'UTF-8'); ?></textarea>
         </div>
       </div>
     </section>
 
+    <!-- Subscription Info -->
     <section class="glass-card">
       <h2 class="section-title">Subscription Plan</h2>
       <div class="form-grid two-col">
@@ -568,11 +612,25 @@ $profileJson = json_encode($profile, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNI
       <div class="form-grid">
         <div class="input-group">
           <label for="planExpiry">Expiry Date</label>
-          <input type="text" id="planExpiry" value="<?php echo htmlspecialchars($profile['planExpiry'], ENT_QUOTES, 'UTF-8'); ?>" readonly />
+          <input
+            type="text"
+            id="planExpiry"
+            name="plan_expiry"
+            value="<?php echo htmlspecialchars($profile['planExpiry'], ENT_QUOTES, 'UTF-8'); ?>"
+            readonly
+          />
         </div>
       </div>
     </section>
+
+    <div class="form-actions" style="text-align: center; margin: 20px 0;">
+      <button type="submit" class="save-button">
+        <i class="ri-save-3-line" aria-hidden="true"></i>
+        Save Changes
+      </button>
+    </div>
   </main>
+</form>
 
   <div class="save-bar">
     <button class="save-button" id="saveBtn" type="button">
