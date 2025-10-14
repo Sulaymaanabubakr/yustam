@@ -77,7 +77,9 @@ $profile = [
     'plan' => array_key_exists('plan', $vendorData) ? ($vendorData['plan'] ?? 'Free') : 'Free',
     'planStatus' => $planStatusColumn ? ($vendorData[$planStatusColumn] ?? 'Active') : 'Active',
     'planExpiry' => $planExpiry,
-    'profilePhoto' => array_key_exists('profile_photo', $vendorData) ? ($vendorData['profile_photo'] ?? '') : '',
+    'profilePhoto' => array_key_exists('profile_photo', $vendorData)
+        ? ($vendorData['profile_photo'] ?? '')
+        : (array_key_exists('avatar_url', $vendorData) ? ($vendorData['avatar_url'] ?? '') : ''),
 ];
 
 if (isset($_GET['format']) && $_GET['format'] === 'json') {

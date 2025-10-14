@@ -1691,7 +1691,7 @@ const handleSubmit = async () => {
     await addDoc(collection(db, 'listings'), listingData);
     showToast('Listing posted successfully!');
     setTimeout(() => {
-      window.location.href = 'vendor-dashboard.html';
+      window.location.href = 'vendor-dashboard.php';
     }, 1600);
   } catch (error) {
     console.error('Error posting listing', error);

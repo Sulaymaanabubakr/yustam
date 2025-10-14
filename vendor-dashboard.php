@@ -40,14 +40,24 @@ if (!$vendor) {
     exit;
 }
 
-$vendorName   = $vendor['full_name'] ?? '';
-$businessName = $vendor['business_name'] ?? '';
-$phone        = $vendor['phone'] ?? '';
-$location     = $vendor['state'] ?? '';
-$plan         = $vendor['plan'] ?? 'Free';
-$createdAt    = $vendor['created_at'] ?? '';
-$createdDisplay = $createdAt ? date('j M Y', strtotime($createdAt)) : '—';
-$profilePhoto = $vendor['profile_photo'] ?? '';
+$vendorData = is_array($vendor) ? $vendor : [];
+$nameColumn = yustam_vendor_name_column();
+$vendorName = $vendorData[$nameColumn] ?? '';
+$businessName = yustam_vendor_table_has_column('business_name') ? ($vendorData['business_name'] ?? '') : '';
+$phone = yustam_vendor_table_has_column('phone') ? ($vendorData['phone'] ?? '') : '';
+$location = yustam_vendor_table_has_column('state') ? ($vendorData['state'] ?? '') : '';
+if ($location === '' && yustam_vendor_table_has_column('category')) {
+    $location = $vendorData['category'] ?? '';
+}
+$plan = yustam_vendor_table_has_column('plan') ? ($vendorData['plan'] ?? 'Free') : 'Free';
+$createdAt = yustam_vendor_table_has_column('created_at') ? ($vendorData['created_at'] ?? '') : '';
+$createdDisplay = $createdAt ? date('j M Y', strtotime($createdAt)) : '-';
+$profilePhoto = '';
+if (yustam_vendor_table_has_column('profile_photo')) {
+    $profilePhoto = $vendorData['profile_photo'] ?? '';
+} elseif (yustam_vendor_table_has_column('avatar_url')) {
+    $profilePhoto = $vendorData['avatar_url'] ?? '';
+}
 $avatarFallback = 'https://res.cloudinary.com/demo/image/upload/v123456789/default_user.png';
 
 $listings = [];

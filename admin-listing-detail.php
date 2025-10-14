@@ -1,3 +1,7 @@
+<?php
+require_once __DIR__ . '/admin-session.php';
+require_admin_auth();
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -698,7 +702,7 @@
   <!-- Header -->
   <header>
     <div class="topbar">
-      <a href="admin-listings.html" class="brand" aria-label="Go back to listings">
+      <a href="admin-listings.php" class="brand" aria-label="Go back to listings">
         <span><i class="ri-arrow-left-line"></i></span>
         YUSTAM Admin
       </a>
@@ -865,5 +869,6 @@
 <script type="module" src="firebase.js"></script>
 </body>
 </html>
+
 
 

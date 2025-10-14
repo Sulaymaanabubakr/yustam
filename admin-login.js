@@ -1,33 +1,27 @@
-import { auth, db } from './firebase.js';
-import {
-  onAuthStateChanged,
-  signInWithEmailAndPassword,
-  signOut,
-  GoogleAuthProvider,
-  signInWithPopup,
-} from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js';
-import { doc, setDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js';
+import { getAuth, signInWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js';
+import firebaseConfig from './firebase.js';
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
 
 const loginForm = document.getElementById('adminLoginForm');
 const loginBtn = document.getElementById('loginBtn');
 const errorMessage = document.getElementById('errorMessage');
-const googleLoginBtn = document.getElementById('googleLoginBtn');
 const toast = document.getElementById('toast');
-const loginCard = document.getElementById('loginCard');
 const pageLoader = document.getElementById('pageLoader');
+const loginCard = document.getElementById('loginCard');
 
-const PRIMARY_ADMIN_EMAIL = 'abubakrsulaymaan@gmail.com';
-const ADMIN_EMAILS = new Set([PRIMARY_ADMIN_EMAIL]);
-
-const setButtonLoading = (isLoading) => {
+const setButtonLoading = (loading) => {
+  if (!loginBtn) return;
   const label = loginBtn.querySelector('.btn-label');
-  if (isLoading) {
+  if (loading) {
     loginBtn.disabled = true;
     if (!loginBtn.querySelector('.spinner')) {
       const spinner = document.createElement('span');
       spinner.className = 'spinner';
       spinner.setAttribute('aria-hidden', 'true');
-      loginBtn.appendChild(spinner);
+      loginBtn.prepend(spinner);
     }
     if (label) label.textContent = 'Authenticating...';
   } else {
@@ -38,156 +32,96 @@ const setButtonLoading = (isLoading) => {
   }
 };
 
-const setGoogleButtonLoading = (isLoading) => {
-  if (!googleLoginBtn) return;
-  if (isLoading) {
-    googleLoginBtn.disabled = true;
-    googleLoginBtn.innerHTML = '<span class="spinner spinner--dark" aria-hidden="true"></span><span>Connecting...</span>';
-  } else {
-    googleLoginBtn.disabled = false;
-    googleLoginBtn.innerHTML = '<i class="ri-google-fill" aria-hidden="true"></i><span>Sign in with Google</span>';
-  }
-};
-
 const showToast = (message, tone = 'success') => {
+  if (!toast) return;
   toast.textContent = message;
-  toast.style.background = tone === 'error' ? 'rgba(216, 67, 21, 0.92)' : 'rgba(0, 77, 64, 0.92)';
+  toast.style.background =
+    tone === 'error' ? 'rgba(216, 67, 21, 0.92)' : 'rgba(0, 77, 64, 0.92)';
   toast.classList.add('show');
-  setTimeout(() => toast.classList.remove('show'), 2200);
+  setTimeout(() => toast.classList.remove('show'), 2500);
 };
 
 const triggerError = (message) => {
+  if (!errorMessage || !loginCard) return;
   errorMessage.textContent = message;
   loginCard.classList.remove('shake');
   void loginCard.offsetWidth;
   loginCard.classList.add('shake');
 };
 
-if (loginForm?.adminEmail) {
-  loginForm.adminEmail.value = PRIMARY_ADMIN_EMAIL;
-  loginForm.adminEmail.readOnly = true;
-  loginForm.adminEmail.setAttribute('aria-readonly', 'true');
-}
-
-const ensureAuthorisedEmail = async (user, { interactive = false } = {}) => {
-  const email = (user?.email || '').toLowerCase();
-  const allowed = ADMIN_EMAILS.has(email);
-
-  if (!allowed) {
-    if (interactive) {
-      triggerError('This account is not authorised for admin access.');
-      showToast('Access denied. Redirecting...', 'error');
-    }
-    try {
-      await signOut(auth);
-    } catch (signOutError) {
-      console.error('Failed to sign out unauthorised admin:', signOutError);
-    }
-    localStorage.removeItem('adminLoggedIn');
-    setTimeout(() => {
-      window.location.href = 'index.html';
-    }, interactive ? 1800 : 1200);
-    return false;
-  }
-
-  return true;
+const redirectToDashboard = () => {
+  window.location.href = 'admin-dashboard.php';
 };
 
-const verifyAdmin = async (user, showGrantToast = false) => {
-  if (!user) return;
-
-  pageLoader.classList.add('active');
-
-  const authorised = await ensureAuthorisedEmail(user, { interactive: showGrantToast });
-  if (!authorised) {
-    pageLoader.classList.remove('active');
-    return;
-  }
-
-  const now = serverTimestamp();
-  let profileSaved = false;
+const checkExistingSession = async () => {
   try {
-    await setDoc(
-      doc(db, 'admins', user.uid),
-      {
-        email: (user.email || '').toLowerCase(),
-        name: user.displayName || '',
-        role: 'owner',
-        lastLoginAt: now,
-        updatedAt: now,
-      },
-      { merge: true }
-    );
-    profileSaved = true;
-  } catch (error) {
-    console.error('Admin profile persistence failed:', error);
-    triggerError('Signed in, but unable to update admin record. Check Firestore rules.');
-    showToast('Signed in, but admin record was not updated.', 'error');
-  }
-
-  if (!profileSaved) {
-    try {
-      await signOut(auth);
-    } catch (signOutError) {
-      console.error('Sign-out after admin profile failure:', signOutError);
+    const response = await fetch('admin-session-status.php', {
+      method: 'GET',
+      credentials: 'same-origin',
+    });
+    if (response.ok) {
+      redirectToDashboard();
+    } else if (pageLoader) {
+      pageLoader.classList.remove('active');
     }
-    pageLoader.classList.remove('active');
-    return;
+  } catch (error) {
+    console.error('Session check failed:', error);
+    if (pageLoader) {
+      pageLoader.classList.remove('active');
+    }
   }
-
-  localStorage.setItem('adminLoggedIn', 'true');
-  if (showGrantToast) {
-    showToast('Access granted. Redirecting...');
-  }
-
-  setTimeout(() => {
-    window.location.href = 'admin.html';
-  }, showGrantToast ? 1400 : 600);
-
-  pageLoader.classList.remove('active');
 };
-
-onAuthStateChanged(auth, (user) => {
-  if (user) {
-    verifyAdmin(user);
-  } else {
-    pageLoader.classList.remove('active');
-  }
-});
 
 loginForm?.addEventListener('submit', async (event) => {
   event.preventDefault();
-  errorMessage.textContent = '';
 
-  const email = loginForm.adminEmail.value.trim().toLowerCase();
-  const password = loginForm.adminPassword.value.trim();
+  if (!loginForm) return;
+  const formData = new FormData(loginForm);
+  const email = (formData.get('adminEmail') || '').toString().trim().toLowerCase();
+  const password = (formData.get('adminPassword') || '').toString();
+
+  errorMessage.textContent = '';
 
   if (!email || !password) {
     triggerError('Please enter both email and password.');
     return;
   }
 
-  if (!ADMIN_EMAILS.has(email)) {
-    triggerError('This email is not authorised for admin access.');
-    showToast('Access denied for this email.', 'error');
-    return;
-  }
-
   try {
     setButtonLoading(true);
-    const credential = await signInWithEmailAndPassword(auth, email, password);
-    await verifyAdmin(credential.user, true);
-  } catch (error) {
-    setButtonLoading(false);
-    localStorage.removeItem('adminLoggedIn');
-    let message = 'Login failed. Please check your credentials.';
-    if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password') {
-      message = 'Incorrect email or password. Try again.';
-    } else if (error.code === 'auth/user-not-found') {
-      message = 'No admin account found with this email.';
-    } else if (error.code === 'auth/too-many-requests') {
-      message = 'Too many attempts. Please wait and try again later.';
+    const response = await fetch('admin-login-action.php', {
+      method: 'POST',
+      credentials: 'same-origin',
+      body: new URLSearchParams({
+        email,
+        password,
+      }),
+    });
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok || !data.success) {
+      const message = data.message || 'Login failed. Please try again.';
+      triggerError(message);
+      showToast(message, 'error');
+      return;
     }
+
+    let firebaseSignedIn = false;
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      firebaseSignedIn = true;
+    } catch (firebaseError) {
+      console.error('Firebase admin sign-in failed:', firebaseError);
+    }
+
+    showToast(firebaseSignedIn ? 'Access granted. Redirecting...' : 'Access granted. Firebase sync unavailable.');
+    setTimeout(() => {
+      window.location.href = data.redirect || 'admin-dashboard.php';
+    }, firebaseSignedIn ? 800 : 1000);
+  } catch (error) {
+    console.error('Admin login failed:', error);
+    const message = 'Unable to sign in right now. Please try again.';
     triggerError(message);
     showToast(message, 'error');
   } finally {
@@ -195,27 +129,9 @@ loginForm?.addEventListener('submit', async (event) => {
   }
 });
 
-googleLoginBtn?.addEventListener('click', async () => {
-  errorMessage.textContent = '';
-  try {
-    setGoogleButtonLoading(true);
-    const provider = new GoogleAuthProvider();
-    provider.setCustomParameters({
-      prompt: 'select_account',
-      login_hint: PRIMARY_ADMIN_EMAIL,
-    });
-    const credential = await signInWithPopup(auth, provider);
-    await verifyAdmin(credential.user, true);
-  } catch (error) {
-    let message = 'Google sign-in failed. Please try again.';
-    if (error.code === 'auth/popup-closed-by-user') {
-      message = 'Google sign-in was cancelled.';
-    } else if (error.code === 'auth/account-exists-with-different-credential') {
-      message = 'Use your email and password for this admin account.';
-    }
-    triggerError(message);
-    showToast(message, 'error');
-  } finally {
-    setGoogleButtonLoading(false);
+document.addEventListener('DOMContentLoaded', () => {
+  if (pageLoader) {
+    pageLoader.classList.add('active');
   }
+  checkExistingSession();
 });
