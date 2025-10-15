@@ -3,6 +3,7 @@ require_once __DIR__ . '/session-path.php';
 session_start();
 
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/send-email.php';
 
 header('Content-Type: application/json');
 
@@ -79,6 +80,32 @@ try {
     $_SESSION['vendor_id'] = $newVendorId;
     $_SESSION['vendor_name'] = $fallbackName;
     $_SESSION['vendor_email'] = $email;
+
+    $host = !empty($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : 'yustam.com.ng';
+    $dashboardUrl = 'https://' . $host . '/vendor-dashboard.php';
+    $profileUrl = 'https://' . $host . '/vendor-edit-profile.php';
+    $welcomeBody = "
+      <h2 style=\"margin:0 0 12px; font-family:'Inter',Arial,sans-serif; color:#0f6a53;\">Welcome to YUSTAM Marketplace, {$fallbackName}!</h2>
+      <p style=\"margin:0 0 12px; font-family:'Inter',Arial,sans-serif; color:#333333; line-height:1.6;\">
+        Your vendor account has been created via Google sign-in. We are excited to have you onboard.
+      </p>
+      <p style=\"margin:0 0 12px; font-family:'Inter',Arial,sans-serif; color:#333333; line-height:1.6;\">
+        Visit your dashboard to set up your storefront, publish listings and reach buyers faster.
+      </p>
+      <p style=\"margin:0 0 20px; font-family:'Inter',Arial,sans-serif;\">
+        <a href=\"{$dashboardUrl}\" style=\"display:inline-block; padding:10px 18px; background:#f3731e; color:#ffffff; text-decoration:none; border-radius:8px;\">Go to Dashboard</a>
+      </p>
+      <p style=\"margin:0; font-family:'Inter',Arial,sans-serif; color:#333333; line-height:1.6;\">
+        Want to complete your profile now? <a href=\"{$profileUrl}\">Finish your vendor profile</a> to attract more buyers.
+      </p>
+      <p style=\"margin:20px 0 0; font-family:'Inter',Arial,sans-serif; color:#333333; line-height:1.6;\">
+        Cheers,<br>YUSTAM Marketplace Support
+      </p>
+    ";
+
+    if (!sendEmail($email, 'Welcome to YUSTAM Marketplace', $welcomeBody)) {
+      error_log('Google login: failed to send welcome email to ' . $email);
+    }
 
     echo json_encode([
         'success' => true,
