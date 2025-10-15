@@ -830,9 +830,6 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
             </div>
           </article>
         </div>
-        <p class="discount-note">
-          <strong>Multi-month discounts:</strong> 3 months save 7%, 6 months save 12%, 12 months save 17%.
-        </p>
       </section>
     </main>
 
