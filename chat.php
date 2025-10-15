@@ -411,8 +411,13 @@ $coverGradient = 'linear-gradient(135deg, rgba(0,77,64,0.92), rgba(0,77,64,0.88)
             </footer>
         </section>
     </div>
-    <script type="module" src="firebase.js"></script>
+  <script src="theme-manager.js" defer></script>
+<script type="module" src="firebase.js"></script>
     <script type="module" src="cloudinary.js"></script>
-    <script type="module" src="chat.js"></script>
+<script type="module" src="chat.js"></script>
 </body>
 </html>
+
+
+
+

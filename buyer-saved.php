@@ -238,7 +238,11 @@ $buyerName = $buyer['name'] ?? ($_SESSION['buyer_name'] ?? 'Buyer');
         <section class="saved-grid" id="savedGrid" aria-live="polite"></section>
         <div class="empty-state" id="emptyState" role="status" hidden>You haven’t saved any listings yet.</div>
     </main>
-
-    <script type="module" src="buyer-saved.js"></script>
+  <script src="theme-manager.js" defer></script>
+<script type="module" src="buyer-saved.js"></script>
 </body>
 </html>
+
+
+
+

@@ -493,7 +493,11 @@
         <p class="copyright">© 2025 YUSTAM Marketplace — Built for Nigeria.</p>
       </div>
     </footer>
-
-    <script src="vendor-billing-history.js" defer></script>
+  <script src="theme-manager.js" defer></script>
+<script src="vendor-billing-history.js" defer></script>
   </body>
 </html>
+
+
+
+

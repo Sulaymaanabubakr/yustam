@@ -770,9 +770,13 @@ require_admin_auth();
   </footer>
 
   <!-- Firebase Logic -->
-  
-    <script type="module" src="admin-listings.js"></script>
+  <script src="theme-manager.js" defer></script>
+<script type="module" src="admin-listings.js"></script>
 <script type="module" src="firebase.js"></script>
 </body>
 </html>
+
+
+
+
 

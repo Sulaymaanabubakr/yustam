@@ -210,7 +210,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </form>
     </div>
     <div class="toast" id="authToast">Incorrect email or password</div>
-    <script>
+  <script src="theme-manager.js" defer></script>
+<script>
         const toast = document.getElementById('authToast');
         const hasError = <?= $errorMessage ? 'true' : 'false' ?>;
 
@@ -229,3 +230,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </script>
 </body>
 </html>
+
+
+
+

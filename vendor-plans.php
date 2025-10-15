@@ -607,7 +607,8 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
         }
       }
     </style>
-    <script>
+  <script src="theme-manager.js" defer></script>
+<script>
       window.YUSTAM_VENDOR_PLAN = <?php echo json_encode(
         $pagePayload,
         JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT
@@ -858,6 +859,10 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
     </footer>
 
     <script src="https://js.paystack.co/v1/inline.js" defer></script>
-    <script src="vendor-plans.js" defer></script>
+<script src="vendor-plans.js" defer></script>
   </body>
 </html>
+
+
+
+

@@ -70,5 +70,10 @@ $reference = $_GET['reference'] ?? '';
             Manage plans
         </a>
     </div>
+  <script src="theme-manager.js" defer></script>
 </body>
 </html>
+
+
+
+

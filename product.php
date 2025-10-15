@@ -944,10 +944,14 @@ $chatId = $vendorId && $buyerId ? $vendorId . '_' . $buyerId . '_' . $productId 
     </footer>
 
     <!-- Firebase Logic placeholder -->
-    
-      <script type="module" src="product.js"></script>
+  <script src="theme-manager.js" defer></script>
+<script type="module" src="product.js"></script>
 <script type="module" src="firebase.js"></script>
 </body>
 </html>
+
+
+
+
 
 

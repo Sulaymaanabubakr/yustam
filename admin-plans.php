@@ -695,10 +695,14 @@ require_admin_auth();
   </button>
 
   <!-- Firebase Logic -->
-  
-    <script type="module" src="admin-plans.js"></script>
+  <script src="theme-manager.js" defer></script>
+<script type="module" src="admin-plans.js"></script>
 <script type="module" src="firebase.js"></script>
 </body>
 </html>
+
+
+
+
 
 

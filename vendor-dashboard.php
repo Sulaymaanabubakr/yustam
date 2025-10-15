@@ -773,7 +773,11 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
     <footer>
         © 2025 YUSTAM Marketplace — <a href="contact.html">Support</a>
     </footer>
-
-    <script type="module" src="vendor-dashboard.js"></script>
+  <script src="theme-manager.js" defer></script>
+<script type="module" src="vendor-dashboard.js"></script>
 </body>
 </html>
+
+
+
+

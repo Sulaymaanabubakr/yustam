@@ -564,8 +564,12 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
             <small>© <?php echo date('Y'); ?> YUSTAM Marketplace. All rights reserved.</small>
         </div>
     </footer>
-
-    <script src="https://js.paystack.co/v1/inline.js" defer></script>
-    <script src="vendor-renew-plan.js" defer></script>
+  <script src="theme-manager.js" defer></script>
+<script src="https://js.paystack.co/v1/inline.js" defer></script>
+<script src="vendor-renew-plan.js" defer></script>
 </body>
 </html>
+
+
+
+

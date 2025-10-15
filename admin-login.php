@@ -376,7 +376,12 @@ $flashStatus = isset($_GET['status']) ? trim($_GET['status']) : '';
   <div class="toast" id="toast" role="status" aria-live="assertive"></div>
 
   <!-- Firebase Logic -->
-  <script type="module" src="admin-login.js"></script>
+  <script src="theme-manager.js" defer></script>
+<script type="module" src="admin-login.js"></script>
 </body>
 </html>
+
+
+
+
 
