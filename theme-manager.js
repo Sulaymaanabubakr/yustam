@@ -17,6 +17,7 @@
     '--yustam-heading-muted': 'rgba(15, 106, 83, 0.78)',
     '--yustam-header-bg': 'rgba(15, 106, 83, 0.94)',
     '--yustam-header-text': '#ffffff',
+    '--yustam-price': '#f3731e',
     '--yustam-overlay': 'rgba(0, 0, 0, 0.55)',
     '--yustam-shadow': '0 24px 45px rgba(15, 106, 83, 0.18)',
     '--yustam-card-shadow': '0 24px 40px rgba(15, 106, 83, 0.12)',
@@ -42,7 +43,8 @@
     '--yustam-heading': '#f3731e',
     '--yustam-heading-muted': '#ffb877',
     '--yustam-header-bg': 'rgba(11, 49, 39, 0.95)',
-    '--yustam-header-text': 'rgba(235, 245, 242, 0.98)',
+    '--yustam-header-text': '#f3731e',
+    '--yustam-price': '#ffffff',
     '--yustam-overlay': 'rgba(0, 0, 0, 0.7)',
     '--yustam-shadow': '0 34px 70px rgba(0, 0, 0, 0.5)',
     '--yustam-card-shadow': '0 30px 60px rgba(0, 0, 0, 0.45)',
@@ -97,6 +99,24 @@
         body small`,
       style: {
         color: 'var(--yustam-text-muted) !important',
+      },
+    },
+    {
+      selectors: `
+        [data-theme="dark"] body .price,
+        [data-theme="dark"] body .plan-price,
+        [data-theme="dark"] body .pricing-value,
+        [data-theme="dark"] body .pricing-amount,
+        [data-theme="dark"] body .listing-price,
+        [data-theme="dark"] body .product-price,
+        [data-theme="dark"] body .price-tag,
+        [data-theme="dark"] body .price-text,
+        [data-theme="dark"] body .total-display,
+        [data-theme="dark"] body .summary-price,
+        [data-theme="dark"] body .amount,
+        [data-theme="dark"] body .currency-value`,
+      style: {
+        color: 'var(--yustam-price) !important',
       },
     },
     {
@@ -328,6 +348,7 @@
   --yustam-input-border: ${LIGHT['--yustam-input-border']};
   --yustam-link: ${LIGHT['--yustam-link']};
   --yustam-link-hover: ${LIGHT['--yustam-link-hover']};
+  --yustam-price: ${LIGHT['--yustam-price']};
 }
 `;
     document.head.appendChild(style);
@@ -353,15 +374,21 @@
     });
   };
 
-  const applyRules = () => {
+  const toKebab = (prop) => prop.replace(/[A-Z]/g, (match) => `-${match.toLowerCase()}`);
+
+  const applyRules = (enable) => {
     ensureBody(() => {
       APPLY_RULES.forEach(({ selectors, style }) => {
         document.querySelectorAll(selectors).forEach((node) => {
           Object.entries(style).forEach(([property, value]) => {
-            const propertyName = property.replace(/[A-Z]/g, (match) => `-${match.toLowerCase()}`);
-            const important = typeof value === 'string' && value.includes('!important');
-            const actualValue = important ? value.replace('!important', '').trim() : value;
-            node.style.setProperty(propertyName, actualValue, important ? 'important' : '');
+            const propertyName = toKebab(property);
+            if (enable) {
+              const important = typeof value === 'string' && value.includes('!important');
+              const actualValue = important ? value.replace('!important', '').trim() : value;
+              node.style.setProperty(propertyName, actualValue, important ? 'important' : '');
+            } else {
+              node.style.removeProperty(propertyName);
+            }
           });
         });
       });
@@ -401,7 +428,7 @@
       document.body.classList.toggle('theme-light', resolved !== 'dark');
     });
 
-    applyRules();
+    applyRules(resolved === 'dark');
     broadcast(sanitized, resolved);
   };
 
@@ -440,3 +467,6 @@
     },
   };
 })();
+
+
+
