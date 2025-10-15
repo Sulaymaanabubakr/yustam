@@ -32,9 +32,42 @@ import { auth, db } from './firebase.js';
             premium: 7000
         };
 
+        const escapeHtml = (value) => String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+
+        const slugifyPlan = (plan) => {
+            if (!plan) return 'free';
+            return String(plan)
+                .toLowerCase()
+                .replace(/plan/g, '')
+                .replace(/[^a-z0-9]+/g, '-')
+                .replace(/(^-+|-+$)/g, '') || 'free';
+        };
+
+        const formatPlanLabel = (plan) => {
+            if (!plan) return 'Free Plan';
+            const trimmed = String(plan).trim();
+            if (!trimmed) return 'Free Plan';
+            const lower = trimmed.toLowerCase();
+            return lower.endsWith('plan') ? trimmed : `${trimmed} Plan`;
+        };
+
+        const formatStatusLabel = (status) => {
+            const value = String(status || '').trim();
+            return value || 'Active';
+        };
+
+        const fallbackVendorAvatar = 'https://via.placeholder.com/80x80?text=VP';
+
         let selectedListingId = null;
         let selectedListingVendor = null;
         let notificationDocs = [];
+        let vendorSummaryTimer = null;
+        let vendorSummaryErrorShown = false;
 
         const recentListingsWrap = document.getElementById('recentListings');
         const noListings = document.getElementById('noListings');
@@ -97,7 +130,7 @@ import { auth, db } from './firebase.js';
                             <h3>${data.title || data.productName || 'Untitled listing'}</h3>
                             <span class="status-chip status-pending">Pending</span>
                         </div>
-                        <span class="meta-line"><i class="ri-stack-line"></i> ${data.category || '—'} &middot; ${data.subcategory || '—'}</span>
+                        <span class="meta-line"><i class="ri-stack-line"></i> ${data.category || 'â€”'} &middot; ${data.subcategory || 'â€”'}</span>
                         <span class="meta-line"><i class="ri-user-smile-line"></i> ${data.vendorName || data.vendorEmail || 'Unknown vendor'}</span>
                         <div class="listing-actions">
                             <button class="btn btn-approve" data-action="approve" data-id="${listing.id}" data-vendor="${data.vendorID || ''}">Approve</button>
@@ -121,44 +154,97 @@ import { auth, db } from './firebase.js';
 
         const renderVendors = (vendors) => {
             recentVendorsWrap.innerHTML = '';
-            if (!vendors.length) {
+            if (!Array.isArray(vendors) || !vendors.length) {
                 noVendors.style.display = 'block';
                 return;
             }
             noVendors.style.display = 'none';
             vendors.forEach((vendor) => {
-                const data = vendor.data();
-                const plan = (data.plan || 'free').toLowerCase();
-                const planClass = `plan-${plan}`;
+                const planLabel = formatPlanLabel(vendor.plan);
+                const planSlug = vendor.planSlug || slugifyPlan(planLabel);
+                const statusLabel = formatStatusLabel(vendor.status);
+                const avatar = vendor.profilePhoto || fallbackVendorAvatar;
+                const joinedMarkup = vendor.joined
+                    ? `<small style="color:rgba(17,17,17,0.45); display:block; margin-top:4px;">Joined ${escapeHtml(vendor.joined)}</small>`
+                    : '';
                 const card = document.createElement('article');
                 card.className = 'vendor-card';
                 card.innerHTML = `
-                    <img class="vendor-avatar" src="${data.profilePhoto || 'https://via.placeholder.com/80x80?text=VP'}" alt="${data.name || 'Vendor'} avatar">
+                    <img class="vendor-avatar" src="${escapeHtml(avatar)}" alt="${escapeHtml(vendor.name || 'Vendor')} avatar">
                     <div class="vendor-meta">
-                        <h3 style="font-size:1.05rem; color:var(--emerald);">${data.name || 'Unnamed Vendor'}</h3>
-                        <span class="meta-line">${data.email || 'No email'}</span>
-                        <span class="plan-chip ${planClass}">${(data.plan || 'Free')}</span>
-                        <small style="color:rgba(17,17,17,0.6); font-weight:600;">${(data.status || 'Active')}</small>
+                        <h3 style="font-size:1.05rem; color:var(--emerald);">${escapeHtml(vendor.name || 'Unnamed Vendor')}</h3>
+                        <span class="meta-line">${escapeHtml(vendor.email || 'No email')}</span>
+                        <span class="plan-chip plan-${escapeHtml(planSlug)}">${escapeHtml(planLabel)}</span>
+                        <small style="color:rgba(17,17,17,0.6); font-weight:600;">${escapeHtml(statusLabel)}</small>
+                        ${joinedMarkup}
                     </div>
                 `;
                 recentVendorsWrap.appendChild(card);
             });
         };
 
-        const updatePlanCounts = (vendors) => {
-            const counts = { free: 0, plus: 0, pro: 0, premium: 0 };
-            vendors.forEach((vendor) => {
-                const plan = (vendor.data().plan || 'free').toLowerCase();
-                if (counts[plan] !== undefined) counts[plan] += 1;
-                else counts.free += 1;
-            });
+        const applyPlanSummary = (summary = {}) => {
+            const counts = {
+                free: 0,
+                plus: 0,
+                pro: 0,
+                premium: 0,
+                ...(summary.planCounts || {}),
+            };
             Object.entries(counts).forEach(([plan, count]) => {
-                planCountsEls[plan].textContent = count.toString();
+                if (planCountsEls[plan]) {
+                    planCountsEls[plan].textContent = count.toString();
+                }
             });
-            const revenue = (counts.plus * PLAN_PRICING.plus) + (counts.pro * PLAN_PRICING.pro) + (counts.premium * PLAN_PRICING.premium);
+            const revenue = summary.revenue ?? ((counts.plus * PLAN_PRICING.plus) + (counts.pro * PLAN_PRICING.pro) + (counts.premium * PLAN_PRICING.premium));
             revenueTotal.textContent = formatCurrency(revenue);
-            statsElements.activePlans.textContent = (counts.plus + counts.pro + counts.premium).toString();
+            const activePlans = summary.activePlans ?? (counts.plus + counts.pro + counts.premium);
+            statsElements.activePlans.textContent = activePlans.toString();
             statsElements.revenue.textContent = formatCurrency(revenue);
+        };
+
+        const normaliseVendorRecords = (vendors) => {
+            if (!Array.isArray(vendors)) return [];
+            return vendors.map((vendor) => {
+                const planLabel = formatPlanLabel(vendor.plan);
+                const joinedDisplay = (vendor.joined && vendor.joined !== '-') ? vendor.joined : '';
+                return {
+                    id: vendor.id ?? '',
+                    name: vendor.name || vendor.businessName || 'Vendor',
+                    email: vendor.email || '',
+                    plan: planLabel,
+                    planSlug: vendor.planSlug || slugifyPlan(planLabel),
+                    status: vendor.status || '',
+                    profilePhoto: vendor.profilePhoto || '',
+                    joined: joinedDisplay,
+                };
+            });
+        };
+
+        const fetchVendorSummary = async () => {
+            try {
+                const response = await fetch('admin-vendors-summary.php', {
+                    method: 'GET',
+                    credentials: 'same-origin',
+                    headers: { Accept: 'application/json' },
+                });
+                const payload = await response.json();
+                if (!response.ok || !payload?.success) {
+                    throw new Error(payload?.message || 'Unable to load vendor summary.');
+                }
+                const vendors = normaliseVendorRecords(payload.vendors || []);
+                renderVendors(vendors);
+                applyPlanSummary(payload.summary || {});
+                const total = payload.summary?.total ?? vendors.length;
+                statsElements.vendors.textContent = total.toString();
+                vendorSummaryErrorShown = false;
+            } catch (error) {
+                console.error('Vendor summary load failed:', error);
+                if (!vendorSummaryErrorShown) {
+                    showToast('Unable to load vendor summary.', 2600);
+                    vendorSummaryErrorShown = true;
+                }
+            }
         };
 
         const approveListing = async (listingId) => {
@@ -404,16 +490,11 @@ import { auth, db } from './firebase.js';
                 statsElements.listings.textContent = snapshot.size.toString();
             });
 
-            const vendorsQuery = query(collection(db, 'vendors'), orderBy('createdAt', 'desc'), limit(8));
-            onSnapshot(vendorsQuery, (snapshot) => {
-                const docs = snapshot.docs;
-                renderVendors(docs);
-            });
-
-            onSnapshot(collection(db, 'vendors'), (snapshot) => {
-                statsElements.vendors.textContent = snapshot.size.toString();
-                updatePlanCounts(snapshot.docs);
-            });
+            fetchVendorSummary();
+            if (vendorSummaryTimer) {
+                clearInterval(vendorSummaryTimer);
+            }
+            vendorSummaryTimer = setInterval(fetchVendorSummary, 60000);
 
             const notificationsQuery = query(collection(db, 'notifications'), orderBy('createdAt', 'desc'), limit(6));
             onSnapshot(notificationsQuery, (snapshot) => {
