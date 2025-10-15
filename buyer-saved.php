@@ -415,6 +415,10 @@ if ($firstName === '') {
             <div class="empty-state" id="emptyState" role="status" hidden>You haven't saved any listings yet. Start exploring the marketplace to bookmark your top picks.</div>
         </section>
 
+        <a class="support-link" href="shop.html">
+            <i class="ri-compass-3-line" aria-hidden="true"></i>
+            Discover more listings
+        </a>
     </main>
   <script src="theme-manager.js" defer></script>
 <script type="module" src="buyer-saved.js"></script>
