@@ -36,6 +36,7 @@ try {
     if ($result && $result->num_rows > 0) {
         $user = $result->fetch_assoc();
         $check->close();
+        session_regenerate_id(true);
         $_SESSION['vendor_id'] = $user['id'];
         $_SESSION['vendor_name'] = $user['full_name'] ?? $name;
         $_SESSION['vendor_email'] = $email;
@@ -77,6 +78,7 @@ try {
     $newVendorId = $insert->insert_id;
     $insert->close();
 
+    session_regenerate_id(true);
     $_SESSION['vendor_id'] = $newVendorId;
     $_SESSION['vendor_name'] = $fallbackName;
     $_SESSION['vendor_email'] = $email;
