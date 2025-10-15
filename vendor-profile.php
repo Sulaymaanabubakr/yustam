@@ -57,6 +57,38 @@ if (array_key_exists('created_at', $vendorData) && !empty($vendorData['created_a
     }
 }
 
+$verificationStatusColumn = null;
+foreach (['verification_status', 'verification_state', 'kyc_status', 'verification_stage'] as $candidate) {
+    if (yustam_vendor_table_has_column($candidate)) {
+        $verificationStatusColumn = $candidate;
+        break;
+    }
+}
+
+$verificationSubmittedColumn = null;
+foreach (['verification_submitted_at', 'verification_requested_at', 'verification_sent_at', 'kyc_submitted_at'] as $candidate) {
+    if (yustam_vendor_table_has_column($candidate)) {
+        $verificationSubmittedColumn = $candidate;
+        break;
+    }
+}
+
+$verificationFeedbackColumn = null;
+foreach (['verification_feedback', 'verification_comment', 'verification_notes', 'kyc_feedback'] as $candidate) {
+    if (yustam_vendor_table_has_column($candidate)) {
+        $verificationFeedbackColumn = $candidate;
+        break;
+    }
+}
+
+$rawVerificationStatus = $verificationStatusColumn ? ($vendorData[$verificationStatusColumn] ?? '') : '';
+$normalisedVerificationStatus = is_string($rawVerificationStatus) ? strtolower(trim($rawVerificationStatus)) : '';
+$verificationSubmittedAt = $verificationSubmittedColumn ? ($vendorData[$verificationSubmittedColumn] ?? '') : '';
+$verificationFeedback = $verificationFeedbackColumn ? ($vendorData[$verificationFeedbackColumn] ?? '') : '';
+
+$planValue = array_key_exists('plan', $vendorData) ? ($vendorData['plan'] ?? 'Free') : 'Free';
+$planNormalised = strtolower(trim((string)$planValue));
+
 $profile = [
     'name' => $vendorData[$nameColumn] ?? '',
     'businessName' => array_key_exists('business_name', $vendorData) ? ($vendorData['business_name'] ?? '') : '',
@@ -64,11 +96,18 @@ $profile = [
     'phone' => array_key_exists('phone', $vendorData) ? ($vendorData['phone'] ?? '') : '',
     'address' => array_key_exists('business_address', $vendorData) ? ($vendorData['business_address'] ?? '') : '',
     'state' => array_key_exists('state', $vendorData) ? ($vendorData['state'] ?? '') : '',
-    'plan' => array_key_exists('plan', $vendorData) ? ($vendorData['plan'] ?? 'Free') : 'Free',
+    'plan' => $planValue,
     'joined' => $joinedDisplay,
     'profilePhoto' => array_key_exists('profile_photo', $vendorData)
         ? ($vendorData['profile_photo'] ?? '')
         : (array_key_exists('avatar_url', $vendorData) ? ($vendorData['avatar_url'] ?? '') : ''),
+    'planIsPaid' => !($planNormalised === '' || strpos($planNormalised, 'free') === 0),
+    'verification' => [
+        'status' => $normalisedVerificationStatus,
+        'statusDisplay' => is_string($rawVerificationStatus) ? trim($rawVerificationStatus) : '',
+        'submittedAt' => $verificationSubmittedAt,
+        'feedback' => is_string($verificationFeedback) ? trim((string)$verificationFeedback) : '',
+    ],
 ];
 
 if (isset($_GET['format']) && $_GET['format'] === 'json') {
@@ -427,6 +466,20 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
       width: 100%;
     }
 
+    .btn[disabled],
+    .btn.is-disabled {
+      cursor: not-allowed;
+      opacity: 0.6;
+      box-shadow: none;
+      transform: none;
+    }
+
+    .btn[disabled]:hover,
+    .btn.is-disabled:hover {
+      box-shadow: none;
+      transform: none;
+    }
+
     .btn-primary {
       background: linear-gradient(135deg, var(--orange), var(--orange-light));
       color: #ffffff;
@@ -456,6 +509,23 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
       margin-top: 6px;
       font-size: 16px;
       padding: 14px 22px;
+    }
+
+    .action-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .verification-note {
+      margin: 4px 0 0;
+      font-size: 0.92rem;
+      color: var(--muted);
+    }
+
+    .verification-note.note-warning {
+      color: #b73a2f;
+      font-weight: 600;
     }
 
     @media (min-width: 640px) {
@@ -640,10 +710,17 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
       </section>
 
       <section class="glass-card" aria-label="Profile actions">
-        <button class="btn btn-primary btn-large" id="editProfileBtn" type="button">
-          <i class="ri-edit-line" aria-hidden="true"></i>
-          Edit Profile
-        </button>
+        <div class="action-stack">
+          <button class="btn btn-primary btn-large" id="editProfileBtn" type="button">
+            <i class="ri-edit-line" aria-hidden="true"></i>
+            Edit Profile
+          </button>
+          <button class="btn btn-outline btn-large" id="verificationBtn" type="button">
+            <i class="ri-shield-check-line" aria-hidden="true"></i>
+            Get Verified
+          </button>
+          <p class="verification-note" id="verificationNote" hidden></p>
+        </div>
       </section>
     </div>
   </main>

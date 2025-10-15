@@ -18,6 +18,8 @@ const viewPricingBtn = document.getElementById('viewPricingBtn');
 const headerProfileImage = document.getElementById('headerProfileImage');
 const headerFallbackImage =
   headerProfileImage?.dataset?.fallback || headerProfileImage?.getAttribute('src') || 'logo.jpeg';
+const verificationBtn = document.getElementById('verificationBtn');
+const verificationNote = document.getElementById('verificationNote');
 
 const safeText = (value) => {
   if (!value) return '—';
@@ -44,6 +46,54 @@ const computeInitials = (name, business) => {
   const words = source.split(/\s+/).filter(Boolean).slice(0, 2);
   const initials = words.map((word) => word.charAt(0)).join('');
   return initials.toUpperCase() || fallback.slice(0, 2).toUpperCase();
+};
+
+const normaliseStatus = (value) => (typeof value === 'string' ? value.trim().toLowerCase() : '');
+const PENDING_STATUSES = new Set(['pending', 'submitted', 'under review', 'in_review', 'in-review', 'processing']);
+const APPROVED_STATUSES = new Set(['verified', 'approved', 'active', 'complete', 'completed']);
+const REJECTED_STATUSES = new Set(['rejected', 'needs_changes', 'needs update', 'needs-update', 'declined', 'failed']);
+
+const updateVerificationCTA = (profile = {}) => {
+  if (!verificationBtn) return;
+
+  const planLabel = typeof profile.plan === 'string' ? profile.plan : '';
+  const planName = planLabel.trim().toLowerCase();
+  const planIsPaid = typeof profile.planIsPaid === 'boolean' ? profile.planIsPaid : !(planName === '' || planName.startsWith('free'));
+
+  const verification = profile.verification || {};
+  const status = normaliseStatus(verification.status || verification.statusDisplay);
+  const feedback = typeof verification.feedback === 'string' ? verification.feedback.trim() : '';
+  const submittedAt = verification.submittedAt ? String(verification.submittedAt) : '';
+
+  let disabled = false;
+  let note = '';
+
+  if (!planIsPaid) {
+    disabled = true;
+    note = 'Upgrade your plan to request verification.';
+  } else if (APPROVED_STATUSES.has(status)) {
+    disabled = true;
+    note = 'Your storefront is already verified.';
+  } else if (PENDING_STATUSES.has(status) || submittedAt) {
+    disabled = true;
+    note = 'Your verification request is under review.';
+  } else if (REJECTED_STATUSES.has(status)) {
+    disabled = false;
+    note = feedback || 'We found issues with your submission. Update the documents and re-submit.';
+  } else {
+    disabled = false;
+    note = 'Earn buyer trust by completing your verification.';
+  }
+
+  verificationBtn.disabled = disabled;
+  verificationBtn.classList.toggle('is-disabled', disabled);
+  verificationBtn.setAttribute('aria-disabled', String(disabled));
+
+  if (verificationNote) {
+    verificationNote.textContent = note;
+    verificationNote.hidden = !note;
+    verificationNote.classList.toggle('note-warning', REJECTED_STATUSES.has(status));
+  }
 };
 
 const applyProfile = (profile) => {
@@ -105,9 +155,11 @@ const applyProfile = (profile) => {
     if (planLabel.toLowerCase() === 'free') {
       upgradeBanner.style.display = 'flex';
     } else {
-      upgradeBanner.style.display = 'none';
+    upgradeBanner.style.display = 'none';
     }
   }
+
+  updateVerificationCTA(profile);
 };
 
 const fetchProfile = async () => {
@@ -163,6 +215,11 @@ const bindActions = () => {
 
   viewPricingBtn?.addEventListener('click', () => {
     window.location.href = 'vendor-plans.php#pricing';
+  });
+
+  verificationBtn?.addEventListener('click', () => {
+    if (verificationBtn.disabled) return;
+    window.location.href = 'vendor-verification.php';
   });
 };
 
