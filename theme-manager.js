@@ -4,6 +4,16 @@
   const THEME_EVENT = 'yustam-theme-change';
   const root = document.documentElement;
 
+  const getThemeContext = () => {
+    if (root.dataset && root.dataset.themeContext) return root.dataset.themeContext;
+    if (document.body && document.body.dataset && document.body.dataset.themeContext) {
+      return document.body.dataset.themeContext;
+    }
+    return '';
+  };
+
+  const isBuyerContext = () => getThemeContext() === 'buyer';
+
   const LIGHT = {
     '--yustam-surface-base': 'radial-gradient(circle at top right, rgba(15, 106, 83, 0.14), transparent 58%), linear-gradient(135deg, #f3ebe0, #f9f3ea)',
     '--yustam-surface-card': 'rgba(255, 255, 255, 0.96)',
@@ -509,6 +519,11 @@
     },
   };
 })();
+
+
+
+
+
 
 
 
