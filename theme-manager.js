@@ -241,6 +241,15 @@
     },
     {
       selectors: `
+        [data-theme="dark"] body .vendor-card p,
+        [data-theme="dark"] body .vendor-card .description,
+        [data-theme="dark"] body .vendor-card .section-description`,
+      style: {
+        color: '#0f6a53 !important',
+      },
+    },
+    {
+      selectors: `
         [data-theme="dark"] body .logo,
         [data-theme="dark"] body .logo span,
         [data-theme="dark"] body .header-inner .logo,
