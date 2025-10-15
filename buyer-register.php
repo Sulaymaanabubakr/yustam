@@ -55,7 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (!$errors) {
         $passwordHash = password_hash($password, PASSWORD_DEFAULT);
-        $buyer = yustam_buyers_create($name, $email, $phone, $passwordHash);
+        $buyer = yustam_buyers_create($name, $email, $phone, $passwordHash, 'email');
 
         $_SESSION['buyer_id'] = $buyer['id'];
         $_SESSION['buyer_name'] = $buyer['name'];
