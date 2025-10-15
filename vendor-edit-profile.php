@@ -355,6 +355,14 @@ $profileJson = json_encode($profile, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNI
       z-index: 50;
     }
 
+    .save-bar .save-button {
+      width: 100%;
+      max-width: 220px;
+      margin: 0 auto;
+      font-size: 0.92rem;
+      padding: 10px 16px;
+    }
+
     .save-button {
       width: 100%;
       border: none;
@@ -386,6 +394,10 @@ $profileJson = json_encode($profile, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNI
       display: inline-flex;
       align-items: center;
       justify-content: center;
+    }
+
+    .save-spinner[hidden] {
+      display: none !important;
     }
 
     .save-spinner i {
@@ -638,12 +650,6 @@ $profileJson = json_encode($profile, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNI
       </div>
     </section>
 
-    <div class="form-actions" style="text-align: center; margin: 20px 0;">
-      <button type="submit" class="save-button">
-        <i class="ri-save-3-line" aria-hidden="true"></i>
-        Save Changes
-      </button>
-    </div>
   </main>
 </form>
 

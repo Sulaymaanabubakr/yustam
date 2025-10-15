@@ -120,6 +120,10 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
       flex-direction: column;
     }
 
+    [hidden] {
+      display: none !important;
+    }
+
     .app-header {
       position: sticky;
       top: 0;
@@ -241,10 +245,28 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
       flex-wrap: wrap;
     }
 
-    .initials-badge {
-      width: 88px;
-      height: 88px;
+    .avatar-shell {
+      position: relative;
+      width: 96px;
+      height: 96px;
       border-radius: 50%;
+      overflow: hidden;
+      flex-shrink: 0;
+      box-shadow: 0 20px 36px rgba(15, 106, 83, 0.24);
+      background: linear-gradient(135deg, var(--emerald), var(--emerald-dark));
+      display: grid;
+      place-items: center;
+    }
+
+    .avatar-shell img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .initials-badge {
+      width: 100%;
+      height: 100%;
       display: grid;
       place-items: center;
       font-family: 'Anton', sans-serif;
@@ -252,7 +274,6 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
       letter-spacing: 0.08em;
       color: #ffffff;
       background: linear-gradient(135deg, var(--emerald), var(--emerald-dark));
-      box-shadow: 0 18px 32px rgba(15, 106, 83, 0.28);
     }
 
     .identity-meta {
@@ -532,8 +553,8 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
 
   <header class="app-header">
     <div class="header-left logo-area">
-      <a class="header-logo" href="/index.html" aria-label="YUSTAM home">
-        <img src="logo.jpeg" alt="YUSTAM logo" />
+      <a class="header-logo" href="/index.html" aria-label="Vendor home">
+        <img id="headerProfileImage" src="logo.jpeg" data-fallback="logo.jpeg" alt="Vendor profile image" />
       </a>
       <span class="header-title" role="link" tabindex="0">Vendor</span>
     </div>
@@ -557,7 +578,10 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
     <div class="page-shell">
       <section class="glass-card profile-card" aria-labelledby="profileTitle">
         <div class="profile-header">
-          <div class="initials-badge" id="vendorInitials">YN</div>
+          <div class="avatar-shell">
+            <img id="vendorAvatar" src="logo.jpeg" alt="Vendor avatar" hidden />
+            <div class="initials-badge" id="vendorInitials">YN</div>
+          </div>
           <div class="identity-meta">
             <h1 class="vendor-name" id="profileTitle">Vendor Name</h1>
             <p class="business-name" id="businessName">Business Name</p>

@@ -1,5 +1,6 @@
 const loader = document.getElementById('profileLoader');
 const initialsBadge = document.getElementById('vendorInitials');
+const avatarImg = document.getElementById('vendorAvatar');
 const profileTitle = document.getElementById('profileTitle');
 const businessNameHeading = document.getElementById('businessName');
 const planBadge = document.getElementById('planBadge');
@@ -14,6 +15,9 @@ const joinedField = document.getElementById('vendorJoined');
 const editProfileBtn = document.getElementById('editProfileBtn');
 const upgradePlanBtn = document.getElementById('upgradePlanBtn');
 const viewPricingBtn = document.getElementById('viewPricingBtn');
+const headerProfileImage = document.getElementById('headerProfileImage');
+const headerFallbackImage =
+  headerProfileImage?.dataset?.fallback || headerProfileImage?.getAttribute('src') || 'logo.jpeg';
 
 const safeText = (value) => {
   if (!value) return '—';
@@ -24,6 +28,13 @@ const safeText = (value) => {
 const toggleLoader = (show) => {
   if (!loader) return;
   loader.classList.toggle('active', Boolean(show));
+};
+
+const sanitizeImageUrl = (value) => {
+  if (!value || typeof value !== 'string') return '';
+  const trimmed = value.trim();
+  if (!trimmed || /^javascript:/i.test(trimmed)) return '';
+  return trimmed;
 };
 
 const computeInitials = (name, business) => {
@@ -44,7 +55,8 @@ const applyProfile = (profile) => {
     address = '',
     state = '',
     plan = 'Free',
-    joined = '—',
+    joined = '-',
+    profilePhoto = '',
   } = profile || {};
 
   const initials = computeInitials(name, businessName);
@@ -65,6 +77,22 @@ const applyProfile = (profile) => {
   if (addressField) addressField.textContent = safeText(address);
   if (stateField) stateField.textContent = safeText(state);
   if (joinedField) joinedField.textContent = safeText(joined);
+
+  const photoUrl = sanitizeImageUrl(profilePhoto);
+  if (avatarImg) {
+    if (photoUrl) {
+      avatarImg.src = photoUrl;
+      avatarImg.hidden = false;
+      if (initialsBadge) initialsBadge.hidden = true;
+    } else {
+      avatarImg.hidden = true;
+      if (initialsBadge) initialsBadge.hidden = false;
+    }
+  }
+
+  if (headerProfileImage) {
+    headerProfileImage.src = photoUrl || headerFallbackImage;
+  }
 
   if (upgradeBanner) {
     if (planLabel.toLowerCase() === 'free') {
