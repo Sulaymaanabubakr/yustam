@@ -11,6 +11,95 @@ $vendorName = 'Elite Gadgets NG';
 $buyerId = $_SESSION['buyer_id'] ?? '';
 $buyerName = $_SESSION['buyer_name'] ?? '';
 
+function yustam_format_plan_label(?string $plan): string
+{
+    $plan = trim((string)$plan);
+    if ($plan === '') {
+        return 'Free Plan';
+    }
+
+    return preg_match('/plan$/i', $plan) ? $plan : $plan . ' Plan';
+}
+
+function yustam_slugify_plan(?string $plan): string
+{
+    $plan = strtolower(trim((string)$plan));
+    $plan = preg_replace('/plan$/', '', $plan);
+    $plan = preg_replace('/[^a-z0-9]+/', '-', $plan);
+    $plan = trim((string)$plan, '-');
+
+    return $plan !== '' ? $plan : 'free';
+}
+
+function yustam_normalise_verification($value): string
+{
+    if ($value === true || $value === 1 || $value === '1') {
+        return 'verified';
+    }
+
+    if ($value === false || $value === 0 || $value === '0' || $value === null) {
+        return 'unverified';
+    }
+
+    $value = strtolower(trim((string)$value));
+
+    if (in_array($value, ['true', 'yes', 'verified', 'approved', 'active'], true)) {
+        return 'verified';
+    }
+
+    if (in_array($value, ['pending', 'submitted', 'processing', 'in_review', 'in-review', 'under review'], true)) {
+        return 'pending';
+    }
+
+    if (in_array($value, ['rejected', 'declined', 'failed', 'needs_changes', 'needs update', 'needs-update', 'no', 'false'], true)) {
+        return 'unverified';
+    }
+
+    return 'unverified';
+}
+
+function yustam_verification_label(string $state): string
+{
+    switch ($state) {
+        case 'verified':
+            return 'Verified Vendor';
+        case 'pending':
+            return 'Pending Review';
+        default:
+            return 'Not Verified';
+    }
+}
+
+function yustam_verification_icon(string $state): string
+{
+    if ($state === 'verified') {
+        return 'ri-shield-check-line';
+    }
+
+    if ($state === 'pending') {
+        return 'ri-time-line';
+    }
+
+    return 'ri-alert-line';
+}
+
+$vendorPlanInput = $_GET['plan'] ?? '';
+if (!is_string($vendorPlanInput)) {
+    $vendorPlanInput = '';
+}
+$vendorPlanInput = trim($vendorPlanInput);
+$vendorPlan = $vendorPlanInput !== '' ? $vendorPlanInput : 'Premium';
+$vendorPlanLabel = yustam_format_plan_label($vendorPlan);
+$vendorPlanSlug = yustam_slugify_plan($vendorPlan);
+
+$vendorVerifiedInput = $_GET['verified'] ?? 'verified';
+if (!is_string($vendorVerifiedInput)) {
+    $vendorVerifiedInput = 'verified';
+}
+$vendorVerificationState = yustam_normalise_verification($vendorVerifiedInput);
+$vendorVerificationLabel = yustam_verification_label($vendorVerificationState);
+$vendorVerificationIcon = yustam_verification_icon($vendorVerificationState);
+
 $chatId = $vendorId && $buyerId ? $vendorId . '_' . $buyerId . '_' . $productId : '';
 ?>
 <!DOCTYPE html>
@@ -379,13 +468,79 @@ $chatId = $vendorId && $buyerId ? $vendorId . '_' . $buyerId . '_' . $productId 
             border: 3px solid rgba(243, 115, 30, 0.4);
         }
 
-        .plan-chip {
-            background: rgba(243, 115, 30, 0.15);
-            color: var(--orange);
+        .vendor-text {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .vendor-badges {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 2px;
+        }
+
+        .vendor-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
             border-radius: 999px;
-            padding: 4px 12px;
-            font-size: 0.85rem;
+            font-size: 0.75rem;
             font-weight: 600;
+            letter-spacing: 0.02em;
+            background: rgba(0, 77, 64, 0.12);
+            color: var(--emerald);
+        }
+
+        .vendor-badge i {
+            font-size: 0.9rem;
+        }
+
+        .vendor-plan-premium {
+            background: rgba(243, 115, 30, 0.16);
+            color: var(--orange-deep);
+        }
+
+        .vendor-plan-pro {
+            background: rgba(0, 77, 64, 0.16);
+            color: var(--emerald);
+        }
+
+        .vendor-plan-plus {
+            background: rgba(0, 77, 64, 0.12);
+            color: var(--emerald);
+        }
+
+        .vendor-plan-starter {
+            background: rgba(17, 17, 17, 0.08);
+            color: rgba(17, 17, 17, 0.68);
+        }
+
+        .vendor-plan-elite {
+            background: linear-gradient(125deg, rgba(243, 115, 30, 0.2), rgba(0, 77, 64, 0.22));
+            color: var(--emerald);
+        }
+
+        .vendor-plan-free {
+            background: rgba(17, 17, 17, 0.08);
+            color: rgba(17, 17, 17, 0.68);
+        }
+
+        .vendor-badge.verified {
+            background: rgba(0, 77, 64, 0.18);
+            color: var(--emerald);
+        }
+
+        .vendor-badge.pending {
+            background: rgba(255, 193, 7, 0.22);
+            color: #a46f00;
+        }
+
+        .vendor-badge.unverified {
+            background: rgba(217, 48, 37, 0.16);
+            color: #a32018;
         }
 
         .vendor-actions {
@@ -697,7 +852,13 @@ $chatId = $vendorId && $buyerId ? $vendorId . '_' . $buyerId . '_' . $productId 
         }
     </style>
 </head>
-<body data-buyer-id="<?= htmlspecialchars((string)$buyerId, ENT_QUOTES, 'UTF-8'); ?>">
+<body
+    data-buyer-id="<?= htmlspecialchars((string)$buyerId, ENT_QUOTES, 'UTF-8'); ?>"
+    data-vendor-id="<?= htmlspecialchars((string)$vendorId, ENT_QUOTES, 'UTF-8'); ?>"
+    data-vendor-name="<?= htmlspecialchars($vendorName, ENT_QUOTES, 'UTF-8'); ?>"
+    data-vendor-plan="<?= htmlspecialchars($vendorPlan, ENT_QUOTES, 'UTF-8'); ?>"
+    data-vendor-verified="<?= htmlspecialchars($vendorVerificationState, ENT_QUOTES, 'UTF-8'); ?>"
+>
     <!-- Header -->
     <header>
         <div class="topbar">
@@ -809,9 +970,24 @@ $chatId = $vendorId && $buyerId ? $vendorId . '_' . $buyerId . '_' . $productId 
         <section class="glass-card vendor-card" aria-labelledby="vendorTitle">
             <div class="vendor-header">
                 <img src="https://images.unsplash.com/photo-1544723795-3fb6469f5b39?auto=format&fit=crop&w=200&q=80" alt="Vendor profile photo" class="vendor-avatar">
-                <div>
+                <div class="vendor-text">
                     <h3 id="vendorTitle"><?= htmlspecialchars($vendorName, ENT_QUOTES, 'UTF-8'); ?></h3>
-                    <div class="plan-chip">Premium Vendor</div>
+                    <div class="vendor-badges">
+                        <span
+                            class="vendor-badge vendor-plan vendor-plan-<?= htmlspecialchars($vendorPlanSlug, ENT_QUOTES, 'UTF-8'); ?>"
+                            id="vendorPlanBadge"
+                        >
+                            <i class="ri-vip-crown-fill" aria-hidden="true"></i>
+                            <?= htmlspecialchars($vendorPlanLabel, ENT_QUOTES, 'UTF-8'); ?>
+                        </span>
+                        <span
+                            class="vendor-badge vendor-verified <?= htmlspecialchars($vendorVerificationState, ENT_QUOTES, 'UTF-8'); ?>"
+                            id="vendorVerifiedBadge"
+                        >
+                            <i class="<?= htmlspecialchars($vendorVerificationIcon, ENT_QUOTES, 'UTF-8'); ?>" aria-hidden="true"></i>
+                            <?= htmlspecialchars($vendorVerificationLabel, ENT_QUOTES, 'UTF-8'); ?>
+                        </span>
+                    </div>
                 </div>
             </div>
             <div id="vendorInfo" class="vendor-details">

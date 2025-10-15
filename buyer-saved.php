@@ -267,6 +267,83 @@ if ($firstName === '') {
             font-size: 0.98rem;
         }
 
+        .vendor-meta {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9rem;
+            color: rgba(17, 17, 17, 0.7);
+        }
+
+        .vendor-meta i {
+            color: var(--emerald);
+        }
+
+        .vendor-badges {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 6px;
+        }
+
+        .vendor-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+            background: rgba(0, 77, 64, 0.12);
+            color: var(--emerald);
+        }
+
+        .vendor-badge i {
+            font-size: 0.9rem;
+        }
+
+        .vendor-plan-premium {
+            background: rgba(243, 115, 30, 0.18);
+            color: var(--orange);
+        }
+
+        .vendor-plan-pro {
+            background: rgba(0, 77, 64, 0.16);
+            color: var(--emerald);
+        }
+
+        .vendor-plan-plus {
+            background: rgba(0, 77, 64, 0.12);
+            color: var(--emerald);
+        }
+
+        .vendor-plan-starter,
+        .vendor-plan-free {
+            background: rgba(17, 17, 17, 0.06);
+            color: rgba(17, 17, 17, 0.7);
+        }
+
+        .vendor-plan-elite {
+            background: linear-gradient(125deg, rgba(243, 115, 30, 0.2), rgba(0, 77, 64, 0.22));
+            color: var(--emerald);
+        }
+
+        .vendor-badge.verified {
+            background: rgba(0, 77, 64, 0.2);
+            color: var(--emerald);
+        }
+
+        .vendor-badge.pending {
+            background: rgba(255, 193, 7, 0.24);
+            color: #a46f00;
+        }
+
+        .vendor-badge.unverified {
+            background: rgba(217, 48, 37, 0.18);
+            color: #a32018;
+        }
+
         .actions {
             display: flex;
             align-items: center;
@@ -424,8 +501,6 @@ if ($firstName === '') {
 <script type="module" src="buyer-saved.js"></script>
 </body>
 </html>
-
-
 
 
 

@@ -28,6 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const normaliseStatus = (value) => (typeof value === 'string' ? value.trim().toLowerCase() : '');
   const STATUS_CLASS_MAP = {
+    not_submitted: 'badge-active',
     pending: 'badge-pending',
     verified: 'badge-verified',
     approved: 'badge-verified',
@@ -238,3 +239,4 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   fetchStatus();
 });
+

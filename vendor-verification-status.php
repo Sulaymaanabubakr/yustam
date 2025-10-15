@@ -69,6 +69,11 @@ $planValue = array_key_exists('plan', $vendor) ? ($vendor['plan'] ?? 'Free') : '
 $planNormalised = strtolower(trim((string) $planValue));
 $planIsPaid = $planNormalised !== '' && $planNormalised !== 'free';
 
+if ($normalisedStatus === '' && ($submittedAt === '' || $submittedAt === null)) {
+    $normalisedStatus = 'not_submitted';
+    $rawStatus = 'Not submitted';
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = isset($_POST['action']) ? strtolower(trim((string) $_POST['action'])) : 'submit';
 
@@ -123,13 +128,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     respond_json(true, 'Documents submitted for review.', [
         'data' => [
-            'status' => 'pending',
-            'statusDisplay' => 'Pending',
-            'submittedAt' => $submittedColumn ? $vendor[$submittedColumn] : '',
-            'feedback' => '',
-            'plan' => $planValue,
-            'planIsPaid' => $planIsPaid,
-        ],
+        'status' => 'pending',
+        'statusDisplay' => 'Pending',
+        'submittedAt' => $submittedColumn ? $vendor[$submittedColumn] : '',
+        'feedback' => '',
+        'plan' => $planValue,
+        'planIsPaid' => $planIsPaid,
+    ],
     ]);
 }
 

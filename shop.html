@@ -320,6 +320,75 @@
       color: rgba(17, 17, 17, 0.6);
     }
 
+    .vendor-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .vendor-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      background: rgba(0, 77, 64, 0.1);
+      color: var(--emerald);
+    }
+
+    .vendor-badge i {
+      font-size: 0.9rem;
+    }
+
+    .vendor-plan-premium {
+      background: rgba(243, 115, 30, 0.12);
+      color: var(--orange-dark);
+    }
+
+    .vendor-plan-pro {
+      background: rgba(0, 77, 64, 0.14);
+      color: var(--emerald-deep);
+    }
+
+    .vendor-plan-plus {
+      background: rgba(0, 77, 64, 0.1);
+      color: var(--emerald);
+    }
+
+    .vendor-plan-starter {
+      background: rgba(17, 17, 17, 0.05);
+      color: rgba(17, 17, 17, 0.65);
+    }
+
+    .vendor-plan-elite {
+      background: linear-gradient(120deg, rgba(243, 115, 30, 0.18), rgba(0, 77, 64, 0.18));
+      color: var(--emerald-deep);
+    }
+
+    .vendor-plan-free {
+      background: rgba(17, 17, 17, 0.05);
+      color: rgba(17, 17, 17, 0.6);
+    }
+
+    .vendor-badge.verified {
+      background: rgba(0, 77, 64, 0.16);
+      color: var(--emerald-deep);
+    }
+
+    .vendor-badge.pending {
+      background: rgba(255, 193, 7, 0.18);
+      color: #a66300;
+    }
+
+    .vendor-badge.unverified {
+      background: rgba(217, 48, 37, 0.14);
+      color: #a32018;
+    }
+
     .product-actions {
       margin-top: auto;
       display: grid;
