@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS `buyers` (
     `email` VARCHAR(150) NOT NULL UNIQUE,
     `phone` VARCHAR(30) DEFAULT NULL,
     `password` VARCHAR(255) NOT NULL,
+    `provider` VARCHAR(30) DEFAULT 'email',
     `joined_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
@@ -38,12 +39,19 @@ SQL;
     if (!$conn->query($sql)) {
         throw new RuntimeException('Unable to ensure buyers table exists: ' . $conn->error);
     }
+
+    $providerColumn = $conn->query("SHOW COLUMNS FROM `buyers` LIKE 'provider'");
+    if ($providerColumn && $providerColumn->num_rows === 0) {
+        if (!$conn->query("ALTER TABLE `buyers` ADD COLUMN `provider` VARCHAR(30) DEFAULT 'email' AFTER `password`")) {
+            throw new RuntimeException('Unable to add provider column to buyers table: ' . $conn->error);
+        }
+    }
 }
 
 /**
  * Inserts a new buyer record.
  */
-function yustam_buyers_create(string $name, string $email, string $phone, string $passwordHash): array
+function yustam_buyers_create(string $name, string $email, string $phone, string $passwordHash, string $provider = 'email'): array
 {
     $conn = yustam_buyers_connection();
     $lowerEmail = strtolower($email);
@@ -51,14 +59,14 @@ function yustam_buyers_create(string $name, string $email, string $phone, string
     $joinedAt = gmdate('Y-m-d H:i:s');
 
     $stmt = $conn->prepare(
-        'INSERT INTO buyers (name, email, phone, password, joined_at) VALUES (?, ?, ?, ?, ?)'
+        'INSERT INTO buyers (name, email, phone, password, provider, joined_at) VALUES (?, ?, ?, ?, ?, ?)'
     );
 
     if (!$stmt) {
         throw new RuntimeException('Failed to prepare buyer insert statement: ' . $conn->error);
     }
 
-    $stmt->bind_param('sssss', $name, $lowerEmail, $normalizedPhone, $passwordHash, $joinedAt);
+    $stmt->bind_param('ssssss', $name, $lowerEmail, $normalizedPhone, $passwordHash, $provider, $joinedAt);
 
     if (!$stmt->execute()) {
         $error = $stmt->error;
@@ -75,6 +83,7 @@ function yustam_buyers_create(string $name, string $email, string $phone, string
         'email' => $lowerEmail,
         'phone' => $normalizedPhone,
         'password' => $passwordHash,
+        'provider' => $provider,
         'joined_at' => $joinedAt,
     ];
 }
@@ -85,7 +94,7 @@ function yustam_buyers_create(string $name, string $email, string $phone, string
 function yustam_buyers_find_by_email(string $email): ?array
 {
     $conn = yustam_buyers_connection();
-    $stmt = $conn->prepare('SELECT id, name, email, phone, password, joined_at FROM buyers WHERE email = ? LIMIT 1');
+    $stmt = $conn->prepare('SELECT id, name, email, phone, password, provider, joined_at FROM buyers WHERE email = ? LIMIT 1');
 
     if (!$stmt) {
         throw new RuntimeException('Failed to prepare buyer lookup statement: ' . $conn->error);
@@ -109,7 +118,7 @@ function yustam_buyers_find_by_email(string $email): ?array
 function yustam_buyers_find(int $id): ?array
 {
     $conn = yustam_buyers_connection();
-    $stmt = $conn->prepare('SELECT id, name, email, phone, password, joined_at FROM buyers WHERE id = ? LIMIT 1');
+    $stmt = $conn->prepare('SELECT id, name, email, phone, password, provider, joined_at FROM buyers WHERE id = ? LIMIT 1');
 
     if (!$stmt) {
         throw new RuntimeException('Failed to prepare buyer lookup statement: ' . $conn->error);

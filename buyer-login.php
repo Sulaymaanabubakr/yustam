@@ -94,6 +94,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             gap: 18px;
         }
 
+        .divider {
+            position: relative;
+            text-align: center;
+            font-size: 0.9rem;
+            color: rgba(17, 17, 17, 0.55);
+            margin: 4px 0;
+        }
+
+        .divider span {
+            position: relative;
+            padding: 0 12px;
+            background: transparent;
+        }
+
+        .divider::before,
+        .divider::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            width: 38%;
+            height: 1px;
+            background: rgba(17, 17, 17, 0.12);
+        }
+
+        .divider::before {
+            left: 0;
+        }
+
+        .divider::after {
+            right: 0;
+        }
+
         .field-group {
             display: grid;
             gap: 8px;
@@ -146,9 +178,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             box-shadow: 0 16px 24px rgba(243, 115, 30, 0.3);
         }
 
+        .google-btn {
+            border: 1px solid rgba(17, 17, 17, 0.08);
+            border-radius: 18px;
+            padding: 12px 18px;
+            background: #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            font-weight: 600;
+            font-size: 0.98rem;
+            color: rgba(17, 17, 17, 0.85);
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+        }
+
+        .google-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 12px 22px rgba(0, 0, 0, 0.12);
+        }
+
+        .google-btn.loading {
+            opacity: 0.75;
+            pointer-events: none;
+        }
+
+        .google-icon {
+            width: 20px;
+            height: 20px;
+        }
+
+        .google-label {
+            position: relative;
+        }
+
         .auth-switch {
             text-align: center;
             font-size: 0.92rem;
+            margin: 0;
         }
 
         .auth-switch a {
@@ -205,29 +273,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
             <div class="auth-footer">
                 <button type="submit" class="action-button">Sign In</button>
-                <p class="auth-switch">Don’t have an account? <a href="buyer-register.php">Sign up now</a></p>
+                <div class="divider"><span>or</span></div>
+                <button type="button" class="google-btn" id="googleBtn">
+                    <svg
+                        class="google-icon"
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 533.5 544.3"
+                        aria-hidden="true"
+                    >
+                        <path
+                            fill="#4285f4"
+                            d="M533.5 278.4c0-17.4-1.6-34.1-4.6-50.4H272.1v95.3h146.9c-6.3 34-25.2 62.8-53.6 82.1v68.2h86.7c50.8-46.8 81.4-115.6 81.4-195.2z"
+                        />
+                        <path
+                            fill="#34a853"
+                            d="M272.1 544.3c72.9 0 134-24.1 178.6-65.7l-86.7-68.2c-24.1 16.3-55 26-91.9 26-70.5 0-130.3-47.6-151.6-111.4H31.6v69.9c44.7 88.5 136.8 148 240.5 148z"
+                        />
+                        <path
+                            fill="#fbbc04"
+                            d="M120.5 325c-10.9-32.5-10.9-67.6 0-100.1V155H31.6c-44.7 88.5-44.7 193.7 0 282.2L120.5 325z"
+                        />
+                        <path
+                            fill="#ea4335"
+                            d="M272.1 107.7c39.6 0 75.3 13.6 103.4 40.2l77.6-77.6C405.9 24.1 345 0 272.1 0 168.4 0 76.3 59.5 31.6 148l88.9 69.9c21.3-63.8 81.1-110.2 151.6-110.2z"
+                        />
+                    </svg>
+                    <span class="google-label">Sign in with Google</span>
+                </button>
+                <p class="auth-switch">Don't have an account? <a href="buyer-register.php">Sign up now</a></p>
             </div>
         </form>
     </div>
     <div class="toast" id="authToast">Incorrect email or password</div>
-  <script src="theme-manager.js" defer></script>
-<script>
-        const toast = document.getElementById('authToast');
-        const hasError = <?= $errorMessage ? 'true' : 'false' ?>;
-
-        function showToast(message) {
-            if (!toast) return;
-            toast.textContent = message;
-            toast.classList.add('is-visible');
-            setTimeout(() => {
-                toast.classList.remove('is-visible');
-            }, 2800);
-        }
-
-        if (hasError) {
-            showToast('<?= htmlspecialchars($errorMessage ?: 'Incorrect email or password') ?>');
-        }
+    <script>
+        window.__BUYER_AUTH_ERROR__ = <?= json_encode($errorMessage) ?>;
     </script>
+    <script src="theme-manager.js" defer></script>
+    <script type="module" src="buyer-login.js"></script>
 </body>
 </html>
 
