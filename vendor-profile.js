@@ -119,8 +119,15 @@ const applyProfile = (profile) => {
   if (businessNameHeading) businessNameHeading.textContent = safeText(businessName);
 
   const planLabel = safeText(plan);
+  let planDisplay = planLabel;
+  if (planDisplay !== '-') {
+    const normalised = planDisplay.replace(/\s+/g, ' ').trim().toLowerCase();
+    if (!normalised.endsWith('plan')) {
+      planDisplay = `${planDisplay} Plan`.trim();
+    }
+  }
   if (planBadge) {
-    planBadge.textContent = `${planLabel} Plan`;
+    planBadge.textContent = planDisplay;
     planBadge.dataset.plan = planLabel;
   }
 
