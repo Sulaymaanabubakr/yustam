@@ -1,434 +1,500 @@
-// Mock listings data for demo purposes
-    const productsData = [
+import { db } from './firebase.js';
+import {
+  collection,
+  onSnapshot,
+  orderBy,
+  query,
+} from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
+
+const productGrid = document.getElementById('productGrid');
+const emptyState = document.getElementById('emptyState');
+const resultsCount = document.getElementById('resultsCount');
+const loadMoreBtn = document.getElementById('loadMoreBtn');
+const showingText = document.getElementById('showingText');
+
+const searchInput = document.getElementById('searchInput');
+const categoryFilter = document.getElementById('categoryFilter');
+const locationFilter = document.getElementById('locationFilter');
+const priceFilter = document.getElementById('priceFilter');
+const sortFilter = document.getElementById('sortFilter');
+const filterBtn = document.getElementById('filterBtn');
+const resetBtn = document.getElementById('resetBtn');
+
+const ITEMS_PER_PAGE = 8;
+const PLACEHOLDER_IMAGE = 'https://images.unsplash.com/photo-1545239351-1141bd82e8a6?auto=format&fit=crop&w=800&q=80';
+const emptyStateDefaultText = emptyState ? emptyState.textContent.trim() : '';
+const LOADING_TEXT = 'Loading marketplace listings...';
+const ERROR_TEXT = 'We could not load marketplace listings right now. Please refresh to try again.';
+const NO_LISTINGS_TEXT = 'No vendor listings are available yet. Vendors are adding their products soon.';
+
+let currentPage = 1;
+let allListings = [];
+let filteredListings = [];
+let rawListingDocs = [];
+let vendorMap = new Map();
+let listingsUnsubscribe = null;
+let vendorsUnsubscribe = null;
+let isLoadingListings = false;
+let listingError = false;
+
+const escapeHtml = (value) =>
+  String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+const formatCurrency = (value) =>
+  new Intl.NumberFormat('en-NG', {
+    style: 'currency',
+    currency: 'NGN',
+    maximumFractionDigits: 0,
+  }).format(Number.isFinite(Number(value)) ? Number(value) : 0);
+
+const slugifyPlan = (plan) => {
+  if (!plan) return 'free';
+  return String(plan)
+    .toLowerCase()
+    .replace(/plan/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-+|-+$)/g, '') || 'free';
+};
+
+const formatPlanLabel = (plan) => {
+  if (!plan) return '';
+  const trimmed = String(plan).trim();
+  if (!trimmed) return '';
+  const lower = trimmed.toLowerCase();
+  return lower.endsWith('plan') ? trimmed : `${trimmed} Plan`;
+};
+
+const normaliseVerificationState = (value) => {
+  if (value === true || value === 1) return 'verified';
+  if (value === false || value === 0 || value === null || value === undefined) return 'unverified';
+  const norm = String(value).trim().toLowerCase();
+  if (['1', 'true', 'yes', 'verified', 'approved', 'active', 'complete', 'completed'].includes(norm)) return 'verified';
+  if (['pending', 'submitted', 'processing', 'under review', 'under_review', 'in_review', 'in-review'].includes(norm)) return 'pending';
+  if (['rejected', 'declined', 'failed', 'needs_changes', 'needs update', 'needs-update', 'suspended', 'blocked'].includes(norm)) return 'unverified';
+  return 'unverified';
+};
+
+const createPlanBadge = (plan) => {
+  const label = formatPlanLabel(plan);
+  if (!label) return '';
+  const slug = slugifyPlan(plan);
+  return `<span class="vendor-badge vendor-plan vendor-plan-${escapeHtml(slug)}"><i class="ri-vip-crown-fill" aria-hidden="true"></i>${escapeHtml(label)}</span>`;
+};
+
+const createVerificationBadge = (value) => {
+  const state = normaliseVerificationState(value);
+  if (state === 'verified') {
+    return '<span class="vendor-badge vendor-verified verified"><i class="ri-shield-check-line" aria-hidden="true"></i>Verified Vendor</span>';
+  }
+  if (state === 'pending') {
+    return '<span class="vendor-badge vendor-verified pending"><i class="ri-time-line" aria-hidden="true"></i>Pending Review</span>';
+  }
+  return '<span class="vendor-badge vendor-verified unverified"><i class="ri-alert-line" aria-hidden="true"></i>Not Verified</span>';
+};
+
+const priceInRange = (price, rangeValue) => {
+  const amount = Number.isFinite(Number(price)) ? Number(price) : 0;
+  if (rangeValue === 'all') return true;
+  if (rangeValue.endsWith('+')) {
+    const min = Number(rangeValue.replace('+', ''));
+    return amount >= min;
+  }
+  const [min, max] = rangeValue.split('-').map(Number);
+  return amount >= min && amount <= max;
+};
+
+const setEmptyState = (state) => {
+  if (!emptyState) return;
+  emptyState.style.display = 'block';
+  switch (state) {
+    case 'loading':
+      emptyState.textContent = LOADING_TEXT;
+      if (showingText) showingText.textContent = 'Loading listings...';
+      if (resultsCount) resultsCount.textContent = '';
+      if (loadMoreBtn) loadMoreBtn.style.display = 'none';
+      break;
+    case 'error':
+      emptyState.textContent = ERROR_TEXT;
+      if (showingText) showingText.textContent = 'Showing 0 items';
+      if (resultsCount) resultsCount.textContent = '0 listings found';
+      if (loadMoreBtn) loadMoreBtn.style.display = 'none';
+      break;
+    case 'empty':
+      emptyState.textContent = NO_LISTINGS_TEXT;
+      if (showingText) showingText.textContent = 'Showing 0 items';
+      if (resultsCount) resultsCount.textContent = '0 listings found';
+      if (loadMoreBtn) loadMoreBtn.style.display = 'none';
+      break;
+    case 'filtered':
+      emptyState.textContent = 'No listings match your filters right now.';
+      if (showingText) showingText.textContent = 'Showing 0 items';
       {
-        id: "lst-001",
-        title: "iPhone 13 Pro Max - 256GB",
-        price: 640000,
-        category: "Phones & Tablets",
-        location: "Lagos",
-        vendor: "Tech Plug NG",
-        vendorPlan: "Premium",
-        vendorVerified: true,
-        image: "https://images.unsplash.com/photo-1617084321550-47e6e9983b74?auto=format&fit=crop&w=800&q=80",
-        dateAdded: "2024-03-12"
-      },
-      {
-        id: "lst-002",
-        title: "Samsung 65\" Neo QLED Smart TV",
-        price: 820000,
-        category: "Electronics",
-        location: "Abuja FCT",
-        vendor: "Pixel Home Store",
-        vendorPlan: "Pro",
-        vendorVerified: true,
-        image: "https://images.unsplash.com/photo-1583225200690-1c7d1dd96d54?auto=format&fit=crop&w=800&q=80",
-        dateAdded: "2024-04-18"
-      },
-      {
-        id: "lst-003",
-        title: "3 Bedroom Terrace Duplex - Lekki",
-        price: 98000000,
-        category: "Property",
-        location: "Lagos",
-        vendor: "Prime Realty",
-        vendorPlan: "Elite",
-        vendorVerified: true,
-        image: "https://images.unsplash.com/photo-1617099391444-7d45cc0c2f03?auto=format&fit=crop&w=1200&q=80",
-        dateAdded: "2024-01-22"
-      },
-      {
-        id: "lst-004",
-        title: "Infinix Hot 40i - 8GB/256GB",
-        price: 148000,
-        category: "Phones & Tablets",
-        location: "Kano",
-        vendor: "Northern Gadgets",
-        vendorPlan: "Starter",
-        vendorVerified: "pending",
-        image: "https://images.unsplash.com/photo-1606741965437-1c187c0183e0?auto=format&fit=crop&w=800&q=80",
-        dateAdded: "2024-05-06"
-      },
-      {
-        id: "lst-005",
-        title: "Hisense 5KG Washing Machine",
-        price: 185000,
-        category: "Home & Kitchen",
-        location: "Port Harcourt",
-        vendor: "CleanSpin Stores",
-        vendorPlan: "Starter",
-        vendorVerified: false,
-        image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=800&q=80",
-        dateAdded: "2024-02-01"
-      },
-      {
-        id: "lst-006",
-        title: "Men's Tailored Agbada Set",
-        price: 120000,
-        category: "Fashion",
-        location: "Abuja FCT",
-        vendor: "Royal Threads",
-        vendorPlan: "Plus",
-        vendorVerified: "pending",
-        image: "https://images.unsplash.com/photo-1612423284934-b43b77f22945?auto=format&fit=crop&w=800&q=80",
-        dateAdded: "2024-03-30"
-      },
-      {
-        id: "lst-007",
-        title: "MacBook Air M2 13",
-        price: 860000,
-        category: "Computing",
-        location: "Lagos",
-        vendor: "ByteWorld NG",
-        vendorPlan: "Premium",
-        vendorVerified: true,
-        image: "https://images.unsplash.com/photo-1517059224940-d4af9eec41e5?auto=format&fit=crop&w=800&q=80",
-        dateAdded: "2024-04-08"
-      },
-      {
-        id: "lst-008",
-        title: "Toyota Camry 2018 XLE",
-        price: 15500000,
-        category: "Vehicles",
-        location: "Oyo",
-        vendor: "Highway Autos",
-        vendorPlan: "Premium",
-        vendorVerified: true,
-        image: "https://images.unsplash.com/photo-1503736334956-4c8f8e92946d?auto=format&fit=crop&w=1200&q=80",
-        dateAdded: "2024-03-15"
-      },
-      {
-        id: "lst-009",
-        title: "Solar Hybrid Inverter 5kVA",
-        price: 480000,
-        category: "Power Solutions",
-        location: "Anambra",
-        vendor: "BrightGrid Energy",
-        vendorPlan: "Pro",
-        vendorVerified: true,
-        image: "https://images.unsplash.com/photo-1509395176047-4a66953fd231?auto=format&fit=crop&w=800&q=80",
-        dateAdded: "2024-03-03"
-      },
-      {
-        id: "lst-010",
-        title: "Organic Shea Butter Bundle",
-        price: 22000,
-        category: "Beauty & Self-Care",
-        location: "Kaduna",
-        vendor: "GlowNaturals",
-        vendorPlan: "Starter",
-        vendorVerified: false,
-        image: "https://images.unsplash.com/photo-1574302733348-22ad3f20e5c1?auto=format&fit=crop&w=800&q=80",
-        dateAdded: "2024-02-17"
-      },
-      {
-        id: "lst-011",
-        title: "Premium Leather Sectional Sofa",
-        price: 650000,
-        category: "Furniture",
-        location: "Rivers",
-        vendor: "The Living Room Co.",
-        vendorPlan: "Plus",
-        vendorVerified: true,
-        image: "https://images.unsplash.com/photo-1505691938895-1758d7feb511?auto=format&fit=crop&w=1200&q=80",
-        dateAdded: "2024-04-26"
-      },
-      {
-        id: "lst-012",
-        title: "Professional Event Catering Service",
-        price: 350000,
-        category: "Services",
-        location: "Lagos",
-        vendor: "Flavors Catering NG",
-        vendorPlan: "Starter",
-        vendorVerified: "pending",
-        image: "https://images.unsplash.com/photo-1541544181015-4e5e697c15c3?auto=format&fit=crop&w=800&q=80",
-        dateAdded: "2024-03-20"
-      },
-      {
-        id: "lst-013",
-        title: "Generator - 10kVA Perkins",
-        price: 1250000,
-        category: "Power Solutions",
-        location: "Delta",
-        vendor: "PowerHouse Supplies",
-        image: "https://images.unsplash.com/photo-1574680096145-d05b474e2155?auto=format&fit=crop&w=800&q=80",
-        dateAdded: "2024-01-30"
-      },
-      {
-        id: "lst-014",
-        title: "Luxury Ankara Gown",
-        price: 88000,
-        category: "Fashion",
-        location: "Enugu",
-        vendor: "Adire & Beyond",
-        image: "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=800&q=80",
-        dateAdded: "2024-05-02"
-      },
-      {
-        id: "lst-015",
-        title: "Fresh Organic Fruit Basket",
-        price: 18500,
-        category: "Food & Groceries",
-        location: "Ogun",
-        vendor: "Farm2Table NG",
-        image: "https://images.unsplash.com/photo-1498837167922-ddd27525d352?auto=format&fit=crop&w=800&q=80",
-        dateAdded: "2024-03-09"
-      },
-      {
-        id: "lst-016",
-        title: "Luxury Shortlet Apartment - VI",
-        price: 185000,
-        category: "Property",
-        location: "Lagos",
-        vendor: "Cityscape Living",
-        image: "https://images.unsplash.com/photo-1554995207-c18c203602cb?auto=format&fit=crop&w=1200&q=80",
-        dateAdded: "2024-04-12"
+        const totalLabel = allListings.length === 1 ? 'listing' : 'listings';
+        if (resultsCount) resultsCount.textContent = `${allListings.length} ${totalLabel} available`;
       }
-    ];
+      if (loadMoreBtn) loadMoreBtn.style.display = 'none';
+      break;
+    default:
+      emptyState.textContent = emptyStateDefaultText;
+      break;
+  }
+};
 
-    const productGrid = document.getElementById("productGrid");
-    const emptyState = document.getElementById("emptyState");
-    const resultsCount = document.getElementById("resultsCount");
-    const loadMoreBtn = document.getElementById("loadMoreBtn");
-    const showingText = document.getElementById("showingText");
+const pickListingImage = (data) => {
+  if (Array.isArray(data.imageUrls) && data.imageUrls.length) return data.imageUrls[0];
+  if (Array.isArray(data.images) && data.images.length) return data.images[0];
+  if (typeof data.image === 'string' && data.image.trim()) return data.image.trim();
+  return PLACEHOLDER_IMAGE;
+};
 
-    const searchInput = document.getElementById("searchInput");
-    const categoryFilter = document.getElementById("categoryFilter");
-    const locationFilter = document.getElementById("locationFilter");
-    const priceFilter = document.getElementById("priceFilter");
-    const sortFilter = document.getElementById("sortFilter");
-    const filterBtn = document.getElementById("filterBtn");
-    const resetBtn = document.getElementById("resetBtn");
+const deriveLocation = (data) => {
+  const state = (data.state || data.location || '').trim();
+  const city = (data.city || '').trim();
+  if (state && city && state.toLowerCase() !== city.toLowerCase()) {
+    return { label: `${city}, ${state}`, filterValue: state };
+  }
+  if (state) {
+    return { label: state, filterValue: state };
+  }
+  if (city) {
+    return { label: city, filterValue: city };
+  }
+  return { label: 'Nigeria', filterValue: 'Nigeria' };
+};
 
-    const ITEMS_PER_PAGE = 8;
-    let currentPage = 1;
-    let filteredProducts = [...productsData];
+const getVendorInfo = (vendorId, listingData = {}) => {
+  const vendor = vendorMap.get(vendorId) || {};
+  const name =
+    vendor.displayName ||
+    vendor.businessName ||
+    vendor.name ||
+    listingData.vendorName ||
+    'Marketplace Vendor';
+  const plan = vendor.plan || listingData.vendorPlan || '';
+  const verification =
+    vendor.verificationStatus ||
+    vendor.verification_state ||
+    vendor.verificationStage ||
+    vendor.verification ||
+    listingData.vendorVerified ||
+    vendor.status ||
+    '';
+  return { name, plan, verification };
+};
 
-    const formatCurrency = (value) =>
-      new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", maximumFractionDigits: 0 }).format(value);
+const transformListing = (docSnap) => {
+  const data = docSnap.data() || {};
+  const status = (data.status || '').toLowerCase();
+  if (status && status !== 'approved') {
+    return null;
+  }
 
-    const slugifyPlan = (plan) => {
-      if (!plan) return 'free';
-      return String(plan)
-        .toLowerCase()
-        .replace(/plan/g, '')
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/(^-+|-+$)/g, '') || 'plan';
-    };
+  const vendorId = data.vendorID || data.vendorId || data.vendor || '';
+  const vendorInfo = getVendorInfo(vendorId, data);
+  const createdAt =
+    (data.createdAt && typeof data.createdAt.toDate === 'function' && data.createdAt.toDate()) ||
+    (docSnap.createTime && typeof docSnap.createTime.toDate === 'function' && docSnap.createTime.toDate()) ||
+    null;
+  const priceValue = Number(data.price ?? data.amount ?? data.listingPrice ?? 0);
+  const price = Number.isFinite(priceValue) ? priceValue : 0;
+  const { label: locationLabel, filterValue: locationFilterValue } = deriveLocation(data);
 
-    const formatPlanLabel = (plan) => {
-      if (!plan) return '';
-      const trimmed = String(plan).trim();
-      if (!trimmed) return '';
-      const lower = trimmed.toLowerCase();
-      return lower.endsWith('plan') ? trimmed : `${trimmed} Plan`;
-    };
+  return {
+    id: docSnap.id,
+    title: data.title || data.productName || 'Marketplace Listing',
+    price,
+    category: data.category || 'Others',
+    locationLabel,
+    locationFilterValue,
+    vendor: vendorInfo.name,
+    vendorPlan: vendorInfo.plan,
+    vendorVerified: vendorInfo.verification,
+    vendorId,
+    image: pickListingImage(data),
+    createdAt,
+    dateAdded: createdAt ? createdAt.toISOString() : '',
+  };
+};
 
-    const createPlanBadge = (plan) => {
-      const label = formatPlanLabel(plan);
-      if (!label) return '';
-      const slug = slugifyPlan(plan);
-      return `<span class="vendor-badge vendor-plan vendor-plan-${slug}"><i class="ri-vip-crown-fill" aria-hidden="true"></i>${label}</span>`;
-    };
+const rebuildListings = () => {
+  if (!rawListingDocs.length) {
+    allListings = [];
+    filteredListings = [];
+    renderProducts();
+    return;
+  }
 
-    const normaliseVerificationState = (value) => {
-      if (value === true || value === 1) return 'verified';
-      if (value === false || value === 0 || value === null) return 'unverified';
-      if (typeof value === 'string') {
-        const norm = value.trim().toLowerCase();
-        if (['1', 'true', 'yes', 'verified', 'approved', 'active'].includes(norm)) return 'verified';
-        if (['pending', 'submitted', 'processing', 'in_review', 'in-review', 'under review'].includes(norm)) return 'pending';
-        if (['rejected', 'declined', 'failed', 'needs_changes', 'needs update', 'needs-update', 'no', 'false'].includes(norm)) return 'unverified';
-      }
-      return 'unverified';
-    };
+  const transformed = rawListingDocs
+    .map(transformListing)
+    .filter(Boolean);
 
-    const createVerificationBadge = (value) => {
-      const state = normaliseVerificationState(value);
-      if (state === 'verified') {
-        return `<span class="vendor-badge vendor-verified verified"><i class="ri-shield-check-line" aria-hidden="true"></i>Verified Vendor</span>`;
-      }
-      if (state === 'pending') {
-        return `<span class="vendor-badge vendor-verified pending"><i class="ri-time-line" aria-hidden="true"></i>Pending Review</span>`;
-      }
-      return `<span class="vendor-badge vendor-verified unverified"><i class="ri-alert-line" aria-hidden="true"></i>Not Verified</span>`;
-    };
+  allListings = transformed;
+  applyFilters();
+};
 
-    const priceInRange = (price, rangeValue) => {
-      if (rangeValue === "all") return true;
-      if (rangeValue.endsWith("+")) {
-        const min = Number(rangeValue.replace("+", ""));
-        return price >= min;
-      }
-      const [min, max] = rangeValue.split("-").map(Number);
-      return price >= min && price <= max;
-    };
+const renderProducts = () => {
+  if (!productGrid) return;
 
-    const applyFilters = () => {
-      const query = searchInput.value.trim().toLowerCase();
-      const selectedCategory = categoryFilter.value;
-      const selectedLocation = locationFilter.value;
-      const selectedPrice = priceFilter.value;
+  productGrid.innerHTML = '';
 
-      filteredProducts = productsData.filter((item) => {
-        const matchesSearch =
-          !query ||
-          item.title.toLowerCase().includes(query) ||
-          item.vendor.toLowerCase().includes(query) ||
-          item.category.toLowerCase().includes(query);
+  const end = currentPage * ITEMS_PER_PAGE;
+  const itemsToRender = filteredListings.slice(0, end);
 
-        const matchesCategory = selectedCategory === "all" || item.category === selectedCategory;
-        const matchesLocation = selectedLocation === "all" || item.location === selectedLocation;
-        const matchesPrice = priceInRange(item.price, selectedPrice);
+  if (!itemsToRender.length) {
+    if (isLoadingListings) {
+      setEmptyState('loading');
+    } else if (listingError) {
+      setEmptyState('error');
+    } else if (!allListings.length) {
+      setEmptyState('empty');
+    } else {
+      setEmptyState('filtered');
+    }
+    return;
+  }
 
-        return matchesSearch && matchesCategory && matchesLocation && matchesPrice;
-      });
+  if (emptyState) {
+    emptyState.style.display = 'none';
+    emptyState.textContent = emptyStateDefaultText;
+  }
 
-      const sortValue = sortFilter.value;
-      filteredProducts.sort((a, b) => {
-        if (sortValue === "priceLowHigh") return a.price - b.price;
-        if (sortValue === "priceHighLow") return b.price - a.price;
-        return new Date(b.dateAdded) - new Date(a.dateAdded);
-      });
+  itemsToRender.forEach((item, index) => {
+    const verificationState = normaliseVerificationState(item.vendorVerified);
+    const planBadge = createPlanBadge(item.vendorPlan);
+    const verificationBadge = createVerificationBadge(verificationState);
+    const planParam = encodeURIComponent(item.vendorPlan || '');
+    const verifiedParam = encodeURIComponent(verificationState);
+    const vendorIdParam = item.vendorId ? `&vendorId=${encodeURIComponent(item.vendorId)}` : '';
 
-      currentPage = 1;
+    const card = document.createElement('article');
+    card.className = 'product-card';
+    card.style.animationDelay = `${index * 0.06}s`;
+    card.dataset.category = item.category || '';
+    card.dataset.price = item.price;
+    card.dataset.location = item.locationFilterValue || '';
+    card.dataset.plan = item.vendorPlan || '';
+    card.dataset.verified = verificationState;
+
+    card.innerHTML = `
+      <img src="${escapeHtml(item.image)}" alt="${escapeHtml(item.title)}" loading="lazy" />
+      <div class="product-body">
+        <div class="product-title">${escapeHtml(item.title)}</div>
+        <div class="product-price">${formatCurrency(item.price)}</div>
+        <div class="product-meta">
+          <span>${escapeHtml(item.category || 'Marketplace')}</span>
+          <span><i class="ri-map-pin-line"></i> ${escapeHtml(item.locationLabel || 'Nigeria')}</span>
+        </div>
+        ${planBadge || verificationBadge ? `<div class="vendor-badges">${planBadge}${verificationBadge}</div>` : ''}
+        <div class="product-meta" style="justify-content:flex-start; gap:8px;">
+          <i class="ri-user-3-line" style="color: var(--emerald);"></i>
+          <span>${escapeHtml(item.vendor)}</span>
+        </div>
+        <div class="product-actions">
+          <a class="btn btn-outline" href="product.php?id=${encodeURIComponent(item.id)}${vendorIdParam}&plan=${planParam}&verified=${verifiedParam}" aria-label="View details of ${escapeHtml(item.title)}">View Details</a>
+          <button class="btn" type="button">Add to Cart</button>
+        </div>
+      </div>
+    `;
+
+    productGrid.appendChild(card);
+  });
+
+  const showingEnd = Math.min(end, filteredListings.length);
+  if (showingText) showingText.textContent = `Showing ${showingEnd} of ${filteredListings.length} items`;
+  const totalLabel = filteredListings.length === 1 ? 'listing' : 'listings';
+  if (resultsCount) resultsCount.textContent = `${filteredListings.length} ${totalLabel} found`;
+  if (loadMoreBtn) {
+    loadMoreBtn.style.display = showingEnd >= filteredListings.length ? 'none' : 'inline-flex';
+  }
+};
+
+const applyFilters = () => {
+  if (!allListings.length) {
+    filteredListings = [];
+    renderProducts();
+    return;
+  }
+
+  const queryTerm = searchInput.value.trim().toLowerCase();
+  const selectedCategory = categoryFilter.value;
+  const selectedLocation = locationFilter.value;
+  const selectedPrice = priceFilter.value;
+
+  filteredListings = allListings.filter((listing) => {
+    const matchesSearch =
+      !queryTerm ||
+      [listing.title, listing.vendor, listing.category]
+        .filter(Boolean)
+        .some((field) => field.toLowerCase().includes(queryTerm));
+
+    const matchesCategory =
+      selectedCategory === 'all' ||
+      (listing.category && listing.category.toLowerCase() === selectedCategory.toLowerCase());
+
+    const matchesLocation =
+      selectedLocation === 'all' ||
+      (listing.locationFilterValue && listing.locationFilterValue.toLowerCase() === selectedLocation.toLowerCase());
+
+    const matchesPrice = priceInRange(listing.price, selectedPrice);
+
+    return matchesSearch && matchesCategory && matchesLocation && matchesPrice;
+  });
+
+  const sortValue = sortFilter.value;
+  filteredListings.sort((a, b) => {
+    if (sortValue === 'priceLowHigh') return (a.price ?? 0) - (b.price ?? 0);
+    if (sortValue === 'priceHighLow') return (b.price ?? 0) - (a.price ?? 0);
+    const dateA = a.createdAt ? a.createdAt.getTime() : 0;
+    const dateB = b.createdAt ? b.createdAt.getTime() : 0;
+    return dateB - dateA;
+  });
+
+  currentPage = 1;
+  renderProducts();
+};
+
+const resetFilters = () => {
+  if (searchInput) searchInput.value = '';
+  if (categoryFilter) categoryFilter.value = 'all';
+  if (locationFilter) locationFilter.value = 'all';
+  if (priceFilter) priceFilter.value = 'all';
+  if (sortFilter) sortFilter.value = 'newest';
+  currentPage = 1;
+  filteredListings = [...allListings];
+  applyFilters();
+};
+
+const initialiseFiltersFromUrl = () => {
+  const params = new URLSearchParams(window.location.search);
+  let shouldFilter = false;
+
+  const categoryParam = params.get('category');
+  if (categoryParam && categoryFilter) {
+    const match = Array.from(categoryFilter.options).find(
+      (option) => option.value.toLowerCase() === categoryParam.toLowerCase(),
+    );
+    if (match) {
+      categoryFilter.value = match.value;
+      shouldFilter = true;
+    }
+  }
+
+  const searchParam = params.get('search');
+  if (searchParam && searchInput) {
+    searchInput.value = searchParam;
+    shouldFilter = true;
+  }
+
+  const locationParam = params.get('location');
+  if (locationParam && locationFilter) {
+    const match = Array.from(locationFilter.options).find(
+      (option) => option.value.toLowerCase() === locationParam.toLowerCase(),
+    );
+    if (match) {
+      locationFilter.value = match.value;
+      shouldFilter = true;
+    }
+  }
+
+  const priceParam = params.get('price');
+  if (priceParam && priceFilter) {
+    const match = Array.from(priceFilter.options).find(
+      (option) => option.value.toLowerCase() === priceParam.toLowerCase(),
+    );
+    if (match) {
+      priceFilter.value = match.value;
+      shouldFilter = true;
+    }
+  }
+
+  if (shouldFilter) {
+    applyFilters();
+  } else {
+    renderProducts();
+  }
+};
+
+const startRealtimeListeners = () => {
+  isLoadingListings = true;
+  listingError = false;
+  setEmptyState('loading');
+
+  const listingsQuery = query(collection(db, 'listings'), orderBy('createdAt', 'desc'));
+
+  listingsUnsubscribe = onSnapshot(
+    listingsQuery,
+    (snapshot) => {
+      rawListingDocs = snapshot.docs;
+      isLoadingListings = false;
+      listingError = false;
+      rebuildListings();
+    },
+    (error) => {
+      console.error('[shop] listings snapshot failed', error);
+      isLoadingListings = false;
+      listingError = true;
+      rawListingDocs = [];
+      allListings = [];
+      filteredListings = [];
       renderProducts();
-    };
+    },
+  );
 
-    const renderProducts = () => {
-      productGrid.innerHTML = "";
-      const start = 0;
-      const end = currentPage * ITEMS_PER_PAGE;
-      const itemsToRender = filteredProducts.slice(start, end);
-
-      if (!itemsToRender.length) {
-        emptyState.style.display = "block";
-        showingText.textContent = "Showing 0 items";
-        resultsCount.textContent = "No listings match your filters";
-        loadMoreBtn.style.display = "none";
-        return;
+  vendorsUnsubscribe = onSnapshot(
+    collection(db, 'vendors'),
+    (snapshot) => {
+      vendorMap = new Map(snapshot.docs.map((docSnap) => [docSnap.id, docSnap.data()]));
+      if (!isLoadingListings) {
+        rebuildListings();
       }
+    },
+    (error) => {
+      console.error('[shop] vendors snapshot failed', error);
+    },
+  );
+};
 
-      emptyState.style.display = "none";
+const cleanupListeners = () => {
+  if (typeof listingsUnsubscribe === 'function') {
+    listingsUnsubscribe();
+    listingsUnsubscribe = null;
+  }
+  if (typeof vendorsUnsubscribe === 'function') {
+    vendorsUnsubscribe();
+    vendorsUnsubscribe = null;
+  }
+};
 
-      itemsToRender.forEach((item, index) => {
-        const card = document.createElement("article");
-        card.className = "product-card";
-        card.style.animationDelay = `${index * 0.06}s`;
-        card.dataset.category = item.category;
-        card.dataset.price = item.price;
-        card.dataset.location = item.location;
-        card.dataset.plan = item.vendorPlan || '';
-        card.dataset.verified = verificationState;
+const bindEvents = () => {
+  filterBtn?.addEventListener('click', applyFilters);
+  resetBtn?.addEventListener('click', resetFilters);
+  loadMoreBtn?.addEventListener('click', () => {
+    currentPage += 1;
+    renderProducts();
+  });
 
-        const planBadge = createPlanBadge(item.vendorPlan);
-        const verificationBadge = createVerificationBadge(item.vendorVerified);
-        const verificationState = normaliseVerificationState(item.vendorVerified);
-        const planParam = encodeURIComponent(item.vendorPlan || '');
-        const verificationParam = encodeURIComponent(verificationState);
-        const badgesMarkup = planBadge || verificationBadge ? `<div class="vendor-badges">${planBadge}${verificationBadge}</div>` : '';
+  sortFilter?.addEventListener('change', applyFilters);
 
-        card.innerHTML = `
-          <img src="${item.image}" alt="${item.title}" loading="lazy" />
-          <div class="product-body">
-            <div class="product-title">${item.title}</div>
-            <div class="product-price">${formatCurrency(item.price)}</div>
-            <div class="product-meta">
-              <span>${item.category}</span>
-              <span><i class="ri-map-pin-line"></i> ${item.location}</span>
-            </div>
-            ${badgesMarkup}
-            <div class="product-meta" style="justify-content:flex-start; gap:8px;">
-              <i class="ri-user-3-line" style="color: var(--emerald);"></i>
-              <span>${item.vendor}</span>
-            </div>
-            <div class="product-actions">
-              <a class="btn btn-outline" href="product.html?id=${item.id}&plan=${planParam}&verified=${verificationParam}" aria-label="View details of ${item.title}">View Details</a>
-              <button class="btn" type="button">Add to Cart</button>
-            </div>
-          </div>
-        `;
+  searchInput?.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      applyFilters();
+    }
+  });
+};
 
-        productGrid.appendChild(card);
-      });
+const initialise = () => {
+  bindEvents();
+  isLoadingListings = true;
+  setEmptyState('loading');
+  initialiseFiltersFromUrl();
+  startRealtimeListeners();
+};
 
-      const showingEnd = Math.min(end, filteredProducts.length);
-      showingText.textContent = `Showing ${showingEnd} of ${filteredProducts.length} items`;
-      resultsCount.textContent = `${filteredProducts.length} listings found`;
-
-      loadMoreBtn.style.display = showingEnd >= filteredProducts.length ? "none" : "inline-flex";
-    };
-
-    const resetFilters = () => {
-      searchInput.value = "";
-      categoryFilter.value = "all";
-      locationFilter.value = "all";
-      priceFilter.value = "all";
-      sortFilter.value = "newest";
-      filteredProducts = [...productsData];
-      currentPage = 1;
-      renderProducts();
-    };
-
-    filterBtn.addEventListener("click", applyFilters);
-    resetBtn.addEventListener("click", resetFilters);
-    loadMoreBtn.addEventListener("click", () => {
-      currentPage += 1;
-      renderProducts();
-    });
-
-    searchInput.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") {
-        applyFilters();
-      }
-    });
-
-    document.addEventListener("DOMContentLoaded", () => {
-      const params = new URLSearchParams(window.location.search);
-      const categoryParam = params.get("category");
-      const searchParam = params.get("search");
-      const locationParam = params.get("location");
-      const priceParam = params.get("price");
-      let shouldFilter = false;
-
-      if (categoryParam) {
-        const match = Array.from(categoryFilter.options).find(
-          (option) => option.value.toLowerCase() === categoryParam.toLowerCase()
-        );
-        if (match) {
-          categoryFilter.value = match.value;
-          shouldFilter = true;
-        }
-      }
-
-      if (searchParam) {
-        searchInput.value = searchParam;
-        shouldFilter = true;
-      }
-
-      if (locationParam) {
-        const match = Array.from(locationFilter.options).find(
-          (option) => option.value.toLowerCase() === locationParam.toLowerCase()
-        );
-        if (match) {
-          locationFilter.value = match.value;
-          shouldFilter = true;
-        }
-      }
-
-      if (priceParam) {
-        const match = Array.from(priceFilter.options).find(
-          (option) => option.value.toLowerCase() === priceParam.toLowerCase()
-        );
-        if (match) {
-          priceFilter.value = match.value;
-          shouldFilter = true;
-        }
-      }
-
-      if (shouldFilter) {
-        applyFilters();
-      } else {
-        renderProducts();
-      }
-    });
+document.addEventListener('DOMContentLoaded', initialise);
+window.addEventListener('beforeunload', cleanupListeners);
+window.addEventListener('pagehide', cleanupListeners);
