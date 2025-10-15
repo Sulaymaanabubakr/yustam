@@ -160,6 +160,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             padding: 0 clamp(24px, 6vw, 36px) clamp(28px, 8vw, 36px);
         }
 
+        .ghost-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 12px 18px;
+            border-radius: 18px;
+            border: 1px solid rgba(0, 77, 64, 0.24);
+            background: rgba(255, 255, 255, 0.92);
+            color: rgba(0, 77, 64, 0.9);
+            font-weight: 600;
+            font-size: 0.95rem;
+            text-decoration: none;
+            transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+        }
+
+        .ghost-button:hover {
+            transform: translateY(-1px);
+            background: rgba(0, 77, 64, 0.08);
+            box-shadow: 0 12px 22px rgba(0, 0, 0, 0.08);
+        }
+
         .action-button {
             border: none;
             border-radius: 18px;
@@ -272,6 +294,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
             </div>
             <div class="auth-footer">
+                <a class="ghost-button" href="index.html" aria-label="Back to YUSTAM homepage">← Back to Homepage</a>
                 <button type="submit" class="action-button">Sign In</button>
                 <div class="divider"><span>or</span></div>
                 <button type="button" class="google-btn" id="googleBtn">
