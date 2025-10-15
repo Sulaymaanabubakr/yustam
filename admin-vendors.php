@@ -451,16 +451,16 @@ require_admin_auth();
     }
 
     .suspend-btn {
-      background: linear-gradient(135deg, var(--orange), #ffa05b);
-      color: #ffffff;
-      border-color: rgba(255, 255, 255, 0.2);
-      box-shadow: 0 12px 26px rgba(243, 115, 30, 0.28);
-      text-shadow: 0 1px 1px rgba(0, 0, 0, 0.35);
+      background: linear-gradient(135deg, rgba(243, 115, 30, 0.22), rgba(255, 160, 91, 0.28));
+      color: var(--emerald);
+      border-color: rgba(0, 77, 64, 0.3);
+      box-shadow: 0 12px 26px rgba(243, 115, 30, 0.18);
+      text-shadow: none;
     }
 
     .suspend-btn:hover {
-      background: linear-gradient(135deg, var(--orange-dark), #f98f3e);
-      box-shadow: 0 14px 30px rgba(243, 115, 30, 0.36);
+      background: linear-gradient(135deg, rgba(243, 115, 30, 0.28), rgba(255, 160, 91, 0.36));
+      box-shadow: 0 14px 30px rgba(243, 115, 30, 0.26);
     }
 
     .delete-btn {
