@@ -5,8 +5,7 @@
   const root = document.documentElement;
 
   const LIGHT = {
-    '--yustam-surface-base':
-      'radial-gradient(circle at top right, rgba(15, 106, 83, 0.14), transparent 58%), linear-gradient(135deg, #f3ebe0, #f9f3ea)',
+    '--yustam-surface-base': 'radial-gradient(circle at top right, rgba(15, 106, 83, 0.14), transparent 58%), linear-gradient(135deg, #f3ebe0, #f9f3ea)',
     '--yustam-surface-card': 'rgba(255, 255, 255, 0.96)',
     '--yustam-surface-card-alt': 'rgba(255, 255, 255, 0.9)',
     '--yustam-surface-elevated': 'rgba(255, 255, 255, 0.86)',
@@ -32,8 +31,7 @@
   };
 
   const DARK = {
-    '--yustam-surface-base':
-      'radial-gradient(circle at top right, rgba(12, 84, 65, 0.28), transparent 60%), linear-gradient(135deg, #0b1c18, #122823)',
+    '--yustam-surface-base': 'radial-gradient(circle at top right, rgba(12, 84, 65, 0.28), transparent 60%), linear-gradient(135deg, #0b1c18, #122823)',
     '--yustam-surface-card': 'rgba(18, 38, 33, 0.94)',
     '--yustam-surface-card-alt': 'rgba(20, 42, 36, 0.9)',
     '--yustam-surface-elevated': 'rgba(16, 32, 29, 0.92)',
@@ -58,7 +56,7 @@
     '--yustam-link-hover': '#ffd6ae',
   };
 
-  const APPLY_MAP = [
+  const APPLY_RULES = [
     {
       selectors: `
         body,
@@ -69,6 +67,36 @@
       style: {
         background: 'var(--yustam-surface-base) !important',
         color: 'var(--yustam-text-primary) !important',
+      },
+    },
+    {
+      selectors: `
+        body p,
+        body li,
+        body .body-text,
+        body .text,
+        body .paragraph,
+        body .description-text,
+        body .content-text,
+        body .list-item,
+        body .card-text,
+        body .detail-value,
+        body .stat-value,
+        body .metric-value`,
+      style: {
+        color: 'var(--yustam-text-primary) !important',
+      },
+    },
+    {
+      selectors: `
+        body .muted,
+        body .text-muted,
+        body .meta-text,
+        body .subtitle,
+        body .caption,
+        body small`,
+      style: {
+        color: 'var(--yustam-text-muted) !important',
       },
     },
     {
@@ -92,12 +120,10 @@
     {
       selectors: `
         body .heading-muted,
-        body .subtitle,
         body .lead,
         body .section-description,
         body .hero-subtitle,
-        body .stat-subtext,
-        body .meta-text`,
+        body .stat-subtext`,
       style: {
         color: 'var(--yustam-heading-muted) !important',
       },
@@ -268,12 +294,12 @@
     },
   ];
 
-  const ensureBody = (cb) => {
-    if (document.body) cb();
-    else document.addEventListener('DOMContentLoaded', cb, { once: true });
+  const ensureBody = (callback) => {
+    if (document.body) callback();
+    else document.addEventListener('DOMContentLoaded', callback, { once: true });
   };
 
-  const injectStyleTag = () => {
+  const injectBaseStyles = () => {
     if (document.getElementById('yustam-theme-overrides')) return;
     const style = document.createElement('style');
     style.id = 'yustam-theme-overrides';
@@ -315,10 +341,9 @@
     }
   };
 
-  const resolveTheme = (pref) => {
-    if (pref === 'light' || pref === 'dark') return pref;
-    const prefersDark =
-      window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const resolveTheme = (preference) => {
+    if (preference === 'light' || preference === 'dark') return preference;
+    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
     return prefersDark ? 'dark' : 'light';
   };
 
@@ -330,13 +355,13 @@
 
   const applyRules = () => {
     ensureBody(() => {
-      APPLY_MAP.forEach(({ selectors, style }) => {
+      APPLY_RULES.forEach(({ selectors, style }) => {
         document.querySelectorAll(selectors).forEach((node) => {
           Object.entries(style).forEach(([property, value]) => {
-            const cssProperty = property.replace(/[A-Z]/g, (match) => `-${match.toLowerCase()}`);
-            const isImportant = typeof value === 'string' && value.includes('!important');
-            const cleanedValue = isImportant ? value.replace('!important', '').trim() : value;
-            node.style.setProperty(cssProperty, cleanedValue, isImportant ? 'important' : '');
+            const propertyName = property.replace(/[A-Z]/g, (match) => `-${match.toLowerCase()}`);
+            const important = typeof value === 'string' && value.includes('!important');
+            const actualValue = important ? value.replace('!important', '').trim() : value;
+            node.style.setProperty(propertyName, actualValue, important ? 'important' : '');
           });
         });
       });
@@ -344,19 +369,20 @@
   };
 
   const broadcast = (preference, resolved) => {
-    window.dispatchEvent(
-      new CustomEvent(THEME_EVENT, { detail: { preference, resolved } }),
-    );
+    window.dispatchEvent(new CustomEvent(THEME_EVENT, {
+      detail: { preference, resolved },
+    }));
   };
 
   const applyPreference = (preference, { skipSave = false } = {}) => {
     const sanitized = ['light', 'dark', 'system'].includes(preference) ? preference : 'system';
     const resolved = resolveTheme(sanitized);
+
     if (!skipSave) {
       try {
         localStorage.setItem(STORAGE_KEY, sanitized);
       } catch {
-        /* ignore */
+        /* ignore storage issues */
       }
     }
 
@@ -380,18 +406,17 @@
   };
 
   const init = () => {
-    injectStyleTag();
+    injectBaseStyles();
     applyPreference(storedPreference(), { skipSave: true });
 
-    const mediaQuery = window.matchMedia
-      ? window.matchMedia('(prefers-color-scheme: dark)')
-      : null;
+    const mediaQuery = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
     if (mediaQuery) {
       const handle = () => {
         if (storedPreference() === 'system') {
           applyPreference('system', { skipSave: true });
         }
       };
+
       if (typeof mediaQuery.addEventListener === 'function') {
         mediaQuery.addEventListener('change', handle);
       } else if (typeof mediaQuery.addListener === 'function') {
@@ -403,10 +428,10 @@
   init();
 
   window.YustamTheme = window.YustamTheme || {
-    setPreference: (pref) => applyPreference(pref),
+    setPreference: (value) => applyPreference(value),
     getPreference: () => storedPreference(),
     getResolvedTheme: () => resolveTheme(storedPreference()),
-    applyTheme: (pref) => applyPreference(pref, { skipSave: true }),
+    applyTheme: (value) => applyPreference(value, { skipSave: true }),
     subscribe: (callback) => {
       if (typeof callback !== 'function') return () => {};
       const handler = (event) => callback(event.detail);
@@ -415,4 +440,3 @@
     },
   };
 })();
-
