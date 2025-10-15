@@ -32,6 +32,13 @@ if (!empty($buyer['joined_at'])) {
         $joined = $date->setTimezone(new DateTimeZone(date_default_timezone_get()))->format('j M Y');
     }
 }
+
+$firstName = trim((string)$buyerName);
+if ($firstName === '') {
+    $firstName = 'Buyer';
+} else {
+    $firstName = explode(' ', $firstName)[0] ?? 'Buyer';
+}
 ?>
 <!DOCTYPE html>
 <html lang="en" data-theme="buyer-dashboard">
@@ -43,71 +50,83 @@ if (!empty($buyer['joined_at'])) {
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet">
-    <style>
+        <style>
         :root {
-            --emerald: #004D40;
-            --emerald-opaque: rgba(0, 77, 64, 0.9);
-            --orange: #F3731E;
-            --beige: #EADCCF;
-            --glass: rgba(255, 255, 255, 0.78);
-            --muted: rgba(17, 17, 17, 0.68);
-            --shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+            --emerald: #004d40;
+            --emerald-soft: rgba(0, 77, 64, 0.82);
+            --orange: #f3731e;
+            --beige: #eadccf;
+            --glass-bg: rgba(255, 255, 255, 0.86);
+            --glass-border: rgba(255, 255, 255, 0.65);
+            --ink: rgba(17, 17, 17, 0.86);
+            --muted: rgba(17, 17, 17, 0.64);
         }
 
-        * { box-sizing: border-box; }
+        * {
+            box-sizing: border-box;
+        }
 
         body {
             margin: 0;
             font-family: 'Inter', system-ui, sans-serif;
-            background: linear-gradient(160deg, rgba(234, 220, 207, 0.94), rgba(255, 255, 255, 0.88));
-            color: rgba(17, 17, 17, 0.85);
+            background:
+                radial-gradient(circle at top right, rgba(0, 77, 64, 0.16), transparent 55%),
+                radial-gradient(circle at bottom left, rgba(243, 115, 30, 0.16), transparent 60%),
+                linear-gradient(160deg, rgba(234, 220, 207, 0.94), #ffffff);
+            color: var(--ink);
             min-height: 100vh;
-            display: flex;
-            flex-direction: column;
         }
 
-        h1, h2, h3 {
-            font-family: 'Anton', sans-serif;
-            letter-spacing: 0.06em;
-            color: var(--emerald);
-            margin: 0;
+        img {
+            max-width: 100%;
+            display: block;
         }
 
-        a { color: inherit; text-decoration: none; }
+        a {
+            color: inherit;
+            text-decoration: none;
+        }
 
-        .dashboard-header {
+        .buyer-header {
             position: sticky;
             top: 0;
-            z-index: 60;
+            z-index: 80;
+            backdrop-filter: blur(20px);
+            background: rgba(0, 77, 64, 0.92);
+            color: #ffffff;
+            border-bottom: 2px solid rgba(243, 115, 30, 0.32);
+            box-shadow: 0 18px 36px rgba(0, 0, 0, 0.22);
+        }
+
+        .header-shell {
+            width: min(1180px, 92vw);
+            margin: 0 auto;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: clamp(0.9rem, 4vw, 1.3rem) clamp(1.4rem, 5vw, 2.6rem);
-            background: rgba(0, 77, 64, 0.94);
-            color: #ffffff;
-            backdrop-filter: blur(16px);
-            box-shadow: 0 18px 28px rgba(0, 0, 0, 0.22);
-            border-bottom: 2px solid rgba(243, 115, 30, 0.3);
+            gap: clamp(16px, 3vw, 28px);
+            padding: clamp(16px, 4vw, 22px) 0;
         }
 
-        .header-brand {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }
-
-        .logo-area {
+        .brand {
             display: inline-flex;
-            width: 48px;
-            height: 48px;
-            border-radius: 16px;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .brand-badge {
+            width: 50px;
+            height: 50px;
+            border-radius: 18px;
             background: rgba(255, 255, 255, 0.18);
-            border: 1px solid rgba(255, 255, 255, 0.4);
-            box-shadow: 0 12px 20px rgba(0, 0, 0, 0.25);
+            border: 1px solid rgba(255, 255, 255, 0.42);
+            box-shadow: 0 14px 28px rgba(0, 0, 0, 0.26);
+            display: grid;
+            place-items: center;
             overflow: hidden;
         }
 
-        .header-logo {
+        .brand-badge img {
             width: 100%;
             height: 100%;
             object-fit: cover;
@@ -116,63 +135,71 @@ if (!empty($buyer['joined_at'])) {
         .brand-text {
             display: flex;
             flex-direction: column;
-            gap: 0.2rem;
+            gap: 4px;
         }
 
         .brand-title {
             font-family: 'Anton', sans-serif;
-            font-size: clamp(1.35rem, 4vw, 1.65rem);
+            font-size: clamp(1.4rem, 4vw, 1.85rem);
             letter-spacing: 0.08em;
         }
 
         .brand-subtitle {
-            font-size: 0.88rem;
-            opacity: 0.8;
+            font-size: 0.95rem;
+            color: rgba(255, 255, 255, 0.82);
         }
 
         .header-actions {
-            display: flex;
+            display: inline-flex;
             align-items: center;
-            gap: clamp(0.6rem, 2vw, 0.9rem);
+            gap: 12px;
         }
 
-        .icon-button {
+        .action-btn {
             width: 46px;
             height: 46px;
-            border-radius: 50%;
-            border: 1px solid rgba(255, 255, 255, 0.22);
+            border-radius: 16px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            background: rgba(255, 255, 255, 0.16);
+            font-size: 1.3rem;
             color: #ffffff;
-            font-size: 1.35rem;
+            background: rgba(255, 255, 255, 0.18);
+            border: 1px solid rgba(255, 255, 255, 0.28);
             transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
         }
 
-        .icon-button:hover,
-        .icon-button:focus-visible {
+        .action-btn:hover,
+        .action-btn:focus-visible,
+        .action-btn.is-active {
+            background: rgba(243, 115, 30, 0.9);
+            box-shadow: 0 16px 30px rgba(243, 115, 30, 0.36);
             transform: translateY(-2px);
-            background: rgba(243, 115, 30, 0.3);
-            box-shadow: 0 16px 30px rgba(243, 115, 30, 0.32);
         }
 
-        }
-
-        main {
-            flex: 1;
-            padding: clamp(24px, 6vw, 56px);
+        .page-shell {
+            width: min(1100px, 92vw);
+            margin: clamp(28px, 7vw, 48px) auto clamp(36px, 8vw, 72px);
             display: grid;
-            gap: clamp(24px, 4vw, 36px);
+            gap: clamp(20px, 5vw, 28px);
+        }
+
+        h1, h2, h3 {
+            margin: 0;
+            font-family: 'Anton', sans-serif;
+            letter-spacing: 0.06em;
+            color: var(--emerald);
         }
 
         .glass-card {
-            background: var(--glass);
-            backdrop-filter: blur(18px);
-            border-radius: 18px;
-            border: 1px solid rgba(255, 255, 255, 0.55);
-            box-shadow: var(--shadow);
-            padding: clamp(20px, 4vw, 30px);
+            background: var(--glass-bg);
+            border-radius: 22px;
+            border: 1px solid var(--glass-border);
+            box-shadow: 0 26px 48px rgba(15, 106, 83, 0.12);
+            backdrop-filter: blur(20px);
+            padding: clamp(20px, 4vw, 28px);
+            display: grid;
+            gap: 16px;
         }
 
         .welcome-card {
@@ -182,47 +209,66 @@ if (!empty($buyer['joined_at'])) {
 
         .welcome-card p {
             margin: 0;
-            font-size: 1rem;
             color: var(--muted);
+            font-size: 1rem;
         }
 
-        .grid-two {
-            display: grid;
-            gap: clamp(18px, 3vw, 28px);
-            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        .welcome-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
         }
 
-        .recent-saved {
-            display: grid;
-            gap: 18px;
+        .meta-pill {
+            padding: 10px 18px;
+            border-radius: 999px;
+            background: rgba(0, 77, 64, 0.12);
+            color: var(--emerald);
+            font-weight: 600;
+            font-size: 0.9rem;
         }
 
-        .recent-saved h2 {
-            font-size: 1.4rem;
-            margin: 0;
-        }
-
-        .recent-saved .head {
+        .section-head,
+        .section-title {
             display: flex;
             align-items: center;
             justify-content: space-between;
             gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .btn-orange {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 18px;
+            border-radius: 14px;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+            background: linear-gradient(135deg, #f3731e, #ff9448);
+            color: #ffffff;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .btn-orange:hover,
+        .btn-orange:focus-visible {
+            transform: translateY(-2px);
+            box-shadow: 0 16px 30px rgba(243, 115, 30, 0.32);
         }
 
         #recentSavedGrid {
             display: grid;
-            gap: 14px;
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
         }
 
         .mini-saved-card {
-            display: grid;
-            gap: 10px;
-            background: rgba(255, 255, 255, 0.86);
+            background: rgba(0, 77, 64, 0.05);
             border-radius: 18px;
             padding: 14px;
-            border: 1px solid rgba(0, 77, 64, 0.12);
-            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.08);
+            display: grid;
+            gap: 10px;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
         }
 
         .mini-saved-card img {
@@ -235,55 +281,50 @@ if (!empty($buyer['joined_at'])) {
         .mini-saved-card p {
             margin: 0;
             font-weight: 600;
-            color: rgba(17, 17, 17, 0.85);
+            color: rgba(17, 17, 17, 0.82);
         }
 
         .mini-saved-card span {
-            color: rgba(0, 77, 64, 0.75);
+            font-size: 0.9rem;
+            color: rgba(17, 17, 17, 0.62);
+        }
+
+        .mini-saved-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 18px 28px rgba(0, 0, 0, 0.12);
+        }
+
+        .empty-state {
+            padding: 18px;
+            border-radius: 16px;
+            background: rgba(0, 77, 64, 0.08);
+            color: rgba(0, 77, 64, 0.78);
             font-weight: 600;
+            text-align: center;
         }
 
-        .btn-orange {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 10px 16px;
-            border-radius: 14px;
-            background: linear-gradient(135deg, rgba(243, 115, 30, 0.95), rgba(255, 138, 60, 0.95));
-            color: #fff;
-            font-weight: 600;
-            text-decoration: none;
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
-        }
-
-        .btn-orange:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 16px 26px rgba(243, 115, 30, 0.28);
-        }
-
-        .section-title {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 18px;
+        #recentChatsList {
+            display: grid;
+            gap: 14px;
         }
 
         .mini-card {
-            display: flex;
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 16px;
             align-items: center;
-            gap: 14px;
             padding: 16px;
-            background: rgba(255, 255, 255, 0.86);
             border-radius: 18px;
-            border: 1px solid rgba(0, 77, 64, 0.1);
-            box-shadow: 0 8px 18px rgba(0, 0, 0, 0.08);
+            background: rgba(255, 255, 255, 0.72);
+            border: 1px solid rgba(0, 77, 64, 0.12);
+            box-shadow: 0 14px 30px rgba(0, 0, 0, 0.08);
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
         }
 
-        .mini-card img {
-            width: 56px;
-            height: 56px;
-            border-radius: 16px;
-            object-fit: cover;
+        .mini-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 20px 34px rgba(0, 0, 0, 0.14);
         }
 
         .mini-card .meta {
@@ -291,69 +332,89 @@ if (!empty($buyer['joined_at'])) {
             gap: 6px;
         }
 
-        .mini-card .meta strong {
+        .mini-card strong {
             font-size: 1rem;
-            color: rgba(17, 17, 17, 0.88);
+            color: var(--emerald);
         }
 
-        .mini-card .meta span {
-            font-size: 0.86rem;
+        .mini-card span {
+            font-size: 0.9rem;
             color: var(--muted);
         }
 
-        .empty-state {
-            padding: 18px;
-            border-radius: 16px;
-            background: rgba(255, 255, 255, 0.72);
-            border: 1px dashed rgba(0, 77, 64, 0.3);
-            text-align: center;
+        .mini-card span:last-child {
+            font-size: 0.78rem;
+            color: rgba(17, 17, 17, 0.5);
             font-weight: 500;
-            color: rgba(0, 77, 64, 0.7);
         }
 
         .shortcut-grid {
             display: grid;
-            gap: 18px;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 16px;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
         }
 
         .shortcut {
+            position: relative;
             display: flex;
             align-items: center;
-            justify-content: space-between;
+            gap: 18px;
             padding: 18px 20px;
-            border-radius: 18px;
-            background: linear-gradient(135deg, rgba(243, 115, 30, 0.92), rgba(255, 138, 61, 0.92));
-            color: #fff;
-            font-weight: 600;
-            box-shadow: 0 16px 32px rgba(243, 115, 30, 0.32);
+            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.86);
+            border: 1px solid rgba(0, 77, 64, 0.1);
+            box-shadow: 0 20px 36px rgba(15, 106, 83, 0.12);
             transition: transform 0.2s ease, box-shadow 0.2s ease;
         }
 
         .shortcut:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 20px 36px rgba(243, 115, 30, 0.36);
+            transform: translateY(-3px);
+            box-shadow: 0 24px 42px rgba(15, 106, 83, 0.18);
         }
 
-        .shortcut span:last-child {
-            font-size: 1.4rem;
-        }
-
-        .recent-list {
+        .shortcut-icon {
+            width: 52px;
+            height: 52px;
+            border-radius: 16px;
+            background: rgba(243, 115, 30, 0.16);
+            color: var(--orange);
             display: grid;
-            gap: 14px;
+            place-items: center;
+            font-size: 1.5rem;
+        }
+
+        .shortcut-text {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .shortcut-text strong {
+            font-size: 1rem;
+            color: rgba(17, 17, 17, 0.9);
+        }
+
+        .shortcut-text span {
+            font-size: 0.9rem;
+            color: var(--muted);
+        }
+
+        .shortcut i:last-child {
+            margin-left: auto;
+            font-size: 1.3rem;
+            color: rgba(0, 77, 64, 0.5);
         }
 
         .badge {
             display: inline-flex;
             align-items: center;
-            gap: 8px;
-            padding: 6px 12px;
+            gap: 6px;
+            padding: 8px 14px;
             border-radius: 999px;
-            background: rgba(0, 77, 64, 0.14);
+            font-size: 0.85rem;
+            font-weight: 600;
+            background: rgba(0, 77, 64, 0.1);
             color: var(--emerald);
-            font-size: 0.78rem;
-            letter-spacing: 0.04em;
         }
 
         .toast {
@@ -372,89 +433,134 @@ if (!empty($buyer['joined_at'])) {
             backdrop-filter: blur(12px);
             opacity: 0;
             transition: opacity 0.3s ease, transform 0.3s ease;
-            z-index: 60;
+            z-index: 90;
         }
 
-        .toast.is-error { background: rgba(217, 48, 37, 0.9); }
+        .toast.is-error {
+            background: rgba(217, 48, 37, 0.9);
+        }
 
         .toast.is-visible {
             opacity: 1;
             transform: translateX(-50%) translateY(0);
         }
 
-        @media (max-width: 720px) {
-            .dashboard-header {
+        @media (max-width: 780px) {
+            .header-shell {
                 flex-direction: column;
                 align-items: stretch;
-                gap: 16px;
             }
 
             .header-actions {
                 justify-content: space-between;
             }
+
+            #recentSavedGrid {
+                grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            }
+        }
+
+        @media (max-width: 520px) {
+            .mini-card {
+                grid-template-columns: 1fr;
+                text-align: left;
+            }
+
+            .shortcut {
+                align-items: flex-start;
+            }
+
+            .shortcut i:last-child {
+                position: absolute;
+                right: 18px;
+                top: 18px;
+            }
         }
     </style>
 </head>
 <body data-buyer-id="<?= htmlspecialchars((string)$buyerId) ?>" data-buyer-name="<?= htmlspecialchars($buyerName) ?>">
-    <header class="dashboard-header">
-    <header class="dashboard-header">
-        <div class="header-brand">
-            <a class="logo-area" href="index.html" aria-label="YUSTAM home">
-                <img src="logo.jpeg" alt="YUSTAM logo" class="header-logo">
+    <header class="buyer-header">
+        <div class="header-shell">
+            <a class="brand" href="index.html" aria-label="YUSTAM home">
+                <span class="brand-badge">
+                    <img src="logo.jpeg" alt="YUSTAM logo">
+                </span>
+                <span class="brand-text">
+                    <span class="brand-title">Hi, <?= htmlspecialchars($firstName) ?></span>
+                    <span class="brand-subtitle">Trusted deals tailored for you</span>
+                </span>
             </a>
-            <div class="brand-text">
-                <span class="brand-title">Hi, <?= htmlspecialchars($firstName) ?></span>
-                <span class="brand-subtitle">Trusted deals tailored for you</span>
-            </div>
+            <nav class="header-actions" aria-label="Buyer navigation">
+                <a class="action-btn is-active" href="buyer-dashboard.php" title="Dashboard" aria-label="Dashboard">
+                    <i class="ri-home-5-line" aria-hidden="true"></i>
+                </a>
+                <a class="action-btn" href="buyer-saved.php" title="Saved items" aria-label="Saved items">
+                    <i class="ri-heart-3-line" aria-hidden="true"></i>
+                </a>
+                <a class="action-btn" href="buyer-chats.php" title="Chats" aria-label="Chats">
+                    <i class="ri-message-3-line" aria-hidden="true"></i>
+                </a>
+                <a class="action-btn" href="buyer-logout.php" title="Logout" aria-label="Logout">
+                    <i class="ri-logout-box-r-line" aria-hidden="true"></i>
+                </a>
+            </nav>
         </div>
-        <nav class="header-actions" aria-label="Buyer shortcuts">
-            <a class="icon-button" href="buyer-dashboard.php" title="Home" aria-label="Home">
-                <i class="ri-home-5-line" aria-hidden="true"></i>
-            </a>
-            <a class="icon-button" href="buyer-saved.php" title="Saved items" aria-label="Saved items">
-                <i class="ri-heart-3-line" aria-hidden="true"></i>
-            </a>
-            <a class="icon-button" href="buyer-chats.php" title="Chats" aria-label="Chats">
-                <i class="ri-message-3-line" aria-hidden="true"></i>
-            </a>
-            <a class="icon-button" href="buyer-logout.php" title="Logout" aria-label="Logout">
-                <i class="ri-logout-box-r-line" aria-hidden="true"></i>
-            </a>
-        </nav>
     </header>
-    <main id="buyerDashboard" data-buyer-id="<?= htmlspecialchars((string)$buyerId) ?>">
+
+    <main class="page-shell" id="buyerDashboard" data-buyer-id="<?= htmlspecialchars((string)$buyerId) ?>">
         <section class="glass-card welcome-card">
             <h1>Welcome back, <?= htmlspecialchars($firstName) ?>!</h1>
-            <p>Joined since <strong><?= htmlspecialchars($joined) ?></strong></p>
-            <span class="badge">Buyer ID #<?= htmlspecialchars((string)$buyerId) ?></span>
+            <p>Curate your favourites, manage conversations, and shop trusted vendors across Nigeria.</p>
+            <div class="welcome-meta">
+                <span class="meta-pill">Member since <?= htmlspecialchars($joined) ?></span>
+                <span class="meta-pill">Buyer ID #<?= htmlspecialchars((string)$buyerId) ?></span>
+            </div>
         </section>
 
         <section class="glass-card recent-saved">
-            <div class="head">
-                <h2>Recently Saved</h2>
-                <a class="btn-orange" href="buyer-saved.php">View All</a>
+            <div class="section-head">
+                <h2>Recently saved</h2>
+                <a class="btn-orange" href="buyer-saved.php">
+                    <i class="ri-heart-3-fill" aria-hidden="true"></i>
+                    View all
+                </a>
             </div>
             <div id="recentSavedGrid" aria-live="polite"></div>
-            <div class="empty-state" id="recentSavedEmpty" role="status" hidden>You haven’t saved any listings yet.</div>
+            <div class="empty-state" id="recentSavedEmpty" role="status" hidden>You haven't saved any listings yet.</div>
         </section>
 
         <section class="glass-card">
             <div class="section-title">
-                <h2 style="font-size:1.4rem;">Recent conversations</h2>
-                <a class="badge" href="buyer-chats.php">Open messages</a>
+                <h2>Recent conversations</h2>
+                <a class="badge" href="buyer-chats.php">
+                    <i class="ri-message-3-line" aria-hidden="true"></i>
+                    Open chats
+                </a>
             </div>
-            <div class="recent-list" id="recentChatsList" aria-live="polite"></div>
+            <div id="recentChatsList" aria-live="polite"></div>
             <div class="empty-state" id="chatsEmptyState" role="status" style="display:none;">Start chatting with vendors from a product page.</div>
         </section>
 
         <section class="shortcut-grid">
             <a href="buyer-chats.php" class="shortcut" aria-label="View all messages">
-                <span>View all messages</span>
-                <span>💬</span>
+                <div class="shortcut-icon">
+                    <i class="ri-message-2-line" aria-hidden="true"></i>
+                </div>
+                <div class="shortcut-text">
+                    <strong>View all messages</strong>
+                    <span>Continue conversations with trusted vendors.</span>
+                </div>
+                <i class="ri-arrow-right-up-line" aria-hidden="true"></i>
             </a>
             <a href="buyer-saved.php" class="shortcut" aria-label="View saved listings">
-                <span>View saved listings</span>
-                <span>❤️</span>
+                <div class="shortcut-icon">
+                    <i class="ri-heart-3-line" aria-hidden="true"></i>
+                </div>
+                <div class="shortcut-text">
+                    <strong>View saved listings</strong>
+                    <span>Compare favourites and secure the best deals.</span>
+                </div>
+                <i class="ri-arrow-right-up-line" aria-hidden="true"></i>
             </a>
         </section>
     </main>
@@ -464,6 +570,8 @@ if (!empty($buyer['joined_at'])) {
 <script type="module" src="buyer-dashboard.js"></script>
 </body>
 </html>
+
+
 
 
 
