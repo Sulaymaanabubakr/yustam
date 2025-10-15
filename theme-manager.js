@@ -41,8 +41,8 @@
     '--yustam-divider': 'rgba(64, 104, 92, 0.45)',
     '--yustam-text-primary': 'rgba(235, 245, 242, 0.96)',
     '--yustam-text-muted': 'rgba(198, 215, 211, 0.74)',
-    '--yustam-heading': '#ffc892',
-    '--yustam-heading-muted': '#fdddb2',
+    '--yustam-heading': '#f3731e',
+    '--yustam-heading-muted': '#ffb877',
     '--yustam-header-bg': 'rgba(11, 49, 39, 0.95)',
     '--yustam-header-text': 'rgba(235, 245, 242, 0.98)',
     '--yustam-overlay': 'rgba(0, 0, 0, 0.7)',
@@ -415,3 +415,4 @@
     },
   };
 })();
+
