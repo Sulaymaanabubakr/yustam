@@ -52,6 +52,7 @@ loginForm?.addEventListener('submit', async (event) => {
     const response = await fetch('login.php', {
       method: 'POST',
       body: formData,
+      credentials: 'same-origin',
     });
 
     const data = await response.json();
@@ -90,6 +91,7 @@ forgotPasswordBtn?.addEventListener('click', async () => {
     const response = await fetch('forgot-password.php', {
       method: 'POST',
       body: formData,
+      credentials: 'same-origin',
     });
 
     const data = await response.json();
@@ -125,6 +127,7 @@ googleBtn?.addEventListener('click', async () => {
     const response = await fetch('google-login.php', {
       method: 'POST',
       body: formData,
+      credentials: 'same-origin',
     });
 
     const data = await response.json();
