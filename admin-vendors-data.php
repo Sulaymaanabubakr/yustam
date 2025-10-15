@@ -28,6 +28,47 @@ function yustam_bind_statement(mysqli_stmt $statement, string $types, array $val
     call_user_func_array([$statement, 'bind_param'], $params);
 }
 
+if (!function_exists('yustam_normalise_verification_state')) {
+    function yustam_normalise_verification_state($value): string
+    {
+        if ($value === true || $value === 1 || $value === '1') {
+            return 'verified';
+        }
+        if ($value === false || $value === 0 || $value === '0' || $value === null) {
+            return 'unverified';
+        }
+
+        $value = strtolower(trim((string) $value));
+        if (in_array($value, ['verified', 'approved', 'active', 'complete', 'completed', 'yes', 'true'], true)) {
+            return 'verified';
+        }
+        if (in_array($value, ['pending', 'submitted', 'processing', 'under review', 'in_review', 'in-review'], true)) {
+            return 'pending';
+        }
+        if (in_array($value, ['rejected', 'declined', 'failed', 'needs_changes', 'needs update', 'needs-update'], true)) {
+            return 'rejected';
+        }
+
+        return 'unverified';
+    }
+}
+
+if (!function_exists('yustam_verification_label')) {
+    function yustam_verification_label(string $state): string
+    {
+        switch ($state) {
+            case 'verified':
+                return 'Verified';
+            case 'pending':
+                return 'Pending Review';
+            case 'rejected':
+                return 'Needs Changes';
+            default:
+                return 'Not Verified';
+        }
+    }
+}
+
 try {
     $db = get_db_connection();
 } catch (Throwable $exception) {
@@ -53,6 +94,22 @@ $hasCreatedAtColumn = in_array('created_at', $columns, true);
 $hasJoinedAtColumn = in_array('joined_at', $columns, true);
 $hasProfilePhotoColumn = in_array('profile_photo', $columns, true);
 $hasAvatarColumn = in_array('avatar_url', $columns, true);
+
+$verificationColumn = null;
+foreach (['verification_status', 'verification_state', 'verification', 'kyc_status', 'verification_stage'] as $candidate) {
+    if (in_array($candidate, $columns, true)) {
+        $verificationColumn = $candidate;
+        break;
+    }
+}
+
+$locationColumn = null;
+foreach (['location', 'city', 'region', 'state'] as $candidate) {
+    if (in_array($candidate, $columns, true)) {
+        $locationColumn = $candidate;
+        break;
+    }
+}
 
 $page = max(1, (int) ($_GET['page'] ?? 1));
 $pageSize = max(1, min(100, (int) ($_GET['pageSize'] ?? 20)));
@@ -179,6 +236,11 @@ while ($row = $listResult->fetch_assoc()) {
         }
     }
 
+    $verificationValue = $verificationColumn ? ($row[$verificationColumn] ?? '') : '';
+    $verificationState = yustam_normalise_verification_state($verificationValue);
+    $verificationLabel = yustam_verification_label($verificationState);
+    $locationValue = $locationColumn ? ($row[$locationColumn] ?? '') : '';
+
     $vendors[] = [
         'id' => (int) ($row['id'] ?? 0),
         'displayName' => $row[$nameColumn] ?? '',
@@ -193,6 +255,10 @@ while ($row = $listResult->fetch_assoc()) {
         'profilePhoto' => $profilePhoto,
         'createdAt' => $createdAtIso,
         'createdAtFormatted' => $createdAtFormatted,
+        'verification' => $verificationValue,
+        'verificationState' => $verificationState,
+        'verificationLabel' => $verificationLabel,
+        'location' => $locationValue,
     ];
 }
 $listStmt->close();

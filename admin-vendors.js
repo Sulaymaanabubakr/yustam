@@ -29,6 +29,21 @@ const confirmNotifyBtn = document.getElementById('confirmNotify');
 const notifyMessage = document.getElementById('notifyMessage');
 const cascadeDelete = document.getElementById('cascadeDelete');
 
+const vendorProfileModal = document.getElementById('vendorProfileModal');
+const vendorPreviewAvatar = document.getElementById('vendorPreviewAvatar');
+const vendorPreviewTitle = document.getElementById('vendorPreviewTitle');
+const vendorPreviewBusiness = document.getElementById('vendorPreviewBusiness');
+const vendorPreviewPlanChip = document.getElementById('vendorPreviewPlan');
+const vendorPreviewStatusChip = document.getElementById('vendorPreviewStatus');
+const vendorPreviewVerificationChip = document.getElementById('vendorPreviewVerification');
+const vendorPreviewId = document.getElementById('vendorPreviewId');
+const vendorPreviewVerificationText = document.getElementById('vendorPreviewVerificationText');
+const vendorPreviewStatusText = document.getElementById('vendorPreviewStatusText');
+const vendorPreviewPlanText = document.getElementById('vendorPreviewPlanText');
+const vendorPreviewPhone = document.getElementById('vendorPreviewPhone');
+const vendorPreviewJoined = document.getElementById('vendorPreviewJoined');
+const vendorPreviewStorefront = document.getElementById('vendorPreviewStorefront');
+
 const totalVendorsEl = document.getElementById('totalVendors');
 const freeCountEl = document.getElementById('freeCount');
 const plusCountEl = document.getElementById('plusCount');
@@ -49,6 +64,8 @@ const state = {
   hasNext: false,
   total: 0,
 };
+
+const vendorCache = new Map();
 
 const pendingAction = {
   vendorId: null,
@@ -109,6 +126,86 @@ const titleCase = (value) => {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 };
 
+const computeInitials = (value, fallback = 'Vendor') => {
+  const source = String(value || fallback || '').trim();
+  if (!source) return fallback.slice(0, 2).toUpperCase();
+  const parts = source.split(/\s+/).filter(Boolean);
+  if (!parts.length) return fallback.slice(0, 2).toUpperCase();
+  const initials = (parts[0][0] || '') + (parts[1]?.[0] || '');
+  return initials.toUpperCase();
+};
+
+const ensurePlanLabel = (label, fallback = 'Free') => {
+  const base = String(label || fallback || '').trim();
+  if (base === '') return 'Free Plan';
+  return /plan$/i.test(base) ? base : `${base} Plan`;
+};
+
+const storefrontUrl = (vendorId) =>
+  vendorId ? `vendor-storefront.php?vendorId=${encodeURIComponent(vendorId)}` : '#';
+
+const applyChipState = (chip, baseClass, state, label) => {
+  if (!chip) return;
+  const normalisedState = String(state || 'default')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'default';
+  chip.className = `vendor-chip ${baseClass} ${baseClass}-${normalisedState}`;
+  chip.textContent = label || '';
+};
+
+const openVendorPreview = (vendor) => {
+  if (!vendor || !vendorProfileModal) {
+    showToast('Unable to load vendor preview.', true);
+    return;
+  }
+
+  const displayName =
+    vendor.displayName || vendor.businessName || vendor.name || `Vendor #${vendor.id}`;
+  const businessName = vendor.businessName || '';
+  const initials = computeInitials(displayName);
+  const photo = vendor.profilePhoto || '';
+  const planLabel = ensurePlanLabel(vendor.planLabel || vendor.plan || 'Free');
+  const statusLabel = vendor.statusLabel || titleCase(vendor.status || 'active');
+  const statusState = (vendor.status || 'active').toLowerCase();
+  const verificationState = (vendor.verificationState || 'unverified').toLowerCase();
+  const verificationLabel = vendor.verificationLabel || titleCase(verificationState.replace('-', ' '));
+
+  if (vendorPreviewAvatar) {
+    if (photo) {
+      vendorPreviewAvatar.innerHTML = `<img src="${escapeHtml(photo)}" alt="${escapeHtml(displayName)} logo">`;
+    } else {
+      vendorPreviewAvatar.innerHTML = `<span>${escapeHtml(initials)}</span>`;
+    }
+  }
+
+  if (vendorPreviewTitle) vendorPreviewTitle.textContent = displayName;
+  if (vendorPreviewBusiness) {
+    vendorPreviewBusiness.textContent = businessName;
+    vendorPreviewBusiness.hidden = businessName.trim() === '';
+  }
+
+  applyChipState(vendorPreviewPlanChip, 'plan', vendor.planSlug || vendor.plan || 'free', planLabel);
+  applyChipState(vendorPreviewStatusChip, 'status', statusState, statusLabel);
+  applyChipState(vendorPreviewVerificationChip, 'verification', verificationState, verificationLabel);
+
+  if (vendorPreviewId) vendorPreviewId.textContent = vendor.id ?? '—';
+  if (vendorPreviewVerificationText) vendorPreviewVerificationText.textContent = verificationLabel || '—';
+  if (vendorPreviewStatusText) vendorPreviewStatusText.textContent = statusLabel || '—';
+  if (vendorPreviewPlanText) vendorPreviewPlanText.textContent = planLabel || '—';
+  if (vendorPreviewPhone) vendorPreviewPhone.textContent = vendor.phone || '—';
+  if (vendorPreviewJoined) vendorPreviewJoined.textContent = vendor.createdAtFormatted || '—';
+
+  if (vendorPreviewStorefront) {
+    vendorPreviewStorefront.href = storefrontUrl(vendor.id);
+    vendorPreviewStorefront.classList.toggle('is-disabled', !vendor.id);
+    vendorPreviewStorefront.setAttribute('aria-disabled', vendor.id ? 'false' : 'true');
+  }
+
+  vendorProfileModal.classList.add('show');
+  vendorProfileModal.setAttribute('aria-hidden', 'false');
+};
+
 const renderCounts = (counts = {}) => {
   const planCounts = counts.plan || {};
   if (totalVendorsEl) totalVendorsEl.textContent = counts.total ?? 0;
@@ -152,7 +249,7 @@ const buildVendorRow = (vendor) => {
     <td>${escapeHtml(vendor.createdAtFormatted || '-')}</td>
     <td>
       <div class="actions">
-        <a class="view-btn" href="shop.html?vendorId=${encodeURIComponent(vendor.id)}" target="_blank" rel="noopener noreferrer" title="Open public storefront"><i class="ri-external-link-line"></i>View Storefront</a>
+        <button class="view-btn" type="button" data-action="view" data-id="${vendor.id}" data-name="${escapeHtml(vendor.displayName || vendor.businessName || 'Vendor')}"><i class="ri-eye-line"></i>Quick View</button>
         <button class="notify-btn" data-action="notify" data-id="${vendor.id}" data-name="${escapeHtml(vendor.displayName || vendor.businessName || 'Vendor')}"><i class="ri-chat-3-line"></i>Notify</button>
         <button class="suspend-btn" data-action="suspend" data-status="${vendor.status || 'active'}" data-id="${vendor.id}" data-name="${escapeHtml(vendor.displayName || vendor.businessName || 'Vendor')}">${vendor.status === 'suspended' ? '<i class="ri-shield-check-line"></i>Unsuspend' : '<i class="ri-shield-off-line"></i>Suspend'}</button>
         <button class="delete-btn" data-action="delete" data-id="${vendor.id}" data-name="${escapeHtml(vendor.displayName || vendor.businessName || 'Vendor')}"><i class="ri-delete-bin-6-line"></i>Delete</button>
@@ -185,7 +282,7 @@ const buildVendorCard = (vendor) => {
       <div><strong>Joined:</strong> ${escapeHtml(vendor.createdAtFormatted || '-')}</div>
     </div>
     <div class="card-actions actions">
-      <a class="view-btn" href="shop.html?vendorId=${encodeURIComponent(vendor.id)}" target="_blank" rel="noopener noreferrer"><i class="ri-external-link-line"></i>View Storefront</a>
+      <button class="view-btn" type="button" data-action="view" data-id="${vendor.id}" data-name="${escapeHtml(vendor.displayName || vendor.businessName || 'Vendor')}"><i class="ri-eye-line"></i>Quick View</button>
       <button class="notify-btn" data-action="notify" data-id="${vendor.id}" data-name="${escapeHtml(vendor.displayName || vendor.businessName || 'Vendor')}"><i class="ri-chat-3-line"></i>Notify</button>
       <button class="suspend-btn" data-action="suspend" data-status="${vendor.status || 'active'}" data-id="${vendor.id}" data-name="${escapeHtml(vendor.displayName || vendor.businessName || 'Vendor')}">${vendor.status === 'suspended' ? '<i class="ri-shield-check-line"></i>Unsuspend' : '<i class="ri-shield-off-line"></i>Suspend'}</button>
       <button class="delete-btn" data-action="delete" data-id="${vendor.id}" data-name="${escapeHtml(vendor.displayName || vendor.businessName || 'Vendor')}"><i class="ri-delete-bin-6-line"></i>Delete</button>
@@ -198,6 +295,7 @@ const buildVendorCard = (vendor) => {
 const renderVendors = (vendors = []) => {
   if (vendorTableBody) vendorTableBody.innerHTML = '';
   if (vendorCardList) vendorCardList.innerHTML = '';
+  vendorCache.clear();
 
   if (!vendors.length) {
     showEmptyState('No vendors match your current filters.');
@@ -207,6 +305,7 @@ const renderVendors = (vendors = []) => {
   if (emptyState) emptyState.hidden = true;
 
   vendors.forEach((vendor) => {
+    vendorCache.set(String(vendor.id), vendor);
     vendorTableBody?.appendChild(buildVendorRow(vendor));
     vendorCardList?.appendChild(buildVendorCard(vendor));
   });
@@ -277,7 +376,11 @@ const fetchVendors = async () => {
   }
 };
 
-const closeModal = (modal) => modal?.classList.remove('show');
+const closeModal = (modal) => {
+  if (!modal) return;
+  modal.classList.remove('show');
+  modal.setAttribute('aria-hidden', 'true');
+};
 
 const performVendorAction = async (payload) => {
   try {
@@ -314,6 +417,16 @@ const handleAction = (event) => {
   const { action, id, status, name } = button.dataset;
   if (!action || !id) return;
 
+  if (action === 'view') {
+    const vendor = vendorCache.get(id);
+    if (!vendor) {
+      showToast('Unable to load vendor preview.', true);
+      return;
+    }
+    openVendorPreview(vendor);
+    return;
+  }
+
   pendingAction.vendorId = id;
   pendingAction.name = name || 'Vendor';
   pendingAction.status = status || 'active';
@@ -322,12 +435,18 @@ const handleAction = (event) => {
     case 'notify':
       pendingAction.intent = 'notify';
       if (notifyMessage) notifyMessage.value = '';
-      notifyModal?.classList.add('show');
+      if (notifyModal) {
+        notifyModal.classList.add('show');
+        notifyModal.setAttribute('aria-hidden', 'false');
+      }
       break;
     case 'delete':
       pendingAction.intent = 'delete';
       if (cascadeDelete) cascadeDelete.checked = false;
-      deleteModal?.classList.add('show');
+      if (deleteModal) {
+        deleteModal.classList.add('show');
+        deleteModal.setAttribute('aria-hidden', 'false');
+      }
       break;
     case 'suspend': {
       const shouldSuspend = pendingAction.status !== 'suspended';
@@ -340,7 +459,10 @@ const handleAction = (event) => {
           : `Are you sure you want to restore ${pendingAction.name} to active status?`;
       }
 
-      suspendModal?.classList.add('show');
+      if (suspendModal) {
+        suspendModal.classList.add('show');
+        suspendModal.setAttribute('aria-hidden', 'false');
+      }
       break;
     }
     default:
@@ -356,7 +478,7 @@ const bindEvents = () => {
     });
   });
 
-  [suspendModal, deleteModal, notifyModal].forEach((modal) => {
+  [suspendModal, deleteModal, notifyModal, vendorProfileModal].forEach((modal) => {
     modal?.addEventListener('click', (event) => {
       if (event.target === modal) {
         closeModal(modal);
@@ -424,6 +546,15 @@ const bindEvents = () => {
 
   vendorTableBody?.addEventListener('click', handleAction);
   vendorCardList?.addEventListener('click', handleAction);
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    [vendorProfileModal, suspendModal, deleteModal, notifyModal].forEach((modal) => {
+      if (modal?.classList.contains('show')) {
+        closeModal(modal);
+      }
+    });
+  });
 
   confirmSuspendBtn?.addEventListener('click', () => {
     if (!pendingAction.vendorId || !pendingAction.intent) return;

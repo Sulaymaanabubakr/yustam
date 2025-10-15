@@ -101,7 +101,7 @@ $vendorVerificationLabel = yustam_verification_label($vendorVerificationState);
 $vendorVerificationIcon = yustam_verification_icon($vendorVerificationState);
 
 $chatId = $vendorId && $buyerId ? $vendorId . '_' . $buyerId . '_' . $productId : '';
-$vendorProfileUrl = 'shop.html';
+$vendorProfileUrl = 'vendor-storefront.php';
 if (is_string($vendorId) && trim($vendorId) !== '') {
     $vendorProfileUrl .= '?vendorId=' . rawurlencode($vendorId);
 }

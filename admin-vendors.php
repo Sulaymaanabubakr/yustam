@@ -452,9 +452,10 @@ require_admin_auth();
 
     .suspend-btn {
       background: linear-gradient(135deg, var(--orange), #ffa05b);
-      color: var(--white);
+      color: #ffffff;
       border-color: rgba(255, 255, 255, 0.2);
       box-shadow: 0 12px 26px rgba(243, 115, 30, 0.28);
+      text-shadow: 0 1px 1px rgba(0, 0, 0, 0.35);
     }
 
     .suspend-btn:hover {
@@ -475,6 +476,7 @@ require_admin_auth();
 
     .actions i {
       font-size: 1rem;
+      color: inherit;
     }
 
     .empty-state {
@@ -609,6 +611,10 @@ require_admin_auth();
       position: relative;
     }
 
+    .modal.modal-wide {
+      width: min(640px, 100%);
+    }
+
     .modal-backdrop.show .modal {
       transform: translateY(0) scale(1);
     }
@@ -618,6 +624,190 @@ require_admin_auth();
       font-size: clamp(20px, 4vw, 26px);
       color: var(--emerald);
       margin-bottom: 12px;
+    }
+
+    .vendor-preview {
+      display: flex;
+      flex-direction: column;
+      gap: 22px;
+    }
+
+    .vendor-preview-header {
+      display: flex;
+      gap: 20px;
+      align-items: flex-start;
+    }
+
+    .vendor-preview-avatar {
+      width: 70px;
+      height: 70px;
+      border-radius: 20px;
+      background: rgba(0, 77, 64, 0.1);
+      color: var(--emerald);
+      display: grid;
+      place-items: center;
+      font-family: 'Anton', sans-serif;
+      font-size: 1.6rem;
+      letter-spacing: 0.06em;
+      overflow: hidden;
+      border: 1px solid rgba(0, 77, 64, 0.18);
+      flex-shrink: 0;
+    }
+
+    .vendor-preview-avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .vendor-preview-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .vendor-preview-meta h3 {
+      margin: 0;
+    }
+
+    .vendor-preview-meta p {
+      margin: 0;
+      color: rgba(17, 17, 17, 0.68);
+      font-weight: 500;
+      letter-spacing: 0.02em;
+    }
+
+    .vendor-badge-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .vendor-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      padding: 6px 12px;
+      text-transform: capitalize;
+    }
+
+    .vendor-chip.plan {
+      background: rgba(0, 77, 64, 0.12);
+      color: var(--emerald);
+    }
+
+    .vendor-chip.status-active {
+      background: rgba(0, 77, 64, 0.1);
+      color: var(--emerald);
+    }
+
+    .vendor-chip.status-suspended {
+      background: rgba(216, 67, 21, 0.12);
+      color: #d84315;
+    }
+
+    .vendor-chip.status-pending {
+      background: rgba(243, 115, 30, 0.12);
+      color: var(--orange);
+    }
+
+    .vendor-chip.verification-verified {
+      background: rgba(0, 150, 136, 0.16);
+      color: #00796b;
+    }
+
+    .vendor-chip.verification-pending {
+      background: rgba(243, 115, 30, 0.16);
+      color: var(--orange);
+    }
+
+    .vendor-chip.verification-rejected {
+      background: rgba(216, 67, 21, 0.16);
+      color: #d84315;
+    }
+
+    .vendor-preview-details {
+      display: grid;
+      gap: 14px;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    }
+
+    .vendor-preview-details dt {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      color: rgba(17, 17, 17, 0.55);
+      margin-bottom: 4px;
+    }
+
+    .vendor-preview-details dd {
+      margin: 0;
+      font-weight: 600;
+      color: var(--ink);
+      font-size: 0.95rem;
+    }
+
+    .vendor-preview-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .vendor-preview-actions .btn {
+      border-radius: 14px;
+      padding: 10px 18px;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(0, 77, 64, 0.12);
+      color: var(--emerald);
+      transition: var(--transition);
+    }
+
+    .vendor-preview-actions .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 20px rgba(0, 0, 0, 0.12);
+    }
+
+    .vendor-preview-actions .btn.is-disabled {
+      pointer-events: none;
+      opacity: 0.6;
+    }
+
+    .vendor-preview-actions .btn-primary {
+      background: linear-gradient(135deg, var(--emerald), var(--emerald-light));
+      color: var(--white);
+    }
+
+    .vendor-preview-actions .btn-primary:hover {
+      box-shadow: 0 12px 24px rgba(0, 77, 64, 0.26);
+    }
+
+    .modal-close {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: none;
+      background: rgba(0, 0, 0, 0.08);
+      color: rgba(17, 17, 17, 0.72);
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+      transition: 0.2s ease;
+    }
+
+    .modal-close:hover {
+      background: rgba(0, 0, 0, 0.12);
     }
 
     .modal p {
@@ -804,6 +994,62 @@ require_admin_auth();
       <div class="modal-actions">
         <button class="cancel" data-close="notifyModal">Cancel</button>
         <button class="confirm" id="confirmNotify">Send</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Vendor Preview Modal -->
+  <div class="modal-backdrop" id="vendorProfileModal" aria-hidden="true">
+    <div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="vendorPreviewTitle">
+      <button class="modal-close" type="button" data-close="vendorProfileModal" aria-label="Close vendor preview">
+        <i class="ri-close-line" aria-hidden="true"></i>
+      </button>
+      <div class="vendor-preview">
+        <div class="vendor-preview-header">
+          <div class="vendor-preview-avatar" id="vendorPreviewAvatar"><span>VN</span></div>
+          <div class="vendor-preview-meta">
+            <h3 id="vendorPreviewTitle">Vendor Name</h3>
+            <p id="vendorPreviewBusiness">Business Name</p>
+            <div class="vendor-badge-row">
+              <span class="vendor-chip plan" id="vendorPreviewPlan">Free Plan</span>
+              <span class="vendor-chip status-active" id="vendorPreviewStatus">Active</span>
+              <span class="vendor-chip verification-unverified" id="vendorPreviewVerification">Not Verified</span>
+            </div>
+          </div>
+        </div>
+        <dl class="vendor-preview-details">
+          <div>
+            <dt>Vendor ID</dt>
+            <dd id="vendorPreviewId">-</dd>
+          </div>
+          <div>
+            <dt>Verification</dt>
+            <dd id="vendorPreviewVerificationText">-</dd>
+          </div>
+          <div>
+            <dt>Account Status</dt>
+            <dd id="vendorPreviewStatusText">-</dd>
+          </div>
+          <div>
+            <dt>Plan</dt>
+            <dd id="vendorPreviewPlanText">-</dd>
+          </div>
+          <div>
+            <dt>Phone</dt>
+            <dd id="vendorPreviewPhone">-</dd>
+          </div>
+          <div>
+            <dt>Joined</dt>
+            <dd id="vendorPreviewJoined">-</dd>
+          </div>
+        </dl>
+        <div class="vendor-preview-actions">
+          <button class="btn" type="button" data-close="vendorProfileModal"><i class="ri-close-line" aria-hidden="true"></i>Close</button>
+          <a class="btn btn-primary" id="vendorPreviewStorefront" href="#" target="_blank" rel="noopener">
+            <i class="ri-external-link-line" aria-hidden="true"></i>
+            Open Storefront
+          </a>
+        </div>
       </div>
     </div>
   </div>

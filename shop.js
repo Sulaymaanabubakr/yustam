@@ -452,7 +452,11 @@ const renderProducts = () => {
         ${planBadge || verificationBadge ? `<div class="vendor-badges">${planBadge}${verificationBadge}</div>` : ''}
         <div class="product-meta" style="justify-content:flex-start; gap:8px;">
           <i class="ri-user-3-line" style="color: var(--emerald);"></i>
-          <span>${escapeHtml(item.vendor)}</span>
+          ${
+            item.vendorId
+              ? `<a class="vendor-link" href="vendor-storefront.php?vendorId=${encodeURIComponent(item.vendorId)}">${escapeHtml(item.vendor)}</a>`
+              : `<span>${escapeHtml(item.vendor)}</span>`
+          }
         </div>
         <div class="product-actions">
           <a class="btn btn-outline" href="product.php?id=${encodeURIComponent(item.id)}${vendorIdParam}&plan=${planParam}&verified=${verifiedParam}" aria-label="View details of ${escapeHtml(item.title)}">View Details</a>

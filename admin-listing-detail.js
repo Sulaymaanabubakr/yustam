@@ -256,7 +256,7 @@ import { app, auth, db } from './firebase.js';
       vendorStatus.className = `chip status-${(data.status || 'active')}`;
       viewVendorBtn.onclick = () => {
         if (!currentVendorId) return;
-        const storefrontUrl = `shop.html?vendorId=${encodeURIComponent(currentVendorId)}`;
+        const storefrontUrl = `vendor-storefront.php?vendorId=${encodeURIComponent(currentVendorId)}`;
         const storefrontWindow = window.open(storefrontUrl, '_blank', 'noopener');
         if (storefrontWindow) {
           storefrontWindow.opener = null;
