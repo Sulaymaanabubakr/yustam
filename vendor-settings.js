@@ -19,6 +19,17 @@ document.addEventListener('DOMContentLoaded', () => {
   const refreshEndpoint = window.__VENDOR_SETTINGS_REFRESH__ || 'vendor-settings.php?format=json';
 
   let settings = { ...DEFAULT_SETTINGS, ...initialSettings };
+  try {
+    const cached = localStorage.getItem(STORAGE_KEY);
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (parsed && typeof parsed === 'object') {
+        settings = { ...settings, ...parsed };
+      }
+    }
+  } catch (error) {
+    console.warn('Unable to read cached settings:', error);
+  }
   let unsubscribeTheme = null;
 
   const toggleIds = {
