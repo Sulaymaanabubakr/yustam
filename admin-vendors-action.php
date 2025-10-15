@@ -44,6 +44,92 @@ function vendor_table_exists(mysqli $db, string $table): bool
     return false;
 }
 
+function vendor_notifications_table(): string
+{
+    if (defined('YUSTAM_VENDOR_NOTIFICATIONS_TABLE') && preg_match('/^[A-Za-z0-9_]+$/', (string) YUSTAM_VENDOR_NOTIFICATIONS_TABLE)) {
+        return YUSTAM_VENDOR_NOTIFICATIONS_TABLE;
+    }
+
+    return 'vendor_notifications';
+}
+
+function vendor_notifications_ensure_table(mysqli $db): void
+{
+    static $ensured = false;
+
+    if ($ensured) {
+        return;
+    }
+
+    $table = vendor_notifications_table();
+    $sql = sprintf(
+        'CREATE TABLE IF NOT EXISTS `%s` (
+            `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            `vendor_id` INT NOT NULL,
+            `title` VARCHAR(255) NOT NULL,
+            `message` VARCHAR(255) NOT NULL,
+            `detail` TEXT NULL,
+            `type` VARCHAR(32) NOT NULL DEFAULT \'bell\',
+            `status` VARCHAR(16) NOT NULL DEFAULT \'new\',
+            `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            `created_by` INT NULL,
+            INDEX `vendor_id_index` (`vendor_id`),
+            INDEX `status_index` (`status`),
+            INDEX `created_at_index` (`created_at`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;',
+        $table
+    );
+
+    try {
+        $db->query($sql);
+        $ensured = true;
+    } catch (Throwable $exception) {
+        error_log('Unable to ensure vendor notifications table: ' . $exception->getMessage());
+    }
+}
+
+function vendor_notifications_insert(
+    mysqli $db,
+    int $vendorId,
+    string $title,
+    string $message,
+    string $detail = '',
+    string $type = 'bell',
+    string $status = 'new',
+    ?int $createdBy = null
+): void {
+    vendor_notifications_ensure_table($db);
+    $table = vendor_notifications_table();
+
+    if ($createdBy !== null && $createdBy > 0) {
+        $sql = sprintf(
+            'INSERT INTO `%s` (vendor_id, title, message, detail, type, status, created_at, created_by)
+             VALUES (?, ?, ?, ?, ?, ?, NOW(), ?)',
+            $table
+        );
+
+        $stmt = $db->prepare($sql);
+        if ($stmt instanceof mysqli_stmt) {
+            vendor_action_bind($stmt, 'isssssi', [$vendorId, $title, $message, $detail, $type, $status, $createdBy]);
+            $stmt->execute();
+            $stmt->close();
+        }
+        return;
+    }
+
+    $sql = sprintf(
+        'INSERT INTO `%s` (vendor_id, title, message, detail, type, status, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, NOW())',
+        $table
+    );
+    $stmt = $db->prepare($sql);
+    if ($stmt instanceof mysqli_stmt) {
+        vendor_action_bind($stmt, 'isssss', [$vendorId, $title, $message, $detail, $type, $status]);
+        $stmt->execute();
+        $stmt->close();
+    }
+}
+
 $rawBody = file_get_contents('php://input');
 $data = json_decode($rawBody, true);
 if (!is_array($data)) {
@@ -97,6 +183,8 @@ $columns = yustam_vendor_table_columns();
 $hasStatusColumn = in_array('status', $columns, true);
 $hasUpdatedColumn = yustam_vendor_table_has_column('updated_at');
 $hasEmailColumn = array_key_exists('email', $vendor);
+$adminId = isset($_SESSION['admin_id']) ? (int) $_SESSION['admin_id'] : null;
+$vendorName = (string) ($vendor['name'] ?? $vendor['full_name'] ?? $vendor['business_name'] ?? 'Vendor');
 
 switch ($action) {
     case 'suspend':
@@ -136,6 +224,30 @@ switch ($action) {
         $updateStmt->execute();
         $updateStmt->close();
 
+        if ($newStatus === 'suspended') {
+            vendor_notifications_insert(
+                $db,
+                $vendorId,
+                'Account Suspended',
+                'Your vendor account has been suspended.',
+                'Your storefront access is currently disabled. Please contact support to resolve any outstanding issues and regain access.',
+                'alert',
+                'new',
+                $adminId
+            );
+        } else {
+            vendor_notifications_insert(
+                $db,
+                $vendorId,
+                'Account Reactivated',
+                'Your vendor account is active again.',
+                'You can continue posting listings and managing your storefront on YUSTAM.',
+                'shield-check',
+                'new',
+                $adminId
+            );
+        }
+
         respond_vendor_action([
             'success' => true,
             'message' => $action === 'suspend' ? 'Vendor account suspended.' : 'Vendor account reactivated.',
@@ -161,6 +273,17 @@ switch ($action) {
             vendor_action_bind($deleteVendorStmt, 'i', [$vendorId]);
             $deleteVendorStmt->execute();
             $deleteVendorStmt->close();
+
+            vendor_notifications_ensure_table($db);
+            $notificationsTable = vendor_notifications_table();
+            if (vendor_table_exists($db, $notificationsTable)) {
+                $deleteNotificationsStmt = $db->prepare(sprintf('DELETE FROM `%s` WHERE vendor_id = ?', $notificationsTable));
+                if ($deleteNotificationsStmt instanceof mysqli_stmt) {
+                    vendor_action_bind($deleteNotificationsStmt, 'i', [$vendorId]);
+                    $deleteNotificationsStmt->execute();
+                    $deleteNotificationsStmt->close();
+                }
+            }
 
             $db->commit();
         } catch (Throwable $exception) {
@@ -205,6 +328,23 @@ switch ($action) {
                 'message' => 'Unable to send notification email at the moment.',
             ], 500);
         }
+
+        $subjectLine = 'Message from Marketplace Admin';
+        if (function_exists('mb_strimwidth')) {
+            $messagePreview = mb_strimwidth($message, 0, 120, '…', 'UTF-8');
+        } else {
+            $messagePreview = strlen($message) > 120 ? substr($message, 0, 117) . '...' : $message;
+        }
+        vendor_notifications_insert(
+            $db,
+            $vendorId,
+            $subjectLine,
+            $messagePreview,
+            $message,
+            'bell',
+            'new',
+            $adminId
+        );
 
         respond_vendor_action([
             'success' => true,
