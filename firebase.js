@@ -4,13 +4,8 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
 import { getFirestore } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
 import { getStorage } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js";
-import {
-  getAuth,
-  GoogleAuthProvider,
-  signInWithPopup,
-  signInWithRedirect,
-  getRedirectResult,
-} from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup } 
+  from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
 
 // -------------------------------
 // 🔹 Your Firebase configuration
@@ -42,13 +37,4 @@ provider.setCustomParameters({ prompt: "select_account" });
 // -------------------------------
 // 🔹 Export everything for use
 // -------------------------------
-export {
-  app,
-  db,
-  storage,
-  auth,
-  provider,
-  signInWithPopup,
-  signInWithRedirect,
-  getRedirectResult,
-};
+export { app, db, storage, auth, provider, signInWithPopup };
