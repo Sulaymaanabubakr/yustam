@@ -121,6 +121,15 @@
     },
     {
       selectors: `
+        [data-theme="dark"] body .hero .hero-content p,
+        [data-theme="dark"] body .hero p,
+        [data-theme="dark"] body .hero .description`,
+      style: {
+        color: 'var(--yustam-heading) !important',
+      },
+    },
+    {
+      selectors: `
         body h1,
         body h2,
         body h3,
