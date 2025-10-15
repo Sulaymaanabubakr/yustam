@@ -7,6 +7,8 @@
         category: "Phones & Tablets",
         location: "Lagos",
         vendor: "Tech Plug NG",
+        vendorPlan: "Premium",
+        vendorVerified: true,
         image: "https://images.unsplash.com/photo-1617084321550-47e6e9983b74?auto=format&fit=crop&w=800&q=80",
         dateAdded: "2024-03-12"
       },
@@ -17,6 +19,8 @@
         category: "Electronics",
         location: "Abuja FCT",
         vendor: "Pixel Home Store",
+        vendorPlan: "Pro",
+        vendorVerified: true,
         image: "https://images.unsplash.com/photo-1583225200690-1c7d1dd96d54?auto=format&fit=crop&w=800&q=80",
         dateAdded: "2024-04-18"
       },
@@ -27,6 +31,8 @@
         category: "Property",
         location: "Lagos",
         vendor: "Prime Realty",
+        vendorPlan: "Elite",
+        vendorVerified: true,
         image: "https://images.unsplash.com/photo-1617099391444-7d45cc0c2f03?auto=format&fit=crop&w=1200&q=80",
         dateAdded: "2024-01-22"
       },
@@ -37,6 +43,8 @@
         category: "Phones & Tablets",
         location: "Kano",
         vendor: "Northern Gadgets",
+        vendorPlan: "Starter",
+        vendorVerified: "pending",
         image: "https://images.unsplash.com/photo-1606741965437-1c187c0183e0?auto=format&fit=crop&w=800&q=80",
         dateAdded: "2024-05-06"
       },
@@ -47,6 +55,8 @@
         category: "Home & Kitchen",
         location: "Port Harcourt",
         vendor: "CleanSpin Stores",
+        vendorPlan: "Starter",
+        vendorVerified: false,
         image: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=800&q=80",
         dateAdded: "2024-02-01"
       },
@@ -57,6 +67,8 @@
         category: "Fashion",
         location: "Abuja FCT",
         vendor: "Royal Threads",
+        vendorPlan: "Plus",
+        vendorVerified: "pending",
         image: "https://images.unsplash.com/photo-1612423284934-b43b77f22945?auto=format&fit=crop&w=800&q=80",
         dateAdded: "2024-03-30"
       },
@@ -67,6 +79,8 @@
         category: "Computing",
         location: "Lagos",
         vendor: "ByteWorld NG",
+        vendorPlan: "Premium",
+        vendorVerified: true,
         image: "https://images.unsplash.com/photo-1517059224940-d4af9eec41e5?auto=format&fit=crop&w=800&q=80",
         dateAdded: "2024-04-08"
       },
@@ -77,6 +91,8 @@
         category: "Vehicles",
         location: "Oyo",
         vendor: "Highway Autos",
+        vendorPlan: "Premium",
+        vendorVerified: true,
         image: "https://images.unsplash.com/photo-1503736334956-4c8f8e92946d?auto=format&fit=crop&w=1200&q=80",
         dateAdded: "2024-03-15"
       },
@@ -87,6 +103,8 @@
         category: "Power Solutions",
         location: "Anambra",
         vendor: "BrightGrid Energy",
+        vendorPlan: "Pro",
+        vendorVerified: true,
         image: "https://images.unsplash.com/photo-1509395176047-4a66953fd231?auto=format&fit=crop&w=800&q=80",
         dateAdded: "2024-03-03"
       },
@@ -97,6 +115,8 @@
         category: "Beauty & Self-Care",
         location: "Kaduna",
         vendor: "GlowNaturals",
+        vendorPlan: "Starter",
+        vendorVerified: false,
         image: "https://images.unsplash.com/photo-1574302733348-22ad3f20e5c1?auto=format&fit=crop&w=800&q=80",
         dateAdded: "2024-02-17"
       },
@@ -107,6 +127,8 @@
         category: "Furniture",
         location: "Rivers",
         vendor: "The Living Room Co.",
+        vendorPlan: "Plus",
+        vendorVerified: true,
         image: "https://images.unsplash.com/photo-1505691938895-1758d7feb511?auto=format&fit=crop&w=1200&q=80",
         dateAdded: "2024-04-26"
       },
@@ -117,6 +139,8 @@
         category: "Services",
         location: "Lagos",
         vendor: "Flavors Catering NG",
+        vendorPlan: "Starter",
+        vendorVerified: "pending",
         image: "https://images.unsplash.com/photo-1541544181015-4e5e697c15c3?auto=format&fit=crop&w=800&q=80",
         dateAdded: "2024-03-20"
       },
@@ -183,6 +207,53 @@
     const formatCurrency = (value) =>
       new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", maximumFractionDigits: 0 }).format(value);
 
+    const slugifyPlan = (plan) => {
+      if (!plan) return 'free';
+      return String(plan)
+        .toLowerCase()
+        .replace(/plan/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-+|-+$)/g, '') || 'plan';
+    };
+
+    const formatPlanLabel = (plan) => {
+      if (!plan) return '';
+      const trimmed = String(plan).trim();
+      if (!trimmed) return '';
+      const lower = trimmed.toLowerCase();
+      return lower.endsWith('plan') ? trimmed : `${trimmed} Plan`;
+    };
+
+    const createPlanBadge = (plan) => {
+      const label = formatPlanLabel(plan);
+      if (!label) return '';
+      const slug = slugifyPlan(plan);
+      return `<span class="vendor-badge vendor-plan vendor-plan-${slug}"><i class="ri-vip-crown-fill" aria-hidden="true"></i>${label}</span>`;
+    };
+
+    const normaliseVerificationState = (value) => {
+      if (value === true || value === 1) return 'verified';
+      if (value === false || value === 0 || value === null) return 'unverified';
+      if (typeof value === 'string') {
+        const norm = value.trim().toLowerCase();
+        if (['1', 'true', 'yes', 'verified', 'approved', 'active'].includes(norm)) return 'verified';
+        if (['pending', 'submitted', 'processing', 'in_review', 'in-review', 'under review'].includes(norm)) return 'pending';
+        if (['rejected', 'declined', 'failed', 'needs_changes', 'needs update', 'needs-update', 'no', 'false'].includes(norm)) return 'unverified';
+      }
+      return 'unverified';
+    };
+
+    const createVerificationBadge = (value) => {
+      const state = normaliseVerificationState(value);
+      if (state === 'verified') {
+        return `<span class="vendor-badge vendor-verified verified"><i class="ri-shield-check-line" aria-hidden="true"></i>Verified Vendor</span>`;
+      }
+      if (state === 'pending') {
+        return `<span class="vendor-badge vendor-verified pending"><i class="ri-time-line" aria-hidden="true"></i>Pending Review</span>`;
+      }
+      return `<span class="vendor-badge vendor-verified unverified"><i class="ri-alert-line" aria-hidden="true"></i>Not Verified</span>`;
+    };
+
     const priceInRange = (price, rangeValue) => {
       if (rangeValue === "all") return true;
       if (rangeValue.endsWith("+")) {
@@ -247,6 +318,15 @@
         card.dataset.category = item.category;
         card.dataset.price = item.price;
         card.dataset.location = item.location;
+        card.dataset.plan = item.vendorPlan || '';
+        card.dataset.verified = verificationState;
+
+        const planBadge = createPlanBadge(item.vendorPlan);
+        const verificationBadge = createVerificationBadge(item.vendorVerified);
+        const verificationState = normaliseVerificationState(item.vendorVerified);
+        const planParam = encodeURIComponent(item.vendorPlan || '');
+        const verificationParam = encodeURIComponent(verificationState);
+        const badgesMarkup = planBadge || verificationBadge ? `<div class="vendor-badges">${planBadge}${verificationBadge}</div>` : '';
 
         card.innerHTML = `
           <img src="${item.image}" alt="${item.title}" loading="lazy" />
@@ -257,12 +337,13 @@
               <span>${item.category}</span>
               <span><i class="ri-map-pin-line"></i> ${item.location}</span>
             </div>
+            ${badgesMarkup}
             <div class="product-meta" style="justify-content:flex-start; gap:8px;">
               <i class="ri-user-3-line" style="color: var(--emerald);"></i>
               <span>${item.vendor}</span>
             </div>
             <div class="product-actions">
-              <a class="btn btn-outline" href="product.html?id=${item.id}" aria-label="View details of ${item.title}">View Details</a>
+              <a class="btn btn-outline" href="product.html?id=${item.id}&plan=${planParam}&verified=${verificationParam}" aria-label="View details of ${item.title}">View Details</a>
               <button class="btn" type="button">Add to Cart</button>
             </div>
           </div>

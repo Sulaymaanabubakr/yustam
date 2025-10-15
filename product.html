@@ -336,13 +336,73 @@
             border: 3px solid rgba(243, 115, 30, 0.4);
         }
 
-        .plan-chip {
-            background: rgba(243, 115, 30, 0.15);
-            color: var(--orange);
+        .vendor-badges {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .vendor-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
             border-radius: 999px;
-            padding: 4px 12px;
-            font-size: 0.85rem;
+            font-size: 0.8rem;
             font-weight: 600;
+            letter-spacing: 0.02em;
+            background: rgba(0, 77, 64, 0.1);
+            color: var(--emerald);
+        }
+
+        .vendor-badge i {
+            font-size: 0.9rem;
+        }
+
+        .vendor-plan-premium {
+            background: rgba(243, 115, 30, 0.12);
+            color: var(--orange-deep);
+        }
+
+        .vendor-plan-pro {
+            background: rgba(0, 77, 64, 0.14);
+            color: var(--emerald);
+        }
+
+        .vendor-plan-plus {
+            background: rgba(0, 77, 64, 0.1);
+            color: var(--emerald-dark);
+        }
+
+        .vendor-plan-starter {
+            background: rgba(17, 17, 17, 0.06);
+            color: rgba(17, 17, 17, 0.7);
+        }
+
+        .vendor-plan-elite {
+            background: linear-gradient(120deg, rgba(243, 115, 30, 0.18), rgba(0, 77, 64, 0.18));
+            color: var(--emerald-dark);
+        }
+
+        .vendor-plan-free {
+            background: rgba(17, 17, 17, 0.05);
+            color: rgba(17, 17, 17, 0.6);
+        }
+
+        .vendor-badge.verified {
+            background: rgba(0, 77, 64, 0.16);
+            color: var(--emerald-dark);
+        }
+
+        .vendor-badge.pending {
+            background: rgba(255, 193, 7, 0.18);
+            color: #a66300;
+        }
+
+        .vendor-badge.unverified {
+            background: rgba(217, 48, 37, 0.14);
+            color: #a32018;
         }
 
         .vendor-actions {
@@ -571,7 +631,7 @@
         }
     </style>
 </head>
-<body>
+<body data-vendor-plan="Premium" data-vendor-verified="true">
     <!-- Header -->
     <header>
         <div class="topbar">
@@ -680,7 +740,10 @@
                 <img src="https://images.unsplash.com/photo-1544723795-3fb6469f5b39?auto=format&fit=crop&w=200&q=80" alt="Vendor profile photo" class="vendor-avatar">
                 <div>
                     <h3 id="vendorTitle">Elite Gadgets NG</h3>
-                    <div class="plan-chip">Premium Vendor</div>
+                    <div class="vendor-badges">
+                        <span class="vendor-badge vendor-plan vendor-plan-premium" id="vendorPlanBadge"><i class="ri-vip-crown-fill" aria-hidden="true"></i>Premium Plan</span>
+                        <span class="vendor-badge vendor-verified verified" id="vendorVerifiedBadge"><i class="ri-shield-check-line" aria-hidden="true"></i>Verified Vendor</span>
+                    </div>
                 </div>
             </div>
             <div id="vendorInfo" class="vendor-details">
@@ -780,6 +843,9 @@
 <script type="module" src="firebase.js"></script>
 </body>
 </html>
+
+
+
 
 
 

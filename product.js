@@ -11,10 +11,16 @@ const productId = productIdInput?.value?.trim?.() || '';
 const productNameEl = document.getElementById('productName');
 const productPriceEl = document.getElementById('productPrice');
 const productImageEl = document.getElementById('productImage');
+const vendorPlanBadge = document.getElementById('vendorPlanBadge');
+const vendorVerifiedBadge = document.getElementById('vendorVerifiedBadge');
+const vendorBadgesContainer = document.querySelector('.vendor-badges');
+const vendorNameEl = document.getElementById('vendorTitle');
 
 const productName = productNameEl?.textContent?.trim?.() || '';
 const productPrice = productPriceEl?.textContent?.trim?.() || '';
 const productImageUrl = productImageEl?.src || '';
+const vendorName = vendorNameEl?.textContent?.trim?.() || document.body?.dataset?.vendorName || 'Vendor';
+const vendorId = document.body?.dataset?.vendorId || '';
 
 const savedRef = buyerId && productId ? doc(db, `saved/${buyerId}/items/${productId}`) : null;
 
@@ -31,6 +37,89 @@ function setSaveState(isSaved) {
   }
 }
 
+const slugifyPlan = (plan) => {
+  if (!plan) return 'free';
+  return String(plan)
+    .toLowerCase()
+    .replace(/plan/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-+|-+$)/g, '') || 'plan';
+};
+
+const formatPlanLabel = (plan) => {
+  if (!plan) return 'Free Plan';
+  const trimmed = String(plan).trim();
+  if (!trimmed) return 'Free Plan';
+  const lower = trimmed.toLowerCase();
+  return lower.endsWith('plan') ? trimmed : `${trimmed} Plan`;
+};
+
+const normaliseVerificationState = (value) => {
+  if (value === true || value === 1) return 'verified';
+  if (value === false || value === 0 || value === null || value === undefined) return 'unverified';
+  const norm = String(value).trim().toLowerCase();
+  if (['1', 'true', 'yes', 'verified', 'approved', 'active'].includes(norm)) return 'verified';
+  if (['pending', 'submitted', 'processing', 'in_review', 'in-review', 'under review'].includes(norm)) return 'pending';
+  if (['rejected', 'declined', 'failed', 'needs_changes', 'needs update', 'needs-update', '0', 'false', 'no', 'unverified'].includes(norm)) return 'unverified';
+  return 'unverified';
+};
+
+const applyVendorBadges = () => {
+  if (!vendorPlanBadge || !vendorVerifiedBadge) return;
+
+  const params = new URLSearchParams(window.location.search);
+  let planValue = params.get('plan');
+  let verifiedValue = params.get('verified');
+
+  if (planValue) {
+    planValue = decodeURIComponent(planValue);
+  } else {
+    planValue = document.body?.dataset?.vendorPlan || '';
+  }
+
+  if (verifiedValue !== null) {
+    verifiedValue = decodeURIComponent(verifiedValue);
+  } else {
+    verifiedValue = document.body?.dataset?.vendorVerified || '';
+  }
+
+  planValue = planValue ? String(planValue).trim() : '';
+
+  const planLabel = formatPlanLabel(planValue);
+  const planSlug = slugifyPlan(planValue);
+  vendorPlanBadge.innerHTML = `<i class="ri-vip-crown-fill" aria-hidden="true"></i>${planLabel}`;
+  vendorPlanBadge.className = `vendor-badge vendor-plan vendor-plan-${planSlug}`;
+
+  const verificationState = normaliseVerificationState(verifiedValue);
+  let verificationLabel = 'Not Verified';
+  let verificationIcon = 'ri-alert-line';
+  let stateClass = 'unverified';
+
+  if (verificationState === 'verified') {
+    verificationLabel = 'Verified Vendor';
+    verificationIcon = 'ri-shield-check-line';
+    stateClass = 'verified';
+  } else if (verificationState === 'pending') {
+    verificationLabel = 'Pending Review';
+    verificationIcon = 'ri-time-line';
+    stateClass = 'pending';
+  }
+
+  vendorVerifiedBadge.innerHTML = `<i class="${verificationIcon}" aria-hidden="true"></i>${verificationLabel}`;
+  vendorVerifiedBadge.className = `vendor-badge vendor-verified ${stateClass}`;
+
+  if (document.body) {
+    document.body.dataset.vendorPlan = planValue || '';
+    document.body.dataset.vendorVerified = verificationState;
+  }
+
+  if (vendorBadgesContainer) {
+    vendorBadgesContainer.hidden = false;
+  }
+};
+
+applyVendorBadges();
+
 async function toggleSave() {
   if (!saveBtn) return;
   if (!buyerId) {
@@ -45,11 +134,17 @@ async function toggleSave() {
       await deleteDoc(savedRef);
       setSaveState(false);
     } else {
+      const vendorPlanValue = document.body?.dataset?.vendorPlan || '';
+      const vendorVerifiedValue = document.body?.dataset?.vendorVerified || '';
       await setDoc(savedRef, {
         name: productName,
         price: productPrice,
         image: productImageUrl,
         productId,
+        vendorId,
+        vendorName,
+        vendorPlan: formatPlanLabel(vendorPlanValue),
+        vendorVerified: normaliseVerificationState(vendorVerifiedValue),
         timestamp: Date.now(),
       });
       setSaveState(true);
