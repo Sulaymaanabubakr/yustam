@@ -853,10 +853,8 @@ require_admin_auth();
 
   <footer>© 2025 YUSTAM - All Rights Reserved.</footer>
 
-  <!-- Firebase Logic -->
   <script src="theme-manager.js" defer></script>
-<script type="module" src="admin-vendors.js"></script>
-<script type="module" src="firebase.js"></script>
+  <script src="admin-vendors.js" defer></script>
 </body>
 </html>
 
