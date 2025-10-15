@@ -14,6 +14,7 @@ const saveBtn = document.getElementById('saveBtn');
 const saveSpinner = saveBtn?.querySelector('.save-spinner');
 const saveText = saveBtn?.querySelector('.save-text');
 const toastContainer = document.getElementById('toastContainer');
+const profileForm = document.getElementById('profileForm');
 
 const fullNameInput = document.getElementById('fullName');
 const emailInput = document.getElementById('email');
@@ -122,7 +123,7 @@ const collectFormValues = () => ({
   business_name: businessNameInput?.value.trim() || '',
   phone: phoneInput?.value.trim() || '',
   state: stateInput?.value.trim() || '',
-  address: businessAddressInput?.value.trim() || '',
+  business_address: businessAddressInput?.value.trim() || '',
 });
 
 const toggleSaveState = (saving) => {
@@ -172,6 +173,8 @@ const submitProfile = async () => {
   if (!validateForm()) return;
   toggleSaveState(true);
 
+  let updateSucceeded = false;
+
   try {
     const uploadedPhotoUrl = await uploadProfilePhoto();
     const formValues = collectFormValues();
@@ -181,7 +184,7 @@ const submitProfile = async () => {
     payload.append('business_name', formValues.business_name);
     payload.append('phone', formValues.phone);
     payload.append('state', formValues.state);
-    payload.append('address', formValues.address);
+    payload.append('business_address', formValues.business_address);
 
     if (uploadedPhotoUrl) {
       payload.append('profile_photo_url', uploadedPhotoUrl);
@@ -198,14 +201,36 @@ const submitProfile = async () => {
       throw new Error(data?.message || 'Unable to save profile changes right now.');
     }
 
-    currentProfile = data.profile || { ...currentProfile, ...formValues, profilePhoto: uploadedPhotoUrl };
+    const normalizedProfile = {
+      name: formValues.name,
+      businessName: formValues.business_name,
+      phone: formValues.phone,
+      state: formValues.state,
+      businessAddress: formValues.business_address,
+      profilePhoto: uploadedPhotoUrl || currentProfile.profilePhoto,
+    };
+
+    currentProfile = data.profile || { ...currentProfile, ...normalizedProfile };
     populateForm(currentProfile);
     showToast(data.message || 'Profile updated successfully!', 'success');
+    updateSucceeded = true;
+
+    toggleSaveState(false);
+    if (saveBtn) {
+      saveBtn.disabled = true;
+      if (saveSpinner) saveSpinner.hidden = true;
+      if (saveText) saveText.textContent = 'Redirecting…';
+    }
+    setTimeout(() => {
+      window.location.href = 'vendor-profile.php';
+    }, 900);
   } catch (error) {
     console.error('Profile update failed', error);
     showToast(error.message || 'Could not update profile. Please retry.', 'error');
   } finally {
-    toggleSaveState(false);
+    if (!updateSucceeded) {
+      toggleSaveState(false);
+    }
   }
 };
 
@@ -281,6 +306,10 @@ const init = () => {
   changePhotoBtn?.addEventListener('click', () => photoInput?.click());
   photoInput?.addEventListener('change', handlePhotoSelection);
   saveBtn?.addEventListener('click', submitProfile);
+  profileForm?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    submitProfile();
+  });
 };
 
 document.addEventListener('DOMContentLoaded', init);
