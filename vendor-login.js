@@ -1,46 +1,53 @@
 // ---------- Imports ----------
 import { auth, provider, signInWithPopup } from './firebase.js';
 
-// ---------- DOM Elements ----------
-const loginForm = document.getElementById('loginForm');
-const loginBtn = document.getElementById('loginBtn');
-const forgotPasswordBtn = document.getElementById('forgotPasswordBtn');
-const formError = document.getElementById('formError');
-const googleBtn = document.getElementById('googleBtn');
+const formSelectors = {
+  form: 'loginForm',
+  submit: 'loginBtn',
+  message: 'formError',
+  google: 'googleBtn',
+};
 
-// ---------- Utility Functions ----------
-const setMessage = (message = '', type = 'error') => {
-  formError.textContent = message;
+const getElement = (id) => document.getElementById(id);
+
+const setMessage = (message, type = 'error') => {
+  const messageBox = getElement(formSelectors.message);
+  if (!messageBox) return;
+  messageBox.textContent = message || '';
   if (!message) {
-    formError.classList.remove('success');
+    messageBox.classList.remove('success');
     return;
   }
   if (type === 'success') {
-    formError.classList.add('success');
+    messageBox.classList.add('success');
   } else {
-    formError.classList.remove('success');
+    messageBox.classList.remove('success');
   }
 };
 
 const setLoading = (loading) => {
-  if (!loginBtn) return;
+  const submitBtn = getElement(formSelectors.submit);
+  if (!submitBtn) return;
   if (loading) {
-    loginBtn.classList.add('loading');
-    loginBtn.disabled = true;
+    submitBtn.classList.add('loading');
+    submitBtn.disabled = true;
   } else {
-    loginBtn.classList.remove('loading');
-    loginBtn.disabled = false;
+    submitBtn.classList.remove('loading');
+    submitBtn.disabled = false;
   }
 };
 
-// ---------- EMAIL & PASSWORD LOGIN ----------
-loginForm?.addEventListener('submit', async (event) => {
+const handleEmailLogin = async (event) => {
   event.preventDefault();
-  setMessage('');
+  const form = event.currentTarget;
 
-  const formData = new FormData(loginForm);
-  const email = (formData.get('email') || '').toString().trim().toLowerCase();
-  const password = (formData.get('password') || '').toString();
+  const emailField = form ? form.querySelector('[name=\"email\"]') : null;
+  const passwordField = form ? form.querySelector('[name=\"password\"]') : null;
+
+  const email = emailField ? String(emailField.value || '').trim().toLowerCase() : '';
+  const password = passwordField ? String(passwordField.value || '') : '';
+
+  setMessage('');
 
   if (!email || !password) {
     setMessage('Please enter your email and password.');
@@ -51,14 +58,15 @@ loginForm?.addEventListener('submit', async (event) => {
     setLoading(true);
     const response = await fetch('login.php', {
       method: 'POST',
-      body: formData,
+      body: new FormData(form),
       credentials: 'same-origin',
     });
 
-    const data = await response.json();
+    const data = await response.json().catch(() => ({}));
 
     if (!response.ok || !data.success) {
-      setMessage(data.message || 'Unable to sign in. Please try again.');
+      const errorMessage = data && data.message ? data.message : 'Unable to sign in. Please try again.';
+      setMessage(errorMessage);
       return;
     }
 
@@ -66,81 +74,123 @@ loginForm?.addEventListener('submit', async (event) => {
     window.location.href = data.redirect || 'vendor-dashboard.php';
   } catch (error) {
     console.error('Login error', error);
-    setMessage(error.message || 'Unable to sign in. Please try again.');
+    setMessage(error && error.message ? error.message : 'Unable to sign in. Please try again.');
   } finally {
     setLoading(false);
   }
-});
+};
 
-// ---------- FORGOT PASSWORD ----------
-forgotPasswordBtn?.addEventListener('click', async () => {
+const handleForgotPassword = async (event) => {
+  const form = getElement(formSelectors.form);
+  const emailField = form ? form.querySelector('[name=\"email\"]') : null;
+  const email = emailField ? String(emailField.value || '').trim().toLowerCase() : '';
+
   setMessage('');
-  const email = (loginForm?.email?.value || '').trim().toLowerCase();
+
   if (!email) {
     setMessage('Enter your email to receive a reset link.');
-    loginForm?.email?.focus();
+    if (emailField) emailField.focus();
+    event.preventDefault();
     return;
   }
 
   try {
-    forgotPasswordBtn.disabled = true;
-    forgotPasswordBtn.textContent = 'Sending link.';
+    const trigger = event.currentTarget;
+    if (trigger) {
+      trigger.setAttribute('aria-busy', 'true');
+    }
+    const payload = new FormData();
+    payload.append('email', email);
 
-    const formData = new FormData();
-    formData.append('email', email);
     const response = await fetch('forgot-password.php', {
       method: 'POST',
-      body: formData,
+      body: payload,
       credentials: 'same-origin',
     });
 
-    const data = await response.json();
+    const data = await response.json().catch(() => ({}));
+
     if (!response.ok || !data.success) {
-      setMessage(data.message || 'Unable to send reset link.');
+      setMessage((data && data.message) || 'Unable to send reset link.');
+      event.preventDefault();
       return;
     }
 
-    setMessage(data.message || 'Check your inbox for the reset link.', 'success');
+    setMessage((data && data.message) || 'Check your inbox for the reset link.', 'success');
+    event.preventDefault();
   } catch (error) {
     console.error('Forgot password error', error);
-    setMessage(error.message || 'Unable to send reset link. Please try again.');
+    setMessage((error && error.message) || 'Unable to send reset link. Please try again.');
+    event.preventDefault();
   } finally {
-    forgotPasswordBtn.disabled = false;
-    forgotPasswordBtn.textContent = 'Forgot password?';
+    const trigger = event.currentTarget;
+    if (trigger) {
+      trigger.removeAttribute('aria-busy');
+    }
   }
-});
+};
 
-// ---------- GOOGLE SIGN-IN ----------
-googleBtn?.addEventListener('click', async () => {
+const handleGoogleLogin = async () => {
   setMessage('Connecting to Google.', 'success');
 
   try {
     const result = await signInWithPopup(auth, provider);
-    const user = result.user;
+    const user = result && result.user ? result.user : null;
+    if (!user || !user.email) {
+      throw new Error('We could not complete Google sign-in. Please try again.');
+    }
 
-    // Send Google user data to backend PHP
-    const formData = new FormData();
-    formData.append('email', user.email);
-    formData.append('name', user.displayName || '');
-    formData.append('provider', 'google');
+    const payload = new FormData();
+    payload.append('email', user.email);
+    payload.append('name', user.displayName || '');
+    payload.append('provider', 'google');
 
     const response = await fetch('google-login.php', {
       method: 'POST',
-      body: formData,
+      body: payload,
       credentials: 'same-origin',
     });
 
-    const data = await response.json();
+    const data = await response.json().catch(() => ({}));
 
-    if (data.success) {
-      setMessage('Welcome back, redirecting.', 'success');
-      window.location.href = data.redirect || 'vendor-dashboard.php';
-    } else {
-      setMessage(data.message || 'Unable to sign in with Google.');
+    if (!response.ok || !data.success) {
+      setMessage((data && data.message) || 'Unable to sign in with Google.');
+      return;
     }
+
+    setMessage('Welcome back, redirecting.', 'success');
+    window.location.href = data.redirect || 'vendor-dashboard.php';
   } catch (error) {
     console.error('Google sign-in error:', error);
-    setMessage('Google sign-in failed. Please try again.');
+    setMessage((error && error.message) || 'Google sign-in failed. Please try again.');
   }
-});
-*** End Patch
+};
+
+const initLogin = () => {
+  const form = getElement(formSelectors.form);
+  if (form) {
+    form.addEventListener('submit', handleEmailLogin);
+  }
+
+  // Optional forgot password trigger (if rendered as a button)
+  const forgotPasswordBtn = getElement('forgotPasswordBtn');
+  if (forgotPasswordBtn) {
+    forgotPasswordBtn.addEventListener('click', handleForgotPassword);
+  }
+
+  const googleBtn = getElement(formSelectors.google);
+  if (googleBtn) {
+    googleBtn.addEventListener('click', (event) => {
+      event.preventDefault();
+      handleGoogleLogin();
+    });
+  }
+
+  console.info('Vendor login script ready');
+};
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initLogin);
+} else {
+  initLogin();
+}
