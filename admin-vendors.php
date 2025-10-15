@@ -392,33 +392,90 @@ require_admin_auth();
     .status-suspended { background: rgba(216, 67, 21, 0.15); color: #d84315; }
 
     .actions {
-      display: flex;
+      display: inline-flex;
       flex-wrap: wrap;
-      gap: 8px;
+      gap: 10px;
+      align-items: center;
     }
 
     .actions button,
     .actions a {
-      padding: 8px 14px;
-      border-radius: 12px;
-      border: none;
-      font-size: 0.85rem;
+      position: relative;
+      padding: 10px 16px;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      font-size: 0.82rem;
       font-weight: 600;
+      letter-spacing: 0.01em;
       cursor: pointer;
       display: inline-flex;
       align-items: center;
-      gap: 6px;
-      transition: var(--transition);
+      gap: 8px;
+      line-height: 1.1;
+      background: rgba(255, 255, 255, 0.92);
+      box-shadow: 0 8px 20px rgba(17, 17, 17, 0.08);
+      transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, border-color 0.2s ease;
     }
 
-    .view-btn { background: rgba(0, 77, 64, 0.1); color: var(--emerald); }
-    .view-btn:hover { background: rgba(0, 77, 64, 0.2); }
-    .suspend-btn { background: var(--orange); color: var(--white); }
-    .suspend-btn:hover { background: var(--orange-dark); }
-    .delete-btn { background: rgba(216, 67, 21, 0.12); color: #d84315; }
-    .delete-btn:hover { background: rgba(216, 67, 21, 0.2); }
-    .notify-btn { background: rgba(0, 77, 64, 0.12); color: var(--emerald); }
-    .notify-btn:hover { background: rgba(0, 77, 64, 0.22); }
+    .actions button:focus-visible,
+    .actions a:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 4px rgba(0, 77, 64, 0.15), 0 8px 20px rgba(17, 17, 17, 0.08);
+      transform: translateY(-1px);
+    }
+
+    .actions button:hover,
+    .actions a:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 24px rgba(17, 17, 17, 0.12);
+    }
+
+    .view-btn {
+      background: linear-gradient(135deg, rgba(0, 77, 64, 0.1), rgba(0, 77, 64, 0.18));
+      color: var(--emerald);
+      border-color: rgba(0, 77, 64, 0.22);
+    }
+
+    .view-btn:hover {
+      background: linear-gradient(135deg, rgba(0, 77, 64, 0.18), rgba(0, 77, 64, 0.26));
+    }
+
+    .notify-btn {
+      background: linear-gradient(135deg, rgba(1, 108, 90, 0.12), rgba(1, 108, 90, 0.2));
+      color: var(--emerald);
+      border-color: rgba(1, 108, 90, 0.32);
+    }
+
+    .notify-btn:hover {
+      background: linear-gradient(135deg, rgba(1, 108, 90, 0.2), rgba(1, 108, 90, 0.3));
+    }
+
+    .suspend-btn {
+      background: linear-gradient(135deg, var(--orange), #ffa05b);
+      color: var(--white);
+      border-color: rgba(255, 255, 255, 0.2);
+      box-shadow: 0 12px 26px rgba(243, 115, 30, 0.28);
+    }
+
+    .suspend-btn:hover {
+      background: linear-gradient(135deg, var(--orange-dark), #f98f3e);
+      box-shadow: 0 14px 30px rgba(243, 115, 30, 0.36);
+    }
+
+    .delete-btn {
+      background: linear-gradient(135deg, rgba(216, 67, 21, 0.16), rgba(216, 67, 21, 0.28));
+      color: #d84315;
+      border-color: rgba(216, 67, 21, 0.4);
+      box-shadow: 0 12px 26px rgba(216, 67, 21, 0.18);
+    }
+
+    .delete-btn:hover {
+      background: linear-gradient(135deg, rgba(216, 67, 21, 0.26), rgba(216, 67, 21, 0.36));
+    }
+
+    .actions i {
+      font-size: 1rem;
+    }
 
     .empty-state {
       padding: 40px 24px;

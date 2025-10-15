@@ -255,7 +255,14 @@ import { app, auth, db } from './firebase.js';
       vendorStatus.textContent = data.status ? data.status.charAt(0).toUpperCase() + data.status.slice(1) : 'Active';
       vendorStatus.className = `chip status-${(data.status || 'active')}`;
       viewVendorBtn.onclick = () => {
-        window.location.href = `vendor-profile.php?id=${currentVendorId}`;
+        if (!currentVendorId) return;
+        const storefrontUrl = `shop.html?vendorId=${encodeURIComponent(currentVendorId)}`;
+        const storefrontWindow = window.open(storefrontUrl, '_blank', 'noopener');
+        if (storefrontWindow) {
+          storefrontWindow.opener = null;
+        } else {
+          window.location.href = storefrontUrl;
+        }
       };
     }
 

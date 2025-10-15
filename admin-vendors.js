@@ -152,7 +152,7 @@ const buildVendorRow = (vendor) => {
     <td>${escapeHtml(vendor.createdAtFormatted || '-')}</td>
     <td>
       <div class="actions">
-        <a class="view-btn" href="vendor-profile.php?id=${encodeURIComponent(vendor.id)}" title="View profile"><i class="ri-external-link-line"></i>View</a>
+        <a class="view-btn" href="shop.html?vendorId=${encodeURIComponent(vendor.id)}" target="_blank" rel="noopener noreferrer" title="Open public storefront"><i class="ri-external-link-line"></i>View Storefront</a>
         <button class="notify-btn" data-action="notify" data-id="${vendor.id}" data-name="${escapeHtml(vendor.displayName || vendor.businessName || 'Vendor')}"><i class="ri-chat-3-line"></i>Notify</button>
         <button class="suspend-btn" data-action="suspend" data-status="${vendor.status || 'active'}" data-id="${vendor.id}" data-name="${escapeHtml(vendor.displayName || vendor.businessName || 'Vendor')}">${vendor.status === 'suspended' ? '<i class="ri-shield-check-line"></i>Unsuspend' : '<i class="ri-shield-off-line"></i>Suspend'}</button>
         <button class="delete-btn" data-action="delete" data-id="${vendor.id}" data-name="${escapeHtml(vendor.displayName || vendor.businessName || 'Vendor')}"><i class="ri-delete-bin-6-line"></i>Delete</button>
@@ -184,8 +184,8 @@ const buildVendorCard = (vendor) => {
       <div><strong>Status:</strong> <span class="${statusClass}">${escapeHtml(vendor.statusLabel || titleCase(vendor.status || 'active'))}</span></div>
       <div><strong>Joined:</strong> ${escapeHtml(vendor.createdAtFormatted || '-')}</div>
     </div>
-    <div class="card-actions">
-      <a class="view-btn" href="vendor-profile.php?id=${encodeURIComponent(vendor.id)}"><i class="ri-external-link-line"></i>View</a>
+    <div class="card-actions actions">
+      <a class="view-btn" href="shop.html?vendorId=${encodeURIComponent(vendor.id)}" target="_blank" rel="noopener noreferrer"><i class="ri-external-link-line"></i>View Storefront</a>
       <button class="notify-btn" data-action="notify" data-id="${vendor.id}" data-name="${escapeHtml(vendor.displayName || vendor.businessName || 'Vendor')}"><i class="ri-chat-3-line"></i>Notify</button>
       <button class="suspend-btn" data-action="suspend" data-status="${vendor.status || 'active'}" data-id="${vendor.id}" data-name="${escapeHtml(vendor.displayName || vendor.businessName || 'Vendor')}">${vendor.status === 'suspended' ? '<i class="ri-shield-check-line"></i>Unsuspend' : '<i class="ri-shield-off-line"></i>Suspend'}</button>
       <button class="delete-btn" data-action="delete" data-id="${vendor.id}" data-name="${escapeHtml(vendor.displayName || vendor.businessName || 'Vendor')}"><i class="ri-delete-bin-6-line"></i>Delete</button>

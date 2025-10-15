@@ -11,6 +11,13 @@ const emptyState = document.getElementById('emptyState');
 const resultsCount = document.getElementById('resultsCount');
 const loadMoreBtn = document.getElementById('loadMoreBtn');
 const showingText = document.getElementById('showingText');
+const vendorShowcase = document.getElementById('vendorShowcase');
+const vendorShowcaseAvatar = document.getElementById('vendorShowcaseAvatar');
+const vendorShowcaseName = document.getElementById('vendorShowcaseName');
+const vendorShowcaseBusiness = document.getElementById('vendorShowcaseBusiness');
+const vendorShowcaseBadges = document.getElementById('vendorShowcaseBadges');
+const vendorShowcaseMeta = document.getElementById('vendorShowcaseMeta');
+const clearVendorFilterBtn = document.getElementById('clearVendorFilter');
 
 const searchInput = document.getElementById('searchInput');
 const categoryFilter = document.getElementById('categoryFilter');
@@ -36,6 +43,9 @@ let listingsUnsubscribe = null;
 let vendorsUnsubscribe = null;
 let isLoadingListings = false;
 let listingError = false;
+let selectedVendorId = '';
+let selectedVendorIdNormalized = '';
+let selectedVendorName = '';
 
 const escapeHtml = (value) =>
   String(value ?? '')
@@ -97,6 +107,130 @@ const createVerificationBadge = (value) => {
   return '<span class="vendor-badge vendor-verified unverified"><i class="ri-alert-line" aria-hidden="true"></i>Not Verified</span>';
 };
 
+const findVendorById = (idValue) => {
+  if (!idValue) return null;
+  if (vendorMap.has(idValue)) {
+    return { id: idValue, data: vendorMap.get(idValue) };
+  }
+  const normalized = String(idValue).toLowerCase();
+  for (const [id, data] of vendorMap.entries()) {
+    if (id.toLowerCase() === normalized) {
+      return { id, data };
+    }
+  }
+  return null;
+};
+
+const setVendorFilter = (vendorId, { updateUrl = true } = {}) => {
+  const trimmed = typeof vendorId === 'string' ? vendorId.trim() : '';
+  selectedVendorId = trimmed;
+  selectedVendorIdNormalized = trimmed.toLowerCase();
+  if (!trimmed) {
+    selectedVendorName = '';
+  }
+
+  if (updateUrl) {
+    const params = new URLSearchParams(window.location.search);
+    if (trimmed) {
+      params.set('vendorId', trimmed);
+      params.delete('vendor');
+    } else {
+      params.delete('vendorId');
+      params.delete('vendor');
+    }
+    const query = params.toString();
+    const newUrl = `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`;
+    window.history.replaceState({}, '', newUrl);
+  }
+};
+
+const updateVendorShowcase = () => {
+  if (!vendorShowcase) return;
+
+  if (!selectedVendorId) {
+    selectedVendorName = '';
+    vendorShowcase.hidden = true;
+    vendorShowcase.classList.remove('is-visible');
+    return;
+  }
+
+  const vendorEntry = findVendorById(selectedVendorId);
+  const vendorData = vendorEntry?.data || null;
+  const resolvedVendorId = vendorEntry?.id || selectedVendorId;
+  const vendorInfo = getVendorInfo(resolvedVendorId) || {};
+  const fallbackName = selectedVendorId || 'Vendor';
+  let computedName =
+    (typeof vendorData?.displayName === 'string' && vendorData.displayName.trim()) ||
+    (typeof vendorData?.businessName === 'string' && vendorData.businessName.trim()) ||
+    (typeof vendorInfo.name === 'string' && vendorInfo.name.trim()) ||
+    fallbackName;
+
+  if (computedName.toLowerCase() === 'marketplace vendor') {
+    computedName = fallbackName;
+  }
+
+  selectedVendorName = computedName;
+
+  if (vendorShowcaseName) {
+    vendorShowcaseName.textContent = selectedVendorName;
+  }
+
+  if (vendorShowcaseBusiness) {
+    const business =
+      (typeof vendorData?.businessName === 'string' && vendorData.businessName.trim()) ||
+      (typeof vendorData?.category === 'string' && vendorData.category.trim()) ||
+      '';
+    vendorShowcaseBusiness.textContent = business;
+    vendorShowcaseBusiness.hidden = !business;
+  }
+
+  if (vendorShowcaseBadges) {
+    const planBadge = vendorEntry ? createPlanBadge(vendorInfo.plan) : '';
+    const verificationBadge = vendorEntry ? createVerificationBadge(vendorInfo.verification) : '';
+    vendorShowcaseBadges.innerHTML = [planBadge, verificationBadge].filter(Boolean).join('');
+  }
+
+  if (vendorShowcaseMeta) {
+    const locationCandidates = [
+      vendorData?.location,
+      vendorData?.state,
+      vendorData?.region,
+      vendorData?.city,
+    ]
+      .map((value) => (typeof value === 'string' ? value.trim() : ''))
+      .filter(Boolean);
+
+    vendorShowcaseMeta.textContent = vendorEntry
+      ? locationCandidates.length
+        ? `Showing listings from ${selectedVendorName} in ${locationCandidates[0]}`
+        : `Showing listings from ${selectedVendorName}`
+      : `Fetching storefront details for ${selectedVendorName}...`;
+  }
+
+  if (vendorShowcaseAvatar) {
+    const photo =
+      (typeof vendorData?.profilePhoto === 'string' && vendorData.profilePhoto.trim()) ||
+      (typeof vendorData?.avatarUrl === 'string' && vendorData.avatarUrl.trim()) ||
+      (typeof vendorData?.photo === 'string' && vendorData.photo.trim()) ||
+      '';
+
+    if (photo) {
+      vendorShowcaseAvatar.innerHTML = `<img src="${escapeHtml(photo)}" alt="${escapeHtml(
+        selectedVendorName,
+      )} storefront logo">`;
+      vendorShowcaseAvatar.classList.add('has-image');
+    } else {
+      const initials =
+        (selectedVendorName.match(/\b\w/g) || []).join('').slice(0, 2).toUpperCase() || 'VN';
+      vendorShowcaseAvatar.innerHTML = `<span>${escapeHtml(initials)}</span>`;
+      vendorShowcaseAvatar.classList.remove('has-image');
+    }
+  }
+
+  vendorShowcase.hidden = false;
+  vendorShowcase.classList.add('is-visible');
+};
+
 const priceInRange = (price, rangeValue) => {
   const amount = Number.isFinite(Number(price)) ? Number(price) : 0;
   if (rangeValue === 'all') return true;
@@ -110,35 +244,61 @@ const priceInRange = (price, rangeValue) => {
 
 const setEmptyState = (state) => {
   if (!emptyState) return;
+  const vendorLabel = selectedVendorName || (selectedVendorId ? 'this vendor' : '');
   emptyState.style.display = 'block';
+
   switch (state) {
-    case 'loading':
-      emptyState.textContent = LOADING_TEXT;
-      if (showingText) showingText.textContent = 'Loading listings...';
-      if (resultsCount) resultsCount.textContent = '';
-      if (loadMoreBtn) loadMoreBtn.style.display = 'none';
-      break;
-    case 'error':
-      emptyState.textContent = ERROR_TEXT;
-      if (showingText) showingText.textContent = 'Showing 0 items';
-      if (resultsCount) resultsCount.textContent = '0 listings found';
-      if (loadMoreBtn) loadMoreBtn.style.display = 'none';
-      break;
-    case 'empty':
-      emptyState.textContent = NO_LISTINGS_TEXT;
-      if (showingText) showingText.textContent = 'Showing 0 items';
-      if (resultsCount) resultsCount.textContent = '0 listings found';
-      if (loadMoreBtn) loadMoreBtn.style.display = 'none';
-      break;
-    case 'filtered':
-      emptyState.textContent = 'No listings match your filters right now.';
-      if (showingText) showingText.textContent = 'Showing 0 items';
-      {
-        const totalLabel = allListings.length === 1 ? 'listing' : 'listings';
-        if (resultsCount) resultsCount.textContent = `${allListings.length} ${totalLabel} available`;
+    case 'loading': {
+      emptyState.textContent = selectedVendorId
+        ? `Loading storefront listings from ${vendorLabel}...`
+        : LOADING_TEXT;
+      if (showingText) {
+        showingText.textContent = selectedVendorId
+          ? `Loading ${vendorLabel}'s listings...`
+          : 'Loading listings...';
+      }
+      if (resultsCount) {
+        resultsCount.textContent = selectedVendorId ? `Fetching ${vendorLabel}'s listings` : '';
       }
       if (loadMoreBtn) loadMoreBtn.style.display = 'none';
       break;
+    }
+    case 'error': {
+      emptyState.textContent = selectedVendorId
+        ? `We couldn't load ${vendorLabel}'s listings right now.`
+        : ERROR_TEXT;
+      if (showingText) showingText.textContent = 'Showing 0 items';
+      if (resultsCount) resultsCount.textContent = '0 listings found';
+      if (loadMoreBtn) loadMoreBtn.style.display = 'none';
+      break;
+    }
+    case 'empty': {
+      emptyState.textContent = selectedVendorId
+        ? `${vendorLabel} has not published any listings yet.`
+        : NO_LISTINGS_TEXT;
+      if (showingText) showingText.textContent = 'Showing 0 items';
+      if (resultsCount) {
+        resultsCount.textContent = selectedVendorId
+          ? `0 listings found for ${vendorLabel}`
+          : '0 listings found';
+      }
+      if (loadMoreBtn) loadMoreBtn.style.display = 'none';
+      break;
+    }
+    case 'filtered': {
+      emptyState.textContent = selectedVendorId
+        ? `No listings from ${vendorLabel} match your filters.`
+        : 'No listings match your filters right now.';
+      if (showingText) showingText.textContent = 'Showing 0 items';
+      const totalLabel = allListings.length === 1 ? 'listing' : 'listings';
+      if (resultsCount) {
+        resultsCount.textContent = selectedVendorId
+          ? `${allListings.length} ${totalLabel} available from ${vendorLabel}`
+          : `${allListings.length} ${totalLabel} available`;
+      }
+      if (loadMoreBtn) loadMoreBtn.style.display = 'none';
+      break;
+    }
     default:
       emptyState.textContent = emptyStateDefaultText;
       break;
@@ -305,15 +465,26 @@ const renderProducts = () => {
   });
 
   const showingEnd = Math.min(end, filteredListings.length);
-  if (showingText) showingText.textContent = `Showing ${showingEnd} of ${filteredListings.length} items`;
+  const vendorSuffix = selectedVendorId
+    ? selectedVendorName
+      ? ` for ${selectedVendorName}`
+      : ' for this vendor'
+    : '';
+  if (showingText) {
+    showingText.textContent = `Showing ${showingEnd} of ${filteredListings.length} items${vendorSuffix}`;
+  }
   const totalLabel = filteredListings.length === 1 ? 'listing' : 'listings';
-  if (resultsCount) resultsCount.textContent = `${filteredListings.length} ${totalLabel} found`;
+  if (resultsCount) {
+    resultsCount.textContent = `${filteredListings.length} ${totalLabel} found${vendorSuffix}`;
+  }
   if (loadMoreBtn) {
     loadMoreBtn.style.display = showingEnd >= filteredListings.length ? 'none' : 'inline-flex';
   }
 };
 
 const applyFilters = () => {
+  updateVendorShowcase();
+
   if (!allListings.length) {
     filteredListings = [];
     renderProducts();
@@ -342,7 +513,11 @@ const applyFilters = () => {
 
     const matchesPrice = priceInRange(listing.price, selectedPrice);
 
-    return matchesSearch && matchesCategory && matchesLocation && matchesPrice;
+    const matchesVendor =
+      !selectedVendorIdNormalized ||
+      (listing.vendorId && String(listing.vendorId).toLowerCase() === selectedVendorIdNormalized);
+
+    return matchesSearch && matchesCategory && matchesLocation && matchesPrice && matchesVendor;
   });
 
   const sortValue = sortFilter.value;
@@ -412,11 +587,21 @@ const initialiseFiltersFromUrl = () => {
     }
   }
 
+  const vendorParam = params.get('vendorId') || params.get('vendor');
+  if (vendorParam) {
+    setVendorFilter(vendorParam, { updateUrl: false });
+    shouldFilter = true;
+  } else {
+    setVendorFilter('', { updateUrl: false });
+  }
+
   if (shouldFilter) {
     applyFilters();
   } else {
     renderProducts();
   }
+
+  updateVendorShowcase();
 };
 
 const startRealtimeListeners = () => {
@@ -449,6 +634,7 @@ const startRealtimeListeners = () => {
     collection(db, 'vendors'),
     (snapshot) => {
       vendorMap = new Map(snapshot.docs.map((docSnap) => [docSnap.id, docSnap.data()]));
+      updateVendorShowcase();
       if (!isLoadingListings) {
         rebuildListings();
       }
@@ -484,6 +670,11 @@ const bindEvents = () => {
     if (event.key === 'Enter') {
       applyFilters();
     }
+  });
+
+  clearVendorFilterBtn?.addEventListener('click', () => {
+    setVendorFilter('');
+    applyFilters();
   });
 };
 
