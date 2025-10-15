@@ -178,6 +178,28 @@
         transform: none;
       }
 
+      .ghost-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 12px 18px;
+        border-radius: 12px;
+        border: 1px solid rgba(0, 77, 64, 0.24);
+        background: rgba(255, 255, 255, 0.94);
+        color: rgba(0, 77, 64, 0.9);
+        font-weight: 600;
+        font-size: 0.95rem;
+        text-decoration: none;
+        transition: transform 180ms ease, box-shadow 200ms ease, background 200ms ease;
+      }
+
+      .ghost-button:hover {
+        transform: translateY(-1px);
+        background: rgba(0, 77, 64, 0.08);
+        box-shadow: 0 12px 22px rgba(0, 0, 0, 0.08);
+      }
+
       .primary-btn {
         background: var(--orange);
         color: var(--white);
@@ -318,14 +340,16 @@
     <div class="auth-wrapper">
       <div class="auth-card">
         <div class="auth-content">
-          <!-- Header Logo -->
-          <header>
-            <h1>YUSTAM</h1>
-            <p class="subtitle">Vendor Access Portal</p>
-          </header>
+        <!-- Header Logo -->
+        <header>
+          <h1>YUSTAM</h1>
+          <p class="subtitle">Vendor Access Portal</p>
+        </header>
 
-          <!-- Login Form -->
-          <form id="loginForm" novalidate>
+        <a class="ghost-button" href="index.html" aria-label="Back to YUSTAM homepage">← Back to Homepage</a>
+
+        <!-- Login Form -->
+        <form id="loginForm" novalidate>
             <div class="form-group">
               <label for="email">Email address</label>
               <input
