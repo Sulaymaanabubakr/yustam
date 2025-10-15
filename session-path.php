@@ -12,5 +12,3 @@ if (!defined('YUSTAM_SESSION_PATH')) {
     ini_set('session.save_path', $sessionPath);
     define('YUSTAM_SESSION_PATH', $sessionPath);
 }
-
-?>
