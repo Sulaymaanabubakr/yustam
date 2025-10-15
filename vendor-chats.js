@@ -85,10 +85,13 @@ function normaliseChat(docSnap) {
   const data = docSnap.data() || {};
   const isVendor = data.vendorId === state.userId;
   const fallbackName = isVendor ? 'Buyer' : 'Vendor';
-  const displayName = (data.counterpartyName || (isVendor ? data.buyerName : data.vendorName) || data.participantName || fallbackName).trim() || fallbackName;
+  const participantProfiles = data.participantProfiles || {};
+  const counterpartyId = isVendor ? data.buyerId : data.vendorId;
+  const counterpartyProfile = counterpartyId ? participantProfiles[counterpartyId] : null;
+  const displayName = (counterpartyProfile?.name || data.counterpartyName || (isVendor ? data.buyerName : data.vendorName) || data.participantName || fallbackName).trim() || fallbackName;
   const productTitle = (data.productTitle || data.productName || 'Marketplace Listing').trim();
   const productImage = data.productImage || data.productThumbnail || data.productCover || FALLBACK_IMAGE;
-  const avatarImage = data.counterpartyImage || (isVendor ? data.buyerAvatar : data.vendorAvatar) || data.avatarUrl || '';
+  const avatarImage = counterpartyProfile?.avatar || data.counterpartyImage || (isVendor ? data.buyerAvatar : data.vendorAvatar) || data.avatarUrl || '';
   const lastMessage = data.lastMessage || null;
   const lastMessageTextRaw = lastMessage?.text?.trim();
   const lastMessageText = lastMessageTextRaw && lastMessageTextRaw.length > 0

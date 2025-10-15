@@ -4,6 +4,7 @@ const iconMap = {
   'shield-check': 'ri-shield-check-line',
   shield: 'ri-shield-keyhole-line',
   alert: 'ri-error-warning-line',
+  chat: 'ri-message-2-line',
 };
 
 const selectors = {
