@@ -103,6 +103,20 @@
     },
     {
       selectors: `
+        [data-theme="dark"] body .auth-wrapper .form-meta,
+        [data-theme="dark"] body .auth-wrapper .form-meta a,
+        [data-theme="dark"] body .auth-wrapper .form-question,
+        [data-theme="dark"] body .auth-wrapper .form-question a,
+        [data-theme="dark"] body .auth-wrapper .link-button,
+        [data-theme="dark"] body .auth-wrapper .account-link,
+        [data-theme="dark"] body .auth-wrapper .account-link a,
+        [data-theme="dark"] body .auth-wrapper .cta-text`,
+      style: {
+        color: '#ffffff !important',
+      },
+    },
+    {
+      selectors: `
         [data-theme="dark"] body .price,
         [data-theme="dark"] body .plan-price,
         [data-theme="dark"] body .pricing-value,
@@ -223,6 +237,16 @@
       style: {
         background: 'var(--yustam-surface-card-alt) !important',
         color: 'var(--yustam-text-primary) !important',
+      },
+    },
+    {
+      selectors: `
+        [data-theme="dark"] body .logo,
+        [data-theme="dark"] body .logo span,
+        [data-theme="dark"] body .header-inner .logo,
+        [data-theme="dark"] body .header-inner .logo span`,
+      style: {
+        color: '#f3731e !important',
       },
     },
     {
