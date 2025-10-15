@@ -20,7 +20,16 @@ if (!defined('YUSTAM_SESSION_LIFETIME')) {
     ini_set('session.cookie_lifetime', (string) $lifetime);
 
     $isSecure = !empty($_SERVER['HTTPS']) && strtolower((string) $_SERVER['HTTPS']) !== 'off';
-    $cookieDomain = $_SERVER['HTTP_HOST'] ?? '';
+    $rawHost = $_SERVER['HTTP_HOST'] ?? '';
+    $cookieDomain = '';
+    if ($rawHost !== '') {
+        $host = strtolower($rawHost);
+        $host = explode(':', $host)[0];
+        $isValidHost = filter_var($host, FILTER_VALIDATE_IP) === false && strpos($host, '.') !== false && $host !== 'localhost';
+        if ($isValidHost) {
+            $cookieDomain = $host;
+        }
+    }
 
     if (PHP_VERSION_ID >= 70300) {
         session_set_cookie_params([
