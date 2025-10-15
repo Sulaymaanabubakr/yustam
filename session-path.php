@@ -20,28 +20,16 @@ if (!defined('YUSTAM_SESSION_LIFETIME')) {
     ini_set('session.cookie_lifetime', (string) $lifetime);
 
     $isSecure = !empty($_SERVER['HTTPS']) && strtolower((string) $_SERVER['HTTPS']) !== 'off';
-    $rawHost = $_SERVER['HTTP_HOST'] ?? '';
-    $cookieDomain = '';
-    if ($rawHost !== '') {
-        $host = strtolower($rawHost);
-        $host = explode(':', $host)[0];
-        $isValidHost = filter_var($host, FILTER_VALIDATE_IP) === false && strpos($host, '.') !== false && $host !== 'localhost';
-        if ($isValidHost) {
-            $cookieDomain = $host;
-        }
-    }
-
     if (PHP_VERSION_ID >= 70300) {
         session_set_cookie_params([
             'lifetime' => $lifetime,
             'path' => '/',
-            'domain' => $cookieDomain,
             'secure' => $isSecure,
             'httponly' => true,
             'samesite' => 'Lax',
         ]);
     } else {
-        session_set_cookie_params($lifetime, '/', $cookieDomain, $isSecure, true);
+        session_set_cookie_params($lifetime, '/', '', $isSecure, true);
         ini_set('session.cookie_samesite', 'Lax');
     }
 
