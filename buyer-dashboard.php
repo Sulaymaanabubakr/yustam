@@ -42,6 +42,7 @@ if (!empty($buyer['joined_at'])) {
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet">
     <style>
         :root {
             --emerald: #004D40;
@@ -77,64 +78,85 @@ if (!empty($buyer['joined_at'])) {
         .dashboard-header {
             position: sticky;
             top: 0;
-            z-index: 40;
+            z-index: 60;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 18px clamp(16px, 4vw, 40px);
-            background: linear-gradient(120deg, rgba(0, 77, 64, 0.98), rgba(0, 77, 64, 0.86));
-            backdrop-filter: blur(14px);
-            border-bottom: 2px solid rgba(243, 115, 30, 0.4);
-            box-shadow: 0 16px 32px rgba(0, 0, 0, 0.22);
-            color: #fff;
+            padding: clamp(0.9rem, 4vw, 1.3rem) clamp(1.4rem, 5vw, 2.6rem);
+            background: rgba(0, 77, 64, 0.94);
+            color: #ffffff;
+            backdrop-filter: blur(16px);
+            box-shadow: 0 18px 28px rgba(0, 0, 0, 0.22);
+            border-bottom: 2px solid rgba(243, 115, 30, 0.3);
         }
 
-        .brand {
+        .header-brand {
             display: flex;
             align-items: center;
-            gap: 14px;
+            gap: 1rem;
         }
 
-        .brand-mark {
-            width: 44px;
-            height: 44px;
-            border-radius: 14px;
-            background: rgba(255, 255, 255, 0.16);
-            display: grid;
-            place-items: center;
-            font-family: 'Anton', sans-serif;
-            font-size: 1.2rem;
-            letter-spacing: 0.04em;
-        }
-
-        .brand span {
-            font-weight: 600;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-        }
-
-        .header-icons {
+        .logo-area {
             display: inline-flex;
-            gap: 12px;
+            width: 48px;
+            height: 48px;
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.18);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            box-shadow: 0 12px 20px rgba(0, 0, 0, 0.25);
+            overflow: hidden;
         }
 
-        .header-icon {
-            width: 44px;
-            height: 44px;
+        .header-logo {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .brand-text {
+            display: flex;
+            flex-direction: column;
+            gap: 0.2rem;
+        }
+
+        .brand-title {
+            font-family: 'Anton', sans-serif;
+            font-size: clamp(1.35rem, 4vw, 1.65rem);
+            letter-spacing: 0.08em;
+        }
+
+        .brand-subtitle {
+            font-size: 0.88rem;
+            opacity: 0.8;
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: clamp(0.6rem, 2vw, 0.9rem);
+        }
+
+        .icon-button {
+            width: 46px;
+            height: 46px;
+            border-radius: 50%;
+            border: 1px solid rgba(255, 255, 255, 0.22);
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            background: rgba(255, 255, 255, 0.14);
-            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.16);
+            color: #ffffff;
+            font-size: 1.35rem;
             transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
-            font-size: 1.15rem;
         }
 
-        .header-icon:hover,
-        .header-icon:focus-visible {
+        .icon-button:hover,
+        .icon-button:focus-visible {
             transform: translateY(-2px);
-            background: rgba(243, 115, 30, 0.75);
-            box-shadow: 0 14px 26px rgba(243, 115, 30, 0.35);
+            background: rgba(243, 115, 30, 0.3);
+            box-shadow: 0 16px 30px rgba(243, 115, 30, 0.32);
+        }
+
         }
 
         main {
@@ -367,7 +389,7 @@ if (!empty($buyer['joined_at'])) {
                 gap: 16px;
             }
 
-            .header-icons {
+            .header-actions {
                 justify-content: space-between;
             }
         }
@@ -375,20 +397,34 @@ if (!empty($buyer['joined_at'])) {
 </head>
 <body data-buyer-id="<?= htmlspecialchars((string)$buyerId) ?>" data-buyer-name="<?= htmlspecialchars($buyerName) ?>">
     <header class="dashboard-header">
-        <a href="index.html" class="brand" aria-label="YUSTAM home">
-            <div class="brand-mark">YU</div>
-            <span>YUSTAM MARKETPLACE</span>
-        </a>
-        <nav class="header-icons" aria-label="Buyer shortcuts">
-            <a class="header-icon" href="buyer-dashboard.php" title="Home" aria-label="Home">🏠</a>
-            <a class="header-icon" href="buyer-chats.php" title="Chats" aria-label="Chats">💬</a>
-            <a class="header-icon" href="buyer-saved.php" title="Saved listings" aria-label="Saved listings">❤️</a>
-            <a class="header-icon" href="buyer-logout.php" title="Logout" aria-label="Logout">🔐</a>
+    <header class="dashboard-header">
+        <div class="header-brand">
+            <a class="logo-area" href="index.html" aria-label="YUSTAM home">
+                <img src="logo.jpeg" alt="YUSTAM logo" class="header-logo">
+            </a>
+            <div class="brand-text">
+                <span class="brand-title">Hi, <?= htmlspecialchars($firstName) ?></span>
+                <span class="brand-subtitle">Trusted deals tailored for you</span>
+            </div>
+        </div>
+        <nav class="header-actions" aria-label="Buyer shortcuts">
+            <a class="icon-button" href="buyer-dashboard.php" title="Home" aria-label="Home">
+                <i class="ri-home-5-line" aria-hidden="true"></i>
+            </a>
+            <a class="icon-button" href="buyer-saved.php" title="Saved items" aria-label="Saved items">
+                <i class="ri-heart-3-line" aria-hidden="true"></i>
+            </a>
+            <a class="icon-button" href="buyer-chats.php" title="Chats" aria-label="Chats">
+                <i class="ri-message-3-line" aria-hidden="true"></i>
+            </a>
+            <a class="icon-button" href="buyer-logout.php" title="Logout" aria-label="Logout">
+                <i class="ri-logout-box-r-line" aria-hidden="true"></i>
+            </a>
         </nav>
     </header>
     <main id="buyerDashboard" data-buyer-id="<?= htmlspecialchars((string)$buyerId) ?>">
         <section class="glass-card welcome-card">
-            <h1>Welcome back, <?= htmlspecialchars(explode(' ', $buyerName)[0] ?? $buyerName) ?>!</h1>
+            <h1>Welcome back, <?= htmlspecialchars($firstName) ?>!</h1>
             <p>Joined since <strong><?= htmlspecialchars($joined) ?></strong></p>
             <span class="badge">Buyer ID #<?= htmlspecialchars((string)$buyerId) ?></span>
         </section>
@@ -428,6 +464,14 @@ if (!empty($buyer['joined_at'])) {
 <script type="module" src="buyer-dashboard.js"></script>
 </body>
 </html>
+
+
+
+
+
+
+
+
 
 
 
