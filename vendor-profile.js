@@ -57,6 +57,10 @@ const applyProfile = (profile) => {
     plan = 'Free',
     joined = '-',
     profilePhoto = '',
+    businessAddress = '',
+    location = '',
+    region = '',
+    category = '',
   } = profile || {};
 
   const initials = computeInitials(name, businessName);
@@ -74,8 +78,11 @@ const applyProfile = (profile) => {
   if (businessField) businessField.textContent = safeText(businessName);
   if (emailField) emailField.textContent = safeText(email);
   if (phoneField) phoneField.textContent = safeText(phone);
-  if (addressField) addressField.textContent = safeText(address);
-  if (stateField) stateField.textContent = safeText(state);
+  const resolvedAddress = address || businessAddress || location;
+  const resolvedState = state || region || location || category;
+
+  if (addressField) addressField.textContent = safeText(resolvedAddress);
+  if (stateField) stateField.textContent = safeText(resolvedState);
   if (joinedField) joinedField.textContent = safeText(joined);
 
   const photoUrl = sanitizeImageUrl(profilePhoto);

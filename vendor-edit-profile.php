@@ -342,25 +342,24 @@ $profileJson = json_encode($profile, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNI
       left: 50%;
       bottom: clamp(14px, 5vw, 28px);
       transform: translateX(-50%);
-      width: min(340px, calc(100% - 36px));
-      background: rgba(0, 77, 64, 0.96);
-      color: var(--white);
-      padding: 10px 12px;
-      border-radius: 999px;
-      box-shadow: 0 24px 45px rgba(0, 0, 0, 0.22);
-      display: flex;
+      display: inline-flex;
       align-items: center;
       justify-content: center;
-      gap: 10px;
+      background: rgba(0, 77, 64, 0.96);
+      color: var(--white);
+      padding: 6px;
+      border-radius: 999px;
+      box-shadow: 0 24px 45px rgba(0, 0, 0, 0.22);
       z-index: 50;
+      width: auto;
+      max-width: calc(100% - 36px);
     }
 
     .save-bar .save-button {
-      width: 100%;
-      max-width: 220px;
-      margin: 0 auto;
+      width: auto;
+      min-width: 180px;
       font-size: 0.92rem;
-      padding: 10px 16px;
+      padding: 10px 18px;
     }
 
     .save-button {
@@ -487,7 +486,8 @@ $profileJson = json_encode($profile, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNI
       }
 
       .save-bar {
-      width: calc(100% - 32px);
+        width: auto;
+        max-width: calc(100% - 32px);
       }
 
       .profile-photo-wrapper {
