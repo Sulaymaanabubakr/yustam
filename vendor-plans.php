@@ -539,21 +539,6 @@
               <li>Access to community tips</li>
               <li>Start selling instantly</li>
             </ul>
-            <div class="plan-controls">
-              <button class="cta-button" type="button">Upgrade Now</button>
-              <div class="duration-group">
-                <label for="duration-free">Duration</label>
-                <select id="duration-free" class="planDuration">
-                  <option value="1">1 month</option>
-                  <option value="3">3 months — 5% off</option>
-                  <option value="6">6 months — 10% off</option>
-                  <option value="12">12 months — 15% off</option>
-                </select>
-              </div>
-              <span class="save-text">Save up to 15% when you subscribe for a year!</span>
-              <button class="payBtn" type="button">Proceed to Pay</button>
-              <div class="total-display">Total: ₦0</div>
-            </div>
           </article>
 
           <article class="glass-card plan-card" data-plan="Starter Plan" data-price="2000">
@@ -570,7 +555,6 @@
               <li>Weekly growth insights</li>
             </ul>
             <div class="plan-controls">
-              <button class="cta-button" type="button">Upgrade Now</button>
               <div class="duration-group">
                 <label for="duration-starter">Duration</label>
                 <select id="duration-starter" class="planDuration">
@@ -581,7 +565,7 @@
                 </select>
               </div>
               <span class="save-text">Save up to 15% when you subscribe for a year!</span>
-              <button class="payBtn" type="button">Proceed to Pay</button>
+              <button class="payBtn" type="button">Upgrade</button>
               <div class="total-display">Total: ₦2,000</div>
             </div>
           </article>
@@ -600,7 +584,6 @@
               <li>Curated marketing tips</li>
             </ul>
             <div class="plan-controls">
-              <button class="cta-button" type="button">Upgrade Now</button>
               <div class="duration-group">
                 <label for="duration-pro">Duration</label>
                 <select id="duration-pro" class="planDuration">
@@ -611,7 +594,7 @@
                 </select>
               </div>
               <span class="save-text">Save up to 15% when you subscribe for a year!</span>
-              <button class="payBtn" type="button">Proceed to Pay</button>
+              <button class="payBtn" type="button">Upgrade</button>
               <div class="total-display">Total: ₦5,000</div>
             </div>
           </article>
@@ -630,7 +613,6 @@
               <li>Discount on multi-month payments</li>
             </ul>
             <div class="plan-controls">
-              <button class="cta-button" type="button">Upgrade Now</button>
               <div class="duration-group">
                 <label for="duration-elite">Duration</label>
                 <select id="duration-elite" class="planDuration">
@@ -641,7 +623,7 @@
                 </select>
               </div>
               <span class="save-text">Save up to 15% when you subscribe for a year!</span>
-              <button class="payBtn" type="button">Proceed to Pay</button>
+              <button class="payBtn" type="button">Upgrade</button>
               <div class="total-display">Total: ₦8,000</div>
             </div>
           </article>
@@ -661,7 +643,6 @@
               <li>Discount on multi-month payments</li>
             </ul>
             <div class="plan-controls">
-              <button class="cta-button" type="button">Upgrade Now</button>
               <div class="duration-group">
                 <label for="duration-power">Duration</label>
                 <select id="duration-power" class="planDuration">
@@ -672,7 +653,7 @@
                 </select>
               </div>
               <span class="save-text">Save up to 15% when you subscribe for a year!</span>
-              <button class="payBtn" type="button">Proceed to Pay</button>
+              <button class="payBtn" type="button">Upgrade</button>
               <div class="total-display">Total: ₦15,000</div>
             </div>
           </article>

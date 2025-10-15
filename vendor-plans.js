@@ -31,7 +31,7 @@ document.addEventListener('DOMContentLoaded', () => {
     12: 0.15,
   };
 
-  const paystackKey = 'pk_test_xxxxxxxxxxxxxx';
+  const paystackKey = 'pk_live_21106eb17dafe8fbdca6708b57cef484d8a125ef';
 
   const initiatePaystack = (planName, amount, duration) => {
     console.log('Initialising Paystack with key', paystackKey);
@@ -79,16 +79,6 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!parentCard) return;
       updateTotalDisplay(parentCard);
     });
-  });
-
-  planCards.forEach((card) => {
-    const upgradeButton = card.querySelector('.cta-button');
-    if (upgradeButton) {
-      upgradeButton.addEventListener('click', () => {
-        highlightCard(card);
-        updateTotalDisplay(card);
-      });
-    }
   });
 
   payButtons.forEach((button) => {
