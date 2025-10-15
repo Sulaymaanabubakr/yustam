@@ -608,7 +608,11 @@
         <small style="color: rgba(255, 255, 255, 0.7);">© 2025 YUSTAM Marketplace — Built for Nigeria.</small>
     </div>
 </footer>
-
+  <script src="theme-manager.js" defer></script>
 <script src="vendor-notifications.js" defer></script>
 </body>
 </html>
+
+
+
+

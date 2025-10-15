@@ -83,5 +83,10 @@ $reasonText = $reason !== '' ? htmlspecialchars($reason) : '';
         <a class="button" href="vendor-plans.php">Try Again</a>
         <a class="secondary" href="vendor-dashboard.php">Return to Dashboard</a>
     </div>
+  <script src="theme-manager.js" defer></script>
 </body>
 </html>
+
+
+
+

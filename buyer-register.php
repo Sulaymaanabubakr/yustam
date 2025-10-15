@@ -258,7 +258,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
         </form>
     </div>
-    <script>
+  <script src="theme-manager.js" defer></script>
+<script>
         const form = document.querySelector('form');
         const fields = ['name', 'email', 'phone', 'password', 'confirm_password'];
 
@@ -317,3 +318,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </script>
 </body>
 </html>
+
+
+
+

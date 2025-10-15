@@ -353,7 +353,12 @@ $buyerName = $_SESSION['buyer_name'] ?? 'Buyer';
         </div>
     </main>
     <footer>© <?= date('Y'); ?> YUSTAM Marketplace</footer>
-    <script type="module" src="firebase.js"></script>
-    <script type="module" src="buyer-chats.js"></script>
+  <script src="theme-manager.js" defer></script>
+<script type="module" src="firebase.js"></script>
+<script type="module" src="buyer-chats.js"></script>
 </body>
 </html>
+
+
+
+

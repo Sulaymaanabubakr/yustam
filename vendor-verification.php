@@ -536,6 +536,11 @@ if (!isset($_SESSION['vendor_id'])) {
     </footer>
 
     <div class="toast" id="verificationToast"><i class="ri-notification-3-line"></i><span></span></div>
-    <script src="vendor-verification.js" defer></script>
+  <script src="theme-manager.js" defer></script>
+<script src="vendor-verification.js" defer></script>
 </body>
 </html>
+
+
+
+

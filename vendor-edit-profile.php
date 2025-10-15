@@ -663,13 +663,17 @@ $profileJson = json_encode($profile, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNI
   </div>
 
   <div class="toast-container" id="toastContainer" aria-live="polite" aria-atomic="true"></div>
-
-  <script>
+  <script src="theme-manager.js" defer></script>
+<script>
     window.__INITIAL_PROFILE__ = <?php echo $profileJson; ?>;
     window.__PROFILE_ENDPOINT__ = 'vendor-edit-profile.php?format=json';
     window.__PROFILE_AVATAR_FALLBACK__ = '<?php echo addslashes($avatarFallback); ?>';
     window.__VENDOR_ID__ = <?php echo (int) $vendorId; ?>;
   </script>
-  <script type="module" src="vendor-edit-profile.js"></script>
+<script type="module" src="vendor-edit-profile.js"></script>
 </body>
 </html>
+
+
+
+

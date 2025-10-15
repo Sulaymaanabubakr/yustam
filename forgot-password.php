@@ -140,5 +140,10 @@ a { display: inline-block; margin-top: 16px; color: #004D40; text-decoration: no
   <?php endif; ?>
   <a href="vendor-login.html">Back to Login</a>
 </div>
+  <script src="theme-manager.js" defer></script>
 </body>
 </html>
+
+
+
+

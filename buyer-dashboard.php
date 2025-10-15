@@ -424,7 +424,11 @@ if (!empty($buyer['joined_at'])) {
     </main>
 
     <div class="toast" id="buyerToast" role="status" aria-live="polite"></div>
-
-    <script type="module" src="buyer-dashboard.js"></script>
+  <script src="theme-manager.js" defer></script>
+<script type="module" src="buyer-dashboard.js"></script>
 </body>
 </html>
+
+
+
+
