@@ -1,5 +1,11 @@
 // ---------- Imports ----------
-import { auth, provider, signInWithPopup } from './firebase.js';
+import {
+  auth,
+  provider,
+  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
+} from './firebase.js';
 
 // ---------- DOM Elements ----------
 const loginForm = document.getElementById('loginForm');
@@ -32,6 +38,69 @@ const setLoading = (loading) => {
     loginBtn.disabled = false;
   }
 };
+
+const GOOGLE_REDIRECT_FLAG = 'yustam.vendor.googleRedirect';
+
+const finishGoogleSignIn = async (user) => {
+  if (!user) return;
+
+  const formData = new FormData();
+  formData.append('email', user.email);
+  formData.append('name', user.displayName || '');
+  formData.append('provider', 'google');
+
+  const response = await fetch('google-login.php', {
+    method: 'POST',
+    body: formData,
+    credentials: 'same-origin',
+  });
+
+  const data = await response.json();
+
+  if (!response.ok || !data.success) {
+    throw new Error(data.message || 'Unable to sign in with Google.');
+  }
+
+  sessionStorage.removeItem(GOOGLE_REDIRECT_FLAG);
+  setMessage('Welcome back, redirecting.', 'success');
+  window.location.href = data.redirect || 'vendor-dashboard.php';
+};
+
+const shouldUseRedirect = () => {
+  const ua = navigator.userAgent || navigator.vendor || window.opera || '';
+  const isTouchViewport = window.matchMedia('(max-width: 768px)').matches;
+  const mobileRegex = /android|iphone|ipad|ipod|iemobile|blackberry|opera mini/i;
+  const isSafari = /^((?!chrome|android).)*safari/i.test(ua);
+  return mobileRegex.test(ua) || isTouchViewport || isSafari;
+};
+
+const fallbackErrorCodes = new Set([
+  'auth/popup-blocked',
+  'auth/popup-closed-by-user',
+  'auth/cancelled-popup-request',
+  'auth/operation-not-supported-in-this-environment',
+]);
+
+const handleRedirectResult = async () => {
+  try {
+    const pending = sessionStorage.getItem(GOOGLE_REDIRECT_FLAG);
+    const result = await getRedirectResult(auth);
+    if (result && result.user) {
+      if (pending) {
+        setMessage('Signing you in...', 'success');
+      }
+      await finishGoogleSignIn(result.user);
+    } else if (pending) {
+      sessionStorage.removeItem(GOOGLE_REDIRECT_FLAG);
+    }
+  } catch (error) {
+    console.error('Google redirect error:', error);
+    sessionStorage.removeItem(GOOGLE_REDIRECT_FLAG);
+    setMessage(error.message || 'Google sign-in failed. Please try again.');
+  }
+};
+
+window.addEventListener('DOMContentLoaded', handleRedirectResult);
 
 // ---------- EMAIL & PASSWORD LOGIN ----------
 loginForm?.addEventListener('submit', async (event) => {
@@ -112,34 +181,31 @@ forgotPasswordBtn?.addEventListener('click', async () => {
 
 // ---------- GOOGLE SIGN-IN ----------
 googleBtn?.addEventListener('click', async () => {
-  setMessage('Connecting to Google…', 'success');
+  setMessage('Connecting to Google.', 'success');
 
   try {
-    const result = await signInWithPopup(auth, provider);
-    const user = result.user;
-
-    // Send Google user data to backend PHP
-    const formData = new FormData();
-    formData.append('email', user.email);
-    formData.append('name', user.displayName || '');
-    formData.append('provider', 'google');
-
-    const response = await fetch('google-login.php', {
-      method: 'POST',
-      body: formData,
-      credentials: 'same-origin',
-    });
-
-    const data = await response.json();
-
-    if (data.success) {
-      setMessage('Welcome back, redirecting…', 'success');
-      window.location.href = data.redirect || 'vendor-dashboard.php';
-    } else {
-      setMessage(data.message || 'Unable to sign in with Google.');
+    if (shouldUseRedirect()) {
+      sessionStorage.setItem(GOOGLE_REDIRECT_FLAG, '1');
+      await signInWithRedirect(auth, provider);
+      return;
     }
+
+    const result = await signInWithPopup(auth, provider);
+    await finishGoogleSignIn(result.user);
   } catch (error) {
     console.error('Google sign-in error:', error);
-    setMessage('Google sign-in failed. Please try again.');
+    if (fallbackErrorCodes.has(error?.code || '')) {
+      try {
+        sessionStorage.setItem(GOOGLE_REDIRECT_FLAG, '1');
+        await signInWithRedirect(auth, provider);
+        return;
+      } catch (redirectError) {
+        console.error('Google redirect fallback error:', redirectError);
+        sessionStorage.removeItem(GOOGLE_REDIRECT_FLAG);
+        setMessage(redirectError.message || 'Google sign-in failed. Please try again.');
+        return;
+      }
+    }
+    setMessage(error.message || 'Google sign-in failed. Please try again.');
   }
 });
