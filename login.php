@@ -53,7 +53,6 @@ try {
     }
 
     // Create session
-    session_regenerate_id(true);
     $_SESSION['vendor_id'] = $user['id'];
     $_SESSION['vendor_name'] = $user['full_name'] ?? '';
     $_SESSION['vendor_email'] = $user['email'];
