@@ -6,9 +6,10 @@
 
   const LIGHT_PALETTE = {
     '--yustam-surface-base': 'radial-gradient(circle at top right, rgba(15, 106, 83, 0.14), transparent 55%), linear-gradient(135deg, #f3ebe0, #f7f1e8)',
-    '--yustam-surface-card': 'rgba(255, 255, 255, 0.92)',
-    '--yustam-surface-card-alt': 'rgba(255, 255, 255, 0.85)',
-    '--yustam-border': 'rgba(255, 255, 255, 0.45)',
+    '--yustam-surface-card': 'rgba(255, 255, 255, 0.96)',
+    '--yustam-surface-card-alt': 'rgba(255, 255, 255, 0.88)',
+    '--yustam-surface-elevated': 'rgba(255, 255, 255, 0.92)',
+    '--yustam-border': 'rgba(15, 106, 83, 0.18)',
     '--yustam-text-primary': '#161616',
     '--yustam-text-muted': 'rgba(22, 22, 22, 0.65)',
     '--yustam-header-bg': 'rgba(15, 106, 83, 0.94)',
@@ -18,15 +19,20 @@
     '--yustam-card-shadow': '0 26px 48px rgba(15, 106, 83, 0.14)',
     '--yustam-btn-bg': 'linear-gradient(145deg, #f3731e, #ff9448)',
     '--yustam-btn-text': '#ffffff',
+    '--yustam-pill-bg': 'rgba(243, 115, 30, 0.12)',
+    '--yustam-pill-text': '#f3731e',
     '--yustam-input-bg': 'rgba(255, 255, 255, 0.96)',
     '--yustam-input-border': 'rgba(15, 106, 83, 0.22)',
+    '--yustam-link': '#0f6a53',
+    '--yustam-link-hover': '#0c5441',
   };
 
   const DARK_PALETTE = {
     '--yustam-surface-base': 'radial-gradient(circle at top right, rgba(12, 84, 65, 0.25), transparent 55%), linear-gradient(135deg, #0b1c18, #122823)',
-    '--yustam-surface-card': 'rgba(16, 32, 29, 0.92)',
-    '--yustam-surface-card-alt': 'rgba(18, 36, 32, 0.88)',
-    '--yustam-border': 'rgba(34, 64, 56, 0.55)',
+    '--yustam-surface-card': 'rgba(18, 38, 33, 0.94)',
+    '--yustam-surface-card-alt': 'rgba(20, 42, 36, 0.9)',
+    '--yustam-surface-elevated': 'rgba(16, 32, 29, 0.92)',
+    '--yustam-border': 'rgba(54, 90, 80, 0.6)',
     '--yustam-text-primary': 'rgba(235, 245, 242, 0.96)',
     '--yustam-text-muted': 'rgba(198, 215, 211, 0.72)',
     '--yustam-header-bg': 'rgba(11, 49, 39, 0.95)',
@@ -38,6 +44,10 @@
     '--yustam-btn-text': '#111a16',
     '--yustam-input-bg': 'rgba(23, 41, 37, 0.92)',
     '--yustam-input-border': 'rgba(54, 90, 80, 0.65)',
+    '--yustam-pill-bg': 'rgba(255, 148, 72, 0.2)',
+    '--yustam-pill-text': '#ffd1a4',
+    '--yustam-link': '#ffb071',
+    '--yustam-link-hover': '#ffcf9f',
   };
 
   const ensureBodyReady = (callback) => {
@@ -78,7 +88,16 @@ body {
 }
 
 body, body * {
-  transition: color 0.28s ease, background 0.28s ease, background-color 0.28s ease, border-color 0.28s ease;
+  transition: color 0.28s ease, background 0.28s ease, background-color 0.28s ease, border-color 0.28s ease, box-shadow 0.28s ease;
+}
+
+body a {
+  color: var(--yustam-link);
+}
+
+body a:hover,
+body a:focus-visible {
+  color: var(--yustam-link-hover);
 }
 
 body .glass-card,
@@ -92,7 +111,25 @@ body .details-card,
 body section.glass-card,
 body .action-card,
 body .save-bar,
-body .pricing-card {
+body .pricing-card,
+body .stats-card,
+body .table-card,
+body .info-card,
+body .auth-card,
+body .form-card,
+body .notification-card,
+body .hero-card,
+body .chat-card,
+body .message-card,
+body .feature-card,
+body .benefit-card,
+body .listing-card,
+body .offer-card,
+body .faq-card,
+body .highlight-card,
+body .support-card,
+body .billing-card,
+body .summary-card {
   background: var(--yustam-surface-card) !important;
   color: var(--yustam-text-primary) !important;
   box-shadow: var(--yustam-card-shadow) !important;
@@ -106,12 +143,18 @@ body .plan-summary,
 body .plan-description,
 body .plan-limit,
 body .plan-features li,
-body .text-muted {
+body .text-muted,
+body .meta-text,
+body .subtitle,
+body small,
+body .badge-muted,
+body .stat-subtext {
   color: var(--yustam-text-muted) !important;
 }
 
 body header,
-body .app-header {
+body .app-header,
+body .sticky-header {
   background: var(--yustam-header-bg) !important;
   color: var(--yustam-header-text) !important;
   box-shadow: var(--yustam-shadow) !important;
@@ -125,25 +168,42 @@ body .save-button,
 body .payBtn,
 body .primary-btn,
 body .hero-button,
-body .submit-btn {
+body .submit-btn,
+body .plan-controls .payBtn,
+body .pricing-card .cta-button,
+body .floating-cta {
   background: var(--yustam-btn-bg) !important;
   color: var(--yustam-btn-text) !important;
   border-color: transparent !important;
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.18) !important;
 }
 
 body .ghost-button,
 body .btn-outline,
 body .secondary-btn,
 body .outline-button,
-body .action-button.ghost-button {
+body .action-button.ghost-button,
+body .pricing-card .cta-outline {
   background: transparent !important;
   border: 1px solid var(--yustam-border) !important;
   color: var(--yustam-text-primary) !important;
 }
 
+body .plan-chip,
+body .status-chip,
+body .plan-pill,
+body .badge,
+body .tag {
+  background: var(--yustam-pill-bg) !important;
+  color: var(--yustam-pill-text) !important;
+  border-color: transparent !important;
+}
+
 body input,
 body textarea,
-body select {
+body select,
+body .input-field,
+body .form-control {
   background: var(--yustam-input-bg) !important;
   color: var(--yustam-text-primary) !important;
   border-color: var(--yustam-input-border) !important;
@@ -154,24 +214,16 @@ body textarea::placeholder {
   color: var(--yustam-text-muted) !important;
 }
 
+[data-theme="dark"] body {
+  color: var(--yustam-text-primary) !important;
+}
+
+[data-theme="dark"] body a {
+  color: var(--yustam-link) !important;
+}
+
 [data-theme="dark"] .modal-backdrop {
   background: var(--yustam-overlay) !important;
-}
-
-[data-theme="dark"] .plan-chip,
-[data-theme="dark"] .status-chip,
-[data-theme="dark"] .plan-pill,
-[data-theme="dark"] .badge,
-[data-theme="dark"] .tag {
-  background: rgba(34, 64, 56, 0.55) !important;
-  color: var(--yustam-text-primary) !important;
-}
-
-[data-theme="dark"] .upgrade-banner,
-[data-theme="dark"] .alert-info {
-  background: rgba(255, 148, 72, 0.12) !important;
-  color: var(--yustam-text-primary) !important;
-  border-color: rgba(255, 148, 72, 0.35) !important;
 }
 
 [data-theme="dark"] .danger-card,
@@ -187,6 +239,55 @@ body textarea::placeholder {
 [data-theme="dark"] .notification-card {
   background: var(--yustam-surface-card-alt) !important;
   box-shadow: var(--yustam-card-shadow) !important;
+}
+
+[data-theme="dark"] .table,
+[data-theme="dark"] table,
+[data-theme="dark"] th,
+[data-theme="dark"] td {
+  background: var(--yustam-surface-elevated) !important;
+  color: var(--yustam-text-primary) !important;
+  border-color: var(--yustam-border) !important;
+}
+
+[data-theme="dark"] .stat-value,
+[data-theme="dark"] .metric-value,
+[data-theme="dark"] .kpi-value,
+[data-theme="dark"] .summary-total {
+  color: #ffb071 !important;
+}
+
+[data-theme="dark"] .upgrade-banner,
+[data-theme="dark"] .alert-info,
+[data-theme="dark"] .info-banner {
+  background: rgba(255, 148, 72, 0.18) !important;
+  color: var(--yustam-text-primary) !important;
+  border-color: rgba(255, 148, 72, 0.4) !important;
+}
+
+[data-theme="dark"] .timeline-item::before,
+[data-theme="dark"] .step::before,
+[data-theme="dark"] .progress-indicator {
+  background: var(--yustam-pill-bg) !important;
+}
+
+[data-theme="dark"] .header-icon,
+[data-theme="dark"] .icon-btn,
+[data-theme="dark"] .fab,
+[data-theme="dark"] .floating-button {
+  background: rgba(34, 64, 56, 0.65) !important;
+  color: var(--yustam-text-primary) !important;
+}
+
+[data-theme="dark"] .chart-card,
+[data-theme="dark"] canvas,
+[data-theme="dark"] .chart-container {
+  background: transparent !important;
+}
+
+[data-theme="dark"] .divider,
+[data-theme="dark"] hr {
+  border-color: var(--yustam-border) !important;
 }
 `;
 
