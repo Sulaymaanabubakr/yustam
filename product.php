@@ -101,6 +101,10 @@ $vendorVerificationLabel = yustam_verification_label($vendorVerificationState);
 $vendorVerificationIcon = yustam_verification_icon($vendorVerificationState);
 
 $chatId = $vendorId && $buyerId ? $vendorId . '_' . $buyerId . '_' . $productId : '';
+$vendorProfileUrl = 'shop.html';
+if (is_string($vendorId) && trim($vendorId) !== '') {
+    $vendorProfileUrl .= '?vendorId=' . rawurlencode($vendorId);
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -996,7 +1000,7 @@ $chatId = $vendorId && $buyerId ? $vendorId . '_' . $buyerId . '_' . $productId 
                 <p><strong>Member since:</strong> March 2023</p>
             </div>
             <div class="vendor-actions">
-                <a href="vendor-profile.php?id=sampleVendor" class="view-profile">View Vendor Profile</a>
+                <a href="<?= htmlspecialchars($vendorProfileUrl, ENT_QUOTES, 'UTF-8'); ?>" class="view-profile" target="_blank" rel="noopener noreferrer">View Vendor Storefront</a>
                 <a href="mailto:elitegadgets@yustam.com" class="email-vendor">Email Vendor</a>
             </div>
             <small>If you are an administrator, <a href="admin-listing-detail.php?id=sampleListing">open this listing in admin view</a>.</small>

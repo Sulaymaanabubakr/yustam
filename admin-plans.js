@@ -310,7 +310,13 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.4/fireba
       if(action === 'change'){
         openChangePlanModal(vendor);
       } else if(action === 'view'){
-        window.location.href = `vendor-profile.php?id=${id}`;
+        const storefrontUrl = `shop.html?vendorId=${encodeURIComponent(id)}`;
+        const storefrontWindow = window.open(storefrontUrl, '_blank', 'noopener');
+        if(storefrontWindow){
+          storefrontWindow.opener = null;
+        } else {
+          window.location.href = storefrontUrl;
+        }
       }
     });
 
