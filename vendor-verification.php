@@ -414,6 +414,11 @@ if (!isset($_SESSION['vendor_id'])) {
             z-index: 99;
         }
 
+        .toast.error {
+            background: rgba(217, 48, 37, 0.92);
+            box-shadow: 0 16px 36px rgba(217, 48, 37, 0.35);
+        }
+
         .toast.show {
             opacity: 1;
             transform: translate(-50%, 0);
