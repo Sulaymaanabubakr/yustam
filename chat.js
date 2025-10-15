@@ -7,6 +7,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  increment,
   onSnapshot,
   orderBy,
   query,
@@ -43,13 +44,43 @@ const state = {
   productImage: appShell?.dataset.productImage || '',
   participantName: appShell?.dataset.participantName || 'YUSTAM User',
   participantStatus: appShell?.dataset.participantStatus || 'Online',
+  currentUserName: appShell?.dataset.currentUserName || '',
+  buyerName: appShell?.dataset.buyerName || '',
+  vendorName: appShell?.dataset.vendorName || '',
+  counterpartyId: appShell?.dataset.counterpartyId || '',
+  counterpartyRole: appShell?.dataset.counterpartyRole || '',
+  counterpartyName: appShell?.dataset.counterpartyName || appShell?.dataset.participantName || '',
   currentUserId: appShell?.dataset.currentUserId || '',
   currentRole: appShell?.dataset.currentRole || 'guest',
   typingTimeout: null,
   unsubscribeMessages: null,
   unsubscribeTyping: null,
-  attachmentFile: null
+  attachmentFile: null,
+  presenceUnsubscribe: null,
+  presenceInterval: null
 };
+
+if (!state.counterpartyRole) {
+  state.counterpartyRole = state.currentRole === 'buyer' ? 'vendor' : 'buyer';
+}
+
+if (!state.counterpartyName) {
+  state.counterpartyName = 'YUSTAM User';
+}
+
+if (!state.buyerName && state.currentRole === 'buyer') {
+  state.buyerName = state.currentUserName || '';
+}
+
+if (!state.vendorName && state.currentRole === 'vendor') {
+  state.vendorName = state.currentUserName || '';
+}
+
+if (state.currentRole === 'buyer' && state.vendorName) {
+  state.counterpartyName = state.vendorName;
+} else if (state.currentRole === 'vendor' && state.buyerName) {
+  state.counterpartyName = state.buyerName;
+}
 
 if (!state.chatId && state.vendorId && state.buyerId && state.productId) {
   state.chatId = `${state.vendorId}_${state.buyerId}_${state.productId}`;
@@ -58,6 +89,8 @@ if (!state.chatId && state.vendorId && state.buyerId && state.productId) {
 
 const chatDocRef = state.chatId ? doc(db, 'chats', state.chatId) : null;
 const messagesCollection = chatDocRef ? collection(chatDocRef, 'messages') : null;
+const presenceDocRef = state.currentUserId ? doc(db, 'presence', state.currentUserId) : null;
+const counterpartyPresenceDocRef = state.counterpartyId ? doc(db, 'presence', state.counterpartyId) : null;
 
 const tickIcons = {
   delivered: '<i class="ri-check-line" aria-hidden="true"></i>',
@@ -176,20 +209,42 @@ function consumeQuickMessage() {
 async function ensureChatDocument() {
   if (!chatDocRef) return;
   const snapshot = await getDoc(chatDocRef);
+  const participantsToAdd = [state.vendorId, state.buyerId].filter(Boolean);
+
+  const basePayload = {
+    chatId: state.chatId,
+    vendorId: state.vendorId,
+    vendorName: state.vendorName || '',
+    buyerId: state.buyerId,
+    buyerName: state.buyerName || '',
+    productId: state.productId,
+    productTitle: state.productTitle,
+    productImage: state.productImage
+  };
+
   if (!snapshot.exists()) {
-    await setDoc(chatDocRef, {
-      chatId: state.chatId,
-      vendorId: state.vendorId,
-      buyerId: state.buyerId,
-      productId: state.productId,
-      productTitle: state.productTitle,
-      productImage: state.productImage,
-      buyerName: '',
-      vendorName: '',
-      participants: [state.vendorId, state.buyerId].filter(Boolean),
-      lastUpdated: serverTimestamp()
-    }, { merge: true });
+    basePayload.lastUpdated = serverTimestamp();
   }
+
+  if (participantsToAdd.length) {
+    basePayload.participants = arrayUnion(...participantsToAdd);
+  }
+
+  if (state.currentUserId && state.currentUserName) {
+    basePayload[`participantProfiles.${state.currentUserId}`] = {
+      name: state.currentUserName,
+      role: state.currentRole
+    };
+  }
+
+  if (state.counterpartyId && state.counterpartyName) {
+    basePayload[`participantProfiles.${state.counterpartyId}`] = {
+      name: state.counterpartyName,
+      role: state.counterpartyRole || ''
+    };
+  }
+
+  await setDoc(chatDocRef, basePayload, { merge: true });
 }
 
 async function markMessagesAsSeen() {
@@ -204,25 +259,146 @@ async function markMessagesAsSeen() {
 
     if (chatDocRef) {
       const chatSnapshot = await getDoc(chatDocRef);
-      if (chatSnapshot.exists()) {
-        const chatData = chatSnapshot.data();
-        const lastMessage = chatData?.lastMessage;
-        if (lastMessage && lastMessage.senderId !== state.currentUserId && !lastMessage.seen) {
-          await updateDoc(chatDocRef, {
-            'lastMessage.seen': true,
-            'lastMessage.seenAt': serverTimestamp()
-          });
-        }
+    if (chatSnapshot.exists()) {
+      const chatData = chatSnapshot.data();
+      const lastMessage = chatData?.lastMessage;
+      if (lastMessage && lastMessage.senderId !== state.currentUserId && !lastMessage.seen) {
+        await updateDoc(chatDocRef, {
+          'lastMessage.seen': true,
+          'lastMessage.seenAt': serverTimestamp()
+        });
       }
     }
-  } catch (error) {
-    console.error('[chat] Failed to mark messages as seen', error);
+    if (state.currentUserId) {
+      const unreadUpdate = {};
+      unreadUpdate[`unreadCounts.${state.currentUserId}`] = 0;
+      await updateDoc(chatDocRef, unreadUpdate);
+    }
   }
+} catch (error) {
+  console.error('[chat] Failed to mark messages as seen', error);
+}
 }
 
 function setTypingIndicator(active) {
   if (!typingIndicator) return;
   typingIndicator.classList.toggle('active', active);
+}
+
+function formatPresenceLabel(timestamp) {
+  if (!timestamp) return 'Offline';
+  const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+  if (!Number.isFinite(date?.getTime?.())) return 'Offline';
+
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMinutes = Math.floor(diffMs / 60000);
+
+  if (diffMinutes < 1) return 'Just now';
+  if (diffMinutes < 60) return `${diffMinutes}m ago`;
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffHours < 48) return 'Yesterday';
+  return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
+
+async function setPresence(isOnline) {
+  if (!presenceDocRef || !state.currentUserId) return;
+  try {
+    await setDoc(presenceDocRef, {
+      userId: state.currentUserId,
+      role: state.currentRole,
+      name: state.currentUserName || '',
+      isOnline,
+      lastSeen: serverTimestamp()
+    }, { merge: true });
+  } catch (error) {
+    console.error('[chat] Failed to update presence', error);
+  }
+}
+
+function applyCounterpartyPresence(data) {
+  if (!participantStatus) return;
+  if (!data) {
+    participantStatus.textContent = 'Offline';
+    return;
+  }
+
+  if (data.isOnline) {
+    participantStatus.textContent = 'Online';
+  } else if (data.lastSeen) {
+    participantStatus.textContent = `Last seen ${formatPresenceLabel(data.lastSeen)}`;
+  } else {
+    participantStatus.textContent = 'Offline';
+  }
+}
+
+function listenToCounterpartyPresence() {
+  if (!counterpartyPresenceDocRef) return;
+  if (state.presenceUnsubscribe) {
+    state.presenceUnsubscribe();
+  }
+
+  state.presenceUnsubscribe = onSnapshot(counterpartyPresenceDocRef, (snapshot) => {
+    applyCounterpartyPresence(snapshot.data());
+  }, (error) => {
+    console.error('[chat] Presence subscription error', error);
+  });
+}
+
+function handleVisibilityChange() {
+  if (document.visibilityState === 'visible') {
+    setPresence(true);
+  } else {
+    setPresence(false);
+  }
+}
+
+function startPresenceTracking() {
+  if (!presenceDocRef || !state.currentUserId) return;
+
+  setPresence(true);
+  if (state.presenceInterval) {
+    clearInterval(state.presenceInterval);
+  }
+  state.presenceInterval = setInterval(() => {
+    if (document.visibilityState === 'visible') {
+      setPresence(true);
+    }
+  }, 45000);
+
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+  window.addEventListener('pagehide', () => {
+    setPresence(false);
+    if (state.presenceInterval) {
+      clearInterval(state.presenceInterval);
+      state.presenceInterval = null;
+    }
+  });
+}
+
+function notifyRecipient(recipientId, recipientRole, preview) {
+  if (!recipientId || !recipientRole || recipientRole !== 'vendor') {
+    return;
+  }
+
+  try {
+    fetch('chat-notify.php', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        recipientType: recipientRole,
+        recipientId,
+        chatId: state.chatId,
+        productId: state.productId,
+        senderName: state.currentUserName || '',
+        message: preview || ''
+      })
+    }).catch(() => {});
+  } catch {
+    // Silent fail – notification logging should not block chat UX
+  }
 }
 
 let typingUpdateTimeout;
@@ -271,10 +447,14 @@ async function sendMessage(event) {
     }
 
     const timestamp = serverTimestamp();
+    const recipientId = state.currentUserId === state.buyerId ? state.vendorId : state.buyerId;
+    const recipientRole = state.currentUserId === state.buyerId ? 'vendor' : 'buyer';
     const payload = {
       text: trimmedText,
       imageUrl,
       senderId: state.currentUserId,
+      senderName: state.currentUserName || '',
+      senderRole: state.currentRole,
       timestamp,
       seen: false
     };
@@ -282,17 +462,43 @@ async function sendMessage(event) {
     await addDoc(messagesCollection, payload);
 
     if (chatDocRef) {
-      await setDoc(chatDocRef, {
+      const chatUpdate = {
         chatId: state.chatId,
         vendorId: state.vendorId,
+        vendorName: state.vendorName || '',
         buyerId: state.buyerId,
+        buyerName: state.buyerName || '',
         productId: state.productId,
         productTitle: state.productTitle,
         productImage: state.productImage,
-        participants: arrayUnion(state.currentUserId),
         lastMessage: payload,
         lastUpdated: timestamp
-      }, { merge: true });
+      };
+
+      const participantsToAdd = [state.currentUserId, recipientId].filter(Boolean);
+      if (participantsToAdd.length) {
+        chatUpdate.participants = arrayUnion(...participantsToAdd);
+      }
+
+      if (state.currentUserId && state.currentUserName) {
+        chatUpdate[`participantProfiles.${state.currentUserId}`] = {
+          name: state.currentUserName,
+          role: state.currentRole
+        };
+        chatUpdate[`unreadCounts.${state.currentUserId}`] = 0;
+      }
+
+      if (recipientId) {
+        chatUpdate[`participantProfiles.${recipientId}`] = {
+          name: state.counterpartyName || '',
+          role: state.counterpartyRole || recipientRole
+        };
+        chatUpdate[`unreadCounts.${recipientId}`] = increment(1);
+      }
+
+      await setDoc(chatDocRef, chatUpdate, { merge: true });
+      const previewText = trimmedText || (imageUrl ? 'Photo attachment' : '');
+      notifyRecipient(recipientId, recipientRole, previewText);
     }
 
     resetComposer();
@@ -405,8 +611,14 @@ function attachEventListeners() {
 
   window.addEventListener('beforeunload', () => {
     updateTypingStatus(false);
+    setPresence(false);
     state.unsubscribeMessages?.();
     state.unsubscribeTyping?.();
+    state.presenceUnsubscribe?.();
+    if (state.presenceInterval) {
+      clearInterval(state.presenceInterval);
+      state.presenceInterval = null;
+    }
   });
 
   document.addEventListener('visibilitychange', () => {
@@ -423,6 +635,8 @@ async function initialiseChat() {
   }
 
   await ensureChatDocument();
+  startPresenceTracking();
+  listenToCounterpartyPresence();
   const prefilledText = consumeQuickMessage();
   if (prefilledText && messageInput) {
     messageInput.value = prefilledText;
