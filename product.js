@@ -1,26 +1,65 @@
 import { db } from './firebase.js';
 import { deleteDoc, doc, getDoc, setDoc } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
 
+const urlParams = new URLSearchParams(window.location.search);
+
 const mainImage = document.getElementById('productImage') || document.getElementById('mainImage');
 const thumbStrip = document.getElementById('thumbStrip');
-
 const saveBtn = document.getElementById('saveListingBtn');
-const buyerId = document.body?.dataset?.buyerId || '';
+const buyerId =
+  document.body?.dataset?.buyerId || (urlParams.get('buyerId') || urlParams.get('buyer') || '').trim();
 const productIdInput = document.getElementById('productId');
-const productId = productIdInput?.value?.trim?.() || '';
+const productIdParam = (urlParams.get('id') || urlParams.get('listingId') || '').trim();
+const productId = productIdInput?.value?.trim?.() || productIdParam;
+const vendorIdParam = (urlParams.get('vendorId') || urlParams.get('vendor') || '').trim();
+const vendorNameParam = (urlParams.get('vendorName') || urlParams.get('vendorDisplayName') || '').trim();
 const productNameEl = document.getElementById('productName');
 const productPriceEl = document.getElementById('productPrice');
+const productDescEl = document.getElementById('productDesc');
+const productStatusEl = document.getElementById('productStatus');
+const categoryLineEl = document.getElementById('categoryLine');
+const categoryLabelEl = document.getElementById('categoryLabel');
+const featureListEl = document.getElementById('featureList');
+const specListEl = document.getElementById('specList');
+const specFallbackEl = document.getElementById('specFallback');
 const productImageEl = document.getElementById('productImage');
 const vendorPlanBadge = document.getElementById('vendorPlanBadge');
 const vendorVerifiedBadge = document.getElementById('vendorVerifiedBadge');
-const vendorBadgesContainer = document.querySelector('.vendor-badges');
+const vendorBadgesContainer = document.getElementById('vendorBadges') || document.querySelector('.vendor-badges');
 const vendorNameEl = document.getElementById('vendorTitle');
+const vendorBusinessEl = document.getElementById('vendorBusiness');
+const vendorEmailLink = document.getElementById('vendorEmailLink');
+const vendorPhoneLink = document.getElementById('vendorPhoneLink');
+const vendorLocationRow = document.getElementById('vendorLocationRow');
+const vendorLocationEl = document.getElementById('vendorLocation');
+const vendorSinceRow = document.getElementById('vendorSinceRow');
+const vendorSinceEl = document.getElementById('vendorSince');
+const vendorStorefrontLink = document.getElementById('vendorStorefrontLink');
+const vendorWhatsappLink = document.getElementById('vendorWhatsappLink');
+const vendorAvatarEl = document.getElementById('vendorAvatar');
+const floatingWhatsappBtn = document.getElementById('floatingWhatsappBtn');
+const PLACEHOLDER_IMAGE =
+  'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=1200&q=80';
 
-const productName = productNameEl?.textContent?.trim?.() || '';
-const productPrice = productPriceEl?.textContent?.trim?.() || '';
-const productImageUrl = productImageEl?.src || '';
-const vendorName = vendorNameEl?.textContent?.trim?.() || document.body?.dataset?.vendorName || 'Vendor';
-const vendorId = document.body?.dataset?.vendorId || '';
+let currentProductName = productNameEl?.textContent?.trim?.() || '';
+let currentProductPrice = 0;
+let currentProductPriceLabel = productPriceEl?.textContent?.trim?.() || '';
+let currentProductImage = productImageEl?.src || '';
+let currentVendorName =
+  vendorNameEl?.textContent?.trim?.() || document.body?.dataset?.vendorName || vendorNameParam || 'Vendor';
+let currentVendorId = document.body?.dataset?.vendorId || vendorIdParam || '';
+let currentVendorPlan = document.body?.dataset?.vendorPlan || '';
+let currentVendorVerification = document.body?.dataset?.vendorVerified || '';
+let currentVendorPhone = '';
+
+if (document.body) {
+  if (!document.body.dataset.vendorId && currentVendorId) {
+    document.body.dataset.vendorId = currentVendorId;
+  }
+  if (!document.body.dataset.vendorName && currentVendorName) {
+    document.body.dataset.vendorName = currentVendorName;
+  }
+}
 
 const savedRef = buyerId && productId ? doc(db, `saved/${buyerId}/items/${productId}`) : null;
 
@@ -64,26 +103,26 @@ const normaliseVerificationState = (value) => {
   return 'unverified';
 };
 
-const applyVendorBadges = () => {
+const applyVendorBadges = (planOverride, verificationOverride) => {
   if (!vendorPlanBadge || !vendorVerifiedBadge) return;
 
   const params = new URLSearchParams(window.location.search);
-  let planValue = params.get('plan');
-  let verifiedValue = params.get('verified');
+  let planValue = planOverride ?? '';
+  let verifiedValue = verificationOverride ?? '';
 
-  if (planValue) {
-    planValue = decodeURIComponent(planValue);
-  } else {
-    planValue = document.body?.dataset?.vendorPlan || '';
+  if (!planValue) {
+    const paramPlan = params.get('plan');
+    planValue = paramPlan ? decodeURIComponent(paramPlan) : document.body?.dataset?.vendorPlan || '';
   }
 
-  if (verifiedValue !== null) {
-    verifiedValue = decodeURIComponent(verifiedValue);
-  } else {
-    verifiedValue = document.body?.dataset?.vendorVerified || '';
+  if (!verifiedValue) {
+    const paramVerified = params.get('verified');
+    verifiedValue =
+      paramVerified !== null ? decodeURIComponent(paramVerified) : document.body?.dataset?.vendorVerified || '';
   }
 
-  planValue = planValue ? String(planValue).trim() : '';
+  planValue = String(planValue || '').trim();
+  currentVendorPlan = planValue;
 
   const planLabel = formatPlanLabel(planValue);
   const planSlug = slugifyPlan(planValue);
@@ -91,6 +130,7 @@ const applyVendorBadges = () => {
   vendorPlanBadge.className = `vendor-badge vendor-plan vendor-plan-${planSlug}`;
 
   const verificationState = normaliseVerificationState(verifiedValue);
+  currentVendorVerification = verificationState;
   let verificationLabel = 'Not Verified';
   let verificationIcon = 'ri-alert-line';
   let stateClass = 'unverified';
@@ -120,6 +160,63 @@ const applyVendorBadges = () => {
 
 applyVendorBadges();
 
+const escapeHtml = (value) =>
+  String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+const formatCurrency = (value) =>
+  new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(
+    Number.isFinite(Number(value)) ? Number(value) : 0,
+  );
+
+const friendlyLabel = (key) => {
+  if (!key) return 'Detail';
+  const spaced = String(key)
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/[\-_]+/g, ' ')
+    .replace(/\s+/g, ' ');
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+};
+
+const normalisePhoneForWhatsapp = (phone) => {
+  if (!phone) return '';
+  const digits = String(phone).replace(/[^0-9+]/g, '');
+  if (!digits) return '';
+  if (digits.startsWith('+') && digits.length > 1) {
+    return digits.slice(1);
+  }
+  if (digits.startsWith('234')) {
+    return digits;
+  }
+  if (digits.startsWith('0')) {
+    return `234${digits.slice(1)}`;
+  }
+  return digits;
+};
+
+const setLinkState = (anchor, href, label) => {
+  if (!anchor) return;
+  if (!href || !label) {
+    anchor.href = '#';
+    anchor.textContent = label || 'Unavailable';
+    anchor.setAttribute('aria-disabled', 'true');
+    anchor.classList.add('is-disabled');
+    anchor.style.pointerEvents = 'none';
+    anchor.style.opacity = '0.6';
+  } else {
+    anchor.href = href;
+    anchor.textContent = label;
+    anchor.setAttribute('aria-disabled', 'false');
+    anchor.classList.remove('is-disabled');
+    anchor.style.pointerEvents = '';
+    anchor.style.opacity = '';
+  }
+};
+
 async function toggleSave() {
   if (!saveBtn) return;
   if (!buyerId) {
@@ -137,14 +234,14 @@ async function toggleSave() {
       const vendorPlanValue = document.body?.dataset?.vendorPlan || '';
       const vendorVerifiedValue = document.body?.dataset?.vendorVerified || '';
       await setDoc(savedRef, {
-        name: productName,
-        price: productPrice,
-        image: productImageUrl,
+        name: currentProductName,
+        price: currentProductPriceLabel,
+        image: currentProductImage,
         productId,
-        vendorId,
-        vendorName,
-        vendorPlan: formatPlanLabel(vendorPlanValue),
-        vendorVerified: normaliseVerificationState(vendorVerifiedValue),
+        vendorId: currentVendorId,
+        vendorName: currentVendorName,
+        vendorPlan: formatPlanLabel(vendorPlanValue || currentVendorPlan),
+        vendorVerified: normaliseVerificationState(vendorVerifiedValue || currentVendorVerification),
         timestamp: Date.now(),
       });
       setSaveState(true);
@@ -185,19 +282,7 @@ if (thumbStrip && mainImage) {
   });
 }
 
-const addToCartButton = document.getElementById('addToCartBtn');
-if (addToCartButton) {
-  addToCartButton.addEventListener('click', () => {
-    alert('Add to cart functionality coming soon!');
-  });
-}
 
-const whatsappButton = document.getElementById('whatsappBtn');
-if (whatsappButton) {
-  whatsappButton.addEventListener('click', () => {
-    window.open('https://wa.me/2348031234567', '_blank');
-  });
-}
 
 const quickChatCard = document.getElementById('quickChatCard');
 const quickChatForm = document.getElementById('quickChatForm');
@@ -216,17 +301,25 @@ suggestionButtons.forEach((button) => {
 
 function buildChatUrl() {
   if (!quickChatCard) return null;
-  const { chatId, vendorId, vendorName, buyerId, productId, productTitle, productImage } = quickChatCard.dataset;
-  const computedChatId = chatId || `${vendorId || 'vendor'}_${buyerId || 'guest'}_${productId || 'listing'}`;
+  const {
+    chatId,
+    vendorId: vendorIdAttr,
+    vendorName: vendorNameAttr,
+    buyerId,
+    productId: listingId,
+    productTitle,
+    productImage,
+  } = quickChatCard.dataset;
+  const computedChatId = chatId || `${vendorIdAttr || 'vendor'}_${buyerId || 'guest'}_${listingId || 'listing'}`;
 
   const url = new URL('chat.php', window.location.origin);
   url.searchParams.set('chatId', computedChatId);
-  url.searchParams.set('vendorId', vendorId || '');
+  url.searchParams.set('vendorId', vendorIdAttr || currentVendorId || '');
   url.searchParams.set('buyerId', buyerId || '');
-  url.searchParams.set('productId', productId || '');
-  url.searchParams.set('participantName', vendorName || 'Vendor');
-  url.searchParams.set('productTitle', productTitle || 'Listing');
-  url.searchParams.set('productImage', productImage || '');
+  url.searchParams.set('productId', listingId || productId || '');
+  url.searchParams.set('participantName', vendorNameAttr || currentVendorName || 'Vendor');
+  url.searchParams.set('productTitle', productTitle || currentProductName || 'Listing');
+  url.searchParams.set('productImage', productImage || currentProductImage || '');
   url.searchParams.set('status', 'Online');
   return { url: url.toString(), chatId: computedChatId };
 }
@@ -258,3 +351,444 @@ if (quickChatForm && quickMessageInput) {
     window.location.href = chatLink.url;
   });
 }
+
+const quickChatHeading = quickChatCard?.querySelector('h3');
+const negotiationSuggestion = suggestionButtons?.[1] || null;
+
+const updateNegotiationSuggestion = () => {
+  if (!negotiationSuggestion) return;
+  if (currentProductPrice > 0) {
+    const offer = Math.max(currentProductPrice - 1000, 0);
+    const offerLabel = formatCurrency(offer);
+    negotiationSuggestion.dataset.quickMessage = `Can I pay ${offerLabel}?`;
+    negotiationSuggestion.textContent = `Can I pay ${offerLabel}?`;
+  } else {
+    negotiationSuggestion.dataset.quickMessage = 'Can I get a better price?';
+    negotiationSuggestion.textContent = 'Can I get a better price?';
+  }
+};
+
+const updateQuickChatDataset = () => {
+  if (!quickChatCard) return;
+  quickChatCard.dataset.vendorId = currentVendorId || '';
+  quickChatCard.dataset.vendorName = currentVendorName || 'Vendor';
+  quickChatCard.dataset.productId = productId || '';
+  quickChatCard.dataset.productTitle = currentProductName || 'Listing';
+  quickChatCard.dataset.productImage = currentProductImage || '';
+  if (quickChatHeading) {
+    quickChatHeading.textContent = `Chat with ${currentVendorName || 'Vendor'}`;
+  }
+};
+
+const updateGallery = (images = []) => {
+  if (!mainImage) return;
+  const galleryImages = Array.isArray(images)
+    ? images.map((src) => String(src || '').trim()).filter(Boolean)
+    : [];
+  if (!galleryImages.length) {
+    galleryImages.push(PLACEHOLDER_IMAGE);
+  }
+
+  const [firstImage] = galleryImages;
+  mainImage.src = firstImage;
+  mainImage.alt = `${currentProductName || 'Listing'} image`;
+  mainImage.style.opacity = '1';
+  if (productImageEl) productImageEl.src = firstImage;
+  currentProductImage = firstImage;
+
+  if (thumbStrip) {
+    thumbStrip.innerHTML = '';
+    galleryImages.forEach((src, index) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.dataset.image = src;
+      button.setAttribute('aria-label', `View image ${index + 1}`);
+      if (index === 0) button.classList.add('active');
+      button.innerHTML = `<img src="${escapeHtml(src)}" alt="Thumbnail image ${index + 1}">`;
+      thumbStrip.appendChild(button);
+    });
+  }
+
+  updateQuickChatDataset();
+};
+
+const extractFeatures = (listing = {}) => {
+  const featureFields = ['keyFeatures', 'highlights', 'highlightFeatures', 'smartFeatures', 'features', 'featureList'];
+  const features = [];
+  featureFields.forEach((field) => {
+    const value = listing[field];
+    if (!value) return;
+    if (Array.isArray(value)) {
+      value
+        .map((item) => String(item || '').trim())
+        .filter(Boolean)
+        .forEach((item) => features.push(item));
+    } else if (typeof value === 'string') {
+      value
+        .split(/[\n;•,]+/)
+        .map((item) => item.trim())
+        .filter(Boolean)
+        .forEach((item) => features.push(item));
+    }
+  });
+  return Array.from(new Set(features));
+};
+
+const updateFeatureList = (features = []) => {
+  if (!featureListEl) return;
+  featureListEl.innerHTML = '';
+  if (!features.length) {
+    featureListEl.hidden = true;
+    return;
+  }
+  features.forEach((feature) => {
+    const li = document.createElement('li');
+    li.innerHTML = `<i class="ri-checkbox-circle-line" aria-hidden="true"></i> ${escapeHtml(feature)}`;
+    featureListEl.appendChild(li);
+  });
+  featureListEl.hidden = false;
+};
+
+const renderSpecifications = (listing = {}) => {
+  if (!specListEl || !specFallbackEl) return;
+  specListEl.innerHTML = '';
+  const excludedKeys = new Set([
+    'title',
+    'listingtitle',
+    'producttitle',
+    'productname',
+    'name',
+    'price',
+    'amount',
+    'currency',
+    'description',
+    'highlights',
+    'highlightfeatures',
+    'smartfeatures',
+    'features',
+    'featurelist',
+    'category',
+    'subcategory',
+    'status',
+    'vendorid',
+    'vendor_id',
+    'vendor',
+    'imageurls',
+    'images',
+    'gallery',
+    'createdat',
+    'updatedat',
+    'approvedat',
+    'rejectedat',
+    'feedback',
+    'plan',
+    'planslug',
+    'planlabel',
+    'verification',
+    'verificationstatus',
+    'verification_state',
+    'verificationstage',
+    'vendorname',
+    'vendorplan',
+    'vendorverified',
+    'locationfiltervalue',
+  ]);
+
+  let specCount = 0;
+  Object.entries(listing).forEach(([key, rawValue]) => {
+    if (rawValue === undefined || rawValue === null || rawValue === '') return;
+    const normalisedKey = key.toLowerCase();
+    if (excludedKeys.has(normalisedKey)) return;
+    if (normalisedKey.includes('image') || normalisedKey.includes('photo') || normalisedKey.includes('url')) return;
+
+    let displayValue = rawValue;
+    if (rawValue && typeof rawValue.toDate === 'function') {
+      displayValue = rawValue.toDate();
+    } else if (rawValue instanceof Date) {
+      displayValue = rawValue;
+    } else if (Array.isArray(rawValue)) {
+      displayValue = rawValue.map((item) => String(item || '').trim()).filter(Boolean).join(', ');
+    } else if (typeof rawValue === 'object') {
+      return;
+    }
+
+    if (displayValue instanceof Date) {
+      displayValue = displayValue.toLocaleDateString('en-NG', { year: 'numeric', month: 'short', day: 'numeric' });
+    } else if (typeof displayValue === 'boolean') {
+      displayValue = displayValue ? 'Yes' : 'No';
+    } else {
+      displayValue = String(displayValue).trim();
+    }
+
+    if (!displayValue) return;
+
+    const row = document.createElement('div');
+    row.className = 'spec-row';
+    row.innerHTML = `<span>${escapeHtml(friendlyLabel(key))}</span><strong>${escapeHtml(displayValue)}</strong>`;
+    specListEl.appendChild(row);
+    specCount += 1;
+  });
+
+  specListEl.hidden = specCount === 0;
+  specFallbackEl.hidden = specCount > 0;
+};
+
+const updateCategoryLine = (category, subcategory) => {
+  if (!categoryLineEl || !categoryLabelEl) return;
+  const parts = [];
+  if (category) parts.push(category);
+  if (subcategory && subcategory !== category) parts.push(subcategory);
+  if (!parts.length) {
+    categoryLineEl.hidden = true;
+    return;
+  }
+  categoryLabelEl.textContent = parts.join(' · ');
+  categoryLineEl.hidden = false;
+};
+
+const updateStatusBadge = (status) => {
+  if (!productStatusEl) return;
+  const normalized = String(status || 'available').toLowerCase();
+  let label = 'Available';
+  if (normalized === 'pending') label = 'Pending Approval';
+  else if (normalized === 'sold' || normalized === 'soldout') label = 'Sold Out';
+  else if (['suspended', 'disabled', 'unavailable'].includes(normalized)) label = 'Temporarily Unavailable';
+  else if (!['approved', 'available', 'active'].includes(normalized)) {
+    label = friendlyLabel(normalized);
+  }
+  productStatusEl.textContent = label;
+  productStatusEl.className = 'status-chip';
+  productStatusEl.classList.add(`status-${normalized}`);
+};
+
+const updateWhatsappLinks = () => {
+  const formatted = normalisePhoneForWhatsapp(currentVendorPhone);
+  const messageLines = [
+    `Hello ${currentVendorName || 'Vendor'},`,
+    '',
+    `I want to purchase "${currentProductName || 'your listing'}" from Yustam Marketplace.`,
+    `Product ID: ${productId || 'N/A'}`,
+  ];
+  if (currentProductPriceLabel) {
+    messageLines.push(`Displayed price: ${currentProductPriceLabel}`);
+  }
+  messageLines.push(`Product link: ${window.location.href}`);
+  messageLines.push(
+    '',
+    'This is an automated message from Yustam Marketplace confirming my interest in this product.',
+  );
+  const encodedMessage = encodeURIComponent(messageLines.join('\n'));
+
+  if (formatted) {
+    const whatsappUrl = `https://wa.me/${formatted}?text=${encodedMessage}`;
+    setLinkState(vendorWhatsappLink, whatsappUrl, 'WhatsApp Vendor');
+    if (floatingWhatsappBtn) {
+      floatingWhatsappBtn.classList.remove('is-disabled');
+      floatingWhatsappBtn.removeAttribute('aria-disabled');
+      floatingWhatsappBtn.onclick = () => window.open(whatsappUrl, '_blank');
+    }
+  } else {
+    setLinkState(vendorWhatsappLink, null, 'WhatsApp Vendor');
+    if (floatingWhatsappBtn) {
+      floatingWhatsappBtn.classList.add('is-disabled');
+      floatingWhatsappBtn.setAttribute('aria-disabled', 'true');
+      floatingWhatsappBtn.onclick = () => {
+        alert('Vendor WhatsApp contact is not available yet.');
+      };
+    }
+  }
+};
+
+const applyVendorData = (vendor, vendorIdValue) => {
+  if (vendorIdValue) {
+    currentVendorId = vendorIdValue;
+    document.body.dataset.vendorId = vendorIdValue;
+  }
+
+  if (vendor) {
+    currentVendorName = vendor.displayName || vendor.businessName || vendor.name || currentVendorName;
+    document.body.dataset.vendorName = currentVendorName;
+    if (vendorBusinessEl) {
+      const businessName = vendor.businessName || '';
+      vendorBusinessEl.textContent = businessName;
+      vendorBusinessEl.hidden = !businessName;
+    }
+
+    const photo = vendor.profilePhoto || vendor.avatarUrl || vendor.logo || '';
+    if (vendorAvatarEl) {
+      vendorAvatarEl.src = photo || PLACEHOLDER_IMAGE;
+    }
+
+    const verificationValue =
+      vendor.verificationStatus || vendor.verification_state || vendor.verificationStage || vendor.status;
+    applyVendorBadges(vendor.plan || vendor.planLabel, verificationValue);
+
+    const email = vendor.email || vendor.contactEmail || '';
+    setLinkState(vendorEmailLink, email ? `mailto:${email}` : null, email || 'Unavailable');
+
+    const phone = vendor.phone || vendor.contactPhone || '';
+    currentVendorPhone = phone;
+    setLinkState(vendorPhoneLink, phone ? `tel:${phone.replace(/\s+/g, '')}` : null, phone || 'Unavailable');
+
+    const locationParts = [vendor.location, vendor.city, vendor.state, vendor.region, vendor.address]
+      .map((part) => (typeof part === 'string' ? part.trim() : ''))
+      .filter(Boolean);
+    if (vendorLocationRow && vendorLocationEl) {
+      if (locationParts.length) {
+        vendorLocationEl.textContent = locationParts[0];
+        vendorLocationRow.hidden = false;
+      } else {
+        vendorLocationRow.hidden = true;
+      }
+    }
+
+    let joinedDate = null;
+    const possibleDates = [vendor.createdAt, vendor.created_at, vendor.joined_at, vendor.registrationDate];
+    possibleDates.some((value) => {
+      if (!value) return false;
+      if (value instanceof Date) {
+        joinedDate = value;
+        return true;
+      }
+      if (value && typeof value.toDate === 'function') {
+        joinedDate = value.toDate();
+        return true;
+      }
+      if (typeof value === 'string') {
+        const parsed = new Date(value);
+        if (!Number.isNaN(parsed.getTime())) {
+          joinedDate = parsed;
+          return true;
+        }
+      }
+      return false;
+    });
+
+    if (vendorSinceRow && vendorSinceEl) {
+      if (joinedDate) {
+        vendorSinceEl.textContent = joinedDate.toLocaleDateString('en-NG', { year: 'numeric', month: 'long' });
+        vendorSinceRow.hidden = false;
+      } else {
+        vendorSinceRow.hidden = true;
+      }
+    }
+
+    if (vendorStorefrontLink && currentVendorId) {
+      vendorStorefrontLink.href = `vendor-storefront.php?vendorId=${encodeURIComponent(currentVendorId)}`;
+    }
+  } else {
+    applyVendorBadges(currentVendorPlan, currentVendorVerification);
+    setLinkState(vendorEmailLink, null, 'Unavailable');
+    setLinkState(vendorPhoneLink, null, 'Unavailable');
+    if (vendorBusinessEl) vendorBusinessEl.hidden = true;
+    if (vendorLocationRow) vendorLocationRow.hidden = true;
+    if (vendorSinceRow) vendorSinceRow.hidden = true;
+    if (vendorAvatarEl) vendorAvatarEl.src = PLACEHOLDER_IMAGE;
+    document.body.dataset.vendorName = currentVendorName;
+  }
+
+  if (vendorNameEl) vendorNameEl.textContent = currentVendorName;
+  updateQuickChatDataset();
+  updateWhatsappLinks();
+};
+
+const loadVendorProfile = async (vendorIdValue) => {
+  currentVendorId = vendorIdValue || currentVendorId;
+  if (currentVendorId) {
+    document.body.dataset.vendorId = currentVendorId;
+  }
+
+  if (!vendorIdValue) {
+    applyVendorData(null, currentVendorId);
+    return;
+  }
+
+  try {
+    const vendorSnap = await getDoc(doc(db, 'vendors', vendorIdValue));
+    if (vendorSnap.exists()) {
+      applyVendorData(vendorSnap.data(), vendorIdValue);
+    } else {
+      applyVendorData(null, vendorIdValue);
+    }
+  } catch (error) {
+    console.error('[product] vendor load failed', error);
+    applyVendorData(null, vendorIdValue);
+  }
+};
+
+const applyListingData = (listing = {}) => {
+  currentProductName = listing.title || listing.productName || currentProductName || 'Marketplace Listing';
+  if (productNameEl) productNameEl.textContent = currentProductName;
+  document.title = `${currentProductName} | YUSTAM Marketplace`;
+
+  const priceValue = Number(listing.price ?? listing.amount ?? 0);
+  currentProductPrice = Number.isFinite(priceValue) ? priceValue : 0;
+  currentProductPriceLabel = currentProductPrice > 0 ? formatCurrency(currentProductPrice) : '';
+  productPriceEl.textContent = currentProductPrice > 0 ? currentProductPriceLabel : 'Contact vendor';
+  updateNegotiationSuggestion();
+
+  if (productDescEl) {
+    productDescEl.textContent =
+      listing.description || listing.details || 'The vendor has not provided additional details yet.';
+  }
+
+  updateFeatureList(extractFeatures(listing));
+  renderSpecifications(listing);
+  updateCategoryLine(listing.category, listing.subcategory);
+  updateStatusBadge(listing.status || 'available');
+
+  const galleryImages = [];
+  if (Array.isArray(listing.imageUrls)) galleryImages.push(...listing.imageUrls);
+  if (Array.isArray(listing.images)) galleryImages.push(...listing.images);
+  updateGallery(galleryImages);
+
+  const listingVendorId = listing.vendorID || listing.vendorId || listing.vendor || currentVendorId;
+  if (listingVendorId) {
+    currentVendorId = listingVendorId;
+    document.body.dataset.vendorId = listingVendorId;
+  }
+
+  if (listing.vendorPlan) currentVendorPlan = listing.vendorPlan;
+  if (listing.vendorVerified) currentVendorVerification = listing.vendorVerified;
+
+  updateQuickChatDataset();
+};
+
+const loadListing = async () => {
+  if (!productId) {
+    updateStatusBadge('unavailable');
+    productPriceEl.textContent = 'Unavailable';
+    updateWhatsappLinks();
+    return;
+  }
+
+  try {
+    const listingSnap = await getDoc(doc(db, 'listings', productId));
+    if (!listingSnap.exists()) {
+      updateStatusBadge('unavailable');
+      productPriceEl.textContent = 'Unavailable';
+      if (featureListEl) featureListEl.hidden = true;
+      if (specListEl) {
+        specListEl.innerHTML = '';
+        specListEl.hidden = true;
+      }
+      if (specFallbackEl) specFallbackEl.hidden = false;
+      updateWhatsappLinks();
+      return;
+    }
+
+    const listingData = listingSnap.data();
+    applyListingData(listingData);
+    await loadVendorProfile(listingData.vendorID || listingData.vendorId || listingData.vendor || currentVendorId);
+  } catch (error) {
+    console.error('[product] listing load failed', error);
+    updateStatusBadge('unavailable');
+    productPriceEl.textContent = 'Unavailable';
+  } finally {
+    updateWhatsappLinks();
+  }
+};
+
+updateQuickChatDataset();
+updateNegotiationSuggestion();
+loadListing();
