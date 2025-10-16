@@ -5,10 +5,21 @@ require_once __DIR__ . '/session-path.php';
 session_start();
 
 require_once __DIR__ . '/chat-storage.php';
+require_once __DIR__ . '/buyer-storage.php';
 
 header('Content-Type: application/json');
 
-$db = yustam_chat_connection();
+try {
+    $db = yustam_chat_connection();
+} catch (Throwable $exception) {
+    http_response_code(500);
+    echo json_encode([
+        'success' => false,
+        'message' => 'Unable to connect to chat service.',
+        'debug' => $exception->getMessage()
+    ]);
+    exit;
+}
 
 $isBuyer = isset($_SESSION['buyer_uid']) && $_SESSION['buyer_uid'] !== '';
 $isVendor = isset($_SESSION['vendor_uid']) && $_SESSION['vendor_uid'] !== '';
@@ -58,6 +69,40 @@ try {
 
     $viewerUid = $isBuyer ? $_SESSION['buyer_uid'] : $_SESSION['vendor_uid'];
     $role = $isBuyer ? 'buyer' : 'vendor';
+    if ($role === 'vendor' && $viewerUid === '' && isset($_SESSION['vendor_id'])) {
+        $vendorNumeric = (int) $_SESSION['vendor_id'];
+        $table = defined('YUSTAM_VENDORS_TABLE') ? YUSTAM_VENDORS_TABLE : 'vendors';
+        if (yustam_vendor_table_has_column('vendor_uid')) {
+            $stmt = $db->prepare(sprintf('SELECT vendor_uid FROM `%s` WHERE id = ? LIMIT 1', $table));
+            if ($stmt) {
+                $stmt->bind_param('i', $vendorNumeric);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                $row = $result ? $result->fetch_assoc() : null;
+                $stmt->close();
+                if ($row && !empty($row['vendor_uid'])) {
+                    $viewerUid = (string) $row['vendor_uid'];
+                    $_SESSION['vendor_uid'] = $viewerUid;
+                }
+            }
+        }
+    }
+    if ($role === 'buyer' && $viewerUid === '' && isset($_SESSION['buyer_id'])) {
+        $buyerNumeric = (int) $_SESSION['buyer_id'];
+        $conn = yustam_buyers_connection();
+        $stmt = $conn->prepare('SELECT buyer_uid FROM buyers WHERE id = ? LIMIT 1');
+        if ($stmt) {
+            $stmt->bind_param('i', $buyerNumeric);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            $row = $result ? $result->fetch_assoc() : null;
+            $stmt->close();
+            if ($row && !empty($row['buyer_uid'])) {
+                $viewerUid = (string) $row['buyer_uid'];
+                $_SESSION['buyer_uid'] = $viewerUid;
+            }
+        }
+    }
     $conversations = yustam_chat_list_conversations($db, $viewerUid, $role, $limit);
     $summaries = array_map(fn ($row) => yustam_chat_conversation_summary($row, $viewerUid), $conversations);
 

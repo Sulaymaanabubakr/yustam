@@ -14,7 +14,17 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-$db = yustam_chat_connection();
+try {
+    $db = yustam_chat_connection();
+} catch (Throwable $exception) {
+    http_response_code(500);
+    echo json_encode([
+        'success' => false,
+        'message' => 'Unable to connect to chat service.',
+        'debug' => $exception->getMessage()
+    ]);
+    exit;
+}
 
 $isBuyer = isset($_SESSION['buyer_uid']) && $_SESSION['buyer_uid'] !== '';
 $isVendor = isset($_SESSION['vendor_uid']) && $_SESSION['vendor_uid'] !== '';
