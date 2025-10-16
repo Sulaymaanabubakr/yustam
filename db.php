@@ -293,4 +293,3 @@ function yustam_admin_updated_column(): ?string
     }
     return null;
 }
-?>
