@@ -95,6 +95,80 @@ function yustam_users_table_has_column($column) {
     return yustam_vendor_table_has_column($column);
 }
 
+function yustam_vendor_format_uid(int $sequence): string
+{
+    if ($sequence < 1) {
+        $sequence = 1;
+    }
+
+    return sprintf('YUSTAM-VND-%04d', $sequence);
+}
+
+function yustam_vendor_next_sequence(mysqli $conn): int
+{
+    $table = YUSTAM_VENDORS_TABLE;
+    $sql = sprintf('SELECT IFNULL(MAX(`id`), 0) + 1 AS next_id FROM `%s`', $table);
+    $result = $conn->query($sql);
+    if ($result instanceof mysqli_result) {
+        $row = $result->fetch_assoc();
+        $result->free();
+        if (isset($row['next_id'])) {
+            $sequence = (int) $row['next_id'];
+            return $sequence > 0 ? $sequence : 1;
+        }
+    }
+
+    return 1;
+}
+
+function yustam_generate_vendor_uid(mysqli $conn): string
+{
+    return yustam_vendor_format_uid(yustam_vendor_next_sequence($conn));
+}
+
+function yustam_vendor_assign_uid_if_missing(mysqli $conn, array &$vendor): string
+{
+    if (!empty($vendor['vendor_uid'])) {
+        $vendor['vendor_uid'] = (string) $vendor['vendor_uid'];
+        return $vendor['vendor_uid'];
+    }
+
+    $id = isset($vendor['id']) ? (int) $vendor['id'] : 0;
+    if ($id <= 0) {
+        throw new InvalidArgumentException('Vendor record is missing an id for UID assignment.');
+    }
+
+    $sql = sprintf('UPDATE `%s` SET `vendor_uid` = ? WHERE `id` = ? LIMIT 1', YUSTAM_VENDORS_TABLE);
+    $stmt = $conn->prepare($sql);
+    if (!$stmt) {
+        throw new RuntimeException('Unable to prepare vendor UID update statement: ' . $conn->error);
+    }
+
+    $uidParam = '';
+    $stmt->bind_param('si', $uidParam, $id);
+
+    $maxAttempts = 5;
+    for ($attempt = 0; $attempt < $maxAttempts; $attempt++) {
+        $uidParam = yustam_generate_vendor_uid($conn);
+        try {
+            $stmt->execute();
+            $vendor['vendor_uid'] = $uidParam;
+            $stmt->close();
+            return $uidParam;
+        } catch (mysqli_sql_exception $exception) {
+            if ((int) $exception->getCode() === 1062) {
+                $stmt->reset();
+                continue;
+            }
+            $stmt->close();
+            throw $exception;
+        }
+    }
+
+    $stmt->close();
+    throw new RuntimeException('Unable to assign vendor UID after multiple attempts.');
+}
+
 /**
  * Admin table helpers
  */

@@ -8,10 +8,24 @@ if ($productId === '') {
 }
 $productTitle = 'Loading listing...';
 $productPrice = 0;
-$vendorId = isset($_GET['vendorId']) ? trim((string) $_GET['vendorId']) : '';
+$vendorUidParam = isset($_GET['vendorUid']) ? trim((string) $_GET['vendorUid']) : '';
+$vendorIdParam = isset($_GET['vendorId']) ? trim((string) $_GET['vendorId']) : '';
+$vendorUidSession = isset($_SESSION['vendor_uid']) ? (string) $_SESSION['vendor_uid'] : '';
+$vendorNumericIdSession = isset($_SESSION['vendor_id']) ? (string) $_SESSION['vendor_id'] : '';
+$vendorId = $vendorUidParam !== '' ? $vendorUidParam : ($vendorIdParam !== '' ? $vendorIdParam : ($vendorUidSession !== '' ? $vendorUidSession : $vendorNumericIdSession));
 $vendorName = 'Marketplace Vendor';
-$buyerId = $_SESSION['buyer_id'] ?? '';
+$buyerNumericId = isset($_SESSION['buyer_id']) ? (string) $_SESSION['buyer_id'] : '';
+$buyerUid = isset($_SESSION['buyer_uid']) ? (string) $_SESSION['buyer_uid'] : '';
+$buyerId = $buyerUid !== '' ? $buyerUid : $buyerNumericId;
 $buyerName = $_SESSION['buyer_name'] ?? '';
+$vendorNumericId = $vendorNumericIdSession;
+$vendorUid = $vendorUidSession !== '' ? $vendorUidSession : ($vendorUidParam !== '' ? $vendorUidParam : '');
+if ($vendorUid === '' && $vendorId !== '' && $vendorId !== $vendorNumericId) {
+    $vendorUid = $vendorId;
+}
+if ($buyerUid === '' && $buyerId !== '' && $buyerId !== $buyerNumericId) {
+    $buyerUid = $buyerId;
+}
 
 function yustam_format_plan_label(?string $plan): string
 {
@@ -889,8 +903,10 @@ if (is_string($vendorId) && trim($vendorId) !== '') {
     </style>
 </head>
 <body
-    data-buyer-id="<?= htmlspecialchars((string)$buyerId, ENT_QUOTES, 'UTF-8'); ?>"
-    data-vendor-id="<?= htmlspecialchars((string)$vendorId, ENT_QUOTES, 'UTF-8'); ?>"
+    data-buyer-id="<?= htmlspecialchars($buyerNumericId, ENT_QUOTES, 'UTF-8'); ?>"
+    data-buyer-uid="<?= htmlspecialchars($buyerUid, ENT_QUOTES, 'UTF-8'); ?>"
+    data-vendor-id="<?= htmlspecialchars($vendorNumericId, ENT_QUOTES, 'UTF-8'); ?>"
+    data-vendor-uid="<?= htmlspecialchars($vendorUid, ENT_QUOTES, 'UTF-8'); ?>"
     data-vendor-name="<?= htmlspecialchars($vendorName, ENT_QUOTES, 'UTF-8'); ?>"
     data-vendor-plan="<?= htmlspecialchars($vendorPlan, ENT_QUOTES, 'UTF-8'); ?>"
     data-vendor-verified="<?= htmlspecialchars($vendorVerificationState, ENT_QUOTES, 'UTF-8'); ?>"
@@ -967,9 +983,13 @@ if (is_string($vendorId) && trim($vendorId) !== '') {
             id="quickChatCard"
             class="glass-card quick-chat-card"
             data-chat-id="<?= htmlspecialchars($chatId, ENT_QUOTES, 'UTF-8'); ?>"
-            data-vendor-id="<?= htmlspecialchars($vendorId, ENT_QUOTES, 'UTF-8'); ?>"
+            data-vendor-id="<?= htmlspecialchars($vendorNumericId, ENT_QUOTES, 'UTF-8'); ?>"
+            data-vendor-uid="<?= htmlspecialchars($vendorUid !== '' ? $vendorUid : $vendorNumericId, ENT_QUOTES, 'UTF-8'); ?>"
+            data-vendor-numeric-id="<?= htmlspecialchars($vendorNumericId, ENT_QUOTES, 'UTF-8'); ?>"
             data-vendor-name="<?= htmlspecialchars($vendorName, ENT_QUOTES, 'UTF-8'); ?>"
-            data-buyer-id="<?= htmlspecialchars($buyerId, ENT_QUOTES, 'UTF-8'); ?>"
+            data-buyer-id="<?= htmlspecialchars($buyerNumericId, ENT_QUOTES, 'UTF-8'); ?>"
+            data-buyer-uid="<?= htmlspecialchars($buyerUid !== '' ? $buyerUid : $buyerNumericId, ENT_QUOTES, 'UTF-8'); ?>"
+            data-buyer-numeric-id="<?= htmlspecialchars($buyerNumericId, ENT_QUOTES, 'UTF-8'); ?>"
             data-product-id="<?= htmlspecialchars($productId, ENT_QUOTES, 'UTF-8'); ?>"
             data-product-title="<?= htmlspecialchars($productTitle, ENT_QUOTES, 'UTF-8'); ?>"
             data-product-image="https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=400&q=80"

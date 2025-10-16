@@ -2,14 +2,47 @@
 require_once __DIR__ . '/session-path.php';
 session_start();
 
-$currentUserId = $_SESSION['vendor_id'] ?? $_SESSION['buyer_id'] ?? '';
+$buyerNumericId = isset($_SESSION['buyer_id']) ? (string) $_SESSION['buyer_id'] : '';
+$vendorNumericId = isset($_SESSION['vendor_id']) ? (string) $_SESSION['vendor_id'] : '';
+$buyerUid = isset($_SESSION['buyer_uid']) ? trim((string) $_SESSION['buyer_uid']) : '';
+$vendorUid = isset($_SESSION['vendor_uid']) ? trim((string) $_SESSION['vendor_uid']) : '';
+
+$buyerIdParam = isset($_GET['buyerUid']) ? trim((string) $_GET['buyerUid']) : '';
+if ($buyerIdParam === '' && isset($_GET['buyerId'])) {
+    $buyerIdParam = trim((string) $_GET['buyerId']);
+}
+
+$vendorIdParam = isset($_GET['vendorUid']) ? trim((string) $_GET['vendorUid']) : '';
+if ($vendorIdParam === '' && isset($_GET['vendorId'])) {
+    $vendorIdParam = trim((string) $_GET['vendorId']);
+}
+
+$buyerId = $buyerIdParam !== '' ? $buyerIdParam : ($buyerUid !== '' ? $buyerUid : $buyerNumericId);
+$vendorId = $vendorIdParam !== '' ? $vendorIdParam : ($vendorUid !== '' ? $vendorUid : $vendorNumericId);
+
 $currentRole = isset($_SESSION['vendor_id']) ? 'vendor' : (isset($_SESSION['buyer_id']) ? 'buyer' : 'guest');
-$buyerId = $_GET['buyerId'] ?? ($_SESSION['buyer_id'] ?? '');
-$vendorId = $_GET['vendorId'] ?? ($_SESSION['vendor_id'] ?? '');
-$buyerNumericId = $_SESSION['buyer_id'] ?? '';
-$vendorNumericId = $_SESSION['vendor_id'] ?? '';
+$currentUserId = $currentRole === 'vendor'
+    ? ($vendorUid !== '' ? $vendorUid : $vendorNumericId)
+    : ($currentRole === 'buyer' ? ($buyerUid !== '' ? $buyerUid : $buyerNumericId) : '');
+
 $buyerFirebaseId = isset($_GET['buyerFirebaseId']) ? trim((string) $_GET['buyerFirebaseId']) : '';
-$vendorFirebaseId = isset($_GET['vendorId']) ? trim((string) $_GET['vendorId']) : '';
+$vendorFirebaseId = isset($_GET['vendorFirebaseId']) ? trim((string) $_GET['vendorFirebaseId']) : '';
+
+if ($buyerFirebaseId === '' && $buyerId !== '') {
+    $buyerFirebaseId = $buyerId;
+}
+
+if ($vendorFirebaseId === '' && $vendorId !== '') {
+    $vendorFirebaseId = $vendorId;
+}
+
+if ($buyerUid === '' && $buyerId !== '' && $buyerId !== $buyerNumericId) {
+    $buyerUid = $buyerId;
+}
+
+if ($vendorUid === '' && $vendorId !== '' && $vendorId !== $vendorNumericId) {
+    $vendorUid = $vendorId;
+}
 
 if ($vendorNumericId === '' && isset($_GET['vendorNumericId'])) {
     $vendorNumericId = trim((string) $_GET['vendorNumericId']);
@@ -47,6 +80,7 @@ $counterpartyName = $participantName ?: ($counterpartyRole === 'vendor' ? $vendo
 $roleLabel = $currentRole === 'vendor' ? 'Buyer' : 'Vendor';
 $counterpartyLabel = $counterpartyName ?: ($roleLabel === 'Buyer' ? 'Marketplace Buyer' : 'Marketplace Vendor');
 $counterpartyName = $counterpartyLabel;
+$currentUserNumericId = $currentRole === 'vendor' ? $vendorNumericId : ($currentRole === 'buyer' ? $buyerNumericId : '');
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -475,15 +509,14 @@ $counterpartyName = $counterpartyLabel;
         data-participant-name="<?= htmlspecialchars($counterpartyLabel, ENT_QUOTES, 'UTF-8'); ?>"
         data-participant-status="<?= htmlspecialchars($statusText, ENT_QUOTES, 'UTF-8'); ?>"
         data-current-user-id="<?= htmlspecialchars((string)$currentUserId, ENT_QUOTES, 'UTF-8'); ?>"
+        data-current-user-numeric-id="<?= htmlspecialchars((string)$currentUserNumericId, ENT_QUOTES, 'UTF-8'); ?>"
         data-current-role="<?= htmlspecialchars($currentRole, ENT_QUOTES, 'UTF-8'); ?>"
         data-current-user-name="<?= htmlspecialchars($currentUserName, ENT_QUOTES, 'UTF-8'); ?>"
-        data-buyer-id="<?= htmlspecialchars($buyerId, ENT_QUOTES, 'UTF-8'); ?>"
-        data-buyer-firebase-id="<?= htmlspecialchars($buyerFirebaseId, ENT_QUOTES, 'UTF-8'); ?>"
-        data-buyer-numeric-id="<?= htmlspecialchars((string)$buyerNumericId, ENT_QUOTES, 'UTF-8'); ?>"
+        data-buyer-uid="<?= htmlspecialchars($buyerId, ENT_QUOTES, 'UTF-8'); ?>"
+        data-buyer-id="<?= htmlspecialchars((string)$buyerNumericId, ENT_QUOTES, 'UTF-8'); ?>"
         data-buyer-name="<?= htmlspecialchars($buyerName, ENT_QUOTES, 'UTF-8'); ?>"
-        data-vendor-id="<?= htmlspecialchars($vendorId, ENT_QUOTES, 'UTF-8'); ?>"
-        data-vendor-firebase-id="<?= htmlspecialchars($vendorFirebaseId, ENT_QUOTES, 'UTF-8'); ?>"
-        data-vendor-numeric-id="<?= htmlspecialchars((string)$vendorNumericId, ENT_QUOTES, 'UTF-8'); ?>"
+        data-vendor-uid="<?= htmlspecialchars($vendorId, ENT_QUOTES, 'UTF-8'); ?>"
+        data-vendor-id="<?= htmlspecialchars((string)$vendorNumericId, ENT_QUOTES, 'UTF-8'); ?>"
         data-vendor-name="<?= htmlspecialchars($vendorName, ENT_QUOTES, 'UTF-8'); ?>"
         data-counterparty-id="<?= htmlspecialchars((string)$counterpartyId, ENT_QUOTES, 'UTF-8'); ?>"
         data-counterparty-role="<?= htmlspecialchars($counterpartyRole, ENT_QUOTES, 'UTF-8'); ?>"
@@ -543,9 +576,7 @@ $counterpartyName = $counterpartyLabel;
         </section>
     </div>
   <script src="theme-manager.js" defer></script>
-<script type="module" src="firebase.js"></script>
-    <script type="module" src="cloudinary.js"></script>
-<script type="module" src="chat.js"></script>
+  <script type="module" src="chat.js"></script>
 </body>
 </html>
 

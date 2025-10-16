@@ -61,13 +61,53 @@ try {
     $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
     $verificationToken = bin2hex(random_bytes(32));
 
-    $stmt = $db->prepare(sprintf(
-        "INSERT INTO `%s` (full_name, email, phone, password, business_name, category, provider, verification_token, verified, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, 'email', ?, 0, NOW(), NOW())",
+    $insertSql = sprintf(
+        "INSERT INTO `%s` (vendor_uid, full_name, email, phone, password, business_name, category, provider, verification_token, verified, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'email', ?, 0, NOW(), NOW())",
         $vendorTable
-    ));
-    $stmt->bind_param('sssssss', $name, $email, $phone, $hashedPassword, $businessName, $category, $verificationToken);
-    $stmt->execute();
+    );
+    $stmt = $db->prepare($insertSql);
+    if ($stmt === false) {
+        throw new RuntimeException('Unable to prepare vendor insert statement.');
+    }
+
+    $vendorUid = '';
+    $stmt->bind_param('ssssssss', $vendorUid, $name, $email, $phone, $hashedPassword, $businessName, $category, $verificationToken);
+
+    $maxAttempts = 5;
+    $created = false;
+
+    for ($attempt = 0; $attempt < $maxAttempts; $attempt++) {
+        $vendorUid = yustam_generate_vendor_uid($db);
+        try {
+            $stmt->execute();
+            $created = true;
+            break;
+        } catch (mysqli_sql_exception $exception) {
+            if ((int) $exception->getCode() === 1062) {
+                $message = $exception->getMessage();
+                if (stripos($message, 'vendor_uid') !== false) {
+                    $stmt->reset();
+                    continue;
+                }
+
+                if (stripos($message, 'email') !== false) {
+                    $stmt->close();
+                    echo json_encode(['success' => false, 'message' => 'This email is already registered.']);
+                    exit;
+                }
+            }
+
+            $stmt->close();
+            throw $exception;
+        }
+    }
+
+    if (!$created) {
+        $stmt->close();
+        throw new RuntimeException('Unable to generate a unique vendor UID. Please try again.');
+    }
+
     $stmt->close();
 
     $verifyLink = 'https://yustam.com.ng/verify.php?token=' . urlencode($verificationToken);

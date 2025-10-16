@@ -59,6 +59,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $_SESSION['buyer_id'] = $buyer['id'];
         $_SESSION['buyer_name'] = $buyer['name'];
+        if (isset($buyer['buyer_uid'])) {
+            $_SESSION['buyer_uid'] = $buyer['buyer_uid'];
+        }
+        $_SESSION['buyer_email'] = $buyer['email'] ?? $email;
 
         header('Location: buyer-dashboard.php');
         exit;

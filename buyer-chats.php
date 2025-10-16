@@ -2,8 +2,10 @@
 require_once __DIR__ . '/session-path.php';
 session_start();
 
-$buyerId = $_SESSION['buyer_id'] ?? '';
+$buyerNumericId = isset($_SESSION['buyer_id']) ? (string) $_SESSION['buyer_id'] : '';
+$buyerUid = isset($_SESSION['buyer_uid']) ? (string) $_SESSION['buyer_uid'] : '';
 $buyerName = $_SESSION['buyer_name'] ?? 'Buyer';
+$buyerIdentifier = $buyerUid !== '' ? $buyerUid : $buyerNumericId;
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -410,7 +412,11 @@ $buyerName = $_SESSION['buyer_name'] ?? 'Buyer';
             <i class="ri-home-3-line"></i>
         </a>
     </header>
-    <main id="buyerChatPage" data-user-id="<?= htmlspecialchars($buyerId, ENT_QUOTES, 'UTF-8'); ?>" data-user-firebase-id="" data-user-name="<?= htmlspecialchars($buyerName, ENT_QUOTES, 'UTF-8'); ?>">
+    <main
+        id="buyerChatPage"
+        data-user-id="<?= htmlspecialchars($buyerIdentifier, ENT_QUOTES, 'UTF-8'); ?>"
+        data-user-numeric-id="<?= htmlspecialchars($buyerNumericId, ENT_QUOTES, 'UTF-8'); ?>"
+        data-user-name="<?= htmlspecialchars($buyerName, ENT_QUOTES, 'UTF-8'); ?>">
         <div class="search-wrapper">
             <i class="ri-search-line" aria-hidden="true"></i>
             <input type="search" id="chatSearch" placeholder="Search vendor chats" autocomplete="off" aria-label="Search vendor conversations">
@@ -444,8 +450,7 @@ $buyerName = $_SESSION['buyer_name'] ?? 'Buyer';
     </main>
     <footer>© <?= date('Y'); ?> YUSTAM Marketplace</footer>
   <script src="theme-manager.js" defer></script>
-<script type="module" src="firebase.js"></script>
-<script type="module" src="buyer-chats.js"></script>
+  <script src="buyer-chats.js" defer></script>
 </body>
 </html>
 

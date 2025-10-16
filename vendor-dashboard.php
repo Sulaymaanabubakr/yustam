@@ -41,6 +41,11 @@ if (!$vendor) {
 }
 
 $vendorData = is_array($vendor) ? $vendor : [];
+$vendorUid = yustam_vendor_assign_uid_if_missing($db, $vendorData);
+$_SESSION['vendor_uid'] = $vendorUid;
+if (isset($vendorData['email']) && $vendorData['email'] !== '') {
+    $_SESSION['vendor_email'] = $vendorData['email'];
+}
 $nameColumn = yustam_vendor_name_column();
 $vendorName = $vendorData[$nameColumn] ?? '';
 $businessName = yustam_vendor_table_has_column('business_name') ? ($vendorData['business_name'] ?? '') : '';

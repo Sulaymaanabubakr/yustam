@@ -11,7 +11,27 @@ if (!isset($_SESSION['buyer_id'])) {
 
 $buyerId = (int)$_SESSION['buyer_id'];
 $buyer = yustam_buyers_find($buyerId);
+$buyer = yustam_buyers_ensure_uid($buyer ?? []);
+$isBuyerValid = is_array($buyer) && !empty($buyer);
+
+if (!$isBuyerValid) {
+    session_destroy();
+    header('Location: buyer-login.php');
+    exit;
+}
 $buyerName = $buyer['name'] ?? ($_SESSION['buyer_name'] ?? 'Buyer');
+if (!empty($buyer['buyer_uid'])) {
+    $_SESSION['buyer_uid'] = $buyer['buyer_uid'];
+}
+if (!empty($buyer['email'])) {
+    $_SESSION['buyer_email'] = $buyer['email'];
+}
+$buyerUid = isset($_SESSION['buyer_uid']) ? (string) $_SESSION['buyer_uid'] : '';
+if ($buyerUid === '' && !empty($buyer['buyer_uid'])) {
+    $buyerUid = (string) $buyer['buyer_uid'];
+    $_SESSION['buyer_uid'] = $buyerUid;
+}
+$buyerIdentifier = $buyerUid !== '' ? $buyerUid : (string) $buyerId;
 
 $firstName = trim((string)$buyerName);
 if ($firstName === '') {
@@ -444,7 +464,7 @@ if ($firstName === '') {
         }
     </style>
 </head>
-<body data-buyer-id="<?= htmlspecialchars((string)$buyerId) ?>" data-buyer-name="<?= htmlspecialchars($buyerName) ?>">
+<body data-buyer-id="<?= htmlspecialchars((string)$buyerId) ?>" data-buyer-uid="<?= htmlspecialchars($buyerUid) ?>" data-buyer-name="<?= htmlspecialchars($buyerName) ?>">
     <header class="buyer-header">
         <div class="header-shell">
             <a class="brand" href="buyer-dashboard.php" aria-label="Back to dashboard">
@@ -473,12 +493,12 @@ if ($firstName === '') {
         </div>
     </header>
 
-    <main class="page-shell" id="buyerSaved" data-buyer-id="<?= htmlspecialchars((string)$buyerId) ?>">
+    <main class="page-shell" id="buyerSaved" data-buyer-id="<?= htmlspecialchars((string)$buyerId) ?>" data-buyer-uid="<?= htmlspecialchars($buyerUid) ?>">
         <section class="glass-card intro-card">
             <h1>Curate and compare</h1>
             <p>Track your favourite listings and jump back in when you're ready to buy.</p>
             <div class="meta-chips">
-                <span class="meta-chip">Buyer ID #<?= htmlspecialchars((string)$buyerId) ?></span>
+                <span class="meta-chip">Buyer ID #<?= htmlspecialchars($buyerIdentifier) ?></span>
                 <span class="meta-chip">Signed in as <?= htmlspecialchars($firstName) ?></span>
             </div>
         </section>
@@ -501,8 +521,3 @@ if ($firstName === '') {
 <script type="module" src="buyer-saved.js"></script>
 </body>
 </html>
-
-
-
-
-

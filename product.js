@@ -6,8 +6,11 @@ const urlParams = new URLSearchParams(window.location.search);
 const mainImage = document.getElementById('productImage') || document.getElementById('mainImage');
 const thumbStrip = document.getElementById('thumbStrip');
 const saveBtn = document.getElementById('saveListingBtn');
-const buyerId =
-  document.body?.dataset?.buyerId || (urlParams.get('buyerId') || urlParams.get('buyer') || '').trim();
+const buyerUidParam = (urlParams.get('buyerUid') || '').trim();
+const buyerNumericParam = (urlParams.get('buyerNumericId') || urlParams.get('buyerId') || urlParams.get('buyer') || '').trim();
+const buyerUid = document.body?.dataset?.buyerUid || buyerUidParam || '';
+const buyerNumericId = document.body?.dataset?.buyerId || buyerNumericParam || '';
+const buyerIdentifier = buyerNumericId || buyerUid || '';
 const productIdInput = document.getElementById('productId');
 const productIdParam = (urlParams.get('id') || urlParams.get('listingId') || '').trim();
 const productId = productIdInput?.value?.trim?.() || productIdParam;
@@ -48,6 +51,7 @@ let currentProductImage = productImageEl?.src || '';
 let currentVendorName =
   vendorNameEl?.textContent?.trim?.() || document.body?.dataset?.vendorName || vendorNameParam || 'Vendor';
 let currentVendorId = document.body?.dataset?.vendorId || vendorIdParam || '';
+let currentVendorUid = document.body?.dataset?.vendorUid || (urlParams.get('vendorUid') || '').trim() || currentVendorId;
 let currentVendorPlan = document.body?.dataset?.vendorPlan || '';
 let currentVendorVerification = document.body?.dataset?.vendorVerified || '';
 let currentVendorPhone = '';
@@ -56,12 +60,15 @@ if (document.body) {
   if (!document.body.dataset.vendorId && currentVendorId) {
     document.body.dataset.vendorId = currentVendorId;
   }
+  if (!document.body.dataset.vendorUid && currentVendorUid) {
+    document.body.dataset.vendorUid = currentVendorUid;
+  }
   if (!document.body.dataset.vendorName && currentVendorName) {
     document.body.dataset.vendorName = currentVendorName;
   }
 }
 
-const savedRef = buyerId && productId ? doc(db, `saved/${buyerId}/items/${productId}`) : null;
+const savedRef = buyerIdentifier && productId ? doc(db, `saved/${buyerIdentifier}/items/${productId}`) : null;
 
 function setSaveState(isSaved) {
   if (!saveBtn) return;
@@ -219,7 +226,7 @@ const setLinkState = (anchor, href, label) => {
 
 async function toggleSave() {
   if (!saveBtn) return;
-  if (!buyerId) {
+  if (!buyerIdentifier) {
     alert('Please sign in to save listings.');
     return;
   }
@@ -255,7 +262,7 @@ async function toggleSave() {
 if (saveBtn) {
   saveBtn.addEventListener('click', toggleSave);
 
-  if (buyerId && savedRef) {
+  if (buyerIdentifier && savedRef) {
     getDoc(savedRef)
       .then((snapshot) => {
         setSaveState(snapshot.exists());
@@ -303,24 +310,33 @@ function buildChatUrl() {
   if (!quickChatCard) return null;
   const {
     chatId,
-    vendorId: vendorIdAttr,
+    vendorUid: vendorUidAttr,
+    vendorId: vendorNumericAttr,
     vendorName: vendorNameAttr,
-    buyerId,
+    buyerUid: buyerUidAttr,
+    buyerId: buyerNumericAttr,
     productId: listingId,
     productTitle,
     productImage,
   } = quickChatCard.dataset;
-  const computedChatId = chatId || `${vendorIdAttr || 'vendor'}_${buyerId || 'guest'}_${listingId || 'listing'}`;
+  const vendorChatUid = vendorUidAttr || currentVendorUid || vendorNumericAttr || currentVendorId || 'vendor';
+  const buyerChatUid = buyerUidAttr || buyerUid || buyerNumericAttr || buyerIdentifier || 'guest';
+  const computedChatId = chatId || `${vendorChatUid}_${buyerChatUid}_${listingId || productId || 'listing'}`;
 
   const url = new URL('chat.php', window.location.origin);
   url.searchParams.set('chatId', computedChatId);
-  url.searchParams.set('vendorId', vendorIdAttr || currentVendorId || '');
-  url.searchParams.set('buyerId', buyerId || '');
+  url.searchParams.set('vendorUid', vendorChatUid || '');
+  if (vendorNumericAttr || currentVendorId) {
+    url.searchParams.set('vendorId', vendorNumericAttr || currentVendorId || '');
+  }
+  url.searchParams.set('buyerUid', buyerChatUid || '');
+  if (buyerNumericAttr || buyerNumericId) {
+    url.searchParams.set('buyerNumericId', buyerNumericAttr || buyerNumericId || '');
+  }
   url.searchParams.set('productId', listingId || productId || '');
   url.searchParams.set('participantName', vendorNameAttr || currentVendorName || 'Vendor');
   url.searchParams.set('productTitle', productTitle || currentProductName || 'Listing');
   url.searchParams.set('productImage', productImage || currentProductImage || '');
-  url.searchParams.set('status', 'Online');
   return { url: url.toString(), chatId: computedChatId };
 }
 
@@ -370,8 +386,11 @@ const updateNegotiationSuggestion = () => {
 
 const updateQuickChatDataset = () => {
   if (!quickChatCard) return;
+  quickChatCard.dataset.vendorUid = currentVendorUid || currentVendorId || '';
   quickChatCard.dataset.vendorId = currentVendorId || '';
   quickChatCard.dataset.vendorName = currentVendorName || 'Vendor';
+  quickChatCard.dataset.buyerUid = buyerUid || '';
+  quickChatCard.dataset.buyerId = buyerNumericId || '';
   quickChatCard.dataset.productId = productId || '';
   quickChatCard.dataset.productTitle = currentProductName || 'Listing';
   quickChatCard.dataset.productImage = currentProductImage || '';
@@ -603,9 +622,18 @@ const applyVendorData = (vendor, vendorIdValue) => {
   if (vendorIdValue) {
     currentVendorId = vendorIdValue;
     document.body.dataset.vendorId = vendorIdValue;
+    if (!currentVendorUid) {
+      currentVendorUid = vendorIdValue;
+    }
   }
 
   if (vendor) {
+    if (vendor.vendorUid || vendor.uid) {
+      currentVendorUid = vendor.vendorUid || vendor.uid;
+    }
+    if (currentVendorUid) {
+      document.body.dataset.vendorUid = currentVendorUid;
+    }
     currentVendorName = vendor.displayName || vendor.businessName || vendor.name || currentVendorName;
     document.body.dataset.vendorName = currentVendorName;
     if (vendorBusinessEl) {
@@ -696,6 +724,10 @@ const loadVendorProfile = async (vendorIdValue) => {
   currentVendorId = vendorIdValue || currentVendorId;
   if (currentVendorId) {
     document.body.dataset.vendorId = currentVendorId;
+    if (!currentVendorUid) {
+      currentVendorUid = currentVendorId;
+      document.body.dataset.vendorUid = currentVendorUid;
+    }
   }
 
   if (!vendorIdValue) {
@@ -746,6 +778,12 @@ const applyListingData = (listing = {}) => {
   if (listingVendorId) {
     currentVendorId = listingVendorId;
     document.body.dataset.vendorId = listingVendorId;
+    if (!currentVendorUid) {
+      currentVendorUid = listing.vendorUid || listing.vendorUID || listingVendorId;
+    }
+    if (currentVendorUid) {
+      document.body.dataset.vendorUid = currentVendorUid;
+    }
   }
 
   if (listing.vendorPlan) currentVendorPlan = listing.vendorPlan;

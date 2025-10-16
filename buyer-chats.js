@@ -1,398 +1,208 @@
-import { db } from './firebase.js';
-import {
-  arrayUnion,
-  collection,
-  doc,
-  onSnapshot,
-  query,
-  updateDoc,
-  where
-} from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
+(() => {
+  const pageShell = document.getElementById('buyerChatPage');
+  const listContainer = document.getElementById('chatList');
+  const searchInput = document.getElementById('chatSearch');
+  const scrollArea = document.getElementById('chatScrollArea');
+  const loader = document.getElementById('chatLoader');
 
-const pageShell = document.getElementById('buyerChatPage');
-const listContainer = document.getElementById('chatList');
-const emptyState = document.getElementById('emptyState');
-const searchInput = document.getElementById('chatSearch');
-const scrollArea = document.getElementById('chatScrollArea');
-const loader = document.getElementById('chatLoader');
-
-const trimString = (value) => (typeof value === 'string' ? value.trim() : (value ?? '').toString().trim());
-
-const state = {
-  userId: trimString(pageShell?.dataset.userId || ''),
-  userFirebaseId: trimString(pageShell?.dataset.userFirebaseId || ''),
-  chats: [],
-  initialised: false
-};
-
-state.senderIds = new Set([state.userId, state.userFirebaseId].filter(Boolean));
-
-const chatStore = new Map();
-const pendingNumericUpdates = new Set();
-
-const FALLBACK_IMAGE = 'https://images.unsplash.com/photo-1510557880182-3d4d3cba35a5?auto=format&fit=crop&w=160&q=80';
-
-if (emptyState) {
-  emptyState.remove();
-}
-
-function escapeHtml(text = '') {
-  return String(text ?? '').replace(/[&<>"']/g, (char) => {
-    switch (char) {
-      case '&':
-        return '&amp;';
-      case '<':
-        return '&lt;';
-      case '>':
-        return '&gt;';
-      case '"':
-        return '&quot;';
-      case '\'':
-        return '&#39;';
-      default:
-        return char;
-    }
-  });
-}
-
-function getInitials(name) {
-  return (name || '')
-    .split(' ')
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() || '')
-    .join('') || 'YU';
-}
-
-function buildAvatarMarkup(name, imageUrl) {
-  if (imageUrl) {
-    return `<img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(name)} avatar">`;
-  }
-  return `<span>${escapeHtml(getInitials(name))}</span>`;
-}
-
-function formatRelativeTime(timestamp) {
-  if (!timestamp) return '';
-  const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-  if (!Number.isFinite(date?.getTime?.())) return '';
-
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMinutes = Math.floor(diffMs / 60000);
-
-  if (diffMinutes < 1) return 'Just now';
-  if (diffMinutes < 60) return `${diffMinutes}m ago`;
-  const diffHours = Math.floor(diffMinutes / 60);
-  if (diffHours < 24) return `${diffHours}h ago`;
-  if (diffHours < 48) return 'Yesterday';
-  return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-}
-
-function renderTick(lastMessage) {
-  if (!lastMessage || !state.senderIds.has(lastMessage.senderId)) {
-    return '';
-  }
-  return lastMessage.seen
-    ? '<i class="ri-check-double-line" style="color:#1CC58D;"></i>'
-    : '<i class="ri-check-line" style="color:rgba(17,17,17,0.45);"></i>';
-}
-
-function normaliseChat(docSnap) {
-  const data = docSnap.data() || {};
-  const buyerIdRaw = trimString(data.buyerId || '');
-  const buyerNumericId = trimString(data.buyerNumericId || buyerIdRaw);
-  const inferredBuyerFirebase = trimString(data.buyerFirebaseId || '');
-  const buyerFirebaseId = buyerIdRaw && buyerIdRaw !== buyerNumericId ? buyerIdRaw : inferredBuyerFirebase;
-  if (buyerFirebaseId) {
-    state.senderIds.add(buyerFirebaseId);
-  }
-  if (buyerNumericId) {
-    state.senderIds.add(buyerNumericId);
-  }
-  const buyerIdCandidates = [buyerIdRaw, buyerNumericId, buyerFirebaseId].filter(Boolean);
-  const isBuyer = buyerIdCandidates.some((id) => state.senderIds.has(id));
-  const fallbackName = isBuyer ? 'Vendor' : 'Buyer';
-  const participantProfiles = data.participantProfiles || {};
-  const counterpartyId = isBuyer ? data.vendorId : data.buyerId;
-  const counterpartyProfile = counterpartyId ? participantProfiles[counterpartyId] : null;
-  const displayName = (counterpartyProfile?.name || data.counterpartyName || (isBuyer ? data.vendorName : data.buyerName) || data.participantName || fallbackName).trim() || fallbackName;
-  const productTitle = (data.productTitle || data.productName || 'Marketplace Listing').trim();
-  const productImage = data.productImage || data.productThumbnail || data.productCover || FALLBACK_IMAGE;
-  const avatarImage = counterpartyProfile?.avatar || data.counterpartyImage || (isBuyer ? data.vendorAvatar : data.buyerAvatar) || data.avatarUrl || '';
-  const lastMessage = data.lastMessage || null;
-  const lastMessageTextRaw = lastMessage?.text?.trim();
-  const lastMessageText = lastMessageTextRaw && lastMessageTextRaw.length > 0
-    ? lastMessageTextRaw
-    : lastMessage?.imageUrl
-      ? '[Photo]'
-      : 'Tap to start chatting';
-  const timestamp = lastMessage?.timestamp || data.lastUpdated || data.updatedAt || data.createdAt || null;
-  const unreadCounts = (typeof data.unreadCounts === 'object' && data.unreadCounts !== null) ? data.unreadCounts : {};
-  const countedKeys = new Set();
-  let unreadTotal = 0;
-  const addUnreadCount = (key) => {
-    const trimmed = trimString(key);
-    if (!trimmed || countedKeys.has(trimmed)) return;
-    const value = unreadCounts[trimmed];
-    if (typeof value === 'number') {
-      unreadCount += value;
-      countedKeys.add(trimmed);
-    }
-  };
-  addUnreadCount(state.userId);
-  addUnreadCount(state.userFirebaseId);
-  const unreadCount = countedKeys.size > 0 ? unreadTotal : undefined;
-  const isUnreadByCount = typeof unreadCount === 'number' ? unreadCount > 0 : false;
-  const isUnread = isUnreadByCount || Boolean(lastMessage && lastMessage.senderId && !state.senderIds.has(lastMessage.senderId) && !lastMessage.seen);
-
-  return {
-    ...data,
-    chatId: docSnap.id,
-    displayName,
-    productTitle,
-    productImage,
-    avatarImage,
-    lastMessage,
-    lastMessageText,
-    timestamp,
-    unreadCount,
-    isUnread,
-    buyerNumericId,
-    buyerFirebaseId,
-    searchText: `${displayName} ${productTitle} ${lastMessageText}`.toLowerCase()
-  };
-}
-
-function createChatCard(chat, index) {
-  const card = document.createElement('article');
-  card.className = 'chat-card';
-  card.tabIndex = 0;
-  card.dataset.chatId = chat.chatId;
-  card.style.animationDelay = `${Math.min(index, 8) * 70}ms`;
-
-  const relativeTime = formatRelativeTime(chat.timestamp || chat.lastUpdated);
-  const tickMarkup = renderTick(chat.lastMessage);
-  const showUnreadDot = chat.isUnread || (typeof chat.unreadCount === 'number' && chat.unreadCount > 0);
-  const dotLabel = typeof chat.unreadCount === 'number' && chat.unreadCount > 0
-    ? (chat.unreadCount > 9 ? '9+' : String(chat.unreadCount))
-    : '';
-
-  card.classList.toggle('is-unread', Boolean(chat.isUnread));
-
-  card.innerHTML = `
-    <div class="avatar" aria-hidden="true">${buildAvatarMarkup(chat.displayName, chat.avatarImage)}</div>
-    <div class="chat-info">
-      <div class="chat-top">
-        <strong class="chat-name">${escapeHtml(chat.displayName)}</strong>
-        <span class="chat-time">${escapeHtml(relativeTime)}</span>
-      </div>
-      <div class="chat-bottom">
-        <span class="last-message">${escapeHtml(chat.lastMessageText)}</span>
-        <span class="tick" aria-hidden="true">${tickMarkup}</span>
-      </div>
-      <div class="chat-product">
-        <i class="ri-shopping-bag-3-line" aria-hidden="true"></i>
-        <span>${escapeHtml(chat.productTitle)}</span>
-      </div>
-    </div>
-    <div class="meta">
-      <img src="${escapeHtml(chat.productImage || FALLBACK_IMAGE)}" alt="${escapeHtml(chat.productTitle)} thumbnail" class="product-thumb">
-    </div>
-  `;
-
-  if (showUnreadDot) {
-    const dot = document.createElement('span');
-    dot.className = 'unread-dot';
-    if (dotLabel) {
-      dot.textContent = dotLabel;
-      dot.style.display = 'grid';
-      dot.style.placeItems = 'center';
-      dot.style.color = '#fff';
-      dot.style.fontSize = '0.62rem';
-      dot.style.fontWeight = '700';
-    }
-    card.appendChild(dot);
-  }
-
-  const destination = new URL('chat.php', window.location.origin);
-  destination.searchParams.set('chatId', chat.chatId);
-  if (chat.buyerId) destination.searchParams.set('buyerId', chat.buyerId);
-  if (chat.buyerNumericId) destination.searchParams.set('buyerNumericId', chat.buyerNumericId);
-  if (chat.buyerFirebaseId) destination.searchParams.set('buyerFirebaseId', chat.buyerFirebaseId);
-  if (chat.vendorId) destination.searchParams.set('vendorId', chat.vendorId);
-  if (chat.productId) destination.searchParams.set('productId', chat.productId);
-  destination.searchParams.set('participantName', chat.displayName);
-  destination.searchParams.set('productTitle', chat.productTitle);
-  destination.searchParams.set('productImage', chat.productImage || FALLBACK_IMAGE);
-  destination.searchParams.set('status', chat.lastMessage?.seen ? 'Seen recently' : 'Last seen recently');
-
-  const openChat = () => {
-    window.location.href = destination.toString();
-  };
-
-  card.addEventListener('click', openChat);
-  card.addEventListener('keypress', (event) => {
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      openChat();
-    }
-  });
-
-  return card;
-}
-
-function renderChats(chats, shouldResetScroll = false) {
-  if (!listContainer) return;
-
-  listContainer.innerHTML = '';
-
-  listContainer.style.display = chats.length ? 'grid' : 'none';
-
-  if (!chats.length) {
-    if (shouldResetScroll && scrollArea) {
-      scrollArea.scrollTo({ top: 0 });
-    }
+  if (!pageShell || !listContainer) {
     return;
   }
 
-  const fragment = document.createDocumentFragment();
-  chats.forEach((chat, index) => {
-    fragment.appendChild(createChatCard(chat, index));
-  });
+  const state = {
+    userUid: pageShell.dataset.userId || '',
+    userNumericId: pageShell.dataset.userNumericId || '',
+    userName: pageShell.dataset.userName || '',
+    polls: null,
+    chats: [],
+    filtered: [],
+    loading: false
+  };
 
-  listContainer.appendChild(fragment);
+  const formatRelativeTime = (value) => {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMinutes = Math.floor(diffMs / 60000);
+    if (diffMinutes < 1) return 'Just now';
+    if (diffMinutes < 60) return `${diffMinutes}m ago`;
+    const diffHours = Math.floor(diffMinutes / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffHours < 48) return 'Yesterday';
+    return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  };
 
-  if (shouldResetScroll && scrollArea) {
-    requestAnimationFrame(() => {
-      scrollArea.scrollTo({ top: 0, behavior: 'smooth' });
+  const escapeHtml = (text = '') =>
+    String(text ?? '').replace(/[&<>"']/g, (char) => {
+      switch (char) {
+        case '&':
+          return '&amp;';
+        case '<':
+          return '&lt;';
+        case '>':
+          return '&gt;';
+        case '"':
+          return '&quot;';
+        case "'":
+          return '&#39;';
+        default:
+          return char;
+      }
     });
-  }
-}
 
-function rebuildChats(shouldResetScroll) {
-  const chatsArray = Array.from(chatStore.values())
-    .sort((a, b) => getTimestampNumber(b.timestamp) - getTimestampNumber(a.timestamp));
-  state.chats = chatsArray;
-  const term = searchInput?.value?.trim() || '';
-  const filtered = filterChats(term);
-  renderChats(filtered, shouldResetScroll);
-}
+  const setLoader = (visible) => {
+    if (!loader) return;
+    loader.style.display = visible ? 'grid' : 'none';
+  };
 
-async function ensureBuyerNumericField(docSnap) {
-  if (!state.userId) return;
-  if (pendingNumericUpdates.has(docSnap.id)) return;
-  const data = docSnap.data() || {};
-  const existingNumeric = trimString(data.buyerNumericId || '');
-  const participants = Array.isArray(data.participants) ? data.participants.map(trimString) : [];
+  const buildChatUrl = (chat) => {
+    const url = new URL('chat.php', window.location.origin);
+    url.searchParams.set('chatId', chat.chatId);
+    if (chat.productId) url.searchParams.set('productId', chat.productId);
+    if (chat.buyerUid) url.searchParams.set('buyerUid', chat.buyerUid);
+    if (chat.vendorUid) url.searchParams.set('vendorUid', chat.vendorUid);
+    if (chat.productTitle) url.searchParams.set('productTitle', chat.productTitle);
+    if (chat.productImage) url.searchParams.set('productImage', chat.productImage);
+    if (chat.counterpartyName) url.searchParams.set('participantName', chat.counterpartyName);
+    return url.toString();
+  };
 
-  const updatePayload = {};
-  let needsUpdate = false;
+  const createChatCard = (chat, index) => {
+    const card = document.createElement('article');
+    card.className = 'chat-card';
+    card.tabIndex = 0;
+    card.dataset.chatId = chat.chatId;
+    card.style.animationDelay = `${Math.min(index, 6) * 60}ms`;
 
-  if (!existingNumeric) {
-    updatePayload.buyerNumericId = state.userId;
-    needsUpdate = true;
-  }
+    const unread = chat.unreadCount > 0;
+    if (unread) {
+      card.classList.add('is-unread');
+    }
 
-  if (!participants.includes(state.userId)) {
-    updatePayload.participants = arrayUnion(state.userId);
-    needsUpdate = true;
-  }
+    card.innerHTML = `
+      <div class="avatar" aria-hidden="true">${escapeHtml(
+        (chat.counterpartyName || 'Y').split(' ').map((part) => part[0]).filter(Boolean).join('').slice(0, 2) || 'YU'
+      )}</div>
+      <div class="chat-info">
+        <div class="chat-top">
+          <strong class="chat-name">${escapeHtml(chat.counterpartyName || 'Marketplace Vendor')}</strong>
+          <span class="chat-time">${escapeHtml(formatRelativeTime(chat.lastMessageAt || chat.createdAt))}</span>
+        </div>
+        <div class="chat-bottom">
+          <span class="last-message">${escapeHtml(chat.lastMessagePreview || 'Tap to start chatting')}</span>
+          <span class="tick" aria-hidden="true">${chat.lastSenderUid === state.userUid ? '✅' : ''}</span>
+        </div>
+        <div class="chat-product">
+          <i class="ri-shopping-bag-3-line" aria-hidden="true"></i>
+          <span>${escapeHtml(chat.productTitle || 'Marketplace Listing')}</span>
+        </div>
+      </div>
+    `;
 
-  if (!needsUpdate) return;
+    if (unread) {
+      const dot = document.createElement('span');
+      dot.className = 'unread-dot';
+      dot.textContent = chat.unreadCount > 9 ? '9+' : String(chat.unreadCount);
+      card.appendChild(dot);
+    }
 
-  pendingNumericUpdates.add(docSnap.id);
-  try {
-    await updateDoc(doc(db, 'chats', docSnap.id), updatePayload);
-  } catch (error) {
-    console.warn('[buyer-chats] Failed to stamp buyerNumericId for chat', docSnap.id, error);
-  } finally {
-    pendingNumericUpdates.delete(docSnap.id);
-  }
-}
+    const navigate = () => {
+      window.location.href = buildChatUrl(chat);
+    };
 
-function processSnapshot(sourceLabel, snapshot) {
-  if (!state.initialised) {
-    state.initialised = true;
-    setLoaderVisibility(false);
-  }
+    card.addEventListener('click', navigate);
+    card.addEventListener('keypress', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        navigate();
+      }
+    });
 
-  snapshot.docChanges().forEach((change) => {
-    if (change.type === 'removed') {
-      chatStore.delete(change.doc.id);
+    return card;
+  };
+
+  const renderChats = (chats) => {
+    if (!listContainer) return;
+    listContainer.innerHTML = '';
+    if (!Array.isArray(chats) || !chats.length) {
+      listContainer.style.display = 'none';
       return;
     }
+    listContainer.style.display = 'grid';
 
-    const chat = normaliseChat(change.doc);
-    chatStore.set(change.doc.id, chat);
-    ensureBuyerNumericField(change.doc);
+    const fragment = document.createDocumentFragment();
+    chats.forEach((chat, index) => fragment.appendChild(createChatCard(chat, index)));
+    listContainer.appendChild(fragment);
+  };
+
+  const filterChats = (term) => {
+    if (!term) {
+      state.filtered = [...state.chats];
+      return;
+    }
+    const query = term.toLowerCase();
+    state.filtered = state.chats.filter((chat) =>
+      `${chat.counterpartyName} ${chat.productTitle} ${chat.lastMessagePreview}`
+        .toLowerCase()
+        .includes(query)
+    );
+  };
+
+  const handleSearch = () => {
+    filterChats(searchInput?.value?.trim() || '');
+    renderChats(state.filtered);
+  };
+
+  const normaliseChats = (items = []) =>
+    items.map((item) => ({
+      chatId: item.chatId,
+      buyerUid: item.buyerUid,
+      vendorUid: item.vendorUid,
+      productId: item.productId,
+      productImage: item.productImage,
+      productTitle: item.productTitle || 'Marketplace Listing',
+      lastMessageAt: item.lastMessageAt,
+      lastMessagePreview: item.lastMessagePreview,
+      lastSenderUid: item.lastSenderUid,
+      counterpartyName: item.counterpartyName || (item.counterpartyRole === 'vendor' ? 'Vendor' : 'Buyer'),
+      unreadCount: item.unreadCount || 0,
+      createdAt: item.createdAt
+    }));
+
+  const fetchChats = async (showLoader = false) => {
+    if (state.loading) return;
+    if (showLoader) setLoader(true);
+    state.loading = true;
+    try {
+      const url = new URL('fetch-chats.php', window.location.origin);
+      url.searchParams.set('scope', 'list');
+      url.searchParams.set('limit', '100');
+      const response = await fetch(url.toString(), { credentials: 'same-origin' });
+      const payload = await response.json();
+      if (!response.ok || !payload?.success) {
+        throw new Error(payload?.message || 'Unable to load chats.');
+      }
+      state.chats = normaliseChats(payload.conversations || []);
+      filterChats(searchInput?.value?.trim() || '');
+      renderChats(state.filtered);
+    } catch (error) {
+      console.error('[buyer-chats] fetch failed', error);
+    } finally {
+      state.loading = false;
+      setLoader(false);
+    }
+  };
+
+  const startPolling = () => {
+    if (state.polls) clearInterval(state.polls);
+    state.polls = window.setInterval(() => fetchChats(false), 10000);
+  };
+
+  searchInput?.addEventListener('input', handleSearch);
+
+  fetchChats(true).then(() => {
+    startPolling();
   });
-
-  rebuildChats(sourceLabel === 'primary');
-}
-
-function filterChats(term) {
-  if (!term) return [...state.chats];
-  const queryText = term.toLowerCase();
-  return state.chats.filter((chat) => chat.searchText.includes(queryText));
-}
-
-const setLoaderVisibility = (isVisible) => {
-  if (!loader) return;
-  loader.style.display = isVisible ? 'grid' : 'none';
-};
-
-setLoaderVisibility(true);
-
-const getTimestampNumber = (value) => {
-  if (!value) return 0;
-  if (typeof value.toMillis === 'function') return value.toMillis();
-  if (typeof value.toDate === 'function') {
-    const date = value.toDate();
-    return Number.isFinite(date?.getTime?.()) ? date.getTime() : 0;
-  }
-  if (value instanceof Date) return Number.isFinite(value.getTime()) ? value.getTime() : 0;
-  const parsed = new Date(value);
-  return Number.isFinite(parsed.getTime()) ? parsed.getTime() : 0;
-};
-
-function handleSearchInput() {
-  const filtered = filterChats(searchInput?.value?.trim() || '');
-  renderChats(filtered, false);
-}
-
-function listenToChats() {
-  if (!state.userId && !state.userFirebaseId) {
-    console.warn('[buyer-chats] Missing buyer identifier.');
-    setLoaderVisibility(false);
-    renderChats([], true);
-    return;
-  }
-
-  const chatsRef = collection(db, 'chats');
-  let listenerCount = 0;
-
-  if (state.userId) {
-    const primaryQuery = query(chatsRef, where('buyerId', '==', state.userId));
-    onSnapshot(primaryQuery, (snapshot) => processSnapshot('primary', snapshot));
-    listenerCount += 1;
-
-    const numericQuery = query(chatsRef, where('buyerNumericId', '==', state.userId));
-    onSnapshot(numericQuery, (snapshot) => processSnapshot('numeric', snapshot));
-    listenerCount += 1;
-  }
-
-  if (state.userFirebaseId) {
-    const firebaseQuery = query(chatsRef, where('buyerId', '==', state.userFirebaseId));
-    onSnapshot(firebaseQuery, (snapshot) => processSnapshot('firebase', snapshot));
-    listenerCount += 1;
-  }
-
-  if (listenerCount === 0) {
-    setLoaderVisibility(false);
-    renderChats([], true);
-  }
-}
-
-searchInput?.addEventListener('input', handleSearchInput);
-
-listenToChats();
+})();

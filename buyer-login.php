@@ -24,8 +24,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!$buyer || !password_verify($password, $buyer['password'])) {
             $errorMessage = 'Incorrect email or password';
         } else {
+            $buyer = yustam_buyers_ensure_uid($buyer);
             $_SESSION['buyer_id'] = (int)$buyer['id'];
             $_SESSION['buyer_name'] = $buyer['name'] ?? 'Buyer';
+            $_SESSION['buyer_uid'] = $buyer['buyer_uid'] ?? null;
+            $_SESSION['buyer_email'] = $buyer['email'] ?? $email;
             header('Location: buyer-dashboard.php');
             exit;
         }

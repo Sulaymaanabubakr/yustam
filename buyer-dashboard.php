@@ -11,6 +11,7 @@ if (!isset($_SESSION['buyer_id'])) {
 
 $buyerId = (int)$_SESSION['buyer_id'];
 $buyer = yustam_buyers_find($buyerId);
+$buyer = yustam_buyers_ensure_uid($buyer ?? []);
 
 if (!$buyer) {
     session_destroy();
@@ -20,6 +21,18 @@ if (!$buyer) {
 
 $buyerName = $buyer['name'] ?? 'Buyer';
 $_SESSION['buyer_name'] = $buyerName;
+if (!empty($buyer['buyer_uid'])) {
+    $_SESSION['buyer_uid'] = $buyer['buyer_uid'];
+}
+if (!empty($buyer['email'])) {
+    $_SESSION['buyer_email'] = $buyer['email'];
+}
+$buyerUid = isset($_SESSION['buyer_uid']) ? (string) $_SESSION['buyer_uid'] : '';
+if ($buyerUid === '' && !empty($buyer['buyer_uid'])) {
+    $buyerUid = (string) $buyer['buyer_uid'];
+    $_SESSION['buyer_uid'] = $buyerUid;
+}
+$buyerIdentifier = $buyerUid !== '' ? $buyerUid : (string) $buyerId;
 
 $joined = 'Today';
 if (!empty($buyer['joined_at'])) {
@@ -478,7 +491,7 @@ if ($firstName === '') {
         }
     </style>
 </head>
-<body data-buyer-id="<?= htmlspecialchars((string)$buyerId) ?>" data-buyer-name="<?= htmlspecialchars($buyerName) ?>">
+<body data-buyer-id="<?= htmlspecialchars((string)$buyerId) ?>" data-buyer-uid="<?= htmlspecialchars($buyerUid) ?>" data-buyer-name="<?= htmlspecialchars($buyerName) ?>">
     <header class="buyer-header">
         <div class="header-shell">
             <a class="brand" href="index.html" aria-label="YUSTAM home">
@@ -507,13 +520,13 @@ if ($firstName === '') {
         </div>
     </header>
 
-    <main class="page-shell" id="buyerDashboard" data-buyer-id="<?= htmlspecialchars((string)$buyerId) ?>">
+    <main class="page-shell" id="buyerDashboard" data-buyer-id="<?= htmlspecialchars((string)$buyerId) ?>" data-buyer-uid="<?= htmlspecialchars($buyerUid) ?>">
         <section class="glass-card welcome-card">
             <h1>Welcome back, <?= htmlspecialchars($firstName) ?>!</h1>
             <p>Curate your favourites, manage conversations, and shop trusted vendors across Nigeria.</p>
             <div class="welcome-meta">
                 <span class="meta-pill">Member since <?= htmlspecialchars($joined) ?></span>
-                <span class="meta-pill">Buyer ID #<?= htmlspecialchars((string)$buyerId) ?></span>
+                <span class="meta-pill">Buyer ID #<?= htmlspecialchars($buyerIdentifier) ?></span>
             </div>
         </section>
 
