@@ -1,5 +1,6 @@
 import { db } from './firebase.js';
 import { deleteDoc, doc, getDoc, setDoc } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
+import { buildChatId, ensureInitialMessage, sendChatMessage } from './chat-service.js';
 
 const urlParams = new URLSearchParams(window.location.search);
 
@@ -11,6 +12,7 @@ const buyerNumericParam = (urlParams.get('buyerNumericId') || urlParams.get('buy
 const buyerUid = document.body?.dataset?.buyerUid || buyerUidParam || '';
 const buyerNumericId = document.body?.dataset?.buyerId || buyerNumericParam || '';
 const buyerIdentifier = buyerNumericId || buyerUid || '';
+const buyerName = document.body?.dataset?.buyerName || 'Buyer';
 const productIdInput = document.getElementById('productId');
 const productIdParam = (urlParams.get('id') || urlParams.get('listingId') || '').trim();
 const productId = productIdInput?.value?.trim?.() || productIdParam;
@@ -41,6 +43,7 @@ const vendorStorefrontLink = document.getElementById('vendorStorefrontLink');
 const vendorWhatsappLink = document.getElementById('vendorWhatsappLink');
 const vendorAvatarEl = document.getElementById('vendorAvatar');
 const floatingWhatsappBtn = document.getElementById('floatingWhatsappBtn');
+const chatWithVendorBtn = document.getElementById('chatWithVendorBtn');
 const PLACEHOLDER_IMAGE =
   'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=1200&q=80';
 
@@ -294,8 +297,8 @@ if (thumbStrip && mainImage) {
 const quickChatCard = document.getElementById('quickChatCard');
 const quickChatForm = document.getElementById('quickChatForm');
 const quickMessageInput = document.getElementById('quickMessageInput');
+const quickMessageSubmit = document.getElementById('quickMessageSubmit');
 const suggestionButtons = document.querySelectorAll('[data-quick-message]');
-const QUICK_MESSAGE_KEY = 'yustam_quick_message';
 
 suggestionButtons.forEach((button) => {
   button.addEventListener('click', () => {
@@ -306,42 +309,95 @@ suggestionButtons.forEach((button) => {
   });
 });
 
-function buildChatUrl() {
-  if (!quickChatCard) return null;
-  const {
-    chatId,
-    vendorUid: vendorUidAttr,
-    vendorId: vendorNumericAttr,
-    vendorName: vendorNameAttr,
-    buyerUid: buyerUidAttr,
-    buyerId: buyerNumericAttr,
-    productId: listingId,
-    productTitle,
-    productImage,
-  } = quickChatCard.dataset;
-  const vendorChatUid = vendorUidAttr || currentVendorUid || vendorNumericAttr || currentVendorId || 'vendor';
-  const buyerChatUid = buyerUidAttr || buyerUid || buyerNumericAttr || buyerIdentifier || 'guest';
-  const computedChatId = chatId || `${vendorChatUid}_${buyerChatUid}_${listingId || productId || 'listing'}`;
+function ensureBuyerAuthenticated() {
+  if (buyerIdentifier) {
+    return true;
+  }
+  const loginUrl = new URL('login.php', window.location.origin);
+  loginUrl.searchParams.set('redirect', window.location.href);
+  window.location.href = loginUrl.toString();
+  return false;
+}
 
+function resolveChatMetadata() {
+  const vendorChatUid = currentVendorUid || document.body?.dataset?.vendorUid || currentVendorId || '';
+  const buyerChatUid = buyerUid || buyerNumericId || buyerIdentifier || '';
+  const listingId = productId || productIdInput?.value?.trim?.() || '';
+  if (!vendorChatUid || !buyerChatUid || !listingId) {
+    return null;
+  }
+  return {
+    chatId: buildChatId(buyerChatUid, vendorChatUid, listingId),
+    buyerUid: buyerChatUid,
+    vendorUid: vendorChatUid,
+    productId: listingId,
+    productTitle: currentProductName || productNameEl?.textContent?.trim?.() || 'Marketplace Listing',
+    productImage: currentProductImage || productImageEl?.src || PLACEHOLDER_IMAGE,
+    vendorName: currentVendorName || document.body?.dataset?.vendorName || 'Vendor',
+    buyerName: buyerName || 'Buyer',
+  };
+}
+
+function buildChatPageUrl(metadata) {
   const url = new URL('chat.php', window.location.origin);
-  url.searchParams.set('chatId', computedChatId);
-  url.searchParams.set('vendorUid', vendorChatUid || '');
-  if (vendorNumericAttr || currentVendorId) {
-    url.searchParams.set('vendorId', vendorNumericAttr || currentVendorId || '');
+  url.searchParams.set('chatId', metadata.chatId);
+  url.searchParams.set('buyerUid', metadata.buyerUid);
+  url.searchParams.set('vendorUid', metadata.vendorUid);
+  url.searchParams.set('productId', metadata.productId);
+  url.searchParams.set('productTitle', metadata.productTitle);
+  if (metadata.productImage) url.searchParams.set('productImage', metadata.productImage);
+  url.searchParams.set('participantName', metadata.vendorName);
+  return url.toString();
+}
+
+async function launchChatWithMessage(message, { initialOnly = false } = {}) {
+  if (!ensureBuyerAuthenticated()) return null;
+  const metadata = resolveChatMetadata();
+  if (!metadata) {
+    alert('We could not prepare the chat. Please try again.');
+    return null;
   }
-  url.searchParams.set('buyerUid', buyerChatUid || '');
-  if (buyerNumericAttr || buyerNumericId) {
-    url.searchParams.set('buyerNumericId', buyerNumericAttr || buyerNumericId || '');
+
+  if (initialOnly) {
+    await ensureInitialMessage({
+      chatId: metadata.chatId,
+      buyerUid: metadata.buyerUid,
+      vendorUid: metadata.vendorUid,
+      productId: metadata.productId,
+      senderUid: metadata.buyerUid,
+      receiverUid: metadata.vendorUid,
+      senderType: 'buyer',
+      receiverType: 'vendor',
+      message,
+      buyerName: metadata.buyerName,
+      vendorName: metadata.vendorName,
+      productTitle: metadata.productTitle,
+      productImage: metadata.productImage,
+    });
+  } else {
+    await sendChatMessage({
+      chatId: metadata.chatId,
+      buyerUid: metadata.buyerUid,
+      vendorUid: metadata.vendorUid,
+      productId: metadata.productId,
+      senderUid: metadata.buyerUid,
+      receiverUid: metadata.vendorUid,
+      senderType: 'buyer',
+      receiverType: 'vendor',
+      message,
+      buyerName: metadata.buyerName,
+      vendorName: metadata.vendorName,
+      productTitle: metadata.productTitle,
+      productImage: metadata.productImage,
+    });
   }
-  url.searchParams.set('productId', listingId || productId || '');
-  url.searchParams.set('participantName', vendorNameAttr || currentVendorName || 'Vendor');
-  url.searchParams.set('productTitle', productTitle || currentProductName || 'Listing');
-  url.searchParams.set('productImage', productImage || currentProductImage || '');
-  return { url: url.toString(), chatId: computedChatId };
+
+  window.location.href = buildChatPageUrl(metadata);
+  return metadata;
 }
 
 if (quickChatForm && quickMessageInput) {
-  quickChatForm.addEventListener('submit', (event) => {
+  quickChatForm.addEventListener('submit', async (event) => {
     event.preventDefault();
     const message = quickMessageInput.value.trim();
     if (!message) {
@@ -349,22 +405,39 @@ if (quickChatForm && quickMessageInput) {
       return;
     }
 
-    const chatLink = buildChatUrl();
-    if (!chatLink) {
-      alert('We could not prepare the chat. Please try again.');
-      return;
+    if (quickMessageSubmit) {
+      quickMessageSubmit.disabled = true;
+      quickMessageSubmit.setAttribute('aria-busy', 'true');
     }
 
     try {
-      sessionStorage.setItem(QUICK_MESSAGE_KEY, JSON.stringify({
-        chatId: chatLink.chatId,
-        text: message
-      }));
+      await launchChatWithMessage(message);
     } catch (error) {
-      console.warn('Unable to store quick message payload', error);
+      console.error('Unable to start chat', error);
+      alert('Unable to send message right now. Please try again.');
+    } finally {
+      if (quickMessageSubmit) {
+        quickMessageSubmit.disabled = false;
+        quickMessageSubmit.removeAttribute('aria-busy');
+      }
     }
+  });
+}
 
-    window.location.href = chatLink.url;
+if (chatWithVendorBtn) {
+  chatWithVendorBtn.addEventListener('click', async () => {
+    chatWithVendorBtn.disabled = true;
+    chatWithVendorBtn.classList.add('is-loading');
+    chatWithVendorBtn.setAttribute('aria-busy', 'true');
+    try {
+      await launchChatWithMessage('Is this still available?', { initialOnly: true });
+    } catch (error) {
+      console.error('Unable to open chat', error);
+      alert('Unable to open chat right now. Please try again.');
+      chatWithVendorBtn.disabled = false;
+      chatWithVendorBtn.classList.remove('is-loading');
+      chatWithVendorBtn.removeAttribute('aria-busy');
+    }
   });
 }
 
@@ -386,14 +459,18 @@ const updateNegotiationSuggestion = () => {
 
 const updateQuickChatDataset = () => {
   if (!quickChatCard) return;
-  quickChatCard.dataset.vendorUid = currentVendorUid || currentVendorId || '';
+  const metadata = resolveChatMetadata();
+  quickChatCard.dataset.vendorUid = metadata?.vendorUid || currentVendorUid || currentVendorId || '';
   quickChatCard.dataset.vendorId = currentVendorId || '';
-  quickChatCard.dataset.vendorName = currentVendorName || 'Vendor';
-  quickChatCard.dataset.buyerUid = buyerUid || '';
+  quickChatCard.dataset.vendorName = metadata?.vendorName || currentVendorName || 'Vendor';
+  quickChatCard.dataset.buyerUid = metadata?.buyerUid || buyerUid || '';
   quickChatCard.dataset.buyerId = buyerNumericId || '';
-  quickChatCard.dataset.productId = productId || '';
-  quickChatCard.dataset.productTitle = currentProductName || 'Listing';
-  quickChatCard.dataset.productImage = currentProductImage || '';
+  quickChatCard.dataset.productId = metadata?.productId || productId || '';
+  quickChatCard.dataset.productTitle = metadata?.productTitle || currentProductName || 'Listing';
+  quickChatCard.dataset.productImage = metadata?.productImage || currentProductImage || '';
+  if (metadata?.chatId) {
+    quickChatCard.dataset.chatId = metadata.chatId;
+  }
   if (quickChatHeading) {
     quickChatHeading.textContent = `Chat with ${currentVendorName || 'Vendor'}`;
   }
