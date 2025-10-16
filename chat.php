@@ -2,92 +2,95 @@
 require_once __DIR__ . '/session-path.php';
 session_start();
 
-$buyerNumericId = isset($_SESSION['buyer_id']) ? (string) $_SESSION['buyer_id'] : '';
-$vendorNumericId = isset($_SESSION['vendor_id']) ? (string) $_SESSION['vendor_id'] : '';
-$buyerUid = isset($_SESSION['buyer_uid']) ? trim((string) $_SESSION['buyer_uid']) : '';
-$vendorUid = isset($_SESSION['vendor_uid']) ? trim((string) $_SESSION['vendor_uid']) : '';
+$buyerNumericId = isset($_SESSION['buyer_id']) ? trim((string) $_SESSION['buyer_id']) : '';
+$buyerUidSession = isset($_SESSION['buyer_uid']) ? trim((string) $_SESSION['buyer_uid']) : '';
+$buyerName = isset($_SESSION['buyer_name']) ? trim((string) $_SESSION['buyer_name']) : 'Buyer';
 
-$buyerIdParam = isset($_GET['buyerUid']) ? trim((string) $_GET['buyerUid']) : '';
-if ($buyerIdParam === '' && isset($_GET['buyerId'])) {
-    $buyerIdParam = trim((string) $_GET['buyerId']);
+$vendorNumericId = isset($_SESSION['vendor_id']) ? trim((string) $_SESSION['vendor_id']) : '';
+$vendorUidSession = isset($_SESSION['vendor_uid']) ? trim((string) $_SESSION['vendor_uid']) : '';
+$vendorName = isset($_SESSION['vendor_name']) ? trim((string) $_SESSION['vendor_name']) : 'Vendor';
+
+$buyerUidParam = isset($_GET['buyerUid']) ? trim((string) $_GET['buyerUid']) : '';
+if ($buyerUidParam === '' && isset($_GET['buyerId'])) {
+    $buyerUidParam = trim((string) $_GET['buyerId']);
 }
 
-$vendorIdParam = isset($_GET['vendorUid']) ? trim((string) $_GET['vendorUid']) : '';
-if ($vendorIdParam === '' && isset($_GET['vendorId'])) {
-    $vendorIdParam = trim((string) $_GET['vendorId']);
+$vendorUidParam = isset($_GET['vendorUid']) ? trim((string) $_GET['vendorUid']) : '';
+if ($vendorUidParam === '' && isset($_GET['vendorId'])) {
+    $vendorUidParam = trim((string) $_GET['vendorId']);
 }
 
-$buyerId = $buyerIdParam !== '' ? $buyerIdParam : ($buyerUid !== '' ? $buyerUid : $buyerNumericId);
-$vendorId = $vendorIdParam !== '' ? $vendorIdParam : ($vendorUid !== '' ? $vendorUid : $vendorNumericId);
+$productId = isset($_GET['productId']) ? trim((string) $_GET['productId']) : '';
+$productTitle = isset($_GET['productTitle']) ? trim((string) $_GET['productTitle']) : 'Marketplace Listing';
+$productImage = isset($_GET['productImage']) ? trim((string) $_GET['productImage']) : '';
 
-$currentRole = isset($_SESSION['vendor_id']) ? 'vendor' : (isset($_SESSION['buyer_id']) ? 'buyer' : 'guest');
-$currentUserId = $currentRole === 'vendor'
-    ? ($vendorUid !== '' ? $vendorUid : $vendorNumericId)
-    : ($currentRole === 'buyer' ? ($buyerUid !== '' ? $buyerUid : $buyerNumericId) : '');
+$currentRole = 'guest';
+$currentUserName = 'Guest';
+$currentUserId = '';
+$counterpartyRole = '';
+$counterpartyName = '';
 
-$buyerFirebaseId = isset($_GET['buyerFirebaseId']) ? trim((string) $_GET['buyerFirebaseId']) : '';
-$vendorFirebaseId = isset($_GET['vendorFirebaseId']) ? trim((string) $_GET['vendorFirebaseId']) : '';
+$buyerUid = $buyerUidParam !== '' ? $buyerUidParam : ($buyerUidSession !== '' ? $buyerUidSession : $buyerNumericId);
+$vendorUid = $vendorUidParam !== '' ? $vendorUidParam : ($vendorUidSession !== '' ? $vendorUidSession : $vendorNumericId);
 
-if ($buyerFirebaseId === '' && $buyerId !== '') {
-    $buyerFirebaseId = $buyerId;
+if ($buyerUid !== '') {
+    $currentRole = 'buyer';
+    $currentUserId = $buyerUid;
+    $currentUserName = $buyerName ?: 'Buyer';
+    $counterpartyRole = 'vendor';
+    $counterpartyName = $vendorName ?: 'Vendor';
+}
+if (isset($_SESSION['vendor_id']) || $vendorUidSession !== '') {
+    $currentRole = 'vendor';
+    $currentUserId = $vendorUid !== '' ? $vendorUid : ($vendorNumericId !== '' ? $vendorNumericId : $vendorUidSession);
+    $currentUserName = $vendorName ?: 'Vendor';
+    $counterpartyRole = 'buyer';
+    $counterpartyName = $buyerName ?: 'Buyer';
 }
 
-if ($vendorFirebaseId === '' && $vendorId !== '') {
-    $vendorFirebaseId = $vendorId;
+if ($currentRole === 'vendor' && $buyerUidParam !== '') {
+    $counterpartyName = $buyerName ?: 'Buyer';
+    $buyerUid = $buyerUidParam;
+}
+if ($currentRole === 'buyer' && $vendorUidParam !== '') {
+    $counterpartyName = $vendorName ?: 'Vendor';
+    $vendorUid = $vendorUidParam;
 }
 
-if ($buyerUid === '' && $buyerId !== '' && $buyerId !== $buyerNumericId) {
-    $buyerUid = $buyerId;
+if ($currentRole === 'guest' && $buyerUid !== '') {
+    $currentRole = 'buyer';
+    $currentUserId = $buyerUid;
+    $currentUserName = $buyerName ?: 'Buyer';
+    $counterpartyRole = 'vendor';
+    $counterpartyName = $vendorName ?: 'Vendor';
+}
+if ($currentRole === 'guest' && $vendorUid !== '') {
+    $currentRole = 'vendor';
+    $currentUserId = $vendorUid;
+    $currentUserName = $vendorName ?: 'Vendor';
+    $counterpartyRole = 'buyer';
+    $counterpartyName = $buyerName ?: 'Buyer';
 }
 
-if ($vendorUid === '' && $vendorId !== '' && $vendorId !== $vendorNumericId) {
-    $vendorUid = $vendorId;
+$chatId = isset($_GET['chatId']) ? trim((string) $_GET['chatId']) : '';
+if ($chatId === '' && $buyerUid !== '' && $vendorUid !== '' && $productId !== '') {
+    $chatId = $buyerUid . '_' . $vendorUid . '_' . $productId;
 }
 
-if ($vendorNumericId === '' && isset($_GET['vendorNumericId'])) {
-    $vendorNumericId = trim((string) $_GET['vendorNumericId']);
+$participantName = isset($_GET['participantName']) ? trim((string) $_GET['participantName']) : '';
+if ($participantName !== '') {
+    $counterpartyName = $participantName;
 }
 
-if ($buyerNumericId === '' && isset($_GET['buyerNumericId'])) {
-    $buyerNumericId = trim((string) $_GET['buyerNumericId']);
-}
-
-if ($vendorNumericId === '' && isset($_GET['vendorNumericId'])) {
-    $vendorNumericId = trim((string) $_GET['vendorNumericId']);
-}
-$productId = $_GET['productId'] ?? '';
-$chatId = $_GET['chatId'] ?? '';
-
-if (!$chatId && $vendorId && $buyerId && $productId) {
-    $chatId = $vendorId . '_' . $buyerId . '_' . $productId;
-}
-
-$participantName = $_GET['participantName'] ?? 'YUSTAM User';
-$statusText = $_GET['status'] ?? 'Online';
-$productTitle = $_GET['productTitle'] ?? 'Marketplace Listing';
-$productImage = $_GET['productImage'] ?? 'https://images.unsplash.com/photo-1510557880182-3d4d3cba35a5?auto=format&fit=crop&w=120&q=80';
-$coverGradient = 'linear-gradient(135deg, rgba(0,77,64,0.92), rgba(0,77,64,0.88))';
-
-$buyerName = $_SESSION['buyer_name'] ?? '';
-$vendorName = $_SESSION['vendor_name'] ?? '';
-$currentUserName = $currentRole === 'buyer'
-    ? ($buyerName !== '' ? $buyerName : 'You')
-    : ($currentRole === 'vendor' && $vendorName !== '' ? $vendorName : 'You');
-
-$counterpartyId = $currentRole === 'buyer' ? $vendorId : $buyerId;
-$counterpartyRole = $currentRole === 'buyer' ? 'vendor' : 'buyer';
-$counterpartyName = $participantName ?: ($counterpartyRole === 'vendor' ? $vendorName : $buyerName);
-$roleLabel = $currentRole === 'vendor' ? 'Buyer' : 'Vendor';
-$counterpartyLabel = $counterpartyName ?: ($roleLabel === 'Buyer' ? 'Marketplace Buyer' : 'Marketplace Vendor');
-$counterpartyName = $counterpartyLabel;
-$currentUserNumericId = $currentRole === 'vendor' ? $vendorNumericId : ($currentRole === 'buyer' ? $buyerNumericId : '');
+$defaultAvatar = 'https://images.unsplash.com/photo-1487412720507-629e7c0b5529?auto=format&fit=crop&w=240&q=80';
+$productImage = $productImage !== '' ? $productImage : 'https://images.unsplash.com/photo-1510557880182-3d4d3cba35a5?auto=format&fit=crop&w=400&q=80';
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-role="<?= htmlspecialchars($currentRole, ENT_QUOTES, 'UTF-8'); ?>">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chat | YUSTAM Marketplace</title>
+    <title>Conversation | YUSTAM Marketplace</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -95,491 +98,481 @@ $currentUserNumericId = $currentRole === 'vendor' ? $vendorNumericId : ($current
     <style>
         :root {
             --emerald: #004D40;
+            --emerald-soft: rgba(0, 77, 64, 0.65);
             --orange: #F3731E;
             --beige: #EADCCF;
-            --white: #FFFFFF;
+            --white: #ffffff;
             --ink: rgba(17, 17, 17, 0.92);
-            --bubble-radius: 18px;
-            --glass: rgba(255, 255, 255, 0.72);
+            --bubble-radius: 20px;
+            --glass: rgba(255, 255, 255, 0.68);
+            --shadow-soft: 0 18px 45px rgba(0, 0, 0, 0.18);
         }
 
-        * {
+        *, *::before, *::after {
             box-sizing: border-box;
         }
 
         body {
             margin: 0;
-            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: radial-gradient(circle at top, rgba(234, 220, 207, 0.8), rgba(255, 255, 255, 0.85));
-            min-height: 100dvh;
-            height: 100dvh;
+            font-family: 'Inter', system-ui, sans-serif;
+            background: radial-gradient(circle at top, rgba(234, 220, 207, 0.82), rgba(255, 255, 255, 0.94));
+            min-height: 100vh;
             display: flex;
             flex-direction: column;
             color: var(--ink);
         }
 
-        .chat-shell {
+        html[data-role="vendor"] body {
+            background: linear-gradient(160deg, rgba(0, 77, 64, 0.92), rgba(0, 128, 106, 0.88));
+            color: var(--white);
+        }
+
+        .chat-surface {
+            flex: 1;
             display: flex;
             flex-direction: column;
-            min-height: 100dvh;
+            width: min(960px, 100%);
+            margin: 0 auto;
             backdrop-filter: blur(18px);
+            background: rgba(255, 255, 255, 0.14);
+        }
+
+        html[data-role="vendor"] .chat-surface {
+            background: rgba(0, 0, 0, 0.28);
         }
 
         .chat-header {
             position: sticky;
             top: 0;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 12px 18px;
-            background: rgba(0, 77, 64, 0.95);
-            color: var(--white);
-            z-index: 80;
-            box-shadow: 0 16px 32px rgba(0, 0, 0, 0.25);
-            border-bottom: 3px solid rgba(243, 115, 30, 0.55);
-        }
-
-        .chat-header .profile {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .chat-header .profile img {
-            width: 42px;
-            height: 42px;
-            border-radius: 16px;
-            object-fit: cover;
-            border: 2px solid rgba(255, 255, 255, 0.55);
-            box-shadow: 0 10px 18px rgba(0, 0, 0, 0.25);
-        }
-
-        .chat-header button {
-            background: rgba(255, 255, 255, 0.16);
-            border: none;
-            color: var(--white);
-            width: 42px;
-            height: 42px;
-            border-radius: 14px;
+            z-index: 50;
             display: grid;
-            place-items: center;
-            font-size: 1.25rem;
-            transition: transform 0.25s ease, background 0.25s ease;
+            grid-template-columns: auto 1fr auto;
+            gap: 16px;
+            align-items: center;
+            padding: clamp(16px, 3vw, 24px);
+            background: rgba(255, 255, 255, 0.58);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(0, 0, 0, 0.06);
         }
 
-        .chat-header button:hover {
+        html[data-role="vendor"] .chat-header {
+            background: rgba(0, 0, 0, 0.38);
+            border-bottom-color: rgba(255, 255, 255, 0.16);
+        }
+
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 44px;
+            height: 44px;
+            border-radius: 16px;
+            color: inherit;
+            text-decoration: none;
+            background: rgba(0, 0, 0, 0.06);
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .back-link:hover {
             transform: translateY(-2px);
-            background: rgba(255, 255, 255, 0.24);
+            box-shadow: inset 0 0 0 2px rgba(243, 115, 30, 0.6);
         }
 
-        .chat-header .profile-info {
+        html[data-role="vendor"] .back-link {
+            background: rgba(255, 255, 255, 0.08);
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.26);
+        }
+
+        .chat-partner {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .chat-partner img {
+            width: 54px;
+            height: 54px;
+            border-radius: 18px;
+            object-fit: cover;
+            box-shadow: 0 16px 32px rgba(0, 0, 0, 0.2);
+        }
+
+        .partner-meta {
             display: flex;
             flex-direction: column;
-            gap: 4px;
+            gap: 6px;
         }
 
-        .product-title {
+        .partner-meta h1 {
+            margin: 0;
             font-family: 'Anton', sans-serif;
-            letter-spacing: 0.05em;
-            font-size: clamp(1.1rem, 3vw, 1.35rem);
-            color: rgba(255, 255, 255, 0.94);
-            max-width: min(52vw, 360px);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+            font-size: clamp(1.3rem, 4vw, 1.8rem);
+            letter-spacing: 0.06em;
         }
 
-        .profile-meta {
+        .partner-status {
             display: inline-flex;
-            flex-wrap: wrap;
             align-items: center;
             gap: 8px;
-            font-size: 0.82rem;
-            color: rgba(255, 255, 255, 0.78);
+            font-size: 0.88rem;
+            opacity: 0.78;
         }
 
-        .profile-meta .role-label {
-            text-transform: uppercase;
-            letter-spacing: 0.12em;
-            font-size: 0.74rem;
+        .partner-product {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            background: rgba(255, 255, 255, 0.72);
+            padding: 10px 16px;
+            border-radius: 16px;
+            box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
         }
 
-        .profile-meta .dot {
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            background: currentColor;
-            opacity: 0.6;
-            display: inline-block;
+        .partner-product img {
+            width: 44px;
+            height: 44px;
+            border-radius: 14px;
+            object-fit: cover;
         }
 
-        .chat-body {
+        .partner-product span {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: rgba(0, 0, 0, 0.8);
+        }
+
+        html[data-role="vendor"] .partner-product {
+            background: rgba(255, 255, 255, 0.16);
+            color: var(--white);
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+        }
+
+        html[data-role="vendor"] .partner-product span {
+            color: rgba(255, 255, 255, 0.92);
+        }
+
+        .message-stream {
             flex: 1;
-            display: flex;
-            flex-direction: column;
-            justify-content: flex-start;
-            background: linear-gradient(160deg, rgba(234, 220, 207, 0.78), rgba(255, 255, 255, 0.9));
-            min-height: 0;
-        }
-
-        .message-area {
-            flex: 1;
-            padding: clamp(14px, 4vw, 26px) clamp(12px, 4vw, 32px);
-            padding-bottom: clamp(80px, 15vh, 140px);
+            padding: 32px clamp(16px, 6vw, 64px) clamp(120px, 20vh, 220px);
             overflow-y: auto;
             display: flex;
             flex-direction: column;
-            gap: 12px;
-            scroll-behavior: smooth;
+            gap: 18px;
         }
 
         .message-bubble {
-            position: relative;
-            max-width: min(82%, 520px);
-            padding: 12px 14px 18px;
+            max-width: min(76%, 520px);
+            padding: 14px 18px;
             border-radius: var(--bubble-radius);
-            box-shadow: 0 14px 32px rgba(0, 0, 0, 0.14);
-            display: grid;
-            gap: 8px;
-            animation: fadeUp 0.35s ease forwards;
-            opacity: 0;
+            background: rgba(255, 255, 255, 0.92);
+            color: rgba(17, 17, 17, 0.92);
+            box-shadow: 0 18px 40px rgba(0, 0, 0, 0.08);
+            display: inline-flex;
+            flex-direction: column;
+            gap: 12px;
+            animation: bubble-in 0.35s ease forwards;
         }
 
         .message-bubble.incoming {
             align-self: flex-start;
-            background: rgba(255, 255, 255, 0.85);
-            color: rgba(17, 17, 17, 0.85);
-            border: 1px solid rgba(17, 17, 17, 0.08);
+            border-bottom-left-radius: 6px;
         }
 
         .message-bubble.outgoing {
             align-self: flex-end;
-            background: linear-gradient(140deg, rgba(0, 77, 64, 0.95), rgba(0, 118, 100, 0.88));
+            border-bottom-right-radius: 6px;
+            background: linear-gradient(135deg, rgba(0, 77, 64, 0.92), rgba(0, 128, 108, 0.92));
             color: var(--white);
         }
 
+        html[data-role="vendor"] .message-bubble.outgoing {
+            background: linear-gradient(135deg, rgba(243, 115, 30, 0.92), rgba(223, 90, 10, 0.92));
+        }
+
         .message-text {
-            font-size: 0.95rem;
-            line-height: 1.45;
+            margin: 0;
+            line-height: 1.55;
+            font-size: 0.98rem;
             word-break: break-word;
         }
 
-        .message-image {
-            border-radius: 16px;
-            overflow: hidden;
-            max-height: 260px;
-            border: 1px solid rgba(255, 255, 255, 0.32);
-        }
-
         .message-image img {
-            width: 100%;
-            display: block;
-            object-fit: cover;
+            max-width: 260px;
+            border-radius: 14px;
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
         }
 
         .message-meta {
-            display: flex;
-            align-items: center;
-            justify-content: flex-end;
-            gap: 6px;
-            font-size: 0.72rem;
-            opacity: 0.86;
-        }
-
-        .message-meta i {
-            font-size: 0.82rem;
-        }
-
-        .typing-indicator {
-            align-self: flex-start;
-            background: rgba(255, 255, 255, 0.78);
-            border-radius: 18px;
-            padding: 10px 16px;
-            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
-            display: none;
-            margin-left: 12px;
-            margin-bottom: 10px;
-            font-size: 0.86rem;
-            color: rgba(17, 17, 17, 0.7);
-        }
-
-        .typing-indicator.active {
             display: inline-flex;
-            flex-wrap: wrap;
             align-items: center;
-            gap: 8px;
-        }
-
-        .typing-indicator span {
-            display: inline-flex;
-            flex-wrap: wrap;
-            gap: 4px;
-        }
-
-        .typing-indicator span i {
-            animation: blink 1.2s infinite ease-in-out;
-        }
-
-        .typing-indicator span i:nth-child(2) {
-            animation-delay: 0.2s;
-        }
-
-        .typing-indicator span i:nth-child(3) {
-            animation-delay: 0.4s;
-        }
-
-        .chat-composer {
-            position: sticky;
-            bottom: 0;
-            padding: 12px clamp(12px, 4vw, 28px) calc(clamp(16px, 5vw, 28px) + env(safe-area-inset-bottom, 0));
-            background: rgba(255, 255, 255, 0.82);
-            backdrop-filter: blur(14px);
-            border-top: 1px solid rgba(0, 0, 0, 0.08);
-            display: grid;
             gap: 12px;
+            font-size: 0.75rem;
+            opacity: 0.66;
+        }
+
+        .message-bubble.outgoing .message-meta {
+            color: rgba(255, 255, 255, 0.76);
+        }
+
+        .empty-state {
+            align-self: center;
+            text-align: center;
+            padding: 48px 32px;
+            background: rgba(255, 255, 255, 0.7);
+            border-radius: 24px;
+            color: rgba(0, 0, 0, 0.7);
+            max-width: 320px;
+            box-shadow: 0 18px 40px rgba(0, 0, 0, 0.1);
+        }
+
+        html[data-role="vendor"] .empty-state {
+            background: rgba(0, 0, 0, 0.35);
+            color: rgba(255, 255, 255, 0.82);
+        }
+
+        .empty-state span {
+            display: block;
+            font-size: 2rem;
+            margin-bottom: 12px;
+        }
+
+        .empty-state h2 {
+            margin: 0 0 10px;
+            font-family: 'Anton', sans-serif;
+            letter-spacing: 0.08em;
+            color: rgba(0, 77, 64, 0.85);
+        }
+
+        .empty-state p {
+            margin: 0;
+            font-size: 0.92rem;
+        }
+
+        .composer {
+            position: fixed;
+            left: 50%;
+            bottom: clamp(12px, 4vw, 28px);
+            transform: translateX(-50%);
+            width: min(920px, calc(100% - 32px));
+            display: grid;
+            grid-template-columns: auto 1fr auto;
+            align-items: center;
+            gap: 16px;
+            padding: 16px 18px;
+            border-radius: 22px;
+            background: rgba(255, 255, 255, 0.92);
+            box-shadow: var(--shadow-soft);
+        }
+
+        html[data-role="vendor"] .composer {
+            background: rgba(0, 0, 0, 0.38);
+            color: var(--white);
+            box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+        }
+
+        .composer textarea {
+            width: 100%;
+            resize: none;
+            border: none;
+            background: transparent;
+            font: inherit;
+            min-height: 54px;
+            color: inherit;
+            outline: none;
+        }
+
+        .composer button,
+        .composer label {
+            width: 46px;
+            height: 46px;
+            border-radius: 16px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: none;
+            background: rgba(0, 0, 0, 0.06);
+            color: inherit;
+            font-size: 1.3rem;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .composer button:hover,
+        .composer label:hover {
+            transform: translateY(-1px);
+            box-shadow: inset 0 0 0 2px rgba(243, 115, 30, 0.65);
+        }
+
+        html[data-role="vendor"] .composer button,
+        html[data-role="vendor"] .composer label {
+            background: rgba(255, 255, 255, 0.12);
+        }
+
+        .composer button.primary {
+            background: linear-gradient(135deg, rgba(0, 77, 64, 0.96), rgba(0, 128, 106, 0.86));
+            color: var(--white);
+        }
+
+        html[data-role="vendor"] .composer button.primary {
+            background: linear-gradient(135deg, rgba(243, 115, 30, 0.96), rgba(224, 96, 16, 0.88));
+        }
+
+        .composer button.primary.is-loading::after {
+            content: '';
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            border-top-color: var(--white);
+            animation: spin 0.9s linear infinite;
+        }
+
+        .composer button.primary.is-loading > i {
+            display: none;
         }
 
         .image-preview {
-            display: none;
-            background: rgba(255, 255, 255, 0.82);
-            border-radius: 18px;
-            padding: 10px;
-            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.14);
-            border: 1px dashed rgba(0, 77, 64, 0.45);
-        }
-
-        .image-preview.active {
             display: flex;
             align-items: center;
             gap: 12px;
+            margin-top: 12px;
+            padding: 12px;
+            border-radius: 16px;
+            background: rgba(0, 77, 64, 0.08);
         }
 
         .image-preview img {
             width: 72px;
             height: 72px;
+            border-radius: 16px;
             object-fit: cover;
-            border-radius: 16px;
         }
 
-        .image-preview button {
-            background: rgba(0, 0, 0, 0.08);
-            border: none;
-            border-radius: 12px;
-            width: 36px;
-            height: 36px;
-            display: grid;
-            place-items: center;
-            cursor: pointer;
+        html[data-role="vendor"] .image-preview {
+            background: rgba(255, 255, 255, 0.16);
         }
 
-        .composer-row {
-            display: grid;
-            grid-template-columns: auto 1fr auto;
-            gap: 10px;
-            align-items: center;
-            background: rgba(255, 255, 255, 0.8);
-            border-radius: 20px;
-            padding: 10px 12px;
-            border: 1px solid rgba(0, 0, 0, 0.08);
-            box-shadow: 0 14px 28px rgba(0, 0, 0, 0.12);
-        }
-
-        .composer-row button,
-        .composer-row label {
-            width: 44px;
-            height: 44px;
-            border-radius: 16px;
-            display: grid;
-            place-items: center;
-            border: none;
-            background: rgba(234, 220, 207, 0.6);
-            color: var(--emerald);
-            font-size: 1.15rem;
-            cursor: pointer;
-            transition: transform 0.24s ease, box-shadow 0.24s ease;
-        }
-
-        .composer-row label:hover,
-        .composer-row button:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12);
-        }
-
-        .composer-row input[type="text"] {
-            border: none;
-            background: transparent;
-            font-size: 1rem;
-            color: var(--ink);
-            outline: none;
-        }
-
-        .composer-row button.send {
-            background: linear-gradient(135deg, var(--orange), #ff8a3c);
-            color: var(--white);
-            font-size: 1.2rem;
-        }
-
-        .hidden-input {
+        .typing-indicator {
             display: none;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.86rem;
+            padding: 4px 12px;
+            border-radius: 14px;
+            background: rgba(0, 77, 64, 0.08);
+            color: rgba(0, 77, 64, 0.86);
+            margin-top: 8px;
         }
 
-        .empty-state {
-            margin: auto;
-            text-align: center;
-            color: rgba(17, 17, 17, 0.65);
+        html[data-role="vendor"] .typing-indicator {
+            background: rgba(255, 255, 255, 0.18);
+            color: rgba(255, 255, 255, 0.8);
         }
 
-        @keyframes fadeUp {
+        @keyframes bubble-in {
             from {
-                transform: translateY(16px);
                 opacity: 0;
+                transform: translateY(12px) scale(0.98);
             }
             to {
-                transform: translateY(0);
                 opacity: 1;
+                transform: translateY(0) scale(1);
             }
         }
 
-        @keyframes blink {
-            0%, 80%, 100% { opacity: 0.2; }
-            40% { opacity: 1; }
+        @keyframes spin {
+            from { transform: rotate(0); }
+            to { transform: rotate(360deg); }
         }
 
-        @media (min-width: 768px) {
+        @media (max-width: 720px) {
             .chat-header {
-                padding: 16px 28px;
+                grid-template-columns: 1fr;
+                text-align: center;
             }
 
-            .message-area {
-                padding: 28px 48px;
-                padding-bottom: clamp(110px, 18vh, 180px);
+            .chat-partner {
+                justify-content: center;
             }
-        }
 
-        body.chat-role-buyer {
-            background: radial-gradient(circle at top, rgba(224, 245, 239, 0.86), rgba(255, 255, 255, 0.94));
-        }
+            .composer {
+                grid-template-columns: 1fr auto;
+                row-gap: 12px;
+                padding: 18px;
+            }
 
-        body.chat-role-buyer .chat-header {
-            background: linear-gradient(135deg, rgba(0, 77, 64, 0.95), rgba(0, 120, 100, 0.82));
-        }
+            .composer textarea {
+                min-height: 64px;
+            }
 
-        body.chat-role-buyer .chat-composer {
-            background: rgba(240, 252, 248, 0.92);
-        }
-
-        body.chat-role-vendor {
-            background: radial-gradient(circle at top, rgba(255, 241, 228, 0.88), rgba(255, 255, 255, 0.95));
-        }
-
-        body.chat-role-vendor .chat-header {
-            background: linear-gradient(135deg, rgba(243, 115, 30, 0.92), rgba(255, 160, 72, 0.82));
-        }
-
-        body.chat-role-vendor .chat-composer {
-            background: rgba(255, 248, 240, 0.94);
-        }
-
-        body.chat-role-vendor .message-bubble.outgoing {
-            background: linear-gradient(140deg, rgba(243, 115, 30, 0.92), rgba(255, 149, 59, 0.85));
-        }
-
-        body.chat-role-vendor .message-bubble.incoming {
-            background: rgba(255, 255, 255, 0.92);
-            color: rgba(17, 17, 17, 0.88);
-        }
-
-        body.chat-role-buyer .composer-row button.send {
-            background: linear-gradient(135deg, rgba(0, 128, 109, 0.92), rgba(0, 173, 137, 0.92));
-        }
-
-        body.chat-role-vendor .composer-row button.send {
-            background: linear-gradient(135deg, rgba(243, 115, 30, 0.96), rgba(255, 160, 72, 0.9));
+            .message-stream {
+                padding-bottom: 180px;
+            }
         }
     </style>
 </head>
-<body class="chat-role-<?= htmlspecialchars($currentRole, ENT_QUOTES, 'UTF-8'); ?>">
+<body>
     <div
         id="chatApp"
-        class="chat-shell"
+        class="chat-surface"
         data-chat-id="<?= htmlspecialchars($chatId, ENT_QUOTES, 'UTF-8'); ?>"
         data-product-id="<?= htmlspecialchars($productId, ENT_QUOTES, 'UTF-8'); ?>"
         data-product-title="<?= htmlspecialchars($productTitle, ENT_QUOTES, 'UTF-8'); ?>"
         data-product-image="<?= htmlspecialchars($productImage, ENT_QUOTES, 'UTF-8'); ?>"
-        data-participant-name="<?= htmlspecialchars($counterpartyLabel, ENT_QUOTES, 'UTF-8'); ?>"
-        data-participant-status="<?= htmlspecialchars($statusText, ENT_QUOTES, 'UTF-8'); ?>"
-        data-current-user-id="<?= htmlspecialchars((string)$currentUserId, ENT_QUOTES, 'UTF-8'); ?>"
-        data-current-user-numeric-id="<?= htmlspecialchars((string)$currentUserNumericId, ENT_QUOTES, 'UTF-8'); ?>"
-        data-current-role="<?= htmlspecialchars($currentRole, ENT_QUOTES, 'UTF-8'); ?>"
-        data-current-user-name="<?= htmlspecialchars($currentUserName, ENT_QUOTES, 'UTF-8'); ?>"
-        data-buyer-uid="<?= htmlspecialchars($buyerId, ENT_QUOTES, 'UTF-8'); ?>"
-        data-buyer-id="<?= htmlspecialchars((string)$buyerNumericId, ENT_QUOTES, 'UTF-8'); ?>"
+        data-buyer-uid="<?= htmlspecialchars($buyerUid, ENT_QUOTES, 'UTF-8'); ?>"
         data-buyer-name="<?= htmlspecialchars($buyerName, ENT_QUOTES, 'UTF-8'); ?>"
-        data-vendor-uid="<?= htmlspecialchars($vendorId, ENT_QUOTES, 'UTF-8'); ?>"
-        data-vendor-id="<?= htmlspecialchars((string)$vendorNumericId, ENT_QUOTES, 'UTF-8'); ?>"
+        data-vendor-uid="<?= htmlspecialchars($vendorUid, ENT_QUOTES, 'UTF-8'); ?>"
         data-vendor-name="<?= htmlspecialchars($vendorName, ENT_QUOTES, 'UTF-8'); ?>"
-        data-counterparty-id="<?= htmlspecialchars((string)$counterpartyId, ENT_QUOTES, 'UTF-8'); ?>"
-        data-counterparty-role="<?= htmlspecialchars($counterpartyRole, ENT_QUOTES, 'UTF-8'); ?>"
+        data-current-role="<?= htmlspecialchars($currentRole, ENT_QUOTES, 'UTF-8'); ?>"
+        data-current-user-id="<?= htmlspecialchars($currentUserId, ENT_QUOTES, 'UTF-8'); ?>"
+        data-counterparty-id="<?= htmlspecialchars($currentRole === 'buyer' ? $vendorUid : $buyerUid, ENT_QUOTES, 'UTF-8'); ?>"
         data-counterparty-name="<?= htmlspecialchars($counterpartyName, ENT_QUOTES, 'UTF-8'); ?>"
+        data-counterparty-role="<?= htmlspecialchars($counterpartyRole, ENT_QUOTES, 'UTF-8'); ?>"
     >
-        <header class="chat-header" role="banner">
-            <button type="button" aria-label="Go back" onclick="window.history.back()">
+        <header class="chat-header">
+            <a class="back-link" href="<?= $currentRole === 'vendor' ? 'vendor-chats.php' : 'buyer-chats.php'; ?>" aria-label="Back to chats">
                 <i class="ri-arrow-left-line" aria-hidden="true"></i>
-            </button>
-            <div class="profile" role="button" tabindex="0">
-                <img src="<?= htmlspecialchars($productImage, ENT_QUOTES, 'UTF-8'); ?>" alt="Product thumbnail">
-                <div class="profile-info">
-                    <strong class="product-title" id="productTitleHeading"><?= htmlspecialchars($productTitle, ENT_QUOTES, 'UTF-8'); ?></strong>
-                    <div class="profile-meta">
-                        <span class="role-label"><?= htmlspecialchars($roleLabel, ENT_QUOTES, 'UTF-8'); ?></span>
-                        <span id="participantNameHeading"><?= htmlspecialchars($counterpartyLabel, ENT_QUOTES, 'UTF-8'); ?></span>
-                        <span class="dot" aria-hidden="true"></span>
-                        <span id="participantStatus"><?= htmlspecialchars($roleLabel . ' ' . ($statusText !== '' ? $statusText : 'Offline'), ENT_QUOTES, 'UTF-8'); ?></span>
+            </a>
+            <div class="chat-partner">
+                <img src="<?= htmlspecialchars($productImage ?: $defaultAvatar, ENT_QUOTES, 'UTF-8'); ?>" alt="Product cover">
+                <div class="partner-meta">
+                    <h1 id="participantNameHeading"><?= htmlspecialchars($counterpartyName, ENT_QUOTES, 'UTF-8'); ?></h1>
+                    <div class="partner-status" id="participantStatus">
+                        <i class="ri-shield-check-line" aria-hidden="true"></i>
+                        Trusted <?= htmlspecialchars(ucfirst($counterpartyRole ?: 'partner'), ENT_QUOTES, 'UTF-8'); ?>
                     </div>
                 </div>
             </div>
-            <button type="button" aria-label="Chat options">
-                <i class="ri-more-2-fill" aria-hidden="true"></i>
-            </button>
+            <div class="partner-product">
+                <img src="<?= htmlspecialchars($productImage, ENT_QUOTES, 'UTF-8'); ?>" alt="Listing">
+                <span><?= htmlspecialchars($productTitle, ENT_QUOTES, 'UTF-8'); ?></span>
+            </div>
         </header>
-        <section class="chat-body">
-            <div id="messageArea" class="message-area" aria-live="polite"></div>
-            <div id="typingIndicator" class="typing-indicator" role="status" aria-live="polite">
-                <span>
-                    <i class="ri-checkbox-blank-circle-fill"></i>
-                    <i class="ri-checkbox-blank-circle-fill"></i>
-                    <i class="ri-checkbox-blank-circle-fill"></i>
-                </span>
-                typing…
-            </div>
-            <footer class="chat-composer" role="contentinfo">
-                <div id="imagePreview" class="image-preview" aria-live="polite">
-                    <img src="" alt="Selected preview" id="previewImage">
-                    <div>
-                        <span style="display:block; font-size:0.8rem; color:rgba(17,17,17,0.65);">Attachment ready</span>
-                        <button type="button" id="removeImage" aria-label="Remove image">
-                            <i class="ri-close-line"></i>
-                        </button>
-                    </div>
-                </div>
-                <form id="composerForm" class="composer-row">
-                    <label for="fileInput" aria-label="Attach image">
-                        <i class="ri-attachment-2"></i>
-                        <input id="fileInput" class="hidden-input" type="file" accept="image/*">
-                    </label>
-                    <input id="messageInput" type="text" placeholder="Type a message…" autocomplete="off">
-                    <button id="sendButton" class="send" type="submit" aria-label="Send message">
-                        <i class="ri-send-plane-fill"></i>
-                    </button>
-                </form>
-            </footer>
-        </section>
+        <section id="messageArea" class="message-stream" aria-live="polite" aria-label="Conversation messages"></section>
+        <div id="typingIndicator" class="typing-indicator">
+            <span class="dot">•</span>
+            <span>Typing…</span>
+        </div>
     </div>
-  <script src="theme-manager.js" defer></script>
-  <script type="module" src="chat.js"></script>
+
+    <form id="composerForm" class="composer" autocomplete="off">
+        <label for="fileInput" title="Send image">
+            <i class="ri-image-add-line" aria-hidden="true"></i>
+            <input id="fileInput" type="file" accept="image/*" hidden>
+        </label>
+        <textarea id="messageInput" name="message" placeholder="Write a message…" maxlength="1200"></textarea>
+        <button id="sendButton" type="submit" class="primary" aria-label="Send message">
+            <i class="ri-send-plane-2-fill" aria-hidden="true"></i>
+        </button>
+        <div id="imagePreview" class="image-preview" hidden>
+            <img id="previewImage" src="" alt="Attachment preview">
+            <button type="button" id="removeImage" class="secondary" title="Remove image">
+                <i class="ri-close-circle-line" aria-hidden="true"></i>
+            </button>
+        </div>
+    </form>
+
+    <script type="module" src="chat.js"></script>
 </body>
 </html>
-
-
-
-

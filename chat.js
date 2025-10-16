@@ -1,7 +1,13 @@
 import { uploadImage } from './cloudinary.js';
-
-const QUICK_MESSAGE_KEY = 'yustam_quick_message';
-const POLL_INTERVAL = 5000;
+import {
+  buildChatId,
+  ensureChatSummary,
+  markChatRead,
+  sendChatMessage,
+  setTypingStatus,
+  subscribeToChatMessages,
+  subscribeToChatSummary,
+} from './chat-service.js';
 
 const appShell = document.getElementById('chatApp');
 const messageArea = document.getElementById('messageArea');
@@ -12,44 +18,59 @@ const fileInput = document.getElementById('fileInput');
 const imagePreview = document.getElementById('imagePreview');
 const previewImage = document.getElementById('previewImage');
 const removeImageButton = document.getElementById('removeImage');
-const participantStatus = document.getElementById('participantStatus');
 const typingIndicator = document.getElementById('typingIndicator');
 const participantNameHeading = document.getElementById('participantNameHeading');
-const roleLabelHeading = document.querySelector('.profile-meta .role-label');
+const participantStatus = document.getElementById('participantStatus');
+
+if (!appShell) {
+  console.warn('[chat] Shell not found.');
+}
 
 const state = {
   chatId: appShell?.dataset.chatId || '',
+  buyerUid: appShell?.dataset.buyerUid || '',
+  buyerName: appShell?.dataset.buyerName || 'Buyer',
+  vendorUid: appShell?.dataset.vendorUid || '',
+  vendorName: appShell?.dataset.vendorName || 'Vendor',
   productId: appShell?.dataset.productId || '',
   productTitle: appShell?.dataset.productTitle || 'Marketplace Listing',
   productImage: appShell?.dataset.productImage || '',
-  buyerUid: appShell?.dataset.buyerUid || '',
-  buyerId: appShell?.dataset.buyerId || '',
-  buyerName: appShell?.dataset.buyerName || '',
-  vendorUid: appShell?.dataset.vendorUid || '',
-  vendorId: appShell?.dataset.vendorId || '',
-  vendorName: appShell?.dataset.vendorName || '',
-  currentUid: appShell?.dataset.currentUserId || '',
-  currentNumericId: appShell?.dataset.currentUserNumericId || '',
   currentRole: appShell?.dataset.currentRole || 'guest',
-  currentUserName: appShell?.dataset.currentUserName || '',
+  currentUserId: appShell?.dataset.currentUserId || '',
+  counterpartyId: appShell?.dataset.counterpartyId || '',
   counterpartyName: appShell?.dataset.counterpartyName || '',
   counterpartyRole: appShell?.dataset.counterpartyRole || '',
-  pollingTimer: null,
-  lastMessageId: 0,
+  sending: false,
+  typing: false,
+  typingTimeout: null,
   pendingFile: null,
-  isSending: false,
-  initialised: false
+  unsubscribeMessages: null,
+  unsubscribeSummary: null,
+  lastReceivedTimestamp: 0,
 };
 
-function computeChatId() {
-  if (state.chatId) return state.chatId;
-  if (state.vendorUid && state.buyerUid && state.productId) {
-    return `${state.vendorUid}_${state.buyerUid}_${state.productId}`;
+if (!state.chatId) {
+  state.chatId = buildChatId(state.buyerUid, state.vendorUid, state.productId);
+  if (appShell) {
+    appShell.dataset.chatId = state.chatId;
   }
-  return '';
 }
 
-state.chatId = computeChatId();
+function formatTimestamp(value) {
+  if (!value) return '';
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function ensureScrolledToBottom(force = false) {
+  if (!messageArea) return;
+  const nearBottom =
+    messageArea.scrollHeight - messageArea.scrollTop - messageArea.clientHeight < 120;
+  if (force || nearBottom) {
+    messageArea.scrollTop = messageArea.scrollHeight;
+  }
+}
 
 function toggleTypingIndicator(show) {
   if (!typingIndicator) return;
@@ -58,306 +79,295 @@ function toggleTypingIndicator(show) {
 
 toggleTypingIndicator(false);
 
-function formatTime(value) {
-  if (!value) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-}
-
-function createMessageElement(message) {
-  const isOwn = message.sender_uid === state.currentUid;
+function createBubbleElement(message) {
+  const isOwn = message.sender_uid === state.currentUserId;
   const bubble = document.createElement('article');
   bubble.className = `message-bubble ${isOwn ? 'outgoing' : 'incoming'}`;
-  bubble.dataset.messageId = String(message.id);
+  bubble.dataset.messageId = message.id;
+  bubble.style.animationDelay = `${Math.min(message.index || 0, 6) * 45}ms`;
 
   if (message.image_url) {
-    const imageWrapper = document.createElement('div');
-    imageWrapper.className = 'message-image';
+    const imageContainer = document.createElement('div');
+    imageContainer.className = 'message-image';
     const img = document.createElement('img');
     img.src = message.image_url;
-    img.alt = 'Attachment';
-    imageWrapper.appendChild(img);
-    bubble.appendChild(imageWrapper);
+    img.alt = 'Chat attachment';
+    img.loading = 'lazy';
+    imageContainer.appendChild(img);
+    bubble.appendChild(imageContainer);
   }
 
-  if (message.message_text) {
+  if (message.message) {
     const text = document.createElement('p');
     text.className = 'message-text';
-    text.textContent = message.message_text;
+    text.textContent = message.message;
     bubble.appendChild(text);
   }
 
-  const meta = document.createElement('div');
+  const meta = document.createElement('footer');
   meta.className = 'message-meta';
-  const timeSpan = document.createElement('span');
-  timeSpan.textContent = formatTime(message.created_at);
-  meta.appendChild(timeSpan);
-  bubble.appendChild(meta);
+  const time = document.createElement('span');
+  time.className = 'message-time';
+  time.textContent = formatTimestamp(message.timestamp);
+  meta.appendChild(time);
 
+  if (isOwn) {
+    const status = document.createElement('span');
+    status.className = 'message-status';
+    if (message.read) {
+      status.textContent = '✔✔';
+      status.title = 'Read';
+    } else {
+      status.textContent = '✔';
+      status.title = 'Sent';
+    }
+    meta.appendChild(status);
+  }
+
+  bubble.appendChild(meta);
   return bubble;
 }
 
-function appendMessages(messages) {
-  if (!messages.length || !messageArea) return;
-  const fragment = document.createDocumentFragment();
-  messages.forEach((msg) => {
-    const element = createMessageElement(msg);
-    fragment.appendChild(element);
-    state.lastMessageId = Math.max(state.lastMessageId, Number(msg.id));
-  });
-  const shouldScroll =
-    messageArea.scrollHeight - messageArea.scrollTop - messageArea.clientHeight < 120;
-  messageArea.appendChild(fragment);
-  if (shouldScroll) {
-    messageArea.scrollTop = messageArea.scrollHeight;
-  }
-}
-
-function clearMessages() {
+function upsertMessageElement(message, index) {
   if (!messageArea) return;
-  messageArea.innerHTML = '';
-  state.lastMessageId = 0;
+  const placeholder = messageArea.querySelector('.empty-state');
+  if (placeholder) {
+    placeholder.remove();
+  }
+  const existing = messageArea.querySelector(`.message-bubble[data-message-id="${message.id}"]`);
+  if (existing) {
+    existing.querySelector('.message-time').textContent = formatTimestamp(message.timestamp);
+    if (message.read && existing.querySelector('.message-status')) {
+      existing.querySelector('.message-status').textContent = '✔✔';
+      existing.querySelector('.message-status').title = 'Read';
+    }
+    return;
+  }
+  const bubble = createBubbleElement({ ...message, index });
+  messageArea.appendChild(bubble);
+  ensureScrolledToBottom(message.sender_uid === state.currentUserId);
 }
 
-function updateConversationSummary(summary) {
-  if (!summary) return;
-  if (summary.counterpartyName) {
-    state.counterpartyName = summary.counterpartyName;
-    if (participantNameHeading) {
-      participantNameHeading.textContent = summary.counterpartyName;
-    }
-    if (appShell) {
-      appShell.dataset.counterpartyName = summary.counterpartyName;
-    }
+function clearComposer() {
+  if (messageInput) {
+    messageInput.value = '';
   }
-  if (summary.counterpartyRole) {
-    state.counterpartyRole = summary.counterpartyRole;
-    if (roleLabelHeading) {
-      roleLabelHeading.textContent = summary.counterpartyRole === 'vendor' ? 'Vendor' : 'Buyer';
-    }
-    if (appShell) {
-      appShell.dataset.counterpartyRole = summary.counterpartyRole;
-    }
+  state.pendingFile = null;
+  if (fileInput) {
+    fileInput.value = '';
   }
-  if (participantStatus && summary.lastMessageAt) {
-    const lastTime = formatTime(summary.lastMessageAt);
-    participantStatus.textContent = lastTime ? `Last active ${lastTime}` : '';
+  if (imagePreview) {
+    imagePreview.hidden = true;
+  }
+  if (previewImage) {
+    previewImage.src = '';
   }
 }
 
-async function fetchThread(initial = false) {
-  if (!state.chatId) return;
+function showPreview(file) {
+  if (!file || !imagePreview || !previewImage) return;
+  const reader = new FileReader();
+  reader.onload = (event) => {
+    previewImage.src = String(event.target?.result || '');
+    imagePreview.hidden = false;
+  };
+  reader.readAsDataURL(file);
+}
+
+function handleTypingStart() {
+  if (state.typingTimeout) {
+    window.clearTimeout(state.typingTimeout);
+  }
+  if (!state.typing) {
+    state.typing = true;
+    setTypingStatus(state.chatId, state.currentRole, true).catch((error) =>
+      console.error('Failed to set typing status', error),
+    );
+  }
+  state.typingTimeout = window.setTimeout(() => {
+    state.typing = false;
+    setTypingStatus(state.chatId, state.currentRole, false).catch((error) =>
+      console.error('Failed to clear typing status', error),
+    );
+  }, 2500);
+}
+
+async function handleSend(event) {
+  event?.preventDefault?.();
+  if (state.sending) return;
+  const text = messageInput?.value?.trim() || '';
+  const hasImage = Boolean(state.pendingFile);
+  if (!text && !hasImage) return;
+
   try {
-    const url = new URL('fetch-chats.php', window.location.origin);
-    url.searchParams.set('scope', 'thread');
-    url.searchParams.set('chat_id', state.chatId);
-    if (!initial && state.lastMessageId) {
-      url.searchParams.set('after_id', String(state.lastMessageId));
+    state.sending = true;
+    sendButton?.setAttribute('aria-busy', 'true');
+    sendButton?.classList.add('is-loading');
+
+    let imageUrl = '';
+    if (state.pendingFile) {
+      imageUrl = await uploadImage(state.pendingFile, {
+        folder: 'yustam/chats',
+        tags: ['chat', state.chatId],
+      });
     }
 
-    const response = await fetch(url.toString(), { credentials: 'same-origin' });
-    const payload = await response.json();
-    if (!response.ok || !payload?.success) {
-      throw new Error(payload?.message || 'Unable to load messages.');
-    }
+    await sendChatMessage({
+      chatId: state.chatId,
+      buyerUid: state.buyerUid,
+      vendorUid: state.vendorUid,
+      productId: state.productId,
+      senderUid: state.currentUserId,
+      receiverUid: state.counterpartyId,
+      senderType: state.currentRole,
+      receiverType: state.currentRole === 'buyer' ? 'vendor' : 'buyer',
+      message: text,
+      imageUrl,
+      buyerName: state.buyerName,
+      vendorName: state.vendorName,
+      productTitle: state.productTitle,
+      productImage: state.productImage,
+    });
 
-    if (initial) {
-      clearMessages();
+    clearComposer();
+    state.typing = false;
+    if (state.typingTimeout) {
+      window.clearTimeout(state.typingTimeout);
+      state.typingTimeout = null;
     }
+    setTypingStatus(state.chatId, state.currentRole, false).catch(() => {});
+    ensureScrolledToBottom(true);
+    markChatRead(state.chatId, state.currentUserId, state.currentRole).catch(() => {});
+  } catch (error) {
+    console.error('[chat] send failed', error);
+    alert('Unable to send message right now. Please try again.');
+  } finally {
+    state.sending = false;
+    sendButton?.removeAttribute('aria-busy');
+    sendButton?.classList.remove('is-loading');
+  }
+}
 
-    if (Array.isArray(payload.messages) && payload.messages.length) {
-      appendMessages(payload.messages);
-    } else if (initial && messageArea && !messageArea.children.length) {
+function handleSummaryUpdate(snapshot) {
+  if (!snapshot?.exists()) return;
+  const data = snapshot.data();
+  if (!data) return;
+
+  const typingKey = state.currentRole === 'buyer' ? 'vendor_typing' : 'buyer_typing';
+  toggleTypingIndicator(Boolean(data[typingKey]));
+
+  if (participantNameHeading && data.vendor_name && state.currentRole === 'buyer') {
+    participantNameHeading.textContent = data.vendor_name;
+  }
+  if (participantNameHeading && data.buyer_name && state.currentRole === 'vendor') {
+    participantNameHeading.textContent = data.buyer_name;
+  }
+
+  if (participantStatus && data.last_updated) {
+    const time = data.last_updated.toDate ? data.last_updated.toDate() : data.last_updated;
+    participantStatus.textContent = `Last updated ${formatTimestamp(time)}`;
+  }
+}
+
+function handleMessagesSnapshot(snapshot) {
+  if (!snapshot) return;
+  const changes = snapshot.docChanges();
+  if (!changes.length) {
+    if (!messageArea?.children?.length) {
       const empty = document.createElement('div');
       empty.className = 'empty-state';
       empty.innerHTML = `
         <span>💬</span>
         <h2>Start the conversation</h2>
-        <p>Send the first message to kick things off.</p>
+        <p>Say hello and ask about the listing.</p>
       `;
       messageArea.appendChild(empty);
     }
-
-    updateConversationSummary(payload.conversation);
-    state.initialised = true;
-  } catch (error) {
-    console.error('[chat] fetch thread failed', error);
-  }
-}
-
-async function pollThread() {
-  if (state.isSending) return;
-  await fetchThread(false);
-}
-
-function startPolling() {
-  if (state.pollingTimer !== null) {
-    clearInterval(state.pollingTimer);
-  }
-  state.pollingTimer = window.setInterval(pollThread, POLL_INTERVAL);
-}
-
-function stopPolling() {
-  if (state.pollingTimer !== null) {
-    clearInterval(state.pollingTimer);
-    state.pollingTimer = null;
-  }
-}
-
-function showAttachmentPreview(file) {
-  if (!imagePreview || !previewImage) return;
-  const reader = new FileReader();
-  reader.onload = (event) => {
-    previewImage.src = String(event.target?.result || '');
-    imagePreview.classList.add('active');
-  };
-  reader.readAsDataURL(file);
-}
-
-function clearAttachment() {
-  state.pendingFile = null;
-  if (imagePreview) imagePreview.classList.remove('active');
-  if (previewImage) previewImage.src = '';
-  if (fileInput) fileInput.value = '';
-}
-
-async function resolveAttachment() {
-  if (!state.pendingFile) return '';
-  try {
-    const url = await uploadImage(state.pendingFile, {
-      folder: 'yustam/chats',
-      tags: ['yustam', 'chat']
-    });
-    return url;
-  } catch (error) {
-    console.error('[chat] attachment upload failed', error);
-    return '';
-  } finally {
-    clearAttachment();
-  }
-}
-
-async function handleSend(event) {
-  event.preventDefault();
-  if (!messageInput || !state.chatId || state.isSending) return;
-
-  const rawText = messageInput.value.trim();
-  if (rawText === '' && !state.pendingFile) {
     return;
   }
 
-  state.isSending = true;
-  if (sendButton) {
-    sendButton.disabled = true;
-  }
-
-  try {
-    const attachmentUrl = await resolveAttachment();
-    const body = {
-      chat_id: state.chatId,
-      product_id: state.productId,
-      product_title: state.productTitle,
-      product_image: state.productImage,
-      sender_role: state.currentRole,
-      buyer_uid: state.buyerUid,
-      buyer_numeric_id: state.buyerId || null,
-      buyer_name: state.buyerName || '',
-      vendor_uid: state.vendorUid,
-      vendor_numeric_id: state.vendorId || null,
-      vendor_name: state.vendorName || '',
-      message: rawText,
-      image_url: attachmentUrl
-    };
-
-    const response = await fetch('send-message.php', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      credentials: 'same-origin',
-      body: JSON.stringify(body)
-    });
-    const payload = await response.json();
-    if (!response.ok || !payload?.success) {
-      throw new Error(payload?.message || 'Unable to send message.');
+  changes.forEach((change, index) => {
+    if (change.type === 'added' || change.type === 'modified') {
+      const raw = change.doc.data();
+      const timestamp = raw.timestamp?.toDate ? raw.timestamp.toDate() : raw.timestamp;
+      const message = {
+        id: change.doc.id,
+        message: raw.message || '',
+        image_url: raw.image_url || '',
+        sender_uid: raw.sender_uid,
+        receiver_uid: raw.receiver_uid,
+        read: Boolean(raw.read),
+        timestamp,
+      };
+      upsertMessageElement(message, index);
+      if (message.sender_uid !== state.currentUserId) {
+        markChatRead(state.chatId, state.currentUserId, state.currentRole).catch(() => {});
+      }
     }
+  });
+}
 
-    if (Array.isArray(payload.message) && payload.message.length) {
-      appendMessages(payload.message);
-    } else if (payload.message) {
-      appendMessages([payload.message]);
-    }
+function initialiseSubscriptions() {
+  if (!state.chatId) return;
+  state.unsubscribeSummary = subscribeToChatSummary(state.chatId, handleSummaryUpdate);
+  state.unsubscribeMessages = subscribeToChatMessages(state.chatId, handleMessagesSnapshot);
+}
 
-    messageInput.value = '';
-    state.isSending = false;
-    if (sendButton) sendButton.disabled = false;
-    messageArea.scrollTop = messageArea.scrollHeight;
-  } catch (error) {
-    console.error('[chat] send failed', error);
-    state.isSending = false;
-    if (sendButton) sendButton.disabled = false;
+function teardown() {
+  state.unsubscribeSummary?.();
+  state.unsubscribeMessages?.();
+  if (state.typingTimeout) {
+    window.clearTimeout(state.typingTimeout);
   }
 }
 
-function consumeQuickMessage() {
-  if (!state.chatId) return '';
-  try {
-    const stored = sessionStorage.getItem(QUICK_MESSAGE_KEY);
-    if (!stored) return '';
-    const parsed = JSON.parse(stored);
-    if (!parsed || parsed.chatId !== state.chatId || !parsed.text) {
-      return '';
-    }
-    sessionStorage.removeItem(QUICK_MESSAGE_KEY);
-    return parsed.text;
-  } catch (error) {
-    console.warn('[chat] unable to parse quick message', error);
-    return '';
+function boot() {
+  if (!appShell || !state.chatId || !state.currentUserId) {
+    console.warn('[chat] Missing identifiers');
+    return;
   }
-}
 
-function initialiseQuickMessage() {
-  const prefill = consumeQuickMessage();
-  if (prefill && messageInput) {
-    messageInput.value = prefill;
-  }
-}
+  ensureChatSummary({
+    chatId: state.chatId,
+    buyerUid: state.buyerUid,
+    vendorUid: state.vendorUid,
+    productId: state.productId,
+    buyerName: state.buyerName,
+    vendorName: state.vendorName,
+    productTitle: state.productTitle,
+    productImage: state.productImage,
+  }).catch((error) => console.error('[chat] summary ensure failed', error));
 
-function bindEvents() {
+  initialiseSubscriptions();
+  markChatRead(state.chatId, state.currentUserId, state.currentRole).catch(() => {});
+
   composerForm?.addEventListener('submit', handleSend);
+  sendButton?.addEventListener('click', handleSend);
+
+  messageInput?.addEventListener('input', handleTypingStart);
+  messageInput?.addEventListener('focus', () =>
+    markChatRead(state.chatId, state.currentUserId, state.currentRole).catch(() => {}),
+  );
 
   fileInput?.addEventListener('change', (event) => {
     const file = event.target?.files?.[0];
     if (file) {
       state.pendingFile = file;
-      showAttachmentPreview(file);
+      showPreview(file);
     } else {
-      clearAttachment();
+      state.pendingFile = null;
+      if (imagePreview) imagePreview.hidden = true;
     }
   });
 
   removeImageButton?.addEventListener('click', () => {
-    clearAttachment();
+    state.pendingFile = null;
+    if (fileInput) fileInput.value = '';
+    if (imagePreview) imagePreview.hidden = true;
+    if (previewImage) previewImage.src = '';
   });
 
-  window.addEventListener('focus', () => {
-    fetchThread(false);
-  });
-
-  window.addEventListener('beforeunload', stopPolling);
+  window.addEventListener('beforeunload', teardown);
 }
 
-async function initialiseChat() {
-  if (!state.chatId) {
-    console.warn('[chat] Missing conversation identifier.');
-    return;
-  }
-
-  initialiseQuickMessage();
-  await fetchThread(true);
-  startPolling();
-}
-
-bindEvents();
-initialiseChat();
+boot();

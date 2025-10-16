@@ -799,6 +799,24 @@ if (is_string($vendorId) && trim($vendorId) !== '') {
             background: linear-gradient(135deg, #25d366, #1ebe57);
         }
 
+        .fab-yustam {
+            background: linear-gradient(135deg, var(--orange), #ff8c42);
+        }
+
+        .fab-yustam.is-loading::after {
+            content: '';
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.4);
+            border-top-color: #fff;
+            animation: spin 1s linear infinite;
+        }
+
+        .fab-yustam.is-loading i {
+            display: none;
+        }
+
         .floating-cta .is-disabled {
             opacity: 0.55;
             cursor: not-allowed;
@@ -905,6 +923,7 @@ if (is_string($vendorId) && trim($vendorId) !== '') {
 <body
     data-buyer-id="<?= htmlspecialchars($buyerNumericId, ENT_QUOTES, 'UTF-8'); ?>"
     data-buyer-uid="<?= htmlspecialchars($buyerUid, ENT_QUOTES, 'UTF-8'); ?>"
+    data-buyer-name="<?= htmlspecialchars($buyerName ?: 'Buyer', ENT_QUOTES, 'UTF-8'); ?>"
     data-vendor-id="<?= htmlspecialchars($vendorNumericId, ENT_QUOTES, 'UTF-8'); ?>"
     data-vendor-uid="<?= htmlspecialchars($vendorUid, ENT_QUOTES, 'UTF-8'); ?>"
     data-vendor-name="<?= htmlspecialchars($vendorName, ENT_QUOTES, 'UTF-8'); ?>"
@@ -1102,6 +1121,10 @@ if (is_string($vendorId) && trim($vendorId) !== '') {
 
     <!-- Floating Action Buttons -->
     <div class="floating-cta" aria-label="Quick purchase actions">
+        <button id="chatWithVendorBtn" class="fab-yustam" type="button" aria-label="Chat with vendor">
+            <i class="ri-message-3-fill" aria-hidden="true"></i>
+            <span>Chat with Vendor</span>
+        </button>
         <button id="floatingWhatsappBtn" class="fab-chat is-disabled" type="button" aria-label="Chat on WhatsApp" aria-disabled="true">
             <i class="ri-whatsapp-line" aria-hidden="true"></i>
             <span>Chat on WhatsApp</span>
