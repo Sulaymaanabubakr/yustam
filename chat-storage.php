@@ -164,6 +164,19 @@ function yustam_chat_ensure_conversation(
 ): void {
     $existing = yustam_chat_fetch_conversation($db, $chatId);
     if ($existing) {
+        // Refresh any missing metadata so legacy conversations stay in sync
+        $updateSql = sprintf(
+            'UPDATE `%s` SET buyer_name = COALESCE(?, buyer_name), vendor_name = COALESCE(?, vendor_name),
+                product_title = COALESCE(?, product_title), product_image = COALESCE(?, product_image)
+             WHERE chat_id = ?',
+            yustam_chat_conversations_table()
+        );
+        $updateStmt = $db->prepare($updateSql);
+        if ($updateStmt) {
+            $updateStmt->bind_param('sssss', $buyerName, $vendorName, $productTitle, $productImage, $chatId);
+            $updateStmt->execute();
+            $updateStmt->close();
+        }
         return;
     }
 
@@ -179,21 +192,6 @@ function yustam_chat_ensure_conversation(
     $stmt->bind_param('ssississss', $chatId, $buyerUid, $buyerId, $buyerName, $vendorUid, $vendorId, $vendorName, $productId, $productTitle, $productImage);
     $stmt->execute();
     $stmt->close();
-} else {
-    $updateSql = sprintf(
-        'UPDATE `%s` SET buyer_name = COALESCE(?, buyer_name), vendor_name = COALESCE(?, vendor_name),
-            product_title = COALESCE(?, product_title), product_image = COALESCE(?, product_image)
-         WHERE chat_id = ?',
-        yustam_chat_conversations_table()
-    );
-    $updateStmt = $db->prepare($updateSql);
-    if ($updateStmt) {
-        $updateStmt->bind_param('sssss', $buyerName, $vendorName, $productTitle, $productImage, $chatId);
-        $updateStmt->execute();
-        $updateStmt->close();
-    }
-}
-
 function yustam_chat_insert_message(
     mysqli $db,
     string $chatId,
