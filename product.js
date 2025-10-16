@@ -327,7 +327,7 @@ function resolveChatMetadata() {
     return null;
   }
   return {
-    chatId: buildChatId(buyerChatUid, vendorChatUid, listingId),
+    chatId: buildChatId(vendorChatUid, buyerChatUid, listingId),
     buyerUid: buyerChatUid,
     vendorUid: vendorChatUid,
     productId: listingId,
@@ -340,13 +340,14 @@ function resolveChatMetadata() {
 
 function buildChatPageUrl(metadata) {
   const url = new URL('chat.php', window.location.origin);
-  url.searchParams.set('chatId', metadata.chatId);
+  url.searchParams.set('chat', metadata.chatId);
   url.searchParams.set('buyerUid', metadata.buyerUid);
   url.searchParams.set('vendorUid', metadata.vendorUid);
-  url.searchParams.set('productId', metadata.productId);
-  url.searchParams.set('productTitle', metadata.productTitle);
-  if (metadata.productImage) url.searchParams.set('productImage', metadata.productImage);
-  url.searchParams.set('participantName', metadata.vendorName);
+  url.searchParams.set('listing', metadata.productId);
+  url.searchParams.set('listing_title', metadata.productTitle);
+  if (metadata.productImage) url.searchParams.set('listing_image', metadata.productImage);
+  url.searchParams.set('vendorName', metadata.vendorName);
+  url.searchParams.set('buyerName', metadata.buyerName);
   return url.toString();
 }
 
