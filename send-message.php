@@ -40,6 +40,7 @@ if (!is_array($payload)) {
     $payload = $_POST;
 }
 
+$senderRole = strtolower(trim((string)($payload['sender_role'] ?? '')));
 $buyerUid = trim((string)($payload['buyer_uid'] ?? ''));
 $vendorUid = trim((string)($payload['vendor_uid'] ?? ''));
 $buyerName = trim((string)($payload['buyer_name'] ?? ($_SESSION['buyer_name'] ?? '')));
@@ -70,8 +71,30 @@ if ($messageText === '' && $imageUrl === '') {
 }
 
 $senderType = $isBuyer ? 'buyer' : 'vendor';
-$senderUid = $isBuyer ? $_SESSION['buyer_uid'] : $_SESSION['vendor_uid'];
-$senderId = $isBuyer ? (int)($_SESSION['buyer_id'] ?? 0) : (int)($_SESSION['vendor_id'] ?? 0);
+if ($senderRole === 'vendor' && $isVendor) {
+    $senderType = 'vendor';
+} elseif ($senderRole === 'buyer' && $isBuyer) {
+    $senderType = 'buyer';
+} elseif ($isVendor && !$isBuyer) {
+    $senderType = 'vendor';
+} elseif ($isBuyer && !$isVendor) {
+    $senderType = 'buyer';
+}
+
+if ($senderType === 'vendor' && !$isVendor) {
+    http_response_code(403);
+    echo json_encode(['success' => false, 'message' => 'Vendor session required.']);
+    exit;
+}
+
+if ($senderType === 'buyer' && !$isBuyer) {
+    http_response_code(403);
+    echo json_encode(['success' => false, 'message' => 'Buyer session required.']);
+    exit;
+}
+
+$senderUid = $senderType === 'buyer' ? ($_SESSION['buyer_uid'] ?? '') : ($_SESSION['vendor_uid'] ?? '');
+$senderId = $senderType === 'buyer' ? (int)($_SESSION['buyer_id'] ?? 0) : (int)($_SESSION['vendor_id'] ?? 0);
 
 $receiverType = $senderType === 'buyer' ? 'vendor' : 'buyer';
 $receiverUid = $receiverType === 'buyer' ? $buyerUid : $vendorUid;
