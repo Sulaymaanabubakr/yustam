@@ -145,10 +145,7 @@ function createChatCard(chat, index) {
     <div class="avatar" aria-hidden="true">${buildAvatarMarkup(chat.displayName, chat.avatarImage)}</div>
     <div class="chat-info">
       <div class="chat-top">
-        <div class="chat-labels">
-          <span class="role-pill">Buyer</span>
-          <strong class="chat-name">${escapeHtml(chat.displayName)}</strong>
-        </div>
+        <strong class="chat-name">${escapeHtml(chat.displayName)}</strong>
         <span class="chat-time">${escapeHtml(relativeTime)}</span>
       </div>
       <div class="chat-bottom">
@@ -275,20 +272,15 @@ function listenToChats() {
   }
 
   const chatsRef = collection(db, 'chats');
-  const chatQuery = query(chatsRef, where('participants', 'array-contains', state.userId));
+  const chatQuery = query(chatsRef, where('vendorId', '==', state.userId));
 
   onSnapshot(chatQuery, (snapshot) => {
     if (!state.initialised) {
       state.initialised = true;
       setLoaderVisibility(false);
     }
-    const userIdLower = state.userId.toLowerCase();
     state.chats = snapshot.docs
       .map(normaliseChat)
-      .filter((chat) => {
-        const vendorId = (chat.vendorId ?? '').toString().trim().toLowerCase();
-        return !vendorId || vendorId === userIdLower;
-      })
       .sort((a, b) => getTimestampNumber(b.timestamp) - getTimestampNumber(a.timestamp));
     const term = searchInput?.value?.trim() || '';
     const filtered = filterChats(term);

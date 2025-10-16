@@ -439,12 +439,7 @@ $buyerName = $_SESSION['buyer_name'] ?? 'Buyer';
                     </div>
                 </div>
             </div>
-             <section id="chatList" class="chat-grid" aria-live="polite"></section>
-            <div id="emptyState" class="empty-state" hidden>
-                <span role="img" aria-hidden="true">💬</span>
-                <h2>No messages yet</h2>
-                <p>No messages yet — start a chat from a product page.</p>
-            </div>
+            <section id="chatList" class="chat-grid" aria-live="polite"></section>
         </div>
     </main>
     <footer>© <?= date('Y'); ?> YUSTAM Marketplace</footer>
