@@ -21,6 +21,10 @@ const state = {
 
 const FALLBACK_IMAGE = 'https://images.unsplash.com/photo-1510557880182-3d4d3cba35a5?auto=format&fit=crop&w=160&q=80';
 
+if (emptyState) {
+  emptyState.remove();
+}
+
 function escapeHtml(text = '') {
   return String(text ?? '').replace(/[&<>"']/g, (char) => {
     switch (char) {
@@ -209,22 +213,14 @@ function renderChats(chats, shouldResetScroll = false) {
     setLoaderVisibility(false);
   }
 
+  listContainer.style.display = chats.length ? 'grid' : 'none';
+
   if (!chats.length) {
-    if (state.initialised) {
-      emptyState?.removeAttribute('hidden');
-    } else {
-      emptyState?.setAttribute('hidden', 'true');
-    }
-    listContainer.style.display = 'none';
     if (shouldResetScroll && scrollArea) {
       scrollArea.scrollTo({ top: 0 });
     }
     return;
   }
-
-  setLoaderVisibility(false);
-  emptyState?.setAttribute('hidden', 'true');
-  listContainer.style.display = 'grid';
 
   const fragment = document.createDocumentFragment();
   chats.forEach((chat, index) => {
@@ -279,15 +275,20 @@ function listenToChats() {
   }
 
   const chatsRef = collection(db, 'chats');
-  const chatQuery = query(chatsRef, where('buyerId', '==', state.userId));
+  const chatQuery = query(chatsRef, where('participants', 'array-contains', state.userId));
 
   onSnapshot(chatQuery, (snapshot) => {
     if (!state.initialised) {
       state.initialised = true;
       setLoaderVisibility(false);
     }
+    const userIdLower = state.userId.toLowerCase();
     state.chats = snapshot.docs
       .map(normaliseChat)
+      .filter((chat) => {
+        const buyerId = (chat.buyerId ?? '').toString().trim().toLowerCase();
+        return !buyerId || buyerId === userIdLower;
+      })
       .sort((a, b) => getTimestampNumber(b.timestamp) - getTimestampNumber(a.timestamp));
     const term = searchInput?.value?.trim() || '';
     const filtered = filterChats(term);
