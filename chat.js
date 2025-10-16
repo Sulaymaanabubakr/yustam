@@ -30,8 +30,6 @@ const imagePreview = document.getElementById('imagePreview');
 const previewImage = document.getElementById('previewImage');
 const removeImageButton = document.getElementById('removeImage');
 const participantStatus = document.getElementById('participantStatus');
-const participantNameHeading = document.getElementById('participantNameHeading');
-const productTitleHeading = document.getElementById('productTitleHeading');
 
 if (!appShell) {
   console.warn('[chat] Chat shell element not found.');
@@ -59,9 +57,7 @@ const state = {
   unsubscribeTyping: null,
   attachmentFile: null,
   presenceUnsubscribe: null,
-  presenceInterval: null,
-  viewportCleanup: null,
-  initialScrollDone: false
+  presenceInterval: null
 };
 
 if (!state.counterpartyRole) {
@@ -86,53 +82,6 @@ if (state.currentRole === 'buyer' && state.vendorName) {
   state.counterpartyName = state.buyerName;
 }
 
-const resolveProductTitle = () => state.productTitle || 'Marketplace Listing';
-
-const resolveCounterpartyLabel = () => {
-  if (state.currentRole === 'vendor') {
-    return state.buyerName || state.counterpartyName || 'Marketplace Buyer';
-  }
-  if (state.currentRole === 'buyer') {
-    return state.vendorName || state.counterpartyName || 'Marketplace Vendor';
-  }
-  return state.counterpartyName || 'Marketplace User';
-};
-
-const applyHeaderName = () => {
-  const productLabel = resolveProductTitle();
-  const counterpartyLabel = resolveCounterpartyLabel();
-  if (productTitleHeading && productLabel) {
-    productTitleHeading.textContent = productLabel;
-  }
-  if (productLabel) {
-    state.productTitle = productLabel;
-  }
-  if (appShell && productLabel) {
-    appShell.dataset.productTitle = productLabel;
-  }
-  if (participantNameHeading && counterpartyLabel) {
-    participantNameHeading.textContent = counterpartyLabel;
-  }
-  if (appShell && counterpartyLabel) {
-    appShell.dataset.participantName = counterpartyLabel;
-  }
-  if (participantStatus) {
-    const prefix = state.currentRole === 'vendor' ? 'Buyer' : 'Vendor';
-    const statusLabelRaw = state.participantStatus || 'Offline';
-    const hasPrefix = statusLabelRaw.toLowerCase().startsWith(`${prefix.toLowerCase()} `);
-    const composedStatus = hasPrefix ? statusLabelRaw : `${prefix} ${statusLabelRaw}`.trim();
-    participantStatus.textContent = composedStatus;
-    state.participantStatus = statusLabelRaw;
-    if (appShell) {
-      appShell.dataset.participantStatus = statusLabelRaw;
-    }
-  }
-  if (counterpartyLabel) {
-    state.counterpartyName = counterpartyLabel;
-    state.participantName = counterpartyLabel;
-  }
-};
-
 if (!state.buyerId) {
   if (state.currentRole === 'buyer' && state.currentUserId) {
     state.buyerId = state.currentUserId;
@@ -155,8 +104,6 @@ if (!state.vendorId) {
   }
 }
 
-applyHeaderName();
-
 if (!state.chatId && state.vendorId && state.buyerId && state.productId) {
   state.chatId = `${state.vendorId}_${state.buyerId}_${state.productId}`;
   appShell?.setAttribute('data-chat-id', state.chatId);
@@ -177,11 +124,6 @@ function formatTime(timestamp) {
   const date = timestamp.toDate ? timestamp.toDate() : timestamp;
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
-
-const scrollMessageAreaToBottom = (behavior = 'auto') => {
-  if (!messageArea) return;
-  messageArea.scrollTo({ top: messageArea.scrollHeight, behavior });
-};
 
 function renderMessage(docSnapshot) {
   const data = docSnapshot.data();
@@ -235,7 +177,7 @@ function appendMessage(element) {
   messageArea.appendChild(element);
   if (shouldScroll) {
     requestAnimationFrame(() => {
-      scrollMessageAreaToBottom('auto');
+      messageArea.scrollTop = messageArea.scrollHeight;
     });
   }
 }
@@ -338,26 +280,14 @@ async function markMessagesAsSeen() {
     await Promise.all(updates);
 
     if (chatDocRef) {
-      const chatSnapshot = await getDoc(chatDocRef);
-    if (chatSnapshot.exists()) {
-      const chatData = chatSnapshot.data();
-      const lastMessage = chatData?.lastMessage;
-      if (lastMessage && lastMessage.senderId !== state.currentUserId && !lastMessage.seen) {
-        await updateDoc(chatDocRef, {
-          'lastMessage.seen': true,
-          'lastMessage.seenAt': serverTimestamp()
-        });
-      }
+      await setDoc(chatDocRef, {
+        [`unreadCounts.${state.currentUserId}`]: 0,
+        lastSeenAt: serverTimestamp()
+      }, { merge: true });
     }
-    if (state.currentUserId) {
-      const unreadUpdate = {};
-      unreadUpdate[`unreadCounts.${state.currentUserId}`] = 0;
-      await updateDoc(chatDocRef, unreadUpdate);
-    }
+  } catch (error) {
+    console.error('[chat] Failed to mark messages as seen', error);
   }
-} catch (error) {
-  console.error('[chat] Failed to mark messages as seen', error);
-}
 }
 
 function setTypingIndicator(active) {
@@ -399,20 +329,17 @@ async function setPresence(isOnline) {
 
 function applyCounterpartyPresence(data) {
   if (!participantStatus) return;
-  const prefix = state.currentRole === 'vendor' ? 'Buyer' : 'Vendor';
-  let labelRaw = 'Offline';
-  if (data) {
-    if (data.isOnline) {
-      labelRaw = 'Online';
-    } else if (data.lastSeen) {
-      labelRaw = `Last seen ${formatPresenceLabel(data.lastSeen)}`;
-    }
+  if (!data) {
+    participantStatus.textContent = 'Offline';
+    return;
   }
-  const composed = `${prefix} ${labelRaw}`.trim();
-  participantStatus.textContent = composed;
-  state.participantStatus = labelRaw;
-  if (appShell) {
-    appShell.dataset.participantStatus = labelRaw;
+
+  if (data.isOnline) {
+    participantStatus.textContent = 'Online';
+  } else if (data.lastSeen) {
+    participantStatus.textContent = `Last seen ${formatPresenceLabel(data.lastSeen)}`;
+  } else {
+    participantStatus.textContent = 'Offline';
   }
 }
 
@@ -480,11 +407,9 @@ function notifyRecipient(recipientId, recipientRole, preview) {
       })
     }).catch(() => {});
   } catch {
-    // Silent fail – notification logging should not block chat UX
+    // Silent fail - notification logging should not block chat UX
   }
 }
-
-let typingUpdateTimeout;
 
 async function updateTypingStatus(isTyping) {
   if (!chatDocRef || !state.currentUserId) return;
@@ -499,6 +424,8 @@ async function updateTypingStatus(isTyping) {
     console.error('[chat] Failed to update typing status', error);
   }
 }
+
+let typingUpdateTimeout;
 
 function debounceTyping() {
   clearTimeout(state.typingTimeout);
@@ -597,7 +524,6 @@ async function sendMessage(event) {
 
 function listenToMessages() {
   if (!messagesCollection) return;
-  state.initialScrollDone = false;
   const q = query(messagesCollection, orderBy('timestamp', 'asc'));
   state.unsubscribeMessages = onSnapshot(q, (snapshot) => {
     if (!messageArea) return;
@@ -633,10 +559,7 @@ function listenToMessages() {
       }
     });
 
-    if (!state.initialScrollDone) {
-      requestAnimationFrame(() => scrollMessageAreaToBottom('auto'));
-      state.initialScrollDone = true;
-    }
+    messageArea.scrollTop = messageArea.scrollHeight;
     markMessagesAsSeen();
   });
 }
@@ -678,12 +601,6 @@ function attachEventListeners() {
     debounceTyping();
   });
 
-  messageInput?.addEventListener('focus', () => {
-    setTimeout(() => {
-      scrollMessageAreaToBottom('smooth');
-    }, 120);
-  });
-
   messageInput?.addEventListener('blur', () => {
     updateTypingStatus(false);
   });
@@ -708,7 +625,6 @@ function attachEventListeners() {
     state.unsubscribeMessages?.();
     state.unsubscribeTyping?.();
     state.presenceUnsubscribe?.();
-    state.viewportCleanup?.();
     if (state.presenceInterval) {
       clearInterval(state.presenceInterval);
       state.presenceInterval = null;
@@ -721,19 +637,6 @@ function attachEventListeners() {
     }
   });
 }
-
-const setupViewportListeners = () => {
-  if (!window.visualViewport) return;
-  const handleViewportChange = () => {
-    scrollMessageAreaToBottom('auto');
-  };
-  window.visualViewport.addEventListener('resize', handleViewportChange);
-  window.visualViewport.addEventListener('scroll', handleViewportChange);
-  state.viewportCleanup = () => {
-    window.visualViewport.removeEventListener('resize', handleViewportChange);
-    window.visualViewport.removeEventListener('scroll', handleViewportChange);
-  };
-};
 
 async function initialiseChat() {
   if (!state.chatId || !chatDocRef) {
@@ -755,5 +658,4 @@ async function initialiseChat() {
 }
 
 attachEventListeners();
-setupViewportListeners();
 initialiseChat();
