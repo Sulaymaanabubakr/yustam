@@ -81,6 +81,53 @@ function yustam_chat_ensure_tables(mysqli $db): void
 
     $db->query($conversationSql);
     $db->query($messageSql);
+
+    // Ensure extra columns exist for legacy installations
+    $conversationCols = [];
+    $result = $db->query(sprintf('SHOW COLUMNS FROM `%s`', $conversations));
+    if ($result instanceof mysqli_result) {
+        while ($row = $result->fetch_assoc()) {
+            if (isset($row['Field'])) {
+                $conversationCols[] = $row['Field'];
+            }
+        }
+        $result->free();
+    }
+
+    if (!in_array('buyer_name', $conversationCols, true)) {
+        try {
+            $db->query(sprintf('ALTER TABLE `%s` ADD COLUMN `buyer_name` VARCHAR(150) NULL AFTER `buyer_id`', $conversations));
+        } catch (Throwable $exception) {
+            error_log('chat ensure buyer_name: ' . $exception->getMessage());
+        }
+    }
+
+    if (!in_array('vendor_name', $conversationCols, true)) {
+        try {
+            $db->query(sprintf('ALTER TABLE `%s` ADD COLUMN `vendor_name` VARCHAR(150) NULL AFTER `vendor_id`', $conversations));
+        } catch (Throwable $exception) {
+            error_log('chat ensure vendor_name: ' . $exception->getMessage());
+        }
+    }
+
+    $messageCols = [];
+    $result = $db->query(sprintf('SHOW COLUMNS FROM `%s`', $messages));
+    if ($result instanceof mysqli_result) {
+        while ($row = $result->fetch_assoc()) {
+            if (isset($row['Field'])) {
+                $messageCols[] = $row['Field'];
+            }
+        }
+        $result->free();
+    }
+
+    if (!in_array('sender_name', $messageCols, true)) {
+        try {
+            $db->query(sprintf('ALTER TABLE `%s` ADD COLUMN `sender_name` VARCHAR(150) NULL AFTER `sender_type`', $messages));
+        } catch (Throwable $exception) {
+            error_log('chat ensure sender_name: ' . $exception->getMessage());
+        }
+    }
 }
 
 function yustam_chat_build_id(string $vendorUid, string $buyerUid, string $productId): string
