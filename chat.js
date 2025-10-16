@@ -30,6 +30,7 @@ const imagePreview = document.getElementById('imagePreview');
 const previewImage = document.getElementById('previewImage');
 const removeImageButton = document.getElementById('removeImage');
 const participantStatus = document.getElementById('participantStatus');
+const participantNameHeading = document.getElementById('participantNameHeading');
 
 if (!appShell) {
   console.warn('[chat] Chat shell element not found.');
@@ -57,7 +58,8 @@ const state = {
   unsubscribeTyping: null,
   attachmentFile: null,
   presenceUnsubscribe: null,
-  presenceInterval: null
+  presenceInterval: null,
+  viewportCleanup: null
 };
 
 if (!state.counterpartyRole) {
@@ -81,6 +83,31 @@ if (state.currentRole === 'buyer' && state.vendorName) {
 } else if (state.currentRole === 'vendor' && state.buyerName) {
   state.counterpartyName = state.buyerName;
 }
+
+const deriveHeaderName = () => {
+  if (state.currentRole === 'buyer') {
+    return state.vendorName || state.counterpartyName || state.participantName;
+  }
+  if (state.currentRole === 'vendor') {
+    return state.buyerName || state.counterpartyName || state.participantName;
+  }
+  return state.counterpartyName || state.participantName;
+};
+
+const applyHeaderName = () => {
+  const headerName = deriveHeaderName();
+  if (participantNameHeading && headerName) {
+    participantNameHeading.textContent = headerName;
+  }
+  if (appShell && headerName) {
+    appShell.dataset.participantName = headerName;
+  }
+  if (headerName) {
+    state.participantName = headerName;
+  }
+};
+
+applyHeaderName();
 
 if (!state.buyerId) {
   if (state.currentRole === 'buyer' && state.currentUserId) {
@@ -124,6 +151,11 @@ function formatTime(timestamp) {
   const date = timestamp.toDate ? timestamp.toDate() : timestamp;
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
+
+const scrollMessageAreaToBottom = (behavior = 'auto') => {
+  if (!messageArea) return;
+  messageArea.scrollTo({ top: messageArea.scrollHeight, behavior });
+};
 
 function renderMessage(docSnapshot) {
   const data = docSnapshot.data();
@@ -177,7 +209,7 @@ function appendMessage(element) {
   messageArea.appendChild(element);
   if (shouldScroll) {
     requestAnimationFrame(() => {
-      messageArea.scrollTop = messageArea.scrollHeight;
+      scrollMessageAreaToBottom('auto');
     });
   }
 }
@@ -571,7 +603,7 @@ function listenToMessages() {
       }
     });
 
-    messageArea.scrollTop = messageArea.scrollHeight;
+    scrollMessageAreaToBottom('auto');
     markMessagesAsSeen();
   });
 }
@@ -613,6 +645,12 @@ function attachEventListeners() {
     debounceTyping();
   });
 
+  messageInput?.addEventListener('focus', () => {
+    setTimeout(() => {
+      scrollMessageAreaToBottom('smooth');
+    }, 120);
+  });
+
   messageInput?.addEventListener('blur', () => {
     updateTypingStatus(false);
   });
@@ -637,6 +675,7 @@ function attachEventListeners() {
     state.unsubscribeMessages?.();
     state.unsubscribeTyping?.();
     state.presenceUnsubscribe?.();
+    state.viewportCleanup?.();
     if (state.presenceInterval) {
       clearInterval(state.presenceInterval);
       state.presenceInterval = null;
@@ -649,6 +688,19 @@ function attachEventListeners() {
     }
   });
 }
+
+const setupViewportListeners = () => {
+  if (!window.visualViewport) return;
+  const handleViewportChange = () => {
+    scrollMessageAreaToBottom('auto');
+  };
+  window.visualViewport.addEventListener('resize', handleViewportChange);
+  window.visualViewport.addEventListener('scroll', handleViewportChange);
+  state.viewportCleanup = () => {
+    window.visualViewport.removeEventListener('resize', handleViewportChange);
+    window.visualViewport.removeEventListener('scroll', handleViewportChange);
+  };
+};
 
 async function initialiseChat() {
   if (!state.chatId || !chatDocRef) {
@@ -670,4 +722,5 @@ async function initialiseChat() {
 }
 
 attachEventListeners();
+setupViewportListeners();
 initialiseChat();

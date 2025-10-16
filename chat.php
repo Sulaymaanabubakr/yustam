@@ -58,7 +58,8 @@ $counterpartyName = $participantName ?: ($counterpartyRole === 'vendor' ? $vendo
             margin: 0;
             font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             background: radial-gradient(circle at top, rgba(234, 220, 207, 0.8), rgba(255, 255, 255, 0.85));
-            min-height: 100vh;
+            min-height: 100dvh;
+            height: 100dvh;
             display: flex;
             flex-direction: column;
             color: var(--ink);
@@ -67,7 +68,7 @@ $counterpartyName = $participantName ?: ($counterpartyRole === 'vendor' ? $vendo
         .chat-shell {
             display: flex;
             flex-direction: column;
-            min-height: 100vh;
+            min-height: 100dvh;
             backdrop-filter: blur(18px);
         }
 
@@ -139,17 +140,20 @@ $counterpartyName = $participantName ?: ($counterpartyRole === 'vendor' ? $vendo
             flex: 1;
             display: flex;
             flex-direction: column;
-            justify-content: space-between;
+            justify-content: flex-start;
             background: linear-gradient(160deg, rgba(234, 220, 207, 0.78), rgba(255, 255, 255, 0.9));
+            min-height: 0;
         }
 
         .message-area {
             flex: 1;
             padding: clamp(14px, 4vw, 26px) clamp(12px, 4vw, 32px);
+            padding-bottom: clamp(80px, 15vh, 140px);
             overflow-y: auto;
             display: flex;
             flex-direction: column;
             gap: 12px;
+            scroll-behavior: smooth;
         }
 
         .message-bubble {
@@ -246,8 +250,10 @@ $counterpartyName = $participantName ?: ($counterpartyRole === 'vendor' ? $vendo
         }
 
         .chat-composer {
-            padding: 12px clamp(12px, 4vw, 28px) clamp(16px, 5vw, 28px);
-            background: rgba(255, 255, 255, 0.68);
+            position: sticky;
+            bottom: 0;
+            padding: 12px clamp(12px, 4vw, 28px) calc(clamp(16px, 5vw, 28px) + env(safe-area-inset-bottom, 0));
+            background: rgba(255, 255, 255, 0.82);
             backdrop-filter: blur(14px);
             border-top: 1px solid rgba(0, 0, 0, 0.08);
             display: grid;
@@ -399,7 +405,7 @@ $counterpartyName = $participantName ?: ($counterpartyRole === 'vendor' ? $vendo
             <div class="profile" role="button" tabindex="0">
                 <img src="<?= htmlspecialchars($productImage, ENT_QUOTES, 'UTF-8'); ?>" alt="Product thumbnail">
                 <div class="profile-info">
-                    <strong><?= htmlspecialchars($participantName, ENT_QUOTES, 'UTF-8'); ?></strong>
+                    <strong id="participantNameHeading"><?= htmlspecialchars($participantName, ENT_QUOTES, 'UTF-8'); ?></strong>
                     <span id="participantStatus"><?= htmlspecialchars($statusText, ENT_QUOTES, 'UTF-8'); ?></span>
                 </div>
             </div>

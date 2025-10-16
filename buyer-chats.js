@@ -11,10 +11,12 @@ const listContainer = document.getElementById('chatList');
 const emptyState = document.getElementById('emptyState');
 const searchInput = document.getElementById('chatSearch');
 const scrollArea = document.getElementById('chatScrollArea');
+const loader = document.getElementById('chatLoader');
 
 const state = {
   userId: pageShell?.dataset.userId || '',
-  chats: []
+  chats: [],
+  initialised: false
 };
 
 const FALLBACK_IMAGE = 'https://images.unsplash.com/photo-1510557880182-3d4d3cba35a5?auto=format&fit=crop&w=160&q=80';
@@ -200,8 +202,16 @@ function renderChats(chats, shouldResetScroll = false) {
 
   listContainer.innerHTML = '';
 
+  if (state.initialised) {
+    setLoaderVisibility(false);
+  }
+
   if (!chats.length) {
-    emptyState?.removeAttribute('hidden');
+    if (state.initialised) {
+      emptyState?.removeAttribute('hidden');
+    } else {
+      emptyState?.setAttribute('hidden', 'true');
+    }
     listContainer.style.display = 'none';
     if (shouldResetScroll && scrollArea) {
       scrollArea.scrollTo({ top: 0 });
@@ -209,6 +219,7 @@ function renderChats(chats, shouldResetScroll = false) {
     return;
   }
 
+  setLoaderVisibility(false);
   emptyState?.setAttribute('hidden', 'true');
   listContainer.style.display = 'grid';
 
@@ -232,6 +243,13 @@ function filterChats(term) {
   return state.chats.filter((chat) => chat.searchText.includes(queryText));
 }
 
+const setLoaderVisibility = (isVisible) => {
+  if (!loader) return;
+  loader.style.display = isVisible ? 'grid' : 'none';
+};
+
+setLoaderVisibility(true);
+
 const getTimestampNumber = (value) => {
   if (!value) return 0;
   if (typeof value.toMillis === 'function') return value.toMillis();
@@ -252,6 +270,7 @@ function handleSearchInput() {
 function listenToChats() {
   if (!state.userId) {
     console.warn('[buyer-chats] Missing buyer identifier.');
+    setLoaderVisibility(false);
     renderChats([], true);
     return;
   }
@@ -260,6 +279,10 @@ function listenToChats() {
   const chatQuery = query(chatsRef, where('participants', 'array-contains', state.userId));
 
   onSnapshot(chatQuery, (snapshot) => {
+    if (!state.initialised) {
+      state.initialised = true;
+      setLoaderVisibility(false);
+    }
     state.chats = snapshot.docs
       .map(normaliseChat)
       .sort((a, b) => getTimestampNumber(b.timestamp) - getTimestampNumber(a.timestamp));
