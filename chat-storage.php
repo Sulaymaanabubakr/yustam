@@ -192,6 +192,8 @@ function yustam_chat_ensure_conversation(
     $stmt->bind_param('ssississss', $chatId, $buyerUid, $buyerId, $buyerName, $vendorUid, $vendorId, $vendorName, $productId, $productTitle, $productImage);
     $stmt->execute();
     $stmt->close();
+}
+
 function yustam_chat_insert_message(
     mysqli $db,
     string $chatId,
