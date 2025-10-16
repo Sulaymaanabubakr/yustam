@@ -118,12 +118,13 @@ const applyHeaderName = () => {
   }
   if (participantStatus) {
     const prefix = state.currentRole === 'vendor' ? 'Buyer' : 'Vendor';
-    const statusLabel = state.participantStatus || 'Offline';
-    const composedStatus = `${prefix} ${statusLabel}`.trim();
+    const statusLabelRaw = state.participantStatus || 'Offline';
+    const hasPrefix = statusLabelRaw.toLowerCase().startsWith(`${prefix.toLowerCase()} `);
+    const composedStatus = hasPrefix ? statusLabelRaw : `${prefix} ${statusLabelRaw}`.trim();
     participantStatus.textContent = composedStatus;
-    state.participantStatus = composedStatus;
+    state.participantStatus = statusLabelRaw;
     if (appShell) {
-      appShell.dataset.participantStatus = composedStatus;
+      appShell.dataset.participantStatus = statusLabelRaw;
     }
   }
   if (counterpartyLabel) {
@@ -399,25 +400,19 @@ async function setPresence(isOnline) {
 function applyCounterpartyPresence(data) {
   if (!participantStatus) return;
   const prefix = state.currentRole === 'vendor' ? 'Buyer' : 'Vendor';
-  let label = `${prefix} offline`;
-  if (!data) {
-    participantStatus.textContent = label;
-    state.participantStatus = label;
-    if (appShell) {
-      appShell.dataset.participantStatus = label;
+  let labelRaw = 'Offline';
+  if (data) {
+    if (data.isOnline) {
+      labelRaw = 'Online';
+    } else if (data.lastSeen) {
+      labelRaw = `Last seen ${formatPresenceLabel(data.lastSeen)}`;
     }
-    return;
   }
-
-  if (data.isOnline) {
-    label = `${prefix} online`;
-  } else if (data.lastSeen) {
-    label = `${prefix} last seen ${formatPresenceLabel(data.lastSeen)}`;
-  }
-  participantStatus.textContent = label;
-  state.participantStatus = label;
+  const composed = `${prefix} ${labelRaw}`.trim();
+  participantStatus.textContent = composed;
+  state.participantStatus = labelRaw;
   if (appShell) {
-    appShell.dataset.participantStatus = label;
+    appShell.dataset.participantStatus = labelRaw;
   }
 }
 
