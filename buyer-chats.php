@@ -32,7 +32,7 @@ $buyerName = $_SESSION['buyer_name'] ?? 'Buyer';
         body {
             margin: 0;
             font-family: 'Inter', system-ui, sans-serif;
-            background: radial-gradient(circle at top left, rgba(246, 233, 221, 0.92), rgba(255, 255, 255, 0.88));
+            background: radial-gradient(circle at top left, rgba(222, 245, 237, 0.92), rgba(255, 255, 255, 0.95));
             min-height: 100vh;
             color: rgba(17, 17, 17, 0.88);
             display: flex;
@@ -46,20 +46,35 @@ $buyerName = $_SESSION['buyer_name'] ?? 'Buyer';
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: clamp(16px, 4vw, 24px);
-            background: linear-gradient(135deg, rgba(0, 77, 64, 0.98), rgba(0, 77, 64, 0.86));
+            padding: clamp(16px, 4vw, 26px);
+            background: linear-gradient(135deg, rgba(0, 77, 64, 0.96), rgba(0, 128, 109, 0.83));
             color: #fff;
             backdrop-filter: blur(14px);
-            border-bottom: 2px solid rgba(243, 115, 30, 0.45);
-            box-shadow: 0 16px 32px rgba(0, 0, 0, 0.24);
+            border-bottom: 2px solid rgba(0, 173, 137, 0.36);
+            box-shadow: 0 16px 32px rgba(0, 77, 64, 0.28);
+        }
+
+        .header-copy {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            text-align: center;
         }
 
         .page-header h1 {
             margin: 0;
             font-family: 'Anton', sans-serif;
             font-size: clamp(1.6rem, 5vw, 2.4rem);
-            letter-spacing: 0.08em;
+            letter-spacing: 0.1em;
             text-transform: uppercase;
+        }
+
+        .header-subtitle {
+            margin: 0;
+            font-size: 0.82rem;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.78);
         }
 
         .header-action {
@@ -90,30 +105,29 @@ $buyerName = $_SESSION['buyer_name'] ?? 'Buyer';
             flex-direction: column;
             gap: 16px;
             padding: 20px clamp(16px, 6vw, 56px) 28px;
-            background: linear-gradient(180deg, rgba(250, 243, 234, 0.88), rgba(255, 255, 255, 0.92));
-        }
-
-        .welcome-note {
-            font-size: 0.95rem;
-            color: rgba(255, 255, 255, 0.85);
-            margin-top: 4px;
+            background: linear-gradient(180deg, rgba(237, 250, 246, 0.65), rgba(255, 255, 255, 0.96));
         }
 
         .search-wrapper {
             position: relative;
             display: flex;
             align-items: center;
-            background: rgba(255, 255, 255, 0.78);
+            background: rgba(255, 255, 255, 0.85);
             border-radius: 18px;
-            box-shadow: inset 0 0 0 1px rgba(0, 77, 64, 0.08);
+            box-shadow: inset 0 0 0 1px rgba(0, 128, 109, 0.12);
             padding: 0 18px;
             min-height: 52px;
             backdrop-filter: blur(16px);
-            transition: box-shadow 0.2s ease;
+            transition: box-shadow 0.2s ease, transform 0.2s ease;
+        }
+
+        .search-wrapper:hover {
+            box-shadow: inset 0 0 0 2px rgba(0, 128, 109, 0.18);
+            transform: translateY(-1px);
         }
 
         .search-wrapper i {
-            color: rgba(0, 77, 64, 0.68);
+            color: rgba(0, 128, 109, 0.7);
             font-size: 1.3rem;
         }
 
@@ -206,6 +220,26 @@ $buyerName = $_SESSION['buyer_name'] ?? 'Buyer';
             align-items: baseline;
             justify-content: space-between;
             gap: 8px;
+        }
+
+        .chat-labels {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .role-pill {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 4px 10px;
+            border-radius: 999px;
+            background: rgba(0, 128, 109, 0.16);
+            color: rgba(0, 77, 64, 0.88);
+            font-size: 0.62rem;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
         }
 
         .chat-name {
@@ -368,7 +402,10 @@ $buyerName = $_SESSION['buyer_name'] ?? 'Buyer';
         <a class="header-action" href="shop.html" aria-label="Back to dashboard">
             <i class="ri-arrow-left-line"></i>
         </a>
-        <h1>Messages</h1>
+        <div class="header-copy">
+            <h1>Buyer Inbox</h1>
+            <p class="header-subtitle">Chat with marketplace vendors</p>
+        </div>
         <a class="header-action" href="index.html" aria-label="Go to homepage">
             <i class="ri-home-3-line"></i>
         </a>
@@ -376,7 +413,7 @@ $buyerName = $_SESSION['buyer_name'] ?? 'Buyer';
     <main id="buyerChatPage" data-user-id="<?= htmlspecialchars($buyerId, ENT_QUOTES, 'UTF-8'); ?>" data-user-name="<?= htmlspecialchars($buyerName, ENT_QUOTES, 'UTF-8'); ?>">
         <div class="search-wrapper">
             <i class="ri-search-line" aria-hidden="true"></i>
-            <input type="search" id="chatSearch" placeholder="Search conversations…" autocomplete="off" aria-label="Search conversations">
+            <input type="search" id="chatSearch" placeholder="Search vendor chats" autocomplete="off" aria-label="Search vendor conversations">
         </div>
         <div id="chatScrollArea" class="chat-scroll">
             <div id="chatLoader" class="chat-loader" aria-hidden="true">

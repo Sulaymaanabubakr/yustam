@@ -141,7 +141,10 @@ function createChatCard(chat, index) {
     <div class="avatar" aria-hidden="true">${buildAvatarMarkup(chat.displayName, chat.avatarImage)}</div>
     <div class="chat-info">
       <div class="chat-top">
-        <strong class="chat-name">${escapeHtml(chat.displayName)}</strong>
+        <div class="chat-labels">
+          <span class="role-pill">Vendor</span>
+          <strong class="chat-name">${escapeHtml(chat.displayName)}</strong>
+        </div>
         <span class="chat-time">${escapeHtml(relativeTime)}</span>
       </div>
       <div class="chat-bottom">

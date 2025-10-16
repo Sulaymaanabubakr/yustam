@@ -28,6 +28,9 @@ $currentUserName = $currentRole === 'buyer'
 $counterpartyId = $currentRole === 'buyer' ? $vendorId : $buyerId;
 $counterpartyRole = $currentRole === 'buyer' ? 'vendor' : 'buyer';
 $counterpartyName = $participantName ?: ($counterpartyRole === 'vendor' ? $vendorName : $buyerName);
+$roleLabel = $currentRole === 'vendor' ? 'Buyer' : 'Vendor';
+$counterpartyLabel = $counterpartyName ?: ($roleLabel === 'Buyer' ? 'Marketplace Buyer' : 'Marketplace Vendor');
+$counterpartyName = $counterpartyLabel;
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -122,18 +125,42 @@ $counterpartyName = $participantName ?: ($counterpartyRole === 'vendor' ? $vendo
         .chat-header .profile-info {
             display: flex;
             flex-direction: column;
-            gap: 2px;
+            gap: 4px;
         }
 
-        .chat-header .profile-info strong {
+        .product-title {
             font-family: 'Anton', sans-serif;
-            letter-spacing: 0.04em;
-            font-size: 1.05rem;
+            letter-spacing: 0.05em;
+            font-size: clamp(1.1rem, 3vw, 1.35rem);
+            color: rgba(255, 255, 255, 0.94);
+            max-width: min(52vw, 360px);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
-        .chat-header .profile-info span {
-            font-size: 0.8rem;
-            opacity: 0.82;
+        .profile-meta {
+            display: inline-flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.82rem;
+            color: rgba(255, 255, 255, 0.78);
+        }
+
+        .profile-meta .role-label {
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            font-size: 0.74rem;
+        }
+
+        .profile-meta .dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: currentColor;
+            opacity: 0.6;
+            display: inline-block;
         }
 
         .chat-body {
@@ -228,12 +255,14 @@ $counterpartyName = $participantName ?: ($counterpartyRole === 'vendor' ? $vendo
 
         .typing-indicator.active {
             display: inline-flex;
+            flex-wrap: wrap;
             align-items: center;
             gap: 8px;
         }
 
         .typing-indicator span {
             display: inline-flex;
+            flex-wrap: wrap;
             gap: 4px;
         }
 
@@ -373,11 +402,53 @@ $counterpartyName = $participantName ?: ($counterpartyRole === 'vendor' ? $vendo
 
             .message-area {
                 padding: 28px 48px;
+                padding-bottom: clamp(110px, 18vh, 180px);
             }
+        }
+
+        body.chat-role-buyer {
+            background: radial-gradient(circle at top, rgba(224, 245, 239, 0.86), rgba(255, 255, 255, 0.94));
+        }
+
+        body.chat-role-buyer .chat-header {
+            background: linear-gradient(135deg, rgba(0, 77, 64, 0.95), rgba(0, 120, 100, 0.82));
+        }
+
+        body.chat-role-buyer .chat-composer {
+            background: rgba(240, 252, 248, 0.92);
+        }
+
+        body.chat-role-vendor {
+            background: radial-gradient(circle at top, rgba(255, 241, 228, 0.88), rgba(255, 255, 255, 0.95));
+        }
+
+        body.chat-role-vendor .chat-header {
+            background: linear-gradient(135deg, rgba(243, 115, 30, 0.92), rgba(255, 160, 72, 0.82));
+        }
+
+        body.chat-role-vendor .chat-composer {
+            background: rgba(255, 248, 240, 0.94);
+        }
+
+        body.chat-role-vendor .message-bubble.outgoing {
+            background: linear-gradient(140deg, rgba(243, 115, 30, 0.92), rgba(255, 149, 59, 0.85));
+        }
+
+        body.chat-role-vendor .message-bubble.incoming {
+            background: rgba(255, 255, 255, 0.92);
+            color: rgba(17, 17, 17, 0.88);
+        }
+
+        body.chat-role-buyer .composer-row button.send {
+            background: linear-gradient(135deg, rgba(0, 128, 109, 0.92), rgba(0, 173, 137, 0.92));
+        }
+
+        body.chat-role-vendor .composer-row button.send {
+            background: linear-gradient(135deg, rgba(243, 115, 30, 0.96), rgba(255, 160, 72, 0.9));
         }
     </style>
 </head>
-<body>
+<body class="chat-role-<?= htmlspecialchars($currentRole, ENT_QUOTES, 'UTF-8'); ?>">
     <div
         id="chatApp"
         class="chat-shell"
@@ -385,7 +456,7 @@ $counterpartyName = $participantName ?: ($counterpartyRole === 'vendor' ? $vendo
         data-product-id="<?= htmlspecialchars($productId, ENT_QUOTES, 'UTF-8'); ?>"
         data-product-title="<?= htmlspecialchars($productTitle, ENT_QUOTES, 'UTF-8'); ?>"
         data-product-image="<?= htmlspecialchars($productImage, ENT_QUOTES, 'UTF-8'); ?>"
-        data-participant-name="<?= htmlspecialchars($participantName, ENT_QUOTES, 'UTF-8'); ?>"
+        data-participant-name="<?= htmlspecialchars($counterpartyLabel, ENT_QUOTES, 'UTF-8'); ?>"
         data-participant-status="<?= htmlspecialchars($statusText, ENT_QUOTES, 'UTF-8'); ?>"
         data-current-user-id="<?= htmlspecialchars((string)$currentUserId, ENT_QUOTES, 'UTF-8'); ?>"
         data-current-role="<?= htmlspecialchars($currentRole, ENT_QUOTES, 'UTF-8'); ?>"
@@ -405,8 +476,13 @@ $counterpartyName = $participantName ?: ($counterpartyRole === 'vendor' ? $vendo
             <div class="profile" role="button" tabindex="0">
                 <img src="<?= htmlspecialchars($productImage, ENT_QUOTES, 'UTF-8'); ?>" alt="Product thumbnail">
                 <div class="profile-info">
-                    <strong id="participantNameHeading"><?= htmlspecialchars($participantName, ENT_QUOTES, 'UTF-8'); ?></strong>
-                    <span id="participantStatus"><?= htmlspecialchars($statusText, ENT_QUOTES, 'UTF-8'); ?></span>
+                    <strong class="product-title" id="productTitleHeading"><?= htmlspecialchars($productTitle, ENT_QUOTES, 'UTF-8'); ?></strong>
+                    <div class="profile-meta">
+                        <span class="role-label"><?= htmlspecialchars($roleLabel, ENT_QUOTES, 'UTF-8'); ?></span>
+                        <span id="participantNameHeading"><?= htmlspecialchars($counterpartyLabel, ENT_QUOTES, 'UTF-8'); ?></span>
+                        <span class="dot" aria-hidden="true"></span>
+                        <span id="participantStatus"><?= htmlspecialchars($roleLabel . ' ' . ($statusText !== '' ? $statusText : 'Offline'), ENT_QUOTES, 'UTF-8'); ?></span>
+                    </div>
                 </div>
             </div>
             <button type="button" aria-label="Chat options">
