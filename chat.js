@@ -82,6 +82,28 @@ if (state.currentRole === 'buyer' && state.vendorName) {
   state.counterpartyName = state.buyerName;
 }
 
+if (!state.buyerId) {
+  if (state.currentRole === 'buyer' && state.currentUserId) {
+    state.buyerId = state.currentUserId;
+  } else if (state.counterpartyRole === 'buyer' && state.counterpartyId) {
+    state.buyerId = state.counterpartyId;
+  }
+  if (state.buyerId) {
+    appShell?.setAttribute('data-buyer-id', state.buyerId);
+  }
+}
+
+if (!state.vendorId) {
+  if (state.currentRole === 'vendor' && state.currentUserId) {
+    state.vendorId = state.currentUserId;
+  } else if (state.counterpartyRole === 'vendor' && state.counterpartyId) {
+    state.vendorId = state.counterpartyId;
+  }
+  if (state.vendorId) {
+    appShell?.setAttribute('data-vendor-id', state.vendorId);
+  }
+}
+
 if (!state.chatId && state.vendorId && state.buyerId && state.productId) {
   state.chatId = `${state.vendorId}_${state.buyerId}_${state.productId}`;
   appShell?.setAttribute('data-chat-id', state.chatId);
