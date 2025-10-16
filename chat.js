@@ -35,11 +35,17 @@ if (!appShell) {
   console.warn('[chat] Chat shell element not found.');
 }
 
+const trimValue = (value) => (typeof value === 'string' ? value.trim() : (value ?? '') + '').trim();
+
 const state = {
-  chatId: appShell?.dataset.chatId || '',
-  vendorId: appShell?.dataset.vendorId || '',
-  buyerId: appShell?.dataset.buyerId || '',
-  productId: appShell?.dataset.productId || '',
+  chatId: trimValue(appShell?.dataset.chatId || ''),
+  vendorId: trimValue(appShell?.dataset.vendorId || ''),
+  vendorFirebaseId: trimValue(appShell?.dataset.vendorFirebaseId || ''),
+  vendorNumericId: trimValue(appShell?.dataset.vendorNumericId || ''),
+  buyerId: trimValue(appShell?.dataset.buyerId || ''),
+  buyerNumericId: trimValue(appShell?.dataset.buyerNumericId || ''),
+  buyerFirebaseId: trimValue(appShell?.dataset.buyerFirebaseId || ''),
+  productId: trimValue(appShell?.dataset.productId || ''),
   productTitle: appShell?.dataset.productTitle || 'Marketplace Listing',
   productImage: appShell?.dataset.productImage || '',
   participantName: appShell?.dataset.participantName || 'YUSTAM User',
@@ -47,10 +53,10 @@ const state = {
   currentUserName: appShell?.dataset.currentUserName || '',
   buyerName: appShell?.dataset.buyerName || '',
   vendorName: appShell?.dataset.vendorName || '',
-  counterpartyId: appShell?.dataset.counterpartyId || '',
+  counterpartyId: trimValue(appShell?.dataset.counterpartyId || ''),
   counterpartyRole: appShell?.dataset.counterpartyRole || '',
   counterpartyName: appShell?.dataset.counterpartyName || appShell?.dataset.participantName || '',
-  currentUserId: appShell?.dataset.currentUserId || '',
+  currentUserId: trimValue(appShell?.dataset.currentUserId || ''),
   currentRole: appShell?.dataset.currentRole || 'guest',
   typingTimeout: null,
   unsubscribeMessages: null,
@@ -76,6 +82,21 @@ if (!state.vendorName && state.currentRole === 'vendor') {
   state.vendorName = state.currentUserName || '';
 }
 
+if (!state.vendorNumericId && state.currentRole === 'vendor') {
+  state.vendorNumericId = state.currentUserId || '';
+}
+
+if (!state.buyerNumericId && state.currentRole === 'buyer') {
+  state.buyerNumericId = state.currentUserId || '';
+}
+
+if (!state.vendorFirebaseId && state.vendorId && state.vendorId !== state.vendorNumericId) {
+  state.vendorFirebaseId = state.vendorId;
+}
+if (!state.buyerFirebaseId && state.buyerId && state.buyerId !== state.buyerNumericId) {
+  state.buyerFirebaseId = state.buyerId;
+}
+
 if (state.currentRole === 'buyer' && state.vendorName) {
   state.counterpartyName = state.vendorName;
 } else if (state.currentRole === 'vendor' && state.buyerName) {
@@ -98,6 +119,8 @@ if (!state.vendorId) {
     state.vendorId = state.currentUserId;
   } else if (state.counterpartyRole === 'vendor' && state.counterpartyId) {
     state.vendorId = state.counterpartyId;
+  } else if (state.vendorFirebaseId) {
+    state.vendorId = state.vendorFirebaseId;
   }
   if (state.vendorId) {
     appShell?.setAttribute('data-vendor-id', state.vendorId);
@@ -231,7 +254,7 @@ function consumeQuickMessage() {
 async function ensureChatDocument() {
   if (!chatDocRef) return;
   const snapshot = await getDoc(chatDocRef);
-  const participantsToAdd = [state.vendorId, state.buyerId].filter(Boolean);
+  const participantsToAdd = [state.vendorId, state.buyerId, state.vendorNumericId, state.buyerNumericId, state.vendorFirebaseId, state.buyerFirebaseId].filter(Boolean);
 
   const basePayload = {
     chatId: state.chatId,
@@ -243,6 +266,19 @@ async function ensureChatDocument() {
     productTitle: state.productTitle,
     productImage: state.productImage
   };
+
+  if (state.vendorNumericId) {
+    basePayload.vendorNumericId = state.vendorNumericId;
+  }
+  if (state.buyerNumericId) {
+    basePayload.buyerNumericId = state.buyerNumericId;
+  }
+  if (state.vendorFirebaseId) {
+    basePayload.vendorFirebaseId = state.vendorFirebaseId;
+  }
+  if (state.buyerFirebaseId) {
+    basePayload.buyerFirebaseId = state.buyerFirebaseId;
+  }
 
   if (!snapshot.exists()) {
     basePayload.lastUpdated = serverTimestamp();
@@ -280,10 +316,31 @@ async function markMessagesAsSeen() {
     await Promise.all(updates);
 
     if (chatDocRef) {
-      await setDoc(chatDocRef, {
-        [`unreadCounts.${state.currentUserId}`]: 0,
-        lastSeenAt: serverTimestamp()
-      }, { merge: true });
+      const unreadUpdates = {};
+      const zeroedKeys = new Set();
+      const addZero = (id) => {
+        const trimmed = trimValue(id);
+        if (!trimmed || zeroedKeys.has(trimmed)) return;
+        unreadUpdates[`unreadCounts.${trimmed}`] = 0;
+        zeroedKeys.add(trimmed);
+      };
+
+      addZero(state.currentUserId);
+
+      if (state.currentRole === 'vendor') {
+        addZero(state.vendorId);
+        addZero(state.vendorFirebaseId);
+        addZero(state.vendorNumericId);
+      } else if (state.currentRole === 'buyer') {
+        addZero(state.buyerId);
+        addZero(state.buyerNumericId);
+        addZero(state.buyerFirebaseId);
+      }
+
+      if (Object.keys(unreadUpdates).length > 0) {
+        unreadUpdates.lastSeenAt = serverTimestamp();
+        await setDoc(chatDocRef, unreadUpdates, { merge: true });
+      }
     }
   } catch (error) {
     console.error('[chat] Failed to mark messages as seen', error);
@@ -485,7 +542,20 @@ async function sendMessage(event) {
         lastUpdated: timestamp
       };
 
-      const participantsToAdd = [state.currentUserId, recipientId].filter(Boolean);
+      if (state.vendorNumericId) {
+        chatUpdate.vendorNumericId = state.vendorNumericId;
+      }
+      if (state.buyerNumericId) {
+        chatUpdate.buyerNumericId = state.buyerNumericId;
+      }
+      if (state.vendorFirebaseId) {
+        chatUpdate.vendorFirebaseId = state.vendorFirebaseId;
+      }
+      if (state.buyerFirebaseId) {
+        chatUpdate.buyerFirebaseId = state.buyerFirebaseId;
+      }
+
+      const participantsToAdd = [state.currentUserId, recipientId, state.vendorNumericId, state.buyerNumericId, state.vendorFirebaseId, state.buyerFirebaseId].filter(Boolean);
       if (participantsToAdd.length) {
         chatUpdate.participants = arrayUnion(...participantsToAdd);
       }
@@ -495,7 +565,23 @@ async function sendMessage(event) {
           name: state.currentUserName,
           role: state.currentRole
         };
-        chatUpdate[`unreadCounts.${state.currentUserId}`] = 0;
+        const zeroKeys = new Set();
+        const addZero = (id) => {
+          const trimmed = trimValue(id);
+          if (!trimmed || zeroKeys.has(trimmed)) return;
+          chatUpdate[`unreadCounts.${trimmed}`] = 0;
+          zeroKeys.add(trimmed);
+        };
+        addZero(state.currentUserId);
+        if (state.currentRole === 'vendor') {
+          addZero(state.vendorId);
+          addZero(state.vendorFirebaseId);
+          addZero(state.vendorNumericId);
+        } else if (state.currentRole === 'buyer') {
+          addZero(state.buyerId);
+          addZero(state.buyerNumericId);
+          addZero(state.buyerFirebaseId);
+        }
       }
 
       if (recipientId) {
@@ -503,7 +589,26 @@ async function sendMessage(event) {
           name: state.counterpartyName || '',
           role: state.counterpartyRole || recipientRole
         };
-        chatUpdate[`unreadCounts.${recipientId}`] = increment(1);
+
+        const incrementedKeys = new Set();
+        const addUnreadIncrement = (id) => {
+          const trimmed = trimValue(id);
+          if (!trimmed || incrementedKeys.has(trimmed)) return;
+          chatUpdate[`unreadCounts.${trimmed}`] = increment(1);
+          incrementedKeys.add(trimmed);
+        };
+
+        addUnreadIncrement(recipientId);
+
+        if (recipientRole === 'vendor') {
+          addUnreadIncrement(state.vendorId);
+          addUnreadIncrement(state.vendorFirebaseId);
+          addUnreadIncrement(state.vendorNumericId);
+        } else if (recipientRole === 'buyer') {
+          addUnreadIncrement(state.buyerId);
+          addUnreadIncrement(state.buyerNumericId);
+          addUnreadIncrement(state.buyerFirebaseId);
+        }
       }
 
       await setDoc(chatDocRef, chatUpdate, { merge: true });

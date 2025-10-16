@@ -2,42 +2,12 @@
 require_once __DIR__ . '/session-path.php';
 session_start();
 
-$chatVendorId = '';
 $vendorId = $_SESSION['vendor_id'] ?? '';
-$vendorEmail = $_SESSION['vendor_email'] ?? '';
 $vendorName = $_SESSION['vendor_name'] ?? 'Vendor';
+$vendorEmail = $_SESSION['vendor_email'] ?? '';
+$vendorFirebaseId = isset($_GET['vendorId']) ? trim((string) $_GET['vendorId']) : '';
 
-if ($vendorId === '') {
-    $chatVendorId = '';
-} else {
-    $chatVendorId = (string) $vendorId;
-    require_once __DIR__ . '/db.php';
-    if (yustam_vendor_table_has_column('firebase_uid')) {
-        try {
-            $db = get_db_connection();
-            $vendorTable = YUSTAM_VENDORS_TABLE;
-            if (!preg_match('/^[A-Za-z0-9_]+$/', $vendorTable)) {
-                throw new RuntimeException('Invalid vendor table name.');
-            }
-            $stmt = $db->prepare(sprintf('SELECT firebase_uid FROM `%s` WHERE id = ? LIMIT 1', $vendorTable));
-            if ($stmt) {
-                $vendorIdInt = (int) $vendorId;
-                $stmt->bind_param('i', $vendorIdInt);
-                $stmt->execute();
-                $result = $stmt->get_result();
-                if ($result) {
-                    $row = $result->fetch_assoc();
-                    if ($row && !empty($row['firebase_uid'])) {
-                        $chatVendorId = trim((string) $row['firebase_uid']);
-                    }
-                }
-                $stmt->close();
-            }
-        } catch (Throwable $exception) {
-            error_log('vendor-chats: failed to load firebase uid for vendor ' . $vendorId . ': ' . $exception->getMessage());
-        }
-    }
-}
+$chatVendorId = $vendorId !== '' ? (string) $vendorId : '';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -446,8 +416,10 @@ if ($vendorId === '') {
     <main
         id="vendorChatPage"
         data-user-id="<?= htmlspecialchars($chatVendorId, ENT_QUOTES, 'UTF-8'); ?>"
+        data-user-firebase-id="<?= htmlspecialchars($vendorFirebaseId, ENT_QUOTES, 'UTF-8'); ?>"
+        data-user-name="<?= htmlspecialchars($vendorName, ENT_QUOTES, 'UTF-8'); ?>"
         data-user-email="<?= htmlspecialchars($vendorEmail, ENT_QUOTES, 'UTF-8'); ?>"
-        data-user-name="<?= htmlspecialchars($vendorName, ENT_QUOTES, 'UTF-8'); ?>">
+        data-legacy-id="<?= htmlspecialchars((string) $vendorId, ENT_QUOTES, 'UTF-8'); ?>">
         <div class="search-wrapper">
             <i class="ri-search-line" aria-hidden="true"></i>
             <input type="search" id="vendorSearch" placeholder="Search buyer chats" autocomplete="off" aria-label="Search buyer conversations">

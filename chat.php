@@ -6,6 +6,22 @@ $currentUserId = $_SESSION['vendor_id'] ?? $_SESSION['buyer_id'] ?? '';
 $currentRole = isset($_SESSION['vendor_id']) ? 'vendor' : (isset($_SESSION['buyer_id']) ? 'buyer' : 'guest');
 $buyerId = $_GET['buyerId'] ?? ($_SESSION['buyer_id'] ?? '');
 $vendorId = $_GET['vendorId'] ?? ($_SESSION['vendor_id'] ?? '');
+$buyerNumericId = $_SESSION['buyer_id'] ?? '';
+$vendorNumericId = $_SESSION['vendor_id'] ?? '';
+$buyerFirebaseId = isset($_GET['buyerFirebaseId']) ? trim((string) $_GET['buyerFirebaseId']) : '';
+$vendorFirebaseId = isset($_GET['vendorId']) ? trim((string) $_GET['vendorId']) : '';
+
+if ($vendorNumericId === '' && isset($_GET['vendorNumericId'])) {
+    $vendorNumericId = trim((string) $_GET['vendorNumericId']);
+}
+
+if ($buyerNumericId === '' && isset($_GET['buyerNumericId'])) {
+    $buyerNumericId = trim((string) $_GET['buyerNumericId']);
+}
+
+if ($vendorNumericId === '' && isset($_GET['vendorNumericId'])) {
+    $vendorNumericId = trim((string) $_GET['vendorNumericId']);
+}
 $productId = $_GET['productId'] ?? '';
 $chatId = $_GET['chatId'] ?? '';
 
@@ -462,8 +478,12 @@ $counterpartyName = $counterpartyLabel;
         data-current-role="<?= htmlspecialchars($currentRole, ENT_QUOTES, 'UTF-8'); ?>"
         data-current-user-name="<?= htmlspecialchars($currentUserName, ENT_QUOTES, 'UTF-8'); ?>"
         data-buyer-id="<?= htmlspecialchars($buyerId, ENT_QUOTES, 'UTF-8'); ?>"
+        data-buyer-firebase-id="<?= htmlspecialchars($buyerFirebaseId, ENT_QUOTES, 'UTF-8'); ?>"
+        data-buyer-numeric-id="<?= htmlspecialchars((string)$buyerNumericId, ENT_QUOTES, 'UTF-8'); ?>"
         data-buyer-name="<?= htmlspecialchars($buyerName, ENT_QUOTES, 'UTF-8'); ?>"
         data-vendor-id="<?= htmlspecialchars($vendorId, ENT_QUOTES, 'UTF-8'); ?>"
+        data-vendor-firebase-id="<?= htmlspecialchars($vendorFirebaseId, ENT_QUOTES, 'UTF-8'); ?>"
+        data-vendor-numeric-id="<?= htmlspecialchars((string)$vendorNumericId, ENT_QUOTES, 'UTF-8'); ?>"
         data-vendor-name="<?= htmlspecialchars($vendorName, ENT_QUOTES, 'UTF-8'); ?>"
         data-counterparty-id="<?= htmlspecialchars((string)$counterpartyId, ENT_QUOTES, 'UTF-8'); ?>"
         data-counterparty-role="<?= htmlspecialchars($counterpartyRole, ENT_QUOTES, 'UTF-8'); ?>"
