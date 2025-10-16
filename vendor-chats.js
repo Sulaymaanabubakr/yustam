@@ -1,6 +1,8 @@
 import { db } from './firebase.js';
 import {
   collection,
+  getDocs,
+  limit,
   onSnapshot,
   query,
   where
@@ -15,6 +17,7 @@ const loader = document.getElementById('vendorChatLoader');
 
 const state = {
   userId: (pageShell?.dataset.userId || '').trim(),
+  userEmail: (pageShell?.dataset.userEmail || '').trim().toLowerCase(),
   chats: [],
   initialised: false
 };
@@ -263,6 +266,36 @@ function handleSearchInput() {
   renderChats(filtered, false);
 }
 
+async function ensureVendorUserId() {
+  if (!pageShell) return;
+  const currentId = state.userId;
+  if (currentId && currentId.length >= 20) {
+    return;
+  }
+  const email = state.userEmail;
+  if (!email) {
+    return;
+  }
+
+  try {
+    const vendorsRef = collection(db, 'vendors');
+    const vendorQuery = query(vendorsRef, where('email', '==', email), limit(1));
+    const snapshot = await getDocs(vendorQuery);
+    if (!snapshot.empty) {
+      const docSnap = snapshot.docs[0];
+      const resolvedId = docSnap.id?.trim?.() || '';
+      if (resolvedId) {
+        state.userId = resolvedId;
+        pageShell.dataset.userId = resolvedId;
+      }
+    } else {
+      console.warn('[vendor-chats] No vendor document found for email', email);
+    }
+  } catch (error) {
+    console.error('[vendor-chats] Failed to resolve vendor identifier from email', error);
+  }
+}
+
 function listenToChats() {
   if (!state.userId) {
     console.warn('[vendor-chats] Missing vendor identifier.');
@@ -290,4 +323,9 @@ function listenToChats() {
 
 searchInput?.addEventListener('input', handleSearchInput);
 
-listenToChats();
+async function initialiseVendorChats() {
+  await ensureVendorUserId();
+  listenToChats();
+}
+
+initialiseVendorChats();
