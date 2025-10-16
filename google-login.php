@@ -28,7 +28,7 @@ try {
         throw new RuntimeException('Invalid vendor table name.');
     }
 
-    $check = $db->prepare(sprintf('SELECT id, full_name FROM `%s` WHERE email = ? LIMIT 1', $vendorTable));
+    $check = $db->prepare(sprintf('SELECT id, vendor_uid, full_name FROM `%s` WHERE email = ? LIMIT 1', $vendorTable));
     $check->bind_param('s', $email);
     $check->execute();
     $result = $check->get_result();
@@ -36,9 +36,12 @@ try {
     if ($result && $result->num_rows > 0) {
         $user = $result->fetch_assoc();
         $check->close();
+        $vendorUid = yustam_vendor_assign_uid_if_missing($db, $user);
+
         $_SESSION['vendor_id'] = $user['id'];
         $_SESSION['vendor_name'] = $user['full_name'] ?? $name;
         $_SESSION['vendor_email'] = $email;
+        $_SESSION['vendor_uid'] = $vendorUid;
 
         echo json_encode([
             'success' => true,
@@ -57,13 +60,20 @@ try {
     $defaultCategory = 'General';
     $emptyPhone = '';
 
-    $insert = $db->prepare(sprintf(
-        'INSERT INTO `%s` (full_name, email, phone, password, business_name, category, provider, verified, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 1, NOW(), NOW())',
+    $insertSql = sprintf(
+        'INSERT INTO `%s` (vendor_uid, full_name, email, phone, password, business_name, category, provider, verified, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, NOW(), NOW())',
         $vendorTable
-    ));
+    );
+    $insert = $db->prepare($insertSql);
+    if ($insert === false) {
+        throw new RuntimeException('Unable to prepare vendor creation statement.');
+    }
+
+    $vendorUid = '';
     $insert->bind_param(
-        'sssssss',
+        'ssssssss',
+        $vendorUid,
         $fallbackName,
         $email,
         $emptyPhone,
@@ -72,14 +82,49 @@ try {
         $defaultCategory,
         $provider
     );
-    $insert->execute();
 
-    $newVendorId = $insert->insert_id;
+    $maxAttempts = 5;
+    $created = false;
+
+    for ($attempt = 0; $attempt < $maxAttempts; $attempt++) {
+        $vendorUid = yustam_generate_vendor_uid($db);
+
+        try {
+            $insert->execute();
+            $created = true;
+            break;
+        } catch (mysqli_sql_exception $exception) {
+            if ((int) $exception->getCode() === 1062) {
+                $message = $exception->getMessage();
+                if (stripos($message, 'vendor_uid') !== false) {
+                    $insert->reset();
+                    continue;
+                }
+
+                if (stripos($message, 'email') !== false) {
+                    $insert->close();
+                    echo json_encode(['success' => false, 'message' => 'This email is already registered.']);
+                    exit;
+                }
+            }
+
+            $insert->close();
+            throw $exception;
+        }
+    }
+
+    if (!$created) {
+        $insert->close();
+        throw new RuntimeException('Unable to generate a unique vendor UID. Please try again.');
+    }
+
+    $newVendorId = (int) $db->insert_id;
     $insert->close();
 
     $_SESSION['vendor_id'] = $newVendorId;
     $_SESSION['vendor_name'] = $fallbackName;
     $_SESSION['vendor_email'] = $email;
+    $_SESSION['vendor_uid'] = $vendorUid;
 
     $host = !empty($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : 'yustam.com.ng';
     $dashboardUrl = 'https://' . $host . '/vendor-dashboard.php';

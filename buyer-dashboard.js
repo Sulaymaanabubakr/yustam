@@ -4,8 +4,7 @@ import {
   limit,
   onSnapshot,
   orderBy,
-  query,
-  where
+  query
 } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
 
 const dashboardShell = document.getElementById('buyerDashboard');
@@ -15,14 +14,18 @@ const chatsList = document.getElementById('recentChatsList');
 const chatsEmpty = document.getElementById('chatsEmptyState');
 const toastEl = document.getElementById('buyerToast');
 
-const buyerId = dashboardShell?.dataset?.buyerId || document.body?.dataset?.buyerId || '';
+const buyerUid = dashboardShell?.dataset?.buyerUid || document.body?.dataset?.buyerUid || '';
+const buyerNumericId = dashboardShell?.dataset?.buyerId || document.body?.dataset?.buyerId || '';
+const buyerChatId = buyerUid || buyerNumericId || '';
+const buyerStorageId = buyerNumericId || buyerUid || '';
 
 function redirectToLogin() {
   window.location.href = 'buyer-login.php';
 }
 
-if (!buyerId) {
+if (!buyerChatId) {
   redirectToLogin();
+  return;
 }
 
 function showToast(message, type = 'success') {
@@ -110,14 +113,11 @@ function renderSaved(snapshot) {
   });
 }
 
-function createChatPreview(docSnap, index) {
-  const data = docSnap.data?.() || {};
-  const displayName = data.counterpartyName || data.vendorName || data.buyerName || 'Marketplace partner';
-  const lastMessage = data.lastMessage || {};
-  const messageTextRaw = lastMessage.text?.trim?.() || '';
-  const messageText = messageTextRaw || (lastMessage.imageUrl ? '📷 Photo' : 'Tap to start chatting');
-  const productTitle = data.productTitle || data.productName || 'Marketplace listing';
-  const timestamp = lastMessage.timestamp || data.lastUpdated || data.updatedAt;
+function createChatPreview(chat, index) {
+  const displayName = chat.counterpartyName || 'Marketplace partner';
+  const messageText = chat.lastMessagePreview || 'Tap to start chatting';
+  const productTitle = chat.productTitle || 'Marketplace listing';
+  const timestamp = chat.lastMessageAt || chat.updatedAt;
 
   const card = document.createElement('article');
   card.className = 'mini-card';
@@ -134,7 +134,12 @@ function createChatPreview(docSnap, index) {
   avatar.style.placeItems = 'center';
   avatar.style.fontWeight = '700';
   avatar.style.color = 'var(--emerald)';
-  const initials = (displayName || 'Y').split(' ').filter(Boolean).map((part) => part[0]?.toUpperCase()).join('').slice(0, 2) || 'YU';
+  const initials = (displayName || 'Y')
+    .split(' ')
+    .filter(Boolean)
+    .map((part) => part[0]?.toUpperCase())
+    .join('')
+    .slice(0, 2) || 'YU';
   avatar.textContent = initials;
 
   const meta = document.createElement('div');
@@ -166,55 +171,71 @@ function createChatPreview(docSnap, index) {
 
   card.addEventListener('click', () => {
     const destination = new URL('chat.php', window.location.href);
-    destination.searchParams.set('chatId', docSnap.id);
-    if (data.productId) destination.searchParams.set('productId', data.productId);
-    if (data.vendorId) destination.searchParams.set('vendorId', data.vendorId);
-    destination.searchParams.set('participantName', displayName);
-    destination.searchParams.set('productTitle', productTitle);
+    destination.searchParams.set('chatId', chat.chatId);
+    if (chat.productId) destination.searchParams.set('productId', chat.productId);
+    if (chat.vendorUid) destination.searchParams.set('vendorUid', chat.vendorUid);
+    if (chat.buyerUid) destination.searchParams.set('buyerUid', chat.buyerUid);
+    if (displayName) destination.searchParams.set('participantName', displayName);
+    if (productTitle) destination.searchParams.set('productTitle', productTitle);
     window.location.href = destination.toString();
   });
 
   return card;
 }
 
-function renderChats(snapshot) {
+async function fetchChatPreviews() {
   if (!chatsList) return;
-  chatsList.innerHTML = '';
-  const docs = snapshot.docs || [];
-  if (docs.length === 0) {
-    if (chatsEmpty) chatsEmpty.style.display = 'block';
-    return;
-  }
-  if (chatsEmpty) chatsEmpty.style.display = 'none';
-  docs.forEach((docSnap, index) => {
-    const card = createChatPreview(docSnap, index);
-    chatsList.appendChild(card);
-  });
-}
+  try {
+    const url = new URL('fetch-chats.php', window.location.origin);
+    url.searchParams.set('scope', 'list');
+    url.searchParams.set('limit', '2');
+    const response = await fetch(url.toString(), { credentials: 'same-origin' });
+    const payload = await response.json();
+    if (!response.ok || !payload?.success) {
+      throw new Error(payload?.message || 'Unable to load chats.');
+    }
 
-try {
-  const savedRef = collection(db, 'saved', buyerId, 'items');
-  const savedQuery = query(savedRef, orderBy('timestamp', 'desc'), limit(3));
-  onSnapshot(savedQuery, renderSaved, (error) => {
-    console.error('[buyer-dashboard] saved listings error', error);
-    showToast('Unable to load saved listings right now.', 'error');
-    if (recentSavedEmpty) recentSavedEmpty.hidden = false;
-  });
-} catch (error) {
-  console.error('[buyer-dashboard] saved setup failed', error);
-  showToast('Unable to connect to saved listings.', 'error');
-  if (recentSavedEmpty) recentSavedEmpty.hidden = false;
-}
+    const conversations = (payload.conversations || []).slice(0, 2);
+    chatsList.innerHTML = '';
 
-try {
-  const chatsRef = collection(db, 'chats');
-  const chatsQuery = query(chatsRef, where('participants', 'array-contains', buyerId), orderBy('lastUpdated', 'desc'), limit(2));
-  onSnapshot(chatsQuery, renderChats, (error) => {
-    console.error('[buyer-dashboard] chats error', error);
+    if (!conversations.length) {
+      if (chatsEmpty) chatsEmpty.style.display = 'block';
+      return;
+    }
+
+    if (chatsEmpty) chatsEmpty.style.display = 'none';
+    conversations.forEach((chat, index) => {
+      const card = createChatPreview(chat, index);
+      chatsList.appendChild(card);
+    });
+  } catch (error) {
+    console.error('[buyer-dashboard] chat preview failed', error);
     showToast('Unable to load chats right now.', 'error');
     if (chatsEmpty) chatsEmpty.style.display = 'block';
-  });
-} catch (error) {
-  console.error('[buyer-dashboard] chat setup failed', error);
-  showToast('Unable to connect to chats.', 'error');
+  }
+}
+
+if (buyerStorageId) {
+  try {
+    const savedRef = collection(db, 'saved', buyerStorageId, 'items');
+    const savedQuery = query(savedRef, orderBy('timestamp', 'desc'), limit(3));
+    onSnapshot(savedQuery, renderSaved, (error) => {
+      console.error('[buyer-dashboard] saved listings error', error);
+      showToast('Unable to load saved listings right now.', 'error');
+      if (recentSavedEmpty) recentSavedEmpty.hidden = false;
+    });
+  } catch (error) {
+    console.error('[buyer-dashboard] saved setup failed', error);
+    showToast('Unable to connect to saved listings.', 'error');
+    if (recentSavedEmpty) recentSavedEmpty.hidden = false;
+  }
+} else if (recentSavedEmpty) {
+  recentSavedEmpty.hidden = false;
+}
+
+if (buyerChatId) {
+  fetchChatPreviews();
+  setInterval(fetchChatPreviews, 12000);
+} else if (chatsEmpty) {
+  chatsEmpty.style.display = 'block';
 }

@@ -24,9 +24,11 @@ if ($email === '') {
 try {
     $existing = yustam_buyers_find_by_email($email);
     if ($existing) {
+        $existing = yustam_buyers_ensure_uid($existing);
         $_SESSION['buyer_id'] = (int)$existing['id'];
         $_SESSION['buyer_name'] = $existing['name'] ?? ($name ?: 'Buyer');
         $_SESSION['buyer_email'] = $existing['email'];
+        $_SESSION['buyer_uid'] = $existing['buyer_uid'] ?? null;
 
         echo json_encode([
             'success' => true,
@@ -45,6 +47,7 @@ try {
     $_SESSION['buyer_id'] = (int)$buyer['id'];
     $_SESSION['buyer_name'] = $buyer['name'];
     $_SESSION['buyer_email'] = $buyer['email'];
+    $_SESSION['buyer_uid'] = $buyer['buyer_uid'] ?? null;
 
     $host = !empty($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : 'yustam.com.ng';
     $dashboardUrl = 'https://' . $host . '/buyer-dashboard.php';

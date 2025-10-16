@@ -1,7 +1,9 @@
 import { db } from './firebase.js';
 import { collection, onSnapshot, deleteDoc, doc, orderBy, query } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
 
-const buyerId = document.body?.dataset?.buyerId || '';
+const buyerUid = document.body?.dataset?.buyerUid || '';
+const buyerNumericId = document.body?.dataset?.buyerId || '';
+const buyerId = buyerNumericId || buyerUid || '';
 const grid = document.getElementById('savedGrid');
 const empty = document.getElementById('emptyState');
 

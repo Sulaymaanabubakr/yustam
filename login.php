@@ -28,7 +28,7 @@ try {
     }
 
     $stmt = $db->prepare(sprintf(
-        'SELECT id, full_name, email, password, verified FROM `%s` WHERE email = ? LIMIT 1',
+        'SELECT id, vendor_uid, full_name, email, password, verified FROM `%s` WHERE email = ? LIMIT 1',
         $vendorTable
     ));
     $stmt->bind_param("s", $email);
@@ -52,10 +52,13 @@ try {
         exit;
     }
 
+    $vendorUid = yustam_vendor_assign_uid_if_missing($db, $user);
+
     // Create session
     $_SESSION['vendor_id'] = $user['id'];
     $_SESSION['vendor_name'] = $user['full_name'] ?? '';
     $_SESSION['vendor_email'] = $user['email'];
+    $_SESSION['vendor_uid'] = $vendorUid;
 
     // Update last login
     if (yustam_vendor_table_has_column('updated_at')) {
