@@ -10,7 +10,7 @@
   }
 
   const state = {
-    userUid: pageShell.dataset.userId || '',
+    userUid: pageShell.dataset.userUid || pageShell.dataset.userId || '',
     userNumericId: pageShell.dataset.userNumericId || '',
     userName: pageShell.dataset.userName || '',
     polls: null,

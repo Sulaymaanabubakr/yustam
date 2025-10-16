@@ -415,6 +415,7 @@ $buyerIdentifier = $buyerUid !== '' ? $buyerUid : $buyerNumericId;
     <main
         id="buyerChatPage"
         data-user-id="<?= htmlspecialchars($buyerIdentifier, ENT_QUOTES, 'UTF-8'); ?>"
+        data-user-uid="<?= htmlspecialchars($buyerIdentifier, ENT_QUOTES, 'UTF-8'); ?>"
         data-user-numeric-id="<?= htmlspecialchars($buyerNumericId, ENT_QUOTES, 'UTF-8'); ?>"
         data-user-name="<?= htmlspecialchars($buyerName, ENT_QUOTES, 'UTF-8'); ?>">
         <div class="search-wrapper">

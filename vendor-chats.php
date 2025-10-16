@@ -11,7 +11,8 @@ if ($vendorFirebaseId === '' && $vendorUid !== '') {
     $vendorFirebaseId = $vendorUid;
 }
 $vendorIdentifier = $vendorUid !== '' ? $vendorUid : $vendorNumericId;
-$chatVendorId = $vendorIdentifier;
+$chatVendorUid = $vendorIdentifier;
+$chatVendorId = $vendorNumericId;
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -419,7 +420,8 @@ $chatVendorId = $vendorIdentifier;
     </header>
     <main
         id="vendorChatPage"
-        data-user-id="<?= htmlspecialchars($chatVendorId, ENT_QUOTES, 'UTF-8'); ?>"
+        data-user-id="<?= htmlspecialchars($chatVendorUid, ENT_QUOTES, 'UTF-8'); ?>"
+        data-user-uid="<?= htmlspecialchars($chatVendorUid, ENT_QUOTES, 'UTF-8'); ?>"
         data-user-numeric-id="<?= htmlspecialchars($vendorNumericId, ENT_QUOTES, 'UTF-8'); ?>"
         data-user-name="<?= htmlspecialchars($vendorName, ENT_QUOTES, 'UTF-8'); ?>"
         data-user-email="<?= htmlspecialchars($vendorEmail, ENT_QUOTES, 'UTF-8'); ?>"
