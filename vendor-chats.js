@@ -14,7 +14,7 @@ const scrollArea = document.getElementById('vendorChatScroll');
 const loader = document.getElementById('vendorChatLoader');
 
 const state = {
-  userId: pageShell?.dataset.userId || '',
+  userId: (pageShell?.dataset.userId || '').trim(),
   chats: [],
   initialised: false
 };
@@ -278,7 +278,7 @@ function listenToChats() {
   }
 
   const chatsRef = collection(db, 'chats');
-  const chatQuery = query(chatsRef, where('participants', 'array-contains', state.userId));
+  const chatQuery = query(chatsRef, where('vendorId', '==', state.userId));
 
   onSnapshot(chatQuery, (snapshot) => {
     if (!state.initialised) {
