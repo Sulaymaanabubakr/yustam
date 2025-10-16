@@ -14,6 +14,8 @@ const previewImage = document.getElementById('previewImage');
 const removeImageButton = document.getElementById('removeImage');
 const participantStatus = document.getElementById('participantStatus');
 const typingIndicator = document.getElementById('typingIndicator');
+const participantNameHeading = document.getElementById('participantNameHeading');
+const roleLabelHeading = document.querySelector('.profile-meta .role-label');
 
 const state = {
   chatId: appShell?.dataset.chatId || '',
@@ -120,8 +122,24 @@ function clearMessages() {
 
 function updateConversationSummary(summary) {
   if (!summary) return;
-  state.counterpartyName = summary.counterpartyName || state.counterpartyName;
-  state.counterpartyRole = summary.counterpartyRole || state.counterpartyRole;
+  if (summary.counterpartyName) {
+    state.counterpartyName = summary.counterpartyName;
+    if (participantNameHeading) {
+      participantNameHeading.textContent = summary.counterpartyName;
+    }
+    if (appShell) {
+      appShell.dataset.counterpartyName = summary.counterpartyName;
+    }
+  }
+  if (summary.counterpartyRole) {
+    state.counterpartyRole = summary.counterpartyRole;
+    if (roleLabelHeading) {
+      roleLabelHeading.textContent = summary.counterpartyRole === 'vendor' ? 'Vendor' : 'Buyer';
+    }
+    if (appShell) {
+      appShell.dataset.counterpartyRole = summary.counterpartyRole;
+    }
+  }
   if (participantStatus && summary.lastMessageAt) {
     const lastTime = formatTime(summary.lastMessageAt);
     participantStatus.textContent = lastTime ? `Last active ${lastTime}` : '';
