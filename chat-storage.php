@@ -49,6 +49,7 @@ function yustam_chat_ensure_tables(mysqli $db): void
             `last_message_at` DATETIME NULL,
             `last_message_preview` TEXT NULL,
             `last_sender_uid` VARCHAR(20) NULL,
+            PRIMARY KEY (`id`),
             INDEX `buyer_uid_idx` (`buyer_uid`),
             INDEX `vendor_uid_idx` (`vendor_uid`),
             INDEX `last_message_at_idx` (`last_message_at`),
@@ -71,6 +72,7 @@ function yustam_chat_ensure_tables(mysqli $db): void
             `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             `seen` TINYINT(1) NOT NULL DEFAULT 0,
             `seen_at` DATETIME NULL,
+            PRIMARY KEY (`id`),
             INDEX `chat_created_idx` (`chat_id`, `created_at`),
             INDEX `receiver_seen_idx` (`receiver_uid`, `seen`),
             FOREIGN KEY (`chat_id`) REFERENCES `%s` (`chat_id`) ON DELETE CASCADE
@@ -81,6 +83,22 @@ function yustam_chat_ensure_tables(mysqli $db): void
 
     $db->query($conversationSql);
     $db->query($messageSql);
+
+    try {
+        $db->query(sprintf('ALTER TABLE `%s` ADD PRIMARY KEY (`id`)', $conversations));
+    } catch (Throwable $exception) {
+        if ((int) $exception->getCode() !== 1068) {
+            error_log('chat ensure conversations primary: ' . $exception->getMessage());
+        }
+    }
+
+    try {
+        $db->query(sprintf('ALTER TABLE `%s` ADD PRIMARY KEY (`id`)', $messages));
+    } catch (Throwable $exception) {
+        if ((int) $exception->getCode() !== 1068) {
+            error_log('chat ensure messages primary: ' . $exception->getMessage());
+        }
+    }
 
     // Ensure extra columns exist for legacy installations
     $conversationCols = [];
