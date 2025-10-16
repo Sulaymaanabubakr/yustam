@@ -1,8 +1,11 @@
 import { db } from './firebase.js';
 import {
+  arrayUnion,
   collection,
+  doc,
   onSnapshot,
   query,
+  updateDoc,
   where
 } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
 
@@ -13,11 +16,19 @@ const searchInput = document.getElementById('chatSearch');
 const scrollArea = document.getElementById('chatScrollArea');
 const loader = document.getElementById('chatLoader');
 
+const trimString = (value) => (typeof value === 'string' ? value.trim() : (value ?? '').toString().trim());
+
 const state = {
-  userId: (pageShell?.dataset.userId || '').trim(),
+  userId: trimString(pageShell?.dataset.userId || ''),
+  userFirebaseId: trimString(pageShell?.dataset.userFirebaseId || ''),
   chats: [],
   initialised: false
 };
+
+state.senderIds = new Set([state.userId, state.userFirebaseId].filter(Boolean));
+
+const chatStore = new Map();
+const pendingNumericUpdates = new Set();
 
 const FALLBACK_IMAGE = 'https://images.unsplash.com/photo-1510557880182-3d4d3cba35a5?auto=format&fit=crop&w=160&q=80';
 
@@ -78,7 +89,7 @@ function formatRelativeTime(timestamp) {
 }
 
 function renderTick(lastMessage) {
-  if (!lastMessage || lastMessage.senderId !== state.userId) {
+  if (!lastMessage || !state.senderIds.has(lastMessage.senderId)) {
     return '';
   }
   return lastMessage.seen
@@ -88,7 +99,18 @@ function renderTick(lastMessage) {
 
 function normaliseChat(docSnap) {
   const data = docSnap.data() || {};
-  const isBuyer = data.buyerId === state.userId;
+  const buyerIdRaw = trimString(data.buyerId || '');
+  const buyerNumericId = trimString(data.buyerNumericId || buyerIdRaw);
+  const inferredBuyerFirebase = trimString(data.buyerFirebaseId || '');
+  const buyerFirebaseId = buyerIdRaw && buyerIdRaw !== buyerNumericId ? buyerIdRaw : inferredBuyerFirebase;
+  if (buyerFirebaseId) {
+    state.senderIds.add(buyerFirebaseId);
+  }
+  if (buyerNumericId) {
+    state.senderIds.add(buyerNumericId);
+  }
+  const buyerIdCandidates = [buyerIdRaw, buyerNumericId, buyerFirebaseId].filter(Boolean);
+  const isBuyer = buyerIdCandidates.some((id) => state.senderIds.has(id));
   const fallbackName = isBuyer ? 'Vendor' : 'Buyer';
   const participantProfiles = data.participantProfiles || {};
   const counterpartyId = isBuyer ? data.vendorId : data.buyerId;
@@ -102,12 +124,26 @@ function normaliseChat(docSnap) {
   const lastMessageText = lastMessageTextRaw && lastMessageTextRaw.length > 0
     ? lastMessageTextRaw
     : lastMessage?.imageUrl
-      ? '📷 Photo'
+      ? '[Photo]'
       : 'Tap to start chatting';
   const timestamp = lastMessage?.timestamp || data.lastUpdated || data.updatedAt || data.createdAt || null;
-  const unreadCounts = data.unreadCounts;
-  const unreadCount = typeof unreadCounts === 'object' && unreadCounts !== null ? unreadCounts[state.userId] : undefined;
-  const isUnread = Boolean(lastMessage && lastMessage.senderId && lastMessage.senderId !== state.userId && !lastMessage.seen);
+  const unreadCounts = (typeof data.unreadCounts === 'object' && data.unreadCounts !== null) ? data.unreadCounts : {};
+  const countedKeys = new Set();
+  let unreadTotal = 0;
+  const addUnreadCount = (key) => {
+    const trimmed = trimString(key);
+    if (!trimmed || countedKeys.has(trimmed)) return;
+    const value = unreadCounts[trimmed];
+    if (typeof value === 'number') {
+      unreadCount += value;
+      countedKeys.add(trimmed);
+    }
+  };
+  addUnreadCount(state.userId);
+  addUnreadCount(state.userFirebaseId);
+  const unreadCount = countedKeys.size > 0 ? unreadTotal : undefined;
+  const isUnreadByCount = typeof unreadCount === 'number' ? unreadCount > 0 : false;
+  const isUnread = isUnreadByCount || Boolean(lastMessage && lastMessage.senderId && !state.senderIds.has(lastMessage.senderId) && !lastMessage.seen);
 
   return {
     ...data,
@@ -121,6 +157,8 @@ function normaliseChat(docSnap) {
     timestamp,
     unreadCount,
     isUnread,
+    buyerNumericId,
+    buyerFirebaseId,
     searchText: `${displayName} ${productTitle} ${lastMessageText}`.toLowerCase()
   };
 }
@@ -179,6 +217,8 @@ function createChatCard(chat, index) {
   const destination = new URL('chat.php', window.location.origin);
   destination.searchParams.set('chatId', chat.chatId);
   if (chat.buyerId) destination.searchParams.set('buyerId', chat.buyerId);
+  if (chat.buyerNumericId) destination.searchParams.set('buyerNumericId', chat.buyerNumericId);
+  if (chat.buyerFirebaseId) destination.searchParams.set('buyerFirebaseId', chat.buyerFirebaseId);
   if (chat.vendorId) destination.searchParams.set('vendorId', chat.vendorId);
   if (chat.productId) destination.searchParams.set('productId', chat.productId);
   destination.searchParams.set('participantName', chat.displayName);
@@ -206,10 +246,6 @@ function renderChats(chats, shouldResetScroll = false) {
 
   listContainer.innerHTML = '';
 
-  if (state.initialised) {
-    setLoaderVisibility(false);
-  }
-
   listContainer.style.display = chats.length ? 'grid' : 'none';
 
   if (!chats.length) {
@@ -231,6 +267,67 @@ function renderChats(chats, shouldResetScroll = false) {
       scrollArea.scrollTo({ top: 0, behavior: 'smooth' });
     });
   }
+}
+
+function rebuildChats(shouldResetScroll) {
+  const chatsArray = Array.from(chatStore.values())
+    .sort((a, b) => getTimestampNumber(b.timestamp) - getTimestampNumber(a.timestamp));
+  state.chats = chatsArray;
+  const term = searchInput?.value?.trim() || '';
+  const filtered = filterChats(term);
+  renderChats(filtered, shouldResetScroll);
+}
+
+async function ensureBuyerNumericField(docSnap) {
+  if (!state.userId) return;
+  if (pendingNumericUpdates.has(docSnap.id)) return;
+  const data = docSnap.data() || {};
+  const existingNumeric = trimString(data.buyerNumericId || '');
+  const participants = Array.isArray(data.participants) ? data.participants.map(trimString) : [];
+
+  const updatePayload = {};
+  let needsUpdate = false;
+
+  if (!existingNumeric) {
+    updatePayload.buyerNumericId = state.userId;
+    needsUpdate = true;
+  }
+
+  if (!participants.includes(state.userId)) {
+    updatePayload.participants = arrayUnion(state.userId);
+    needsUpdate = true;
+  }
+
+  if (!needsUpdate) return;
+
+  pendingNumericUpdates.add(docSnap.id);
+  try {
+    await updateDoc(doc(db, 'chats', docSnap.id), updatePayload);
+  } catch (error) {
+    console.warn('[buyer-chats] Failed to stamp buyerNumericId for chat', docSnap.id, error);
+  } finally {
+    pendingNumericUpdates.delete(docSnap.id);
+  }
+}
+
+function processSnapshot(sourceLabel, snapshot) {
+  if (!state.initialised) {
+    state.initialised = true;
+    setLoaderVisibility(false);
+  }
+
+  snapshot.docChanges().forEach((change) => {
+    if (change.type === 'removed') {
+      chatStore.delete(change.doc.id);
+      return;
+    }
+
+    const chat = normaliseChat(change.doc);
+    chatStore.set(change.doc.id, chat);
+    ensureBuyerNumericField(change.doc);
+  });
+
+  rebuildChats(sourceLabel === 'primary');
 }
 
 function filterChats(term) {
@@ -264,7 +361,7 @@ function handleSearchInput() {
 }
 
 function listenToChats() {
-  if (!state.userId) {
+  if (!state.userId && !state.userFirebaseId) {
     console.warn('[buyer-chats] Missing buyer identifier.');
     setLoaderVisibility(false);
     renderChats([], true);
@@ -272,20 +369,28 @@ function listenToChats() {
   }
 
   const chatsRef = collection(db, 'chats');
-  const chatQuery = query(chatsRef, where('buyerId', '==', state.userId));
+  let listenerCount = 0;
 
-  onSnapshot(chatQuery, (snapshot) => {
-    if (!state.initialised) {
-      state.initialised = true;
-      setLoaderVisibility(false);
-    }
-    state.chats = snapshot.docs
-      .map(normaliseChat)
-      .sort((a, b) => getTimestampNumber(b.timestamp) - getTimestampNumber(a.timestamp));
-    const term = searchInput?.value?.trim() || '';
-    const filtered = filterChats(term);
-    renderChats(filtered, true);
-  });
+  if (state.userId) {
+    const primaryQuery = query(chatsRef, where('buyerId', '==', state.userId));
+    onSnapshot(primaryQuery, (snapshot) => processSnapshot('primary', snapshot));
+    listenerCount += 1;
+
+    const numericQuery = query(chatsRef, where('buyerNumericId', '==', state.userId));
+    onSnapshot(numericQuery, (snapshot) => processSnapshot('numeric', snapshot));
+    listenerCount += 1;
+  }
+
+  if (state.userFirebaseId) {
+    const firebaseQuery = query(chatsRef, where('buyerId', '==', state.userFirebaseId));
+    onSnapshot(firebaseQuery, (snapshot) => processSnapshot('firebase', snapshot));
+    listenerCount += 1;
+  }
+
+  if (listenerCount === 0) {
+    setLoaderVisibility(false);
+    renderChats([], true);
+  }
 }
 
 searchInput?.addEventListener('input', handleSearchInput);

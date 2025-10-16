@@ -410,7 +410,7 @@ $buyerName = $_SESSION['buyer_name'] ?? 'Buyer';
             <i class="ri-home-3-line"></i>
         </a>
     </header>
-    <main id="buyerChatPage" data-user-id="<?= htmlspecialchars($buyerId, ENT_QUOTES, 'UTF-8'); ?>" data-user-name="<?= htmlspecialchars($buyerName, ENT_QUOTES, 'UTF-8'); ?>">
+    <main id="buyerChatPage" data-user-id="<?= htmlspecialchars($buyerId, ENT_QUOTES, 'UTF-8'); ?>" data-user-firebase-id="" data-user-name="<?= htmlspecialchars($buyerName, ENT_QUOTES, 'UTF-8'); ?>">
         <div class="search-wrapper">
             <i class="ri-search-line" aria-hidden="true"></i>
             <input type="search" id="chatSearch" placeholder="Search vendor chats" autocomplete="off" aria-label="Search vendor conversations">
