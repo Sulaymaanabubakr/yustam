@@ -127,6 +127,10 @@ try {
         $receiverUid = $vendorUid !== '' ? $vendorUid : ($_SESSION['vendor_uid'] ?? '');
     }
 
+    if ($senderUid === $receiverUid) {
+        throw new RuntimeException('Chat participants are not distinct.');
+    }
+
     if ($senderUid === '' || $receiverUid === '') {
         throw new RuntimeException('Unable to resolve chat participants.');
     }
