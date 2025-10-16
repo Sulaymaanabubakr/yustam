@@ -259,6 +259,7 @@ async function handleSend(event) {
       product_id: state.productId,
       product_title: state.productTitle,
       product_image: state.productImage,
+      sender_role: state.currentRole,
       buyer_uid: state.buyerUid,
       buyer_numeric_id: state.buyerId || null,
       buyer_name: state.buyerName || '',
