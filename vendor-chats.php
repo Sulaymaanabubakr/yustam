@@ -4,6 +4,7 @@ session_start();
 
 $chatVendorId = '';
 $vendorId = $_SESSION['vendor_id'] ?? '';
+$vendorEmail = $_SESSION['vendor_email'] ?? '';
 $vendorName = $_SESSION['vendor_name'] ?? 'Vendor';
 
 if ($vendorId === '') {
@@ -442,7 +443,11 @@ if ($vendorId === '') {
             <i class="ri-home-3-line"></i>
         </a>
     </header>
-    <main id="vendorChatPage" data-user-id="<?= htmlspecialchars($chatVendorId, ENT_QUOTES, 'UTF-8'); ?>" data-user-name="<?= htmlspecialchars($vendorName, ENT_QUOTES, 'UTF-8'); ?>">
+    <main
+        id="vendorChatPage"
+        data-user-id="<?= htmlspecialchars($chatVendorId, ENT_QUOTES, 'UTF-8'); ?>"
+        data-user-email="<?= htmlspecialchars($vendorEmail, ENT_QUOTES, 'UTF-8'); ?>"
+        data-user-name="<?= htmlspecialchars($vendorName, ENT_QUOTES, 'UTF-8'); ?>">
         <div class="search-wrapper">
             <i class="ri-search-line" aria-hidden="true"></i>
             <input type="search" id="vendorSearch" placeholder="Search buyer chats" autocomplete="off" aria-label="Search buyer conversations">
