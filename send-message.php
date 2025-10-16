@@ -88,17 +88,48 @@ if ($vendorNumeric !== null && $vendorNumeric > 0) {
 try {
     yustam_chat_ensure_conversation(
         $db,
-    $chatId,
-    $buyerUid,
-    $buyerIdNumeric,
-    $buyerName !== '' ? $buyerName : null,
-    $vendorUid,
-    $vendorIdNumeric,
-    $vendorName !== '' ? $vendorName : null,
-    $productId !== '' ? $productId : null,
-    $productTitle !== '' ? $productTitle : null,
-    $productImage !== '' ? $productImage : null
+        $chatId,
+        $buyerUid,
+        $buyerIdNumeric,
+        $buyerName !== '' ? $buyerName : null,
+        $vendorUid,
+        $vendorIdNumeric,
+        $vendorName !== '' ? $vendorName : null,
+        $productId !== '' ? $productId : null,
+        $productTitle !== '' ? $productTitle : null,
+        $productImage !== '' ? $productImage : null
     );
+
+    $conversation = yustam_chat_fetch_conversation($db, $chatId);
+    if ($conversation) {
+        $buyerUid = $conversation['buyer_uid'] ?? $buyerUid;
+        $vendorUid = $conversation['vendor_uid'] ?? $vendorUid;
+        $buyerName = $buyerName !== '' ? $buyerName : ($conversation['buyer_name'] ?? '');
+        $vendorName = $vendorName !== '' ? $vendorName : ($conversation['vendor_name'] ?? '');
+        if ($buyerIdNumeric === null && isset($conversation['buyer_id'])) {
+            $buyerIdNumeric = (int) $conversation['buyer_id'] ?: null;
+        }
+        if ($vendorIdNumeric === null && isset($conversation['vendor_id'])) {
+            $vendorIdNumeric = (int) $conversation['vendor_id'] ?: null;
+        }
+    }
+
+    if ($senderUid === '' && $senderType === 'buyer') {
+        $senderUid = $buyerUid !== '' ? $buyerUid : ($_SESSION['buyer_uid'] ?? '');
+    }
+    if ($senderUid === '' && $senderType === 'vendor') {
+        $senderUid = $vendorUid !== '' ? $vendorUid : ($_SESSION['vendor_uid'] ?? '');
+    }
+
+    if ($receiverType === 'buyer') {
+        $receiverUid = $buyerUid !== '' ? $buyerUid : ($_SESSION['buyer_uid'] ?? '');
+    } else {
+        $receiverUid = $vendorUid !== '' ? $vendorUid : ($_SESSION['vendor_uid'] ?? '');
+    }
+
+    if ($senderUid === '' || $receiverUid === '') {
+        throw new RuntimeException('Unable to resolve chat participants.');
+    }
 
     $message = yustam_chat_insert_message(
         $db,
