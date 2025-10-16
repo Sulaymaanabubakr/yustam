@@ -2,7 +2,6 @@ import { db } from './firebase.js';
 import {
   collection,
   onSnapshot,
-  orderBy,
   query,
   where
 } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
@@ -233,6 +232,18 @@ function filterChats(term) {
   return state.chats.filter((chat) => chat.searchText.includes(queryText));
 }
 
+const getTimestampNumber = (value) => {
+  if (!value) return 0;
+  if (typeof value.toMillis === 'function') return value.toMillis();
+  if (typeof value.toDate === 'function') {
+    const date = value.toDate();
+    return Number.isFinite(date?.getTime?.()) ? date.getTime() : 0;
+  }
+  if (value instanceof Date) return Number.isFinite(value.getTime()) ? value.getTime() : 0;
+  const parsed = new Date(value);
+  return Number.isFinite(parsed.getTime()) ? parsed.getTime() : 0;
+};
+
 function handleSearchInput() {
   const filtered = filterChats(searchInput?.value?.trim() || '');
   renderChats(filtered, false);
@@ -246,10 +257,12 @@ function listenToChats() {
   }
 
   const chatsRef = collection(db, 'chats');
-  const chatQuery = query(chatsRef, where('participants', 'array-contains', state.userId), orderBy('lastUpdated', 'desc'));
+  const chatQuery = query(chatsRef, where('participants', 'array-contains', state.userId));
 
   onSnapshot(chatQuery, (snapshot) => {
-    state.chats = snapshot.docs.map(normaliseChat);
+    state.chats = snapshot.docs
+      .map(normaliseChat)
+      .sort((a, b) => getTimestampNumber(b.timestamp) - getTimestampNumber(a.timestamp));
     const term = searchInput?.value?.trim() || '';
     const filtered = filterChats(term);
     renderChats(filtered, true);
