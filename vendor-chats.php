@@ -135,53 +135,51 @@ $vendorName = $_SESSION['vendor_name'] ?? 'Vendor';
 
         .chat-grid {
             display: grid;
-            gap: 16px;
-            grid-template-columns: repeat(1, minmax(0, 1fr));
+            gap: 12px;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
         }
 
         .chat-card {
             position: relative;
             display: grid;
-            grid-template-columns: auto 1fr auto;
+            grid-template-columns: auto 1fr;
             align-items: center;
-            gap: 16px;
-            padding: 18px 20px;
-            border-radius: 20px;
-            background: var(--glass);
-            border: 1px solid rgba(255, 255, 255, 0.52);
-            box-shadow: 0 24px 40px rgba(0, 0, 0, 0.18);
-            backdrop-filter: blur(18px);
-            transition: transform 0.25s ease, box-shadow 0.25s ease;
+            gap: 12px;
+            padding: 14px 16px;
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.85);
+            border: 1px solid rgba(243, 115, 30, 0.08);
+            box-shadow: 0 12px 20px rgba(0, 0, 0, 0.08);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
             opacity: 0;
-            transform: translateY(18px);
-            animation: card-enter 0.45s ease forwards;
+            transform: translateY(12px);
+            animation: card-enter 0.28s ease forwards;
         }
 
         .chat-card:hover,
         .chat-card:focus-visible {
             outline: none;
-            transform: translateY(-4px);
-            box-shadow: 0 26px 44px rgba(243, 115, 30, 0.3);
+            transform: translateY(-2px);
+            box-shadow: 0 12px 22px rgba(243, 115, 30, 0.2);
         }
 
         .chat-card.is-unread strong,
         .chat-card.is-unread .last-message {
             font-weight: 600;
-            color: rgba(17, 17, 17, 0.9);
+            color: rgba(17, 17, 17, 0.92);
         }
 
         .avatar {
-            width: 56px;
-            height: 56px;
-            border-radius: 50%;
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
             display: grid;
             place-items: center;
-            background: linear-gradient(145deg, rgba(243, 115, 30, 0.9), rgba(255, 153, 72, 0.85));
+            background: linear-gradient(145deg, rgba(243, 115, 30, 0.92), rgba(255, 153, 72, 0.82));
             color: #fff;
             font-weight: 700;
-            font-size: 1.1rem;
+            font-size: 0.95rem;
             overflow: hidden;
-            box-shadow: 0 16px 28px rgba(0, 0, 0, 0.2);
         }
 
         .avatar img {
@@ -192,33 +190,34 @@ $vendorName = $_SESSION['vendor_name'] ?? 'Vendor';
 
         .chat-info {
             display: grid;
-            gap: 8px;
+            gap: 6px;
         }
 
         .chat-top {
             display: flex;
             align-items: baseline;
             justify-content: space-between;
-            gap: 12px;
+            gap: 8px;
         }
 
         .chat-name {
-            font-size: 1.05rem;
-            letter-spacing: 0.02em;
+            font-size: 0.98rem;
+            letter-spacing: 0.01em;
+            color: rgba(17, 17, 17, 0.92);
         }
 
         .chat-time {
-            font-size: 0.82rem;
-            color: rgba(17, 17, 17, 0.56);
+            font-size: 0.75rem;
+            color: rgba(17, 17, 17, 0.52);
             white-space: nowrap;
         }
 
         .chat-bottom {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 6px;
             color: rgba(17, 17, 17, 0.64);
-            font-size: 0.92rem;
+            font-size: 0.85rem;
         }
 
         .last-message {
@@ -232,43 +231,80 @@ $vendorName = $_SESSION['vendor_name'] ?? 'Vendor';
         .chat-product {
             display: flex;
             align-items: center;
-            gap: 8px;
-            font-size: 0.82rem;
-            color: rgba(17, 17, 17, 0.55);
+            gap: 6px;
+            font-size: 0.75rem;
+            color: rgba(17, 17, 17, 0.52);
         }
 
         .chat-product i {
-            color: rgba(243, 115, 30, 0.8);
+            color: rgba(243, 115, 30, 0.72);
         }
 
         .meta {
-            display: grid;
-            gap: 12px;
-            justify-items: flex-end;
-        }
-
-        .product-thumb {
-            width: 48px;
-            height: 48px;
-            border-radius: 14px;
-            object-fit: cover;
-            border: 2px solid rgba(243, 115, 30, 0.52);
-            box-shadow: 0 12px 24px rgba(243, 115, 30, 0.26);
+            display: none;
         }
 
         .tick i {
-            font-size: 1rem;
+            font-size: 0.95rem;
         }
 
         .unread-dot {
             position: absolute;
-            top: 14px;
-            right: 18px;
-            width: 12px;
-            height: 12px;
+            top: 12px;
+            right: 12px;
+            width: 10px;
+            height: 10px;
             border-radius: 50%;
             background: var(--orange);
-            box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.7);
+            box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85);
+        }
+
+        .chat-loader {
+            display: grid;
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+
+        .chat-loader-item {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 12px;
+            padding: 14px 16px;
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.6);
+            overflow: hidden;
+        }
+
+        .chat-loader .avatar-skeleton {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            background: rgba(243, 115, 30, 0.18);
+        }
+
+        .chat-loader .line {
+            height: 10px;
+            border-radius: 999px;
+            background: rgba(0, 0, 0, 0.08);
+            animation: pulse 1.3s ease-in-out infinite;
+        }
+
+        .loader-lines {
+            display: grid;
+            gap: 8px;
+        }
+
+        .chat-loader .line.short {
+            width: 40%;
+        }
+
+        .chat-loader .line.long {
+            width: 70%;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.45; }
+            50% { opacity: 0.85; }
         }
 
         .empty-state {
@@ -314,7 +350,7 @@ $vendorName = $_SESSION['vendor_name'] ?? 'Vendor';
 
         @media (min-width: 720px) {
             .chat-grid {
-                grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+                grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
             }
         }
     </style>
@@ -335,6 +371,29 @@ $vendorName = $_SESSION['vendor_name'] ?? 'Vendor';
             <input type="search" id="vendorSearch" placeholder="Search conversations…" autocomplete="off" aria-label="Search conversations">
         </div>
         <div id="vendorChatScroll" class="chat-scroll">
+            <div id="vendorChatLoader" class="chat-loader" aria-hidden="true">
+                <div class="chat-loader-item">
+                    <div class="avatar-skeleton"></div>
+                    <div class="loader-lines">
+                        <div class="line long"></div>
+                        <div class="line short"></div>
+                    </div>
+                </div>
+                <div class="chat-loader-item">
+                    <div class="avatar-skeleton"></div>
+                    <div class="loader-lines">
+                        <div class="line long"></div>
+                        <div class="line short"></div>
+                    </div>
+                </div>
+                <div class="chat-loader-item">
+                    <div class="avatar-skeleton"></div>
+                    <div class="loader-lines">
+                        <div class="line long"></div>
+                        <div class="line short"></div>
+                    </div>
+                </div>
+            </div>
             <section id="vendorChatContainer" class="chat-grid" aria-live="polite"></section>
             <div id="vendorEmptyState" class="empty-state" hidden>
                 <span role="img" aria-hidden="true">💬</span>
