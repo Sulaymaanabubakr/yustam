@@ -2,12 +2,14 @@
 require_once __DIR__ . '/session-path.php';
 session_start();
 
-$productId = $_GET['id'] ?? 'demoProduct';
-$productTitle = 'Apple iPhone 15 Pro Max (256GB, Titanium)';
-$productPrice = 1050000;
-$suggestedOffer = max($productPrice - 1000, 0);
-$vendorId = $_GET['vendorId'] ?? 'vendor-demo';
-$vendorName = 'Elite Gadgets NG';
+$productId = isset($_GET['id']) ? trim((string) $_GET['id']) : '';
+if ($productId === '') {
+    $productId = 'listing-preview';
+}
+$productTitle = 'Loading listing...';
+$productPrice = 0;
+$vendorId = isset($_GET['vendorId']) ? trim((string) $_GET['vendorId']) : '';
+$vendorName = 'Marketplace Vendor';
 $buyerId = $_SESSION['buyer_id'] ?? '';
 $buyerName = $_SESSION['buyer_name'] ?? '';
 
@@ -88,11 +90,11 @@ if (!is_string($vendorPlanInput)) {
     $vendorPlanInput = '';
 }
 $vendorPlanInput = trim($vendorPlanInput);
-$vendorPlan = $vendorPlanInput !== '' ? $vendorPlanInput : 'Premium';
+$vendorPlan = $vendorPlanInput !== '' ? $vendorPlanInput : 'Free';
 $vendorPlanLabel = yustam_format_plan_label($vendorPlan);
 $vendorPlanSlug = yustam_slugify_plan($vendorPlan);
 
-$vendorVerifiedInput = $_GET['verified'] ?? 'verified';
+$vendorVerifiedInput = $_GET['verified'] ?? 'unverified';
 if (!is_string($vendorVerifiedInput)) {
     $vendorVerifiedInput = 'verified';
 }
@@ -343,6 +345,23 @@ if (is_string($vendorId) && trim($vendorId) !== '') {
             background: rgba(0, 128, 0, 0.12);
             color: var(--emerald);
         }
+        .status-chip.status-pending {
+            background: rgba(243, 115, 30, 0.16);
+            color: var(--orange);
+        }
+
+        .status-chip.status-suspended,
+        .status-chip.status-disabled,
+        .status-chip.status-unavailable {
+            background: rgba(17, 17, 17, 0.12);
+            color: rgba(17, 17, 17, 0.7);
+        }
+
+        .status-chip.status-sold,
+        .status-chip.status-soldout {
+            background: rgba(216, 67, 21, 0.16);
+            color: #d84315;
+        }
 
         .category-line {
             font-size: 0.95rem;
@@ -377,11 +396,6 @@ if (is_string($vendorId) && trim($vendorId) !== '') {
             color: rgba(17, 17, 17, 0.75);
         }
 
-        .cta-row {
-            display: flex;
-            gap: 12px;
-            flex-wrap: wrap;
-        }
 
         .btn-primary,
         .btn-accent {
@@ -446,6 +460,11 @@ if (is_string($vendorId) && trim($vendorId) !== '') {
             border-bottom: 1px solid rgba(0, 0, 0, 0.05);
             color: rgba(17, 17, 17, 0.75);
         }
+        .spec-empty {
+            margin-top: 12px;
+            font-size: 0.9rem;
+            color: rgba(17, 17, 17, 0.55);
+        }
 
         .spec-row:last-child {
             border-bottom: none;
@@ -476,6 +495,11 @@ if (is_string($vendorId) && trim($vendorId) !== '') {
             display: flex;
             flex-direction: column;
             gap: 6px;
+        }
+        .vendor-business {
+            margin: 0;
+            color: var(--muted);
+            font-size: 0.95rem;
         }
 
         .vendor-badges {
@@ -551,6 +575,10 @@ if (is_string($vendorId) && trim($vendorId) !== '') {
             display: flex;
             flex-wrap: wrap;
             gap: 10px;
+        }
+        .vendor-actions .is-disabled {
+            pointer-events: none;
+            opacity: 0.6;
         }
 
         .vendor-actions a {
@@ -735,7 +763,7 @@ if (is_string($vendorId) && trim($vendorId) !== '') {
         .floating-cta button span {
             position: absolute;
             right: 65px;
-            background: rgba(0, 0, 0, 0.8);
+            background: rgba(0, 0, 0, 0.85);
             color: var(--white);
             padding: 6px 12px;
             border-radius: 999px;
@@ -747,17 +775,24 @@ if (is_string($vendorId) && trim($vendorId) !== '') {
             white-space: nowrap;
         }
 
-        .floating-cta button:hover span {
+        .floating-cta button:hover span,
+        .floating-cta button:focus-visible span {
             opacity: 1;
             transform: translateY(0);
         }
 
-        .fab-buy {
-            background: linear-gradient(135deg, var(--orange), #FF8A3C);
+        .fab-chat {
+            background: linear-gradient(135deg, #25d366, #1ebe57);
         }
 
-        .fab-chat {
-            background: #25D366;
+        .floating-cta .is-disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+        }
+
+        .floating-cta .is-disabled:hover {
+            transform: none;
+            box-shadow: 0 10px 18px rgba(0, 0, 0, 0.12);
         }
 
         footer {
@@ -826,9 +861,6 @@ if (is_string($vendorId) && trim($vendorId) !== '') {
                 padding: 90px 16px 110px;
             }
 
-            .cta-row {
-                flex-direction: column;
-            }
 
             .floating-cta {
                 right: 16px;
@@ -900,34 +932,23 @@ if (is_string($vendorId) && trim($vendorId) !== '') {
         <section class="glass-card product-details" aria-labelledby="productName">
             <div class="product-header">
                 <h2 id="productName" class="product-title"><?= htmlspecialchars($productTitle, ENT_QUOTES, 'UTF-8'); ?></h2>
-                <p id="productPrice" class="price-tag">₦<?= number_format($productPrice); ?></p>
+                <p id="productPrice" class="price-tag">&mdash;</p>
                 <button id="saveListingBtn" class="save-btn" type="button">
                     <i class="ri-heart-line" aria-hidden="true"></i>
                     Save
                 </button>
-                <span class="status-chip">In Stock</span>
-                <div class="category-line">
+                <span class="status-chip" id="productStatus">Checking availability</span>
+                <div class="category-line" id="categoryLine" hidden>
                     <i class="ri-smartphone-line"></i>
-                    <span>Phones &amp; Tablets ▸ Smartphones</span>
+                    <span id="categoryLabel">Listing category</span>
                 </div>
                 <div class="divider" aria-hidden="true"></div>
                 <p id="productDesc" class="product-description">
-                    Experience unparalleled performance with the iPhone 15 Pro Max featuring the all-new A17 Pro chip, advanced camera system, and all-day battery life. Enjoy smooth experiences with iOS 17, a titanium chassis, and lightning-fast 5G connectivity.
+                    Listing description will appear here once loaded from the vendor.
                 </p>
-                <ul class="feature-list">
-                    <li><i class="ri-checkbox-circle-line" aria-hidden="true"></i> Official warranty: 12 months from Apple</li>
-                    <li><i class="ri-checkbox-circle-line" aria-hidden="true"></i> Comes with MagSafe charger and premium accessories bundle</li>
-                    <li><i class="ri-checkbox-circle-line" aria-hidden="true"></i> Available in Natural Titanium, Blue Titanium, and Black Titanium</li>
-                </ul>
+                <ul id="featureList" class="feature-list" hidden></ul>
             </div>
             <input type="hidden" id="productId" value="<?= htmlspecialchars($productId, ENT_QUOTES, 'UTF-8'); ?>">
-            <div class="cta-row">
-                <button id="addToCartBtn" class="btn-primary" type="button">Add to Cart</button>
-                <button id="whatsappBtn" class="btn-accent" type="button">
-                    <i class="ri-whatsapp-line" aria-hidden="true"></i>
-                    Buy on WhatsApp
-                </button>
-            </div>
         </section>
 
         <!-- Specifications -->
@@ -937,75 +958,10 @@ if (is_string($vendorId) && trim($vendorId) !== '') {
                     <i class="ri-slideshow-line" aria-hidden="true"></i>
                     Specifications
                 </summary>
-                <div id="specList" class="spec-list">
-                    <div class="spec-row">
-                        <span>Brand</span>
-                        <strong>Apple</strong>
-                    </div>
-                    <div class="spec-row">
-                        <span>Model</span>
-                        <strong>iPhone 15 Pro Max</strong>
-                    </div>
-                    <div class="spec-row">
-                        <span>Storage</span>
-                        <strong>512GB</strong>
-                    </div>
-                    <div class="spec-row">
-                        <span>RAM</span>
-                        <strong>8GB</strong>
-                    </div>
-                    <div class="spec-row">
-                        <span>Display</span>
-                        <strong>6.7" Super Retina XDR</strong>
-                    </div>
-                    <div class="spec-row">
-                        <span>Battery</span>
-                        <strong>4422 mAh</strong>
-                    </div>
-                    <div class="spec-row">
-                        <span>Warranty</span>
-                        <strong>12 Months</strong>
-                    </div>
-                </div>
+                <div id="specList" class="spec-list"></div>
+                <p id="specFallback" class="spec-empty" hidden>No additional specifications provided.</p>
             </details>
         </section>
-
-        <!-- Vendor Information Card -->
-        <section class="glass-card vendor-card" aria-labelledby="vendorTitle">
-            <div class="vendor-header">
-                <img src="https://images.unsplash.com/photo-1544723795-3fb6469f5b39?auto=format&fit=crop&w=200&q=80" alt="Vendor profile photo" class="vendor-avatar">
-                <div class="vendor-text">
-                    <h3 id="vendorTitle"><?= htmlspecialchars($vendorName, ENT_QUOTES, 'UTF-8'); ?></h3>
-                    <div class="vendor-badges">
-                        <span
-                            class="vendor-badge vendor-plan vendor-plan-<?= htmlspecialchars($vendorPlanSlug, ENT_QUOTES, 'UTF-8'); ?>"
-                            id="vendorPlanBadge"
-                        >
-                            <i class="ri-vip-crown-fill" aria-hidden="true"></i>
-                            <?= htmlspecialchars($vendorPlanLabel, ENT_QUOTES, 'UTF-8'); ?>
-                        </span>
-                        <span
-                            class="vendor-badge vendor-verified <?= htmlspecialchars($vendorVerificationState, ENT_QUOTES, 'UTF-8'); ?>"
-                            id="vendorVerifiedBadge"
-                        >
-                            <i class="<?= htmlspecialchars($vendorVerificationIcon, ENT_QUOTES, 'UTF-8'); ?>" aria-hidden="true"></i>
-                            <?= htmlspecialchars($vendorVerificationLabel, ENT_QUOTES, 'UTF-8'); ?>
-                        </span>
-                    </div>
-                </div>
-            </div>
-            <div id="vendorInfo" class="vendor-details">
-                <p><strong>Contact:</strong> elitegadgets@yustam.com · +234 803 123 4567</p>
-                <p><strong>Location:</strong> Victoria Island, Lagos</p>
-                <p><strong>Member since:</strong> March 2023</p>
-            </div>
-            <div class="vendor-actions">
-                <a href="<?= htmlspecialchars($vendorProfileUrl, ENT_QUOTES, 'UTF-8'); ?>" class="view-profile" target="_blank" rel="noopener noreferrer">View Vendor Storefront</a>
-                <a href="mailto:elitegadgets@yustam.com" class="email-vendor">Email Vendor</a>
-            </div>
-            <small>If you are an administrator, <a href="admin-listing-detail.php?id=sampleListing">open this listing in admin view</a>.</small>
-        </section>
-
         <!-- Quick Message Card -->
         <section
             id="quickChatCard"
@@ -1037,12 +993,49 @@ if (is_string($vendorId) && trim($vendorId) !== '') {
             </form>
             <div class="quick-suggestions" aria-label="Quick message suggestions">
                 <button type="button" class="suggestion-chip" data-quick-message="Is this still available?">Is this still available?</button>
-                <button type="button" class="suggestion-chip" data-quick-message="Can I pay ₦<?= number_format($suggestedOffer); ?>?">Can I pay ₦<?= number_format($suggestedOffer); ?>?</button>
+                <button type="button" class="suggestion-chip" data-quick-message="Can I get a better price?">Can I get a better price?</button>
                 <button type="button" class="suggestion-chip" data-quick-message="Final price please?">Final price please?</button>
                 <button type="button" class="suggestion-chip" data-quick-message="Can you deliver to my area?">Can you deliver to my area?</button>
             </div>
             <small>We'll pop open chat and drop your message in instantly.</small>
         </section>
+
+        <!-- Vendor Information Card -->
+        <section class="glass-card vendor-card" aria-labelledby="vendorTitle">
+            <div class="vendor-header">
+                <img id="vendorAvatar" src="logo.jpeg" alt="Vendor profile photo" class="vendor-avatar">
+                <div class="vendor-text">
+                    <h3 id="vendorTitle"><?= htmlspecialchars($vendorName, ENT_QUOTES, 'UTF-8'); ?></h3>
+                    <p id="vendorBusiness" class="vendor-business" hidden></p>
+                    <div class="vendor-badges" id="vendorBadges">
+                        <span
+                            class="vendor-badge vendor-plan vendor-plan-<?= htmlspecialchars($vendorPlanSlug, ENT_QUOTES, 'UTF-8'); ?>"
+                            id="vendorPlanBadge"
+                        >
+                            <i class="ri-vip-crown-fill" aria-hidden="true"></i>
+                            <?= htmlspecialchars($vendorPlanLabel, ENT_QUOTES, 'UTF-8'); ?>
+                        </span>
+                        <span
+                            class="vendor-badge vendor-verified <?= htmlspecialchars($vendorVerificationState, ENT_QUOTES, 'UTF-8'); ?>"
+                            id="vendorVerifiedBadge"
+                        >
+                            <i class="<?= htmlspecialchars($vendorVerificationIcon, ENT_QUOTES, 'UTF-8'); ?>" aria-hidden="true"></i>
+                            <?= htmlspecialchars($vendorVerificationLabel, ENT_QUOTES, 'UTF-8'); ?>
+                        </span>
+                    </div>
+                </div>
+            </div>
+            <div id="vendorInfo" class="vendor-details">
+                <p><strong>Contact:</strong> <a id="vendorEmailLink" href="#" aria-disabled="true">Unavailable</a> &middot; <a id="vendorPhoneLink" href="#" aria-disabled="true">Unavailable</a></p>
+                <p id="vendorLocationRow" hidden><strong>Location:</strong> <span id="vendorLocation"></span></p>
+                <p id="vendorSinceRow" hidden><strong>Member since:</strong> <span id="vendorSince"></span></p>
+            </div>
+            <div class="vendor-actions">
+                <a id="vendorStorefrontLink" href="<?= htmlspecialchars($vendorProfileUrl, ENT_QUOTES, 'UTF-8'); ?>" class="view-profile" target="_blank" rel="noopener noreferrer">View Vendor Storefront</a>
+                <a id="vendorWhatsappLink" href="#" class="email-vendor" target="_blank" rel="noopener" aria-disabled="true">WhatsApp Vendor</a>
+            </div>
+        </section>
+
 
         <!-- Related Products -->
         <section class="glass-card" aria-labelledby="relatedHeading">
@@ -1089,13 +1082,9 @@ if (is_string($vendorId) && trim($vendorId) !== '') {
 
     <!-- Floating Action Buttons -->
     <div class="floating-cta" aria-label="Quick purchase actions">
-        <button class="fab-buy" type="button" aria-label="Add to cart">
-            <i class="ri-shopping-bag-line" aria-hidden="true"></i>
-            <span>Add to Cart</span>
-        </button>
-        <button class="fab-chat" type="button" aria-label="Chat on WhatsApp" onclick="window.open('https://wa.me/2348031234567','_blank')">
+        <button id="floatingWhatsappBtn" class="fab-chat is-disabled" type="button" aria-label="Chat on WhatsApp" aria-disabled="true">
             <i class="ri-whatsapp-line" aria-hidden="true"></i>
-            <span>Chat Vendor</span>
+            <span>Chat on WhatsApp</span>
         </button>
     </div>
 
