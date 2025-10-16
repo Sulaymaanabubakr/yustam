@@ -32,7 +32,7 @@ $vendorName = $_SESSION['vendor_name'] ?? 'Vendor';
             margin: 0;
             min-height: 100vh;
             font-family: 'Inter', system-ui, sans-serif;
-            background: linear-gradient(140deg, rgba(246, 233, 221, 0.94), rgba(255, 255, 255, 0.88));
+            background: linear-gradient(160deg, rgba(255, 239, 225, 0.9), rgba(255, 255, 255, 0.95));
             color: var(--ink);
             display: flex;
             flex-direction: column;
@@ -45,20 +45,35 @@ $vendorName = $_SESSION['vendor_name'] ?? 'Vendor';
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: clamp(16px, 4vw, 24px);
-            background: linear-gradient(120deg, rgba(0, 77, 64, 0.96), rgba(0, 77, 64, 0.82));
+            padding: clamp(16px, 4vw, 26px);
+            background: linear-gradient(120deg, rgba(243, 115, 30, 0.96), rgba(255, 158, 72, 0.86));
             color: #fff;
-            border-bottom: 2px solid rgba(243, 115, 30, 0.45);
-            backdrop-filter: blur(16px);
-            box-shadow: 0 18px 38px rgba(0, 0, 0, 0.24);
+            border-bottom: 2px solid rgba(255, 199, 144, 0.55);
+            backdrop-filter: blur(18px);
+            box-shadow: 0 18px 38px rgba(243, 115, 30, 0.28);
+        }
+
+        .header-copy {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            text-align: center;
         }
 
         .page-header h1 {
             margin: 0;
             font-family: 'Anton', sans-serif;
             font-size: clamp(1.6rem, 5vw, 2.4rem);
-            letter-spacing: 0.08em;
+            letter-spacing: 0.1em;
             text-transform: uppercase;
+        }
+
+        .header-subtitle {
+            margin: 0;
+            font-size: 0.82rem;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.8);
         }
 
         .header-action {
@@ -89,23 +104,29 @@ $vendorName = $_SESSION['vendor_name'] ?? 'Vendor';
             flex-direction: column;
             gap: 16px;
             padding: 20px clamp(16px, 6vw, 56px) 28px;
+            background: linear-gradient(180deg, rgba(255, 247, 238, 0.66), rgba(255, 255, 255, 0.96));
         }
 
         .search-wrapper {
             position: relative;
             display: flex;
             align-items: center;
-            background: rgba(255, 255, 255, 0.8);
+            background: rgba(255, 255, 255, 0.85);
             border-radius: 18px;
             padding: 0 18px;
             min-height: 52px;
-            box-shadow: inset 0 0 0 1px rgba(0, 77, 64, 0.08);
+            box-shadow: inset 0 0 0 1px rgba(243, 115, 30, 0.16);
             backdrop-filter: blur(18px);
-            transition: box-shadow 0.2s ease;
+            transition: box-shadow 0.2s ease, transform 0.2s ease;
+        }
+
+        .search-wrapper:hover {
+            box-shadow: inset 0 0 0 2px rgba(243, 115, 30, 0.22);
+            transform: translateY(-1px);
         }
 
         .search-wrapper i {
-            color: rgba(0, 77, 64, 0.7);
+            color: rgba(243, 115, 30, 0.76);
             font-size: 1.3rem;
         }
 
@@ -198,6 +219,26 @@ $vendorName = $_SESSION['vendor_name'] ?? 'Vendor';
             align-items: baseline;
             justify-content: space-between;
             gap: 8px;
+        }
+
+        .chat-labels {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .role-pill {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 4px 10px;
+            border-radius: 999px;
+            background: rgba(243, 115, 30, 0.18);
+            color: rgba(192, 70, 0, 0.88);
+            font-size: 0.62rem;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
         }
 
         .chat-name {
@@ -360,7 +401,10 @@ $vendorName = $_SESSION['vendor_name'] ?? 'Vendor';
         <a class="header-action" href="vendor-dashboard.php" aria-label="Back to dashboard">
             <i class="ri-arrow-left-line"></i>
         </a>
-        <h1>Messages</h1>
+        <div class="header-copy">
+            <h1>Vendor Inbox</h1>
+            <p class="header-subtitle">Keep the conversation going with buyers</p>
+        </div>
         <a class="header-action" href="index.html" aria-label="Go to homepage">
             <i class="ri-home-3-line"></i>
         </a>
@@ -368,7 +412,7 @@ $vendorName = $_SESSION['vendor_name'] ?? 'Vendor';
     <main id="vendorChatPage" data-user-id="<?= htmlspecialchars($vendorId, ENT_QUOTES, 'UTF-8'); ?>" data-user-name="<?= htmlspecialchars($vendorName, ENT_QUOTES, 'UTF-8'); ?>">
         <div class="search-wrapper">
             <i class="ri-search-line" aria-hidden="true"></i>
-            <input type="search" id="vendorSearch" placeholder="Search conversations…" autocomplete="off" aria-label="Search conversations">
+            <input type="search" id="vendorSearch" placeholder="Search buyer chats" autocomplete="off" aria-label="Search buyer conversations">
         </div>
         <div id="vendorChatScroll" class="chat-scroll">
             <div id="vendorChatLoader" class="chat-loader" aria-hidden="true">

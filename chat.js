@@ -31,6 +31,7 @@ const previewImage = document.getElementById('previewImage');
 const removeImageButton = document.getElementById('removeImage');
 const participantStatus = document.getElementById('participantStatus');
 const participantNameHeading = document.getElementById('participantNameHeading');
+const productTitleHeading = document.getElementById('productTitleHeading');
 
 if (!appShell) {
   console.warn('[chat] Chat shell element not found.');
@@ -59,7 +60,8 @@ const state = {
   attachmentFile: null,
   presenceUnsubscribe: null,
   presenceInterval: null,
-  viewportCleanup: null
+  viewportCleanup: null,
+  initialScrollDone: false
 };
 
 if (!state.counterpartyRole) {
@@ -84,30 +86,51 @@ if (state.currentRole === 'buyer' && state.vendorName) {
   state.counterpartyName = state.buyerName;
 }
 
-const deriveHeaderName = () => {
-  if (state.currentRole === 'buyer') {
-    return state.vendorName || state.counterpartyName || state.participantName;
-  }
+const resolveProductTitle = () => state.productTitle || 'Marketplace Listing';
+
+const resolveCounterpartyLabel = () => {
   if (state.currentRole === 'vendor') {
-    return state.buyerName || state.counterpartyName || state.participantName;
+    return state.buyerName || state.counterpartyName || 'Marketplace Buyer';
   }
-  return state.counterpartyName || state.participantName;
+  if (state.currentRole === 'buyer') {
+    return state.vendorName || state.counterpartyName || 'Marketplace Vendor';
+  }
+  return state.counterpartyName || 'Marketplace User';
 };
 
 const applyHeaderName = () => {
-  const headerName = deriveHeaderName();
-  if (participantNameHeading && headerName) {
-    participantNameHeading.textContent = headerName;
+  const productLabel = resolveProductTitle();
+  const counterpartyLabel = resolveCounterpartyLabel();
+  if (productTitleHeading && productLabel) {
+    productTitleHeading.textContent = productLabel;
   }
-  if (appShell && headerName) {
-    appShell.dataset.participantName = headerName;
+  if (productLabel) {
+    state.productTitle = productLabel;
   }
-  if (headerName) {
-    state.participantName = headerName;
+  if (appShell && productLabel) {
+    appShell.dataset.productTitle = productLabel;
+  }
+  if (participantNameHeading && counterpartyLabel) {
+    participantNameHeading.textContent = counterpartyLabel;
+  }
+  if (appShell && counterpartyLabel) {
+    appShell.dataset.participantName = counterpartyLabel;
+  }
+  if (participantStatus) {
+    const prefix = state.currentRole === 'vendor' ? 'Buyer' : 'Vendor';
+    const statusLabel = state.participantStatus || 'Offline';
+    const composedStatus = `${prefix} ${statusLabel}`.trim();
+    participantStatus.textContent = composedStatus;
+    state.participantStatus = composedStatus;
+    if (appShell) {
+      appShell.dataset.participantStatus = composedStatus;
+    }
+  }
+  if (counterpartyLabel) {
+    state.counterpartyName = counterpartyLabel;
+    state.participantName = counterpartyLabel;
   }
 };
-
-applyHeaderName();
 
 if (!state.buyerId) {
   if (state.currentRole === 'buyer' && state.currentUserId) {
@@ -130,6 +153,8 @@ if (!state.vendorId) {
     appShell?.setAttribute('data-vendor-id', state.vendorId);
   }
 }
+
+applyHeaderName();
 
 if (!state.chatId && state.vendorId && state.buyerId && state.productId) {
   state.chatId = `${state.vendorId}_${state.buyerId}_${state.productId}`;
@@ -373,17 +398,26 @@ async function setPresence(isOnline) {
 
 function applyCounterpartyPresence(data) {
   if (!participantStatus) return;
+  const prefix = state.currentRole === 'vendor' ? 'Buyer' : 'Vendor';
+  let label = `${prefix} offline`;
   if (!data) {
-    participantStatus.textContent = 'Offline';
+    participantStatus.textContent = label;
+    state.participantStatus = label;
+    if (appShell) {
+      appShell.dataset.participantStatus = label;
+    }
     return;
   }
 
   if (data.isOnline) {
-    participantStatus.textContent = 'Online';
+    label = `${prefix} online`;
   } else if (data.lastSeen) {
-    participantStatus.textContent = `Last seen ${formatPresenceLabel(data.lastSeen)}`;
-  } else {
-    participantStatus.textContent = 'Offline';
+    label = `${prefix} last seen ${formatPresenceLabel(data.lastSeen)}`;
+  }
+  participantStatus.textContent = label;
+  state.participantStatus = label;
+  if (appShell) {
+    appShell.dataset.participantStatus = label;
   }
 }
 
@@ -568,6 +602,7 @@ async function sendMessage(event) {
 
 function listenToMessages() {
   if (!messagesCollection) return;
+  state.initialScrollDone = false;
   const q = query(messagesCollection, orderBy('timestamp', 'asc'));
   state.unsubscribeMessages = onSnapshot(q, (snapshot) => {
     if (!messageArea) return;
@@ -603,7 +638,10 @@ function listenToMessages() {
       }
     });
 
-    scrollMessageAreaToBottom('auto');
+    if (!state.initialScrollDone) {
+      requestAnimationFrame(() => scrollMessageAreaToBottom('auto'));
+      state.initialScrollDone = true;
+    }
     markMessagesAsSeen();
   });
 }
