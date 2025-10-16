@@ -39,6 +39,24 @@ if (!defined('YUSTAM_USERS_TABLE')) {
 /**
  * Retrieve and cache the list of column names on the vendors table.
  */
+function yustam_vendor_ensure_uid_column(mysqli $conn): void
+{
+    try {
+        $table = YUSTAM_VENDORS_TABLE;
+        $check = $conn->query("SHOW COLUMNS FROM `{$table}` LIKE 'vendor_uid'");
+        if ($check instanceof mysqli_result) {
+            $exists = $check->num_rows > 0;
+            $check->free();
+            if ($exists) {
+                return;
+            }
+        }
+        $conn->query("ALTER TABLE `{$table}` ADD COLUMN `vendor_uid` VARCHAR(20) DEFAULT NULL UNIQUE AFTER `id`");
+    } catch (Throwable $exception) {
+        error_log('Unable to ensure vendor_uid column: ' . $exception->getMessage());
+    }
+}
+
 function yustam_vendor_table_columns(): array
 {
     static $columns = null;
@@ -51,6 +69,7 @@ function yustam_vendor_table_columns(): array
 
     try {
         $conn = get_db_connection();
+        yustam_vendor_ensure_uid_column($conn);
         $result = $conn->query('SHOW COLUMNS FROM `' . YUSTAM_VENDORS_TABLE . '`');
         if ($result instanceof mysqli_result) {
             while ($row = $result->fetch_assoc()) {
