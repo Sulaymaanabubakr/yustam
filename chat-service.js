@@ -315,6 +315,11 @@ function normaliseMessagePayload(input) {
   const duration = Number(input?.duration || input?.voice_duration || 0);
   const buyerUid = normaliseString(input?.buyer_uid || input?.buyerUid || '');
   const vendorUid = normaliseString(input?.vendor_uid || input?.vendorUid || '');
+  const buyerName = normaliseString(input?.buyer_name || input?.buyerName || '');
+  const vendorName = normaliseString(input?.vendor_name || input?.vendorName || '');
+  const listingId = normaliseString(input?.listing_id || input?.listingId || '');
+  const listingTitle = normaliseString(input?.listing_title || input?.listingTitle || '');
+  const listingImage = normaliseString(input?.listing_image || input?.listingImage || '');
 
   if (!text && !imageUrl && !voiceUrl) {
     throw new Error('Please write a message or attach media.');
@@ -335,11 +340,33 @@ function normaliseMessagePayload(input) {
     buyerUid,
     vendorUid,
     type,
+    buyerName,
+    vendorName,
+    listingId,
+    listingTitle,
+    listingImage,
+    __normalised: true,
   };
 }
 
 async function writeMessage(payload) {
-  const { chatId, senderRole, senderUid, text, imageUrl, voiceUrl, duration, buyerUid, vendorUid, type } = payload;
+  const {
+    chatId,
+    senderRole,
+    senderUid,
+    text,
+    imageUrl,
+    voiceUrl,
+    duration,
+    buyerUid,
+    vendorUid,
+    type,
+    listingId,
+    listingTitle,
+    listingImage,
+    buyerName,
+    vendorName,
+  } = payload;
   const messageData = {
     ts: serverTimestamp(),
     sender_uid: senderUid,
@@ -383,26 +410,95 @@ async function writeMessage(payload) {
   if (vendorUid) {
     chatUpdates.vendor_uid = vendorUid;
   }
+  if (listingId) {
+    chatUpdates.listing_id = listingId;
+  }
+  if (listingTitle) {
+    chatUpdates.listing_title = listingTitle;
+  }
+  if (listingImage) {
+    chatUpdates.listing_image = listingImage;
+  }
+  if (buyerName) {
+    chatUpdates.buyer_name = buyerName;
+  }
+  if (vendorName) {
+    chatUpdates.vendor_name = vendorName;
+  }
 
   await setDoc(chatRef, chatUpdates, { merge: true });
 
   return { id: messageRef.id, ...messageData };
 }
 
-export async function sendMessage(input) {
+function isPermissionDenied(error) {
+  const code = error?.code || error?.status;
+  if (code && String(code).toLowerCase() === 'permission-denied') return true;
+  const message = String(error?.message || '').toLowerCase();
+  return message.includes('missing or insufficient permissions') || message.includes('permission denied');
+}
+
+async function sendMessageViaApi(payload) {
+  if (!isBrowser || typeof fetch !== 'function') {
+    throw new Error('Unable to send message without browser fetch support.');
+  }
   try {
-    const payload = normaliseMessagePayload(input);
+    const response = await fetch('./api/chat/send-message.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: payload.chatId,
+        as: payload.senderRole,
+        sender_uid: payload.senderUid,
+        text: payload.text,
+        image_url: payload.imageUrl,
+        voice_url: payload.voiceUrl,
+        duration: payload.duration,
+        buyer_uid: payload.buyerUid,
+        vendor_uid: payload.vendorUid,
+        buyer_name: payload.buyerName,
+        vendor_name: payload.vendorName,
+        listing_id: payload.listingId,
+        listing_title: payload.listingTitle,
+        listing_image: payload.listingImage,
+      }),
+      credentials: 'include',
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data?.success) {
+      throw new Error(data?.message || 'Unable to send message via server.');
+    }
+    return { sent: true, viaApi: true, result: { id: data.message_id || null, type: data.type || payload.type } };
+  } catch (apiError) {
+    console.error('[chat] sendMessage fallback error', apiError);
+    throw apiError;
+  }
+}
+
+export async function sendMessage(input) {
+  const payload = input?.__normalised ? input : normaliseMessagePayload(input);
+  try {
     const isOffline = !isBrowser || typeof navigator === 'undefined' ? false : navigator.onLine === false;
     if (isOffline) {
       offlineQueue.push({ chatId: payload.chatId, payload });
       persistOfflineQueue();
-      showToast('Message saved offline — will send when online.');
+      showToast('Message saved offline - will send when online.');
       return { queued: true };
     }
     const result = await writeMessage(payload);
     return { sent: true, result };
   } catch (error) {
     console.error('[chat] sendMessage error', error);
+    if (isPermissionDenied(error)) {
+      try {
+        const apiResult = await sendMessageViaApi(payload);
+        showToast('Message sent.');
+        return apiResult;
+      } catch (apiError) {
+        showToast(apiError?.message || 'Unable to send message.');
+        throw apiError;
+      }
+    }
     showToast(error?.message || 'Unable to send message.');
     throw error;
   }

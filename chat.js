@@ -352,6 +352,11 @@ async function sendCurrentMessage() {
       image_url: imageUrl,
       buyer_uid: buyerIdentifier,
       vendor_uid: vendorIdentifier,
+      buyer_name: role === 'buyer' ? viewer.name : counterparty.name,
+      vendor_name: role === 'vendor' ? viewer.name : counterparty.name,
+      listing_id: listingId,
+      listing_title: listing.title,
+      listing_image: listing.image,
     });
     messageInput.value = '';
     pendingImageFile = null;
