@@ -9,6 +9,7 @@ import {
   recordVoice,
   uploadVoiceToCloudinary,
   showToast,
+  fetchChatSummary,
 } from './chat-service.js';
 import { uploadToCloudinary } from './cloudinary.js';
 
@@ -260,6 +261,42 @@ function toggleSendMode() {
 
 toggleSendMode();
 
+async function loadChatSummary() {
+  try {
+    const summary = await fetchChatSummary(thread.chatId);
+    if (!summary) return;
+    if (summary.listing_title) {
+      listing.title = summary.listing_title;
+      chatSubtitleEl.textContent = listing.title;
+    } else if (!listing.title) {
+      chatSubtitleEl.textContent = 'Listing';
+    }
+    if (summary.listing_image) {
+      listing.image = summary.listing_image;
+      headerAvatar.querySelector('img').src = listing.image;
+    }
+    if (role === 'buyer') {
+      if (summary.vendor_name) {
+        counterparty.name = summary.vendor_name;
+        chatTitleEl.textContent = counterparty.name;
+      }
+      if (summary.vendor_avatar) {
+        counterparty.avatar = summary.vendor_avatar;
+      }
+    } else {
+      if (summary.buyer_name) {
+        counterparty.name = summary.buyer_name;
+        chatTitleEl.textContent = counterparty.name;
+      }
+      if (summary.buyer_avatar) {
+        counterparty.avatar = summary.buyer_avatar;
+      }
+    }
+  } catch (error) {
+    console.error('Unable to load chat summary', error);
+  }
+}
+
 async function ensureThread() {
   try {
     await ensureChat({
@@ -272,12 +309,14 @@ async function ensureThread() {
       listing_title: listing.title,
       listing_image: listing.image,
     });
+    loadChatSummary();
   } catch (error) {
     console.error('[chat] ensureChat failed', error);
   }
 }
 
 ensureThread();
+loadChatSummary();
 
 async function sendCurrentMessage() {
   if (!messageInput) return;
