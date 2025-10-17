@@ -29,6 +29,7 @@ let firebaseInitialised = false;
 let toastQueue = [];
 let toastActive = false;
 const offlineQueue = [];
+const fallbackChatCache = new Map();
 
 function ensureToastRoot() {
   if (!isBrowser) return null;
@@ -143,6 +144,77 @@ function orderChatsByLastTs(chats) {
   return [...chats].sort((a, b) => resolveTimestamp(b.last_ts) - resolveTimestamp(a.last_ts));
 }
 
+async function ensureChatViaApi(payload) {
+  if (!isBrowser || typeof fetch !== 'function') {
+    throw new Error('Unable to reach chat service.');
+  }
+  const body = {
+    chat_id: payload.chat_id,
+    buyer_uid: payload.buyer_uid,
+    buyer_name: payload.buyer_name,
+    buyer_avatar: payload.buyer_avatar,
+    vendor_uid: payload.vendor_uid,
+    vendor_name: payload.vendor_name,
+    vendor_avatar: payload.vendor_avatar,
+    listing_id: payload.listing_id,
+    listing_title: payload.listing_title,
+    listing_image: payload.listing_image,
+  };
+  const response = await fetch('./api/chat/chat-open.php', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    credentials: 'include',
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data?.success) {
+    throw new Error(data?.message || 'Unable to prepare chat.');
+  }
+  const chatData = data?.data && typeof data.data === 'object' ? data.data : {};
+  const result = { chatId: payload.chat_id, ...(chatData || {}) };
+  const fieldsToCopy = [
+    'chat_id',
+    'buyer_uid',
+    'buyer_name',
+    'buyer_avatar',
+    'vendor_uid',
+    'vendor_name',
+    'vendor_avatar',
+    'listing_id',
+    'listing_title',
+    'listing_image',
+  ];
+  fieldsToCopy.forEach((field) => {
+    if (result[field] === undefined && payload[field] !== undefined) {
+      result[field] = payload[field];
+    }
+  });
+  fallbackChatCache.set(payload.chat_id, result);
+  return result;
+}
+
+async function fetchMessagesViaApi(chatId) {
+  if (!isBrowser || typeof fetch !== 'function') {
+    throw new Error('Unable to load messages without fetch support.');
+  }
+  const response = await fetch(`./api/chat/list-messages.php?chat_id=${encodeURIComponent(chatId)}`, {
+    method: 'GET',
+    credentials: 'include',
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data?.success) {
+    throw new Error(data?.message || 'Unable to load messages.');
+  }
+  const messages = Array.isArray(data.messages) ? data.messages : [];
+  const chat = data.chat && typeof data.chat === 'object' ? { chatId, ...data.chat } : null;
+  if (chat) {
+    fallbackChatCache.set(chatId, chat);
+  } else {
+    fallbackChatCache.delete(chatId);
+  }
+  return { messages, chat };
+}
+
 async function flushOfflineQueue() {
   if (!isBrowser || typeof navigator === 'undefined' || !navigator.onLine || !offlineQueue.length) return;
   const queueCopy = [...offlineQueue];
@@ -224,24 +296,31 @@ export async function ensureChat(meta) {
     unread_for_vendor: Number(meta?.unread_for_vendor || 0),
   };
 
-  const chatRef = chatDoc(chatId);
-  const snapshot = await getDoc(chatRef);
-  if (!snapshot.exists()) {
-    await setDoc(chatRef, payload);
-  } else {
-    await updateDoc(chatRef, {
-      buyer_uid: payload.buyer_uid,
-      buyer_name: payload.buyer_name,
-      buyer_avatar: payload.buyer_avatar,
-      vendor_uid: payload.vendor_uid,
-      vendor_name: payload.vendor_name,
-      vendor_avatar: payload.vendor_avatar,
-      listing_id: payload.listing_id,
-      listing_title: payload.listing_title,
-      listing_image: payload.listing_image,
-    });
+  try {
+    const chatRef = chatDoc(chatId);
+    const snapshot = await getDoc(chatRef);
+    if (!snapshot.exists()) {
+      await setDoc(chatRef, payload);
+    } else {
+      await updateDoc(chatRef, {
+        buyer_uid: payload.buyer_uid,
+        buyer_name: payload.buyer_name,
+        buyer_avatar: payload.buyer_avatar,
+        vendor_uid: payload.vendor_uid,
+        vendor_name: payload.vendor_name,
+        vendor_avatar: payload.vendor_avatar,
+        listing_id: payload.listing_id,
+        listing_title: payload.listing_title,
+        listing_image: payload.listing_image,
+      });
+    }
+    return { chatId, ...payload };
+  } catch (error) {
+    if (isPermissionDenied(error)) {
+      return ensureChatViaApi(payload);
+    }
+    throw error;
   }
-  return { chatId, ...payload };
 }
 
 export async function fetchChatSummary(chatId) {
@@ -252,7 +331,22 @@ export async function fetchChatSummary(chatId) {
       return { id: snapshot.id, ...snapshot.data() };
     }
   } catch (error) {
-    console.error('[chat] fetchChatSummary failed', error);
+    if (isPermissionDenied(error)) {
+      const cached = fallbackChatCache.get(id);
+      if (cached) {
+        return cached;
+      }
+      try {
+        const data = await fetchMessagesViaApi(id);
+        if (data.chat) {
+          return data.chat;
+        }
+      } catch (fallbackError) {
+        console.error('[chat] fetchChatSummary fallback failed', fallbackError);
+      }
+    } else {
+      console.error('[chat] fetchChatSummary failed', error);
+    }
   }
   return null;
 }
@@ -292,17 +386,89 @@ export function subscribeChatsForVendor(vendorUid, callback) {
 export function subscribeMessages(chatId, callback) {
   const id = getSafeUid(chatId);
   const q = query(messagesCollection(id), orderBy('ts', 'asc'), limit(500));
-  return onSnapshot(
-    q,
-    (snapshot) => {
-      const messages = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
-      callback(messages);
-    },
-    (error) => {
-      console.error('[chat] subscribeMessages', error);
+  let unsubscribeFirestore = null;
+  let pollingTimer = null;
+  let lastSignature = '';
+  let active = true;
+
+  const stopPolling = () => {
+    if (pollingTimer) {
+      clearInterval(pollingTimer);
+      pollingTimer = null;
+    }
+  };
+
+  const cleanup = () => {
+    active = false;
+    if (unsubscribeFirestore) {
+      try {
+        unsubscribeFirestore();
+      } catch (unsubscribeError) {
+        console.warn('[chat] unsubscribe snapshot failed', unsubscribeError);
+      }
+      unsubscribeFirestore = null;
+    }
+    stopPolling();
+  };
+
+  const emitMessages = (messages) => {
+    if (!active) return;
+    const signature = Array.isArray(messages)
+      ? messages.map((msg) => `${msg.id || ''}:${resolveTimestamp(msg.ts)}`).join('|')
+      : '';
+    if (signature === lastSignature) return;
+    lastSignature = signature;
+    callback(messages);
+  };
+
+  const startPolling = () => {
+    if (pollingTimer) return;
+    const fetchAndEmit = async () => {
+      try {
+        const data = await fetchMessagesViaApi(id);
+        emitMessages(data.messages || []);
+      } catch (pollError) {
+        console.error('[chat] messages fallback poll failed', pollError);
+      }
+    };
+    fetchAndEmit();
+    pollingTimer = setInterval(fetchAndEmit, 8000);
+  };
+
+  const handleSnapshot = (snapshot) => {
+    const messages = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+    emitMessages(messages);
+  };
+
+  const handleError = (error) => {
+    console.error('[chat] subscribeMessages', error);
+    if (isPermissionDenied(error)) {
+      if (unsubscribeFirestore) {
+        try {
+          unsubscribeFirestore();
+        } catch (unsubscribeError) {
+          console.warn('[chat] unsubscribe after permission denied failed', unsubscribeError);
+        }
+        unsubscribeFirestore = null;
+      }
+      if (!pollingTimer) {
+        showToast('Switching to server updates for this chat.');
+        startPolling();
+      }
+    } else {
       showToast('Unable to load messages.');
     }
-  );
+  };
+
+  try {
+    unsubscribeFirestore = onSnapshot(q, handleSnapshot, handleError);
+  } catch (error) {
+    handleError(error);
+  }
+
+  return () => {
+    cleanup();
+  };
 }
 
 function normaliseMessagePayload(input) {
