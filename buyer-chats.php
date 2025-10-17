@@ -1,16 +1,44 @@
 <?php
 require_once __DIR__ . '/session-path.php';
+require_once __DIR__ . '/buyer-storage.php';
 session_start();
 
 $buyerUid = isset($_SESSION['buyer_uid']) ? trim((string) $_SESSION['buyer_uid']) : '';
 $buyerName = isset($_SESSION['buyer_name']) ? trim((string) $_SESSION['buyer_name']) : 'Buyer';
 $buyerAvatar = isset($_SESSION['buyer_avatar']) ? trim((string) $_SESSION['buyer_avatar']) : '';
+$buyerId = isset($_SESSION['buyer_id']) ? (int) $_SESSION['buyer_id'] : 0;
 
-if ($buyerUid === '' && isset($_SESSION['buyer_id'])) {
-    $buyerUid = trim((string) $_SESSION['buyer_id']);
+if ($buyerUid === '' && $buyerId > 0) {
+    try {
+        $buyer = yustam_buyers_find($buyerId);
+    } catch (Throwable $exception) {
+        error_log('[buyer-chats] Unable to load buyer: ' . $exception->getMessage());
+        $buyer = null;
+    }
+
+    if (is_array($buyer) && !empty($buyer)) {
+        $buyer = yustam_buyers_ensure_uid($buyer);
+        if (!empty($buyer['buyer_uid'])) {
+            $buyerUid = (string) $buyer['buyer_uid'];
+            $_SESSION['buyer_uid'] = $buyerUid;
+        }
+        if (array_key_exists('name', $buyer)) {
+            $normalizedName = trim((string) $buyer['name']);
+            if ($normalizedName !== '') {
+                $buyerName = $normalizedName;
+                $_SESSION['buyer_name'] = $buyerName;
+            }
+        }
+    } else {
+        session_destroy();
+        http_response_code(302);
+        header('Location: buyer-login.php');
+        exit;
+    }
 }
 
 if ($buyerUid === '') {
+    session_destroy();
     http_response_code(302);
     header('Location: buyer-login.php');
     exit;
@@ -405,7 +433,7 @@ $chatContext = [
     </div>
 </main>
 <script>
-    window.__CHAT_CONTEXT__ = <?= json_encode($chatContext, JSON_UNESCAPED_SLASHES); ?>;
+    window.__CHAT_CONTEXT__ = <?= json_encode($chatContext, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 </script>
 <script type="module" src="./buyer-chats.js"></script>
 </body>

@@ -1,16 +1,56 @@
 <?php
 require_once __DIR__ . '/session-path.php';
+require_once __DIR__ . '/db.php';
 session_start();
 
 $vendorUid = isset($_SESSION['vendor_uid']) ? trim((string) $_SESSION['vendor_uid']) : '';
 $vendorName = isset($_SESSION['vendor_name']) ? trim((string) $_SESSION['vendor_name']) : 'Vendor';
 $vendorAvatar = isset($_SESSION['vendor_logo']) ? trim((string) $_SESSION['vendor_logo']) : '';
+$vendorId = isset($_SESSION['vendor_id']) ? (int) $_SESSION['vendor_id'] : 0;
 
-if ($vendorUid === '' && isset($_SESSION['vendor_id'])) {
-    $vendorUid = trim((string) $_SESSION['vendor_id']);
+if ($vendorUid === '' && $vendorId > 0) {
+    try {
+        $db = get_db_connection();
+        $table = defined('YUSTAM_VENDORS_TABLE') && preg_match('/^[A-Za-z0-9_]+$/', YUSTAM_VENDORS_TABLE) ? YUSTAM_VENDORS_TABLE : 'vendors';
+        $stmt = $db->prepare(sprintf('SELECT * FROM %s WHERE id = ? LIMIT 1', $table));
+        if ($stmt) {
+            $stmt->bind_param('i', $vendorId);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            $vendor = $result ? $result->fetch_assoc() : null;
+            $stmt->close();
+        } else {
+            throw new RuntimeException('Failed to prepare vendor lookup statement: ' . $db->error);
+        }
+
+        if (is_array($vendor) && !empty($vendor)) {
+            $vendorData = $vendor;
+            $vendorUid = yustam_vendor_assign_uid_if_missing($db, $vendorData);
+            if ($vendorUid !== '') {
+                $_SESSION['vendor_uid'] = $vendorUid;
+            }
+            $nameColumn = yustam_vendor_name_column();
+            if (array_key_exists($nameColumn, $vendorData)) {
+                $normalizedName = trim((string) $vendorData[$nameColumn]);
+                if ($normalizedName !== '') {
+                    $vendorName = $normalizedName;
+                    $_SESSION['vendor_name'] = $vendorName;
+                }
+            }
+        } else {
+            throw new RuntimeException('Vendor account missing.');
+        }
+    } catch (Throwable $exception) {
+        error_log('[vendor-chats] Unable to load vendor: ' . $exception->getMessage());
+        session_destroy();
+        http_response_code(302);
+        header('Location: vendor-login.html');
+        exit;
+    }
 }
 
 if ($vendorUid === '') {
+    session_destroy();
     http_response_code(302);
     header('Location: vendor-login.html');
     exit;
@@ -394,7 +434,7 @@ $chatContext = [
     </div>
 </main>
 <script>
-    window.__CHAT_CONTEXT__ = <?= json_encode($chatContext, JSON_UNESCAPED_SLASHES); ?>;
+    window.__CHAT_CONTEXT__ = <?= json_encode($chatContext, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 </script>
 <script type="module" src="./vendor-chats.js"></script>
 </body>
