@@ -142,6 +142,130 @@ function reshapeSummaryDoc(docSnap) {
   };
 }
 
+function isMissingIndexError(error) {
+  if (!error) return false;
+  const code = error.code || error?.cause?.code;
+  if (code !== 'failed-precondition') return false;
+  const message = String(error.message || '').toLowerCase();
+  return message.includes('index');
+}
+
+function mapRestSummary(raw, viewerRole) {
+  if (!raw) return null;
+  const role = viewerRole === 'vendor' ? 'vendor' : 'buyer';
+  const buyerUid = raw.buyerUid || '';
+  const vendorUid = raw.vendorUid || '';
+  const listingTitle = raw.productTitle || 'Listing';
+  const listingImage = raw.productImage || '';
+  const lastTimestamp = raw.lastMessageAt || raw.updatedAt || raw.createdAt || null;
+  const lastTs = safeToDate(lastTimestamp);
+  const lastSenderUid = raw.lastSenderUid || '';
+  let lastSenderRole = '';
+  if (lastSenderUid) {
+    if (lastSenderUid === buyerUid) {
+      lastSenderRole = 'buyer';
+    } else if (lastSenderUid === vendorUid) {
+      lastSenderRole = 'vendor';
+    } else {
+      lastSenderRole = role;
+    }
+  }
+
+  const summary = {
+    id: raw.chatId,
+    chatId: raw.chatId,
+    buyer_uid: buyerUid,
+    vendor_uid: vendorUid,
+    listing_id: raw.productId || '',
+    buyer_name: raw.buyerName || (role === 'vendor' ? raw.counterpartyName || 'Buyer' : 'Buyer'),
+    vendor_name: raw.vendorName || (role === 'buyer' ? raw.counterpartyName || 'Vendor' : 'Vendor'),
+    listing_title: listingTitle,
+    listing_image: listingImage,
+    last_text: clampText(raw.lastMessagePreview || ''),
+    last_ts: lastTs,
+    last_sender_uid: lastSenderUid,
+    last_sender_role: lastSenderRole,
+    unread_for_buyer: role === 'buyer' ? Number(raw.unreadCount || 0) : 0,
+    unread_for_vendor: role === 'vendor' ? Number(raw.unreadCount || 0) : 0,
+  };
+
+  return summary;
+}
+
+function createRestSummariesController({ pageSize, onUpdate, onError }) {
+  let stopped = false;
+  let pollTimer = null;
+  let currentRole = 'buyer';
+
+  const fetchLatest = async () => {
+    try {
+      const params = new URLSearchParams();
+      params.set('limit', String(pageSize));
+      const response = await fetch(`./fetch-chats.php?${params.toString()}`, {
+        credentials: 'same-origin',
+        headers: {
+          Accept: 'application/json',
+        },
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const payload = await response.json();
+      if (!payload?.success) {
+        throw new Error(payload?.message || 'Unable to load chats.');
+      }
+      currentRole = payload.role === 'vendor' ? 'vendor' : 'buyer';
+      const items = Array.isArray(payload.conversations)
+        ? payload.conversations
+            .map((entry) => mapRestSummary(entry, currentRole))
+            .filter(Boolean)
+        : [];
+      if (stopped) {
+        return items;
+      }
+      onUpdate?.(items, {
+        append: false,
+        hasMore: false,
+        fromRealtime: false,
+        source: 'rest',
+      });
+      return items;
+    } catch (error) {
+      if (stopped) {
+        return [];
+      }
+      console.error('[chat] rest summaries failed', error);
+      showToast('Loading conversations from backup. Some updates may be delayed.');
+      onError?.(error);
+      return [];
+    }
+  };
+
+  const start = async () => {
+    await fetchLatest();
+    if (stopped) return;
+    pollTimer = window.setInterval(() => {
+      fetchLatest();
+    }, 15000);
+  };
+
+  const stop = () => {
+    stopped = true;
+    if (pollTimer) {
+      window.clearInterval(pollTimer);
+      pollTimer = null;
+    }
+  };
+
+  return {
+    start,
+    stop,
+    async loadMore() {
+      return [];
+    },
+  };
+}
+
 export function listSummariesForUser(options = {}) {
   const { pageSize = 20, onUpdate, onError } = options;
   const context = getUserContext();
@@ -161,23 +285,56 @@ export function listSummariesForUser(options = {}) {
 
   let lastVisible = null;
   let hasMore = true;
-  const unsubscribe = onSnapshot(
-    q,
-    (snapshot) => {
-      if (!snapshot.empty) {
-        lastVisible = snapshot.docs[snapshot.docs.length - 1];
-      }
-      const items = snapshot.docs.map(reshapeSummaryDoc);
-      hasMore = snapshot.size >= pageSize;
-      onUpdate?.(items, { append: false, hasMore, fromRealtime: true });
-    },
-    (error) => {
+  let mode = 'firestore';
+  let firestoreUnsubscribe = () => {};
+  let restController = null;
+
+  const activateRestFallback = (reason) => {
+    if (mode === 'rest') return;
+    console.warn('[chat] Switching to REST chat summaries fallback.', reason);
+    mode = 'rest';
+    firestoreUnsubscribe?.();
+    showToast('Realtime chat index unavailable. Showing the latest conversations in compatibility mode.');
+    restController = createRestSummariesController({ pageSize, onUpdate, onError });
+    restController.start();
+  };
+
+  try {
+    firestoreUnsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        if (mode !== 'firestore') {
+          return;
+        }
+        if (!snapshot.empty) {
+          lastVisible = snapshot.docs[snapshot.docs.length - 1];
+        }
+        const items = snapshot.docs.map(reshapeSummaryDoc);
+        hasMore = snapshot.size >= pageSize;
+        onUpdate?.(items, { append: false, hasMore, fromRealtime: true });
+      },
+      (error) => {
+        if (isMissingIndexError(error)) {
+          activateRestFallback(error);
+          return;
+        }
+        handleFirestoreError('listSummariesForUser subscribe failed', error);
+        onError?.(error);
+      },
+    );
+  } catch (error) {
+    if (isMissingIndexError(error)) {
+      activateRestFallback(error);
+    } else {
       handleFirestoreError('listSummariesForUser subscribe failed', error);
       onError?.(error);
-    },
-  );
+    }
+  }
 
   async function loadMore() {
+    if (mode === 'rest') {
+      return restController?.loadMore?.() ?? [];
+    }
     if (!hasMore || !lastVisible) return [];
     try {
       const nextQuery = query(
@@ -198,13 +355,26 @@ export function listSummariesForUser(options = {}) {
       onUpdate?.(items, { append: true, hasMore, fromRealtime: false });
       return items;
     } catch (error) {
+      if (isMissingIndexError(error)) {
+        activateRestFallback(error);
+        return restController?.loadMore?.() ?? [];
+      }
       handleFirestoreError('listSummariesForUser loadMore failed', error);
       onError?.(error);
       return [];
     }
   }
 
-  return { unsubscribe, loadMore };
+  return {
+    unsubscribe() {
+      if (mode === 'rest') {
+        restController?.stop?.();
+      } else {
+        firestoreUnsubscribe?.();
+      }
+    },
+    loadMore,
+  };
 }
 
 export async function markThreadRead(chatId) {
