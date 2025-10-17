@@ -45,8 +45,6 @@ const chatTitleEl = document.getElementById('chatTitle');
 const chatSubtitleEl = document.getElementById('chatSubtitle');
 const backButton = document.getElementById('backButton');
 const infoButton = document.getElementById('infoButton');
-const callButton = document.getElementById('callButton');
-const videoButton = document.getElementById('videoButton');
 
 let messagesState = [];
 let unsubscribeMessages = null;
@@ -57,6 +55,10 @@ let recorderController = null;
 let recordStartTime = null;
 let pointerStartX = 0;
 let pendingImageFile = null;
+
+if (sendButton && !sendButton.dataset.mode) {
+  sendButton.dataset.mode = 'voice';
+}
 
 const counterpartyLabel = counterparty.name || (role === 'buyer' ? 'Vendor' : 'Buyer');
 chatTitleEl.textContent = counterpartyLabel;
@@ -319,6 +321,7 @@ async function sendCurrentMessage() {
     if (imageInput) {
       imageInput.value = '';
     }
+    autoResizeTextarea();
     toggleSendMode();
     scrollToBottom(true);
   } catch (error) {
@@ -468,14 +471,6 @@ infoButton?.addEventListener('click', () => {
   } else {
     showToast('Listing details unavailable.');
   }
-});
-
-callButton?.addEventListener('click', () => {
-  showToast('Call feature coming soon.');
-});
-
-videoButton?.addEventListener('click', () => {
-  showToast('Video call feature coming soon.');
 });
 
 backButton?.addEventListener('click', () => {

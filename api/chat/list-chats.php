@@ -8,6 +8,32 @@ require_once __DIR__ . '/firebase.php';
 
 header('Content-Type: application/json');
 
+$timestampNormalizer = static function ($value): int {
+    if ($value === null || $value === '') {
+        return 0;
+    }
+    if (is_numeric($value)) {
+        return (int)$value;
+    }
+    if (is_string($value)) {
+        $time = strtotime($value);
+        return $time !== false ? $time : 0;
+    }
+    if (is_array($value)) {
+        if (isset($value['seconds'])) {
+            $seconds = (int)$value['seconds'];
+            $nanos = isset($value['nanos']) ? (int)$value['nanos'] : 0;
+            return $seconds + (int)round($nanos / 1_000_000_000);
+        }
+    }
+    if (is_object($value) && isset($value->seconds)) {
+        $seconds = (int)$value->seconds;
+        $nanos = isset($value->nanos) ? (int)$value->nanos : 0;
+        return $seconds + (int)round($nanos / 1_000_000_000);
+    }
+    return 0;
+};
+
 $role = strtolower(trim((string)($_GET['role'] ?? $_POST['role'] ?? '')));
 $uid = trim((string)($_GET['uid'] ?? $_POST['uid'] ?? ''));
 
@@ -41,9 +67,6 @@ try {
                 'value' => yustam_firestore_string($uid),
             ],
         ],
-        'orderBy' => [
-            ['field' => ['fieldPath' => 'last_ts'], 'direction' => 'DESCENDING'],
-        ],
         'limit' => 50,
     ];
 
@@ -60,6 +83,12 @@ try {
         $fields['chat_id'] = $fields['chat_id'] ?? basename($result['document']['name']);
         $chats[] = $fields;
     }
+
+    usort($chats, static function ($a, $b) use ($timestampNormalizer) {
+        $aTs = $timestampNormalizer($a['last_ts'] ?? null);
+        $bTs = $timestampNormalizer($b['last_ts'] ?? null);
+        return $bTs <=> $aTs;
+    });
 
     echo json_encode([
         'success' => true,
