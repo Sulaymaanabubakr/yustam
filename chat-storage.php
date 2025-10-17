@@ -150,7 +150,15 @@ function yustam_chat_ensure_tables(mysqli $db): void
 
 function yustam_chat_build_id(string $vendorUid, string $buyerUid, string $productId): string
 {
-    return trim($vendorUid . '_' . $buyerUid . '_' . $productId, '_');
+    $vendor = trim($vendorUid);
+    $buyer = trim($buyerUid);
+    $product = trim($productId);
+
+    if ($vendor === '' || $buyer === '' || $product === '') {
+        return trim($vendor . '_' . $buyer . '_' . $product, '_');
+    }
+
+    return $vendor . '__' . $buyer . '__' . $product;
 }
 
 function yustam_chat_fetch_conversation(mysqli $db, string $chatId): ?array
