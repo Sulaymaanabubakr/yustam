@@ -1,6 +1,8 @@
 <?php
 require_once __DIR__ . '/session-path.php';
-session_start();
+if (session_status() !== PHP_SESSION_ACTIVE) {
+    session_start();
+}
 
 $buyerUid = isset($_SESSION['buyer_uid']) ? trim((string) $_SESSION['buyer_uid']) : '';
 $buyerName = isset($_SESSION['buyer_name']) ? trim((string) $_SESSION['buyer_name']) : 'Buyer';
@@ -11,7 +13,6 @@ $vendorName = isset($_SESSION['vendor_name']) ? trim((string) $_SESSION['vendor_
 $vendorAvatar = isset($_SESSION['vendor_logo']) ? trim((string) $_SESSION['vendor_logo']) : '';
 
 require_once __DIR__ . '/chat-storage.php';
-session_start();
 
 $chatParam = isset($_GET['chat']) ? trim((string) $_GET['chat']) : '';
 $chatId = '';
