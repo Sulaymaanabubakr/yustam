@@ -215,6 +215,19 @@ $threadBootstrapJson = json_encode($threadBootstrap, JSON_UNESCAPED_UNICODE | JS
             gap: 6px;
         }
 
+        .chat-back {
+            border: none;
+            background: rgba(0, 77, 64, 0.12);
+            color: var(--emerald);
+            width: 42px;
+            height: 42px;
+            border-radius: 14px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+
         .header-actions {
             margin-left: auto;
             display: flex;
@@ -487,7 +500,7 @@ $threadBootstrapJson = json_encode($threadBootstrap, JSON_UNESCAPED_UNICODE | JS
 <body>
 <div class="chat-shell" data-role="<?= htmlspecialchars($viewer['role'], ENT_QUOTES, 'UTF-8'); ?>">
     <header class="chat-header">
-        <button class="header-actions" id="backButton" aria-label="Back">
+        <button class="chat-back" id="backButton" aria-label="Back">
             <i class="ri-arrow-left-line"></i>
         </button>
         <div class="header-avatar" id="headerAvatar">
@@ -498,8 +511,6 @@ $threadBootstrapJson = json_encode($threadBootstrap, JSON_UNESCAPED_UNICODE | JS
             <span id="chatSubtitle">Loading…</span>
         </div>
         <div class="header-actions">
-            <button id="callButton" aria-label="Call"><i class="ri-phone-line"></i></button>
-            <button id="videoButton" aria-label="Video call"><i class="ri-video-add-line"></i></button>
             <button id="infoButton" aria-label="Listing details"><i class="ri-information-line"></i></button>
         </div>
     </header>
@@ -519,7 +530,7 @@ $threadBootstrapJson = json_encode($threadBootstrap, JSON_UNESCAPED_UNICODE | JS
             <div class="attachment-preview" id="attachmentPreview" hidden></div>
             <textarea id="messageInput" rows="1" placeholder="Message" aria-label="Message"></textarea>
         </div>
-        <button id="sendButton" aria-label="Send message"><i class="ri-send-plane-2-line"></i></button>
+        <button id="sendButton" aria-label="Send message or hold to record voice note" title="Tap to send, hold to record a voice note"><i class="ri-mic-line"></i></button>
     </footer>
 </div>
 <script>

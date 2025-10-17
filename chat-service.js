@@ -124,6 +124,25 @@ function persistOfflineQueue() {
   }
 }
 
+function resolveTimestamp(value) {
+  if (!value) return 0;
+  if (typeof value.toMillis === 'function') {
+    return value.toMillis();
+  }
+  if (typeof value.seconds === 'number') {
+    const seconds = value.seconds;
+    const nanos = typeof value.nanoseconds === 'number' ? value.nanoseconds : 0;
+    return seconds * 1000 + Math.floor(nanos / 1_000_000);
+  }
+  const date = new Date(value);
+  const ms = date.getTime();
+  return Number.isNaN(ms) ? 0 : ms;
+}
+
+function orderChatsByLastTs(chats) {
+  return [...chats].sort((a, b) => resolveTimestamp(b.last_ts) - resolveTimestamp(a.last_ts));
+}
+
 async function flushOfflineQueue() {
   if (!isBrowser || typeof navigator === 'undefined' || !navigator.onLine || !offlineQueue.length) return;
   const queueCopy = [...offlineQueue];
@@ -227,50 +246,32 @@ export async function ensureChat(meta) {
 
 export function subscribeChatsForBuyer(buyerUid, callback) {
   const uid = getSafeUid(buyerUid);
-  const q = query(
-    collection(db, CHATS_COLLECTION),
-    where('buyer_uid', '==', uid),
-    orderBy('last_ts', 'desc'),
-    limit(50)
-  );
+  const q = query(collection(db, CHATS_COLLECTION), where('buyer_uid', '==', uid), limit(100));
   return onSnapshot(
     q,
     (snapshot) => {
-      const chats = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
-      callback(chats);
+      const chats = orderChatsByLastTs(snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() })));
+      callback(chats.slice(0, 100));
     },
     (error) => {
       console.error('[chat] subscribeChatsForBuyer', error);
-      if (error?.code === 'failed-precondition') {
-        showToast('Missing Firestore index for buyer chats.');
-      } else {
-        showToast('Unable to load chats.');
-      }
+      showToast('Unable to load chats.');
     }
   );
 }
 
 export function subscribeChatsForVendor(vendorUid, callback) {
   const uid = getSafeUid(vendorUid);
-  const q = query(
-    collection(db, CHATS_COLLECTION),
-    where('vendor_uid', '==', uid),
-    orderBy('last_ts', 'desc'),
-    limit(50)
-  );
+  const q = query(collection(db, CHATS_COLLECTION), where('vendor_uid', '==', uid), limit(100));
   return onSnapshot(
     q,
     (snapshot) => {
-      const chats = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
-      callback(chats);
+      const chats = orderChatsByLastTs(snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() })));
+      callback(chats.slice(0, 100));
     },
     (error) => {
       console.error('[chat] subscribeChatsForVendor', error);
-      if (error?.code === 'failed-precondition') {
-        showToast('Missing Firestore index for vendor chats.');
-      } else {
-        showToast('Unable to load chats.');
-      }
+      showToast('Unable to load chats.');
     }
   );
 }
