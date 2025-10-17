@@ -1,6 +1,10 @@
 <?php
 require_once __DIR__ . '/session-path.php';
-if (session_status() !== PHP_SESSION_ACTIVE) {
+if (function_exists('session_status')) {
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        session_start();
+    }
+} elseif (!isset($_SESSION) || session_id() === '') {
     session_start();
 }
 
