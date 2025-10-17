@@ -1,12 +1,6 @@
 <?php
 require_once __DIR__ . '/session-path.php';
-if (function_exists('session_status')) {
-    if (session_status() !== PHP_SESSION_ACTIVE) {
-        session_start();
-    }
-} elseif (!isset($_SESSION) || session_id() === '') {
-    session_start();
-}
+session_start();
 
 $buyerUid = isset($_SESSION['buyer_uid']) ? trim((string) $_SESSION['buyer_uid']) : '';
 $buyerName = isset($_SESSION['buyer_name']) ? trim((string) $_SESSION['buyer_name']) : 'Buyer';
