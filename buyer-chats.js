@@ -1,303 +1,203 @@
 import {
-  listSummariesForUser,
-  subscribeToTyping,
+  initFirebase,
+  subscribeChatsForBuyer,
+  subscribeTyping,
   showToast,
 } from './chat-service.js';
 
-const listEl = document.getElementById('chat-list');
-const loaderEl = document.getElementById('chat-loader');
-const emptyEl = document.getElementById('chat-empty');
-const errorEl = document.getElementById('chat-error');
-const retryBtn = document.getElementById('chat-retry');
-const searchInput = document.getElementById('chat-search');
+const bootstrap = window.__CHAT_BOOTSTRAP__ || {};
+if (bootstrap.role !== 'buyer' || !bootstrap.buyer?.uid) {
+  showToast('Buyer session required.');
+  throw new Error('Buyer session missing');
+}
+
+initFirebase();
+
+const buyer = bootstrap.buyer;
+const chatListEl = document.getElementById('chatList');
+const emptyStateEl = document.getElementById('emptyState');
+const newChatBtn = document.getElementById('newChatBtn');
 
 const typingSubscriptions = new Map();
+const typingState = new Map();
+let unsubscribeChats = null;
 
-const state = {
-  ready: false,
-  items: [],
-  filtered: [],
-  typing: new Map(),
-  unsubscribe: null,
-  loadMore: null,
-  search: '',
-  hasMore: false,
-  loadingMore: false,
-};
+const relativeFormatter = typeof Intl !== 'undefined' && typeof Intl.RelativeTimeFormat === 'function'
+  ? new Intl.RelativeTimeFormat('en', { numeric: 'auto' })
+  : null;
+const minute = 60 * 1000;
+const hour = 60 * minute;
+const day = 24 * hour;
 
-function setLoading(isLoading) {
-  if (loaderEl) loaderEl.hidden = !isLoading;
-}
-
-function setError(visible) {
-  if (errorEl) errorEl.hidden = !visible;
-}
-
-function formatTime(date) {
+function relativeTimeFrom(date) {
   if (!date) return '';
-  const now = new Date();
-  const diff = now.getTime() - date.getTime();
-  const minute = 60 * 1000;
-  const hour = 60 * minute;
-  const day = 24 * hour;
-  if (diff < minute) return 'Just now';
-  if (diff < hour) return `${Math.floor(diff / minute)}m ago`;
-  if (diff < day) return `${Math.floor(diff / hour)}h ago`;
-  if (diff < day * 2) return 'Yesterday';
-  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-}
-
-function createTypingDots() {
-  return `<span class="typing-dots" aria-hidden="true"><span></span><span></span><span></span></span>`;
-}
-
-function escapeHtml(value) {
-  return String(value ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-}
-
-function initials(name) {
-  return (name || '')
-    .split(' ')
-    .map((part) => part.charAt(0).toUpperCase())
-    .join('')
-    .slice(0, 2) || 'YU';
-}
-
-function buildCard(chat) {
-  const typingState = state.typing.get(chat.chatId) || {};
-  const isTyping = Boolean(typingState.vendor);
-  const href = `chat.php?chat=${encodeURIComponent(chat.chatId)}`;
-  const lastTime = chat.last_ts ? formatTime(chat.last_ts) : '';
-  const unread = Number(chat.unread_for_buyer || 0);
-  const unreadLabel = unread > 9 ? '9+' : unread || '';
-  const lastSenderRole = chat.last_sender_role || '';
-  const vendorUnread = Number(chat.unread_for_vendor || 0);
-
-  const baseSnippet = chat.last_text || 'Ask about this listing';
-  const snippetText =
-    lastSenderRole === 'buyer' && !isTyping ? `You: ${baseSnippet}` : baseSnippet;
-
-  const typingHtml = isTyping
-    ? `<span class="chat-item__typing" role="status" aria-live="polite">${createTypingDots()} <span>Vendor is typing</span></span>`
-    : escapeHtml(snippetText);
-
-  const statusIcon =
-    !isTyping && lastSenderRole === 'buyer'
-      ? `<span class="chat-item__status" aria-label="${vendorUnread ? 'Message sent' : 'Seen'}">
-            <i class="${vendorUnread ? 'ri-check-line' : 'ri-check-double-line'}" aria-hidden="true"></i>
-         </span>`
-      : '';
-
-  return `
-    <article class="chat-item" role="listitem" tabindex="0" data-chat-id="${escapeHtml(
-      chat.chatId,
-    )}" data-href="${href}">
-      <div class="chat-item__avatar" aria-hidden="true">${escapeHtml(
-        initials(chat.vendor_name),
-      )}</div>
-      <div class="chat-item__content">
-        <div class="chat-item__title">${escapeHtml(chat.vendor_name)}</div>
-        <p class="chat-item__subtitle">${typingHtml}</p>
-        <div class="chat-item__listing"><i class="ri-store-3-line" aria-hidden="true"></i><span>${escapeHtml(
-          chat.listing_title,
-        )}</span></div>
-      </div>
-      <div class="chat-item__meta">
-        <span class="chat-item__time">${escapeHtml(lastTime)}</span>
-        ${statusIcon}
-        ${
-          unread
-            ? `<span class="chat-item__badge" aria-label="${escapeHtml(
-                unreadLabel,
-              )} unread messages">${escapeHtml(unreadLabel)}</span>`
-            : ''
-        }
-      </div>
-    </article>
-  `;
-}
-
-function render() {
-  if (!listEl) return;
-  listEl.innerHTML = '';
-
-  if (!state.filtered.length) {
-    listEl.hidden = true;
-    if (state.ready && emptyEl) emptyEl.hidden = false;
-    return;
+  if (!relativeFormatter) {
+    return date.toLocaleTimeString('en', { hour: 'numeric', minute: 'numeric' });
   }
-
-  if (emptyEl) emptyEl.hidden = true;
-  listEl.hidden = false;
-
-  const fragment = document.createDocumentFragment();
-  state.filtered.forEach((chat) => {
-    const wrapper = document.createElement('div');
-    wrapper.innerHTML = buildCard(chat);
-    const card = wrapper.firstElementChild;
-    if (!card) return;
-    card.addEventListener('click', () => {
-      window.location.href = card.dataset.href;
-    });
-    card.addEventListener('keypress', (event) => {
-      if (event.key === 'Enter' || event.key === ' ') {
-        event.preventDefault();
-        window.location.href = card.dataset.href;
-      }
-    });
-    fragment.appendChild(card);
-  });
-  listEl.appendChild(fragment);
+  const now = Date.now();
+  const diff = date.getTime() - now;
+  if (Math.abs(diff) < minute) return 'just now';
+  if (Math.abs(diff) < hour) {
+    return relativeFormatter.format(Math.round(diff / minute), 'minute');
+  }
+  if (Math.abs(diff) < day) {
+    return relativeFormatter.format(Math.round(diff / hour), 'hour');
+  }
+  return relativeFormatter.format(Math.round(diff / day), 'day');
 }
 
-function filterChats(term) {
-  const value = term.trim().toLowerCase();
-  state.search = value;
-  if (!value) {
-    state.filtered = [...state.items];
-  } else {
-    state.filtered = state.items.filter((chat) =>
-      `${chat.vendor_name} ${chat.listing_title} ${chat.last_text}`.toLowerCase().includes(value),
-    );
+function toDate(value) {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  if (typeof value.toDate === 'function') return value.toDate();
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function cleanupTyping(chatId) {
+  if (typingSubscriptions.has(chatId)) {
+    typingSubscriptions.get(chatId)();
+    typingSubscriptions.delete(chatId);
   }
-  state.filtered.sort((a, b) => (b.last_ts?.getTime?.() || 0) - (a.last_ts?.getTime?.() || 0));
-  render();
+  typingState.delete(chatId);
 }
 
 function ensureTypingSubscription(chatId) {
-  if (!chatId || typingSubscriptions.has(chatId)) return;
-  const unsubscribe = subscribeToTyping(
-    chatId,
-    (snapshot) => {
-      state.typing.set(chatId, snapshot || {});
-      filterChats(state.search);
-    },
-    () => {},
-  );
+  if (typingSubscriptions.has(chatId)) return;
+  const unsubscribe = subscribeTyping(chatId, (snapshot) => {
+    typingState.set(chatId, snapshot || {});
+    scheduleRender();
+  });
   typingSubscriptions.set(chatId, unsubscribe);
 }
 
-function clearTypingSubscriptions() {
-  typingSubscriptions.forEach((unsubscribe) => unsubscribe?.());
-  typingSubscriptions.clear();
-  state.typing.clear();
-}
+let pendingFrame = null;
+let latestChats = [];
 
-function handleUpdate(chats, meta = { append: false }) {
-  state.ready = true;
-  setLoading(false);
-  setError(false);
-
-  if (meta?.append) {
-    const merged = new Map();
-    state.items.forEach((item) => merged.set(item.chatId, item));
-    chats.forEach((item) => merged.set(item.chatId, item));
-    state.items = Array.from(merged.values());
-  } else {
-    state.items = chats;
-    clearTypingSubscriptions();
-  }
-
-  state.hasMore = Boolean(meta?.hasMore);
-  state.items.forEach((chat) => ensureTypingSubscription(chat.chatId));
-  filterChats(state.search);
-  maybePrefetchMore();
-}
-
-function handleError(error) {
-  setLoading(false);
-  if (!state.ready) {
-    setError(true);
-  }
-  console.error('[buyer-chats] load failed', error);
-  showToast('Unable to load chats right now.');
-}
-
-async function loadMoreIfNeeded() {
-  if (!state.loadMore || state.loadingMore || !state.hasMore) return;
-  state.loadingMore = true;
-  try {
-    await state.loadMore();
-  } catch (error) {
-    console.error('[buyer-chats] loadMore failed', error);
-  } finally {
-    state.loadingMore = false;
-  }
-}
-
-function isNearPageBottom(offset = 200) {
-  const scrollY = window.scrollY || window.pageYOffset || 0;
-  const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
-  const doc = document.documentElement;
-  const scrollHeight = doc.scrollHeight || document.body.scrollHeight || 0;
-  return scrollY + viewportHeight >= scrollHeight - offset;
-}
-
-function maybePrefetchMore() {
-  if (!state.hasMore || state.loadingMore || !state.loadMore) return;
-  const doc = document.documentElement;
-  const viewportHeight = window.innerHeight || doc.clientHeight || 0;
-  if (doc.scrollHeight <= viewportHeight + 160) {
-    loadMoreIfNeeded();
-  }
-}
-
-function handleWindowScroll() {
-  if (!state.hasMore) return;
-  if (isNearPageBottom()) {
-    loadMoreIfNeeded();
-  }
-}
-
-function init() {
-  if (!listEl) return;
-  setLoading(true);
-  const subscription = listSummariesForUser({
-    pageSize: 20,
-    onUpdate: handleUpdate,
-    onError: handleError,
-  });
-  state.unsubscribe = subscription.unsubscribe;
-  state.loadMore = subscription.loadMore;
-
-  if (retryBtn) {
-    retryBtn.addEventListener('click', () => {
-      setError(false);
-      setLoading(true);
-      state.unsubscribe?.();
-      clearTypingSubscriptions();
-      state.items = [];
-      state.filtered = [];
-      state.hasMore = false;
-      state.loadingMore = false;
-      const nextSub = listSummariesForUser({
-        pageSize: 20,
-        onUpdate: handleUpdate,
-        onError: handleError,
-      });
-      state.unsubscribe = nextSub.unsubscribe;
-      state.loadMore = nextSub.loadMore;
-    });
-  }
-
-  if (searchInput) {
-    searchInput.addEventListener('input', (event) => {
-      filterChats(event.target.value || '');
-    });
-  }
-
-  window.addEventListener('scroll', handleWindowScroll, { passive: true });
-
-  window.addEventListener('beforeunload', () => {
-    window.removeEventListener('scroll', handleWindowScroll);
-    state.unsubscribe?.();
-    clearTypingSubscriptions();
+function scheduleRender() {
+  if (pendingFrame) return;
+  pendingFrame = requestAnimationFrame(() => {
+    pendingFrame = null;
+    renderChats(latestChats);
   });
 }
 
-init();
+function messagePreview(chat) {
+  const type = chat.last_type || 'text';
+  const text = (chat.last_text || '').trim();
+  if (type === 'image') return '🖼️ Photo';
+  if (type === 'voice') return '🎤 Voice note';
+  if (text) return text.length > 96 ? `${text.slice(0, 93)}…` : text;
+  return 'New conversation';
+}
+
+function renderChats(chats) {
+  latestChats = chats;
+  if (!chatListEl) return;
+
+  chatListEl.innerHTML = '';
+  if (!Array.isArray(chats) || chats.length === 0) {
+    emptyStateEl?.removeAttribute('hidden');
+    return;
+  }
+  emptyStateEl?.setAttribute('hidden', 'hidden');
+
+  const fragment = document.createDocumentFragment();
+  chats.forEach((chat) => {
+    const chatId = chat.chat_id || chat.id;
+    if (!chatId) return;
+    ensureTypingSubscription(chatId);
+    const typing = typingState.get(chatId) || {};
+    const isVendorTyping = Boolean(typing.vendor);
+
+    const card = document.createElement('article');
+    card.className = 'chat-card';
+    card.role = 'listitem';
+    card.dataset.chatId = chatId;
+
+    const avatar = document.createElement('div');
+    avatar.className = 'chat-avatar';
+    const avatarImg = document.createElement('img');
+    avatarImg.alt = `${chat.vendor_name || 'Vendor'} avatar`;
+    avatarImg.src = chat.vendor_avatar || chat.listing_image || 'https://images.unsplash.com/photo-1618005198919-d3d4b5a92eee?auto=format&fit=crop&w=120&q=80';
+    avatar.appendChild(avatarImg);
+
+    const content = document.createElement('div');
+    content.className = 'chat-content';
+
+    const title = document.createElement('strong');
+    title.textContent = chat.vendor_name || 'Vendor';
+
+    const subtitle = document.createElement('small');
+    subtitle.textContent = chat.listing_title || 'Listing';
+
+    const preview = document.createElement('small');
+    preview.textContent = isVendorTyping ? 'Typing…' : messagePreview(chat);
+    if (isVendorTyping) {
+      preview.classList.add('typing-indicator');
+    }
+
+    content.append(title, subtitle, preview);
+
+    const meta = document.createElement('div');
+    meta.className = 'chat-meta';
+
+    const timeLabel = document.createElement('small');
+    const lastDate = toDate(chat.last_ts);
+    timeLabel.textContent = lastDate ? relativeTimeFrom(lastDate) : '';
+    meta.appendChild(timeLabel);
+
+    const unread = chat.unread_for_buyer || 0;
+    if (unread > 0) {
+      const badge = document.createElement('span');
+      badge.className = 'badge';
+      badge.textContent = unread > 9 ? '9+' : String(unread);
+      meta.appendChild(badge);
+    }
+
+    card.append(avatar, content, meta);
+    card.addEventListener('click', () => openChat(chat));
+    fragment.appendChild(card);
+  });
+
+  chatListEl.appendChild(fragment);
+}
+
+function openChat(chat) {
+  const chatId = chat.chat_id || chat.id;
+  if (!chatId) return;
+  const url = new URL('chat.php', window.location.origin);
+  url.searchParams.set('ch', chatId);
+  url.searchParams.set('as', 'buyer');
+  window.location.href = url.toString();
+}
+
+function subscribeToChats() {
+  if (unsubscribeChats) {
+    unsubscribeChats();
+  }
+  unsubscribeChats = subscribeChatsForBuyer(buyer.uid, (chats) => {
+    latestChats = chats;
+    scheduleRender();
+    const chatIds = new Set((chats || []).map((c) => c.chat_id || c.id));
+    Array.from(typingSubscriptions.keys()).forEach((id) => {
+      if (!chatIds.has(id)) {
+        cleanupTyping(id);
+      }
+    });
+  });
+}
+
+if (newChatBtn) {
+  newChatBtn.addEventListener('click', () => {
+    window.location.href = 'shop.html';
+  });
+}
+
+subscribeToChats();
+
+window.addEventListener('beforeunload', () => {
+  if (unsubscribeChats) unsubscribeChats();
+  typingSubscriptions.forEach((unsubscribe) => unsubscribe());
+});
+

@@ -1,6 +1,6 @@
 import { db } from './firebase.js';
 import { deleteDoc, doc, getDoc, setDoc } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
-import { buildChatId, ensureInitialMessage, sendChatMessage } from './chat-service.js';
+import { buildChatId, ensureChat, sendMessage } from './chat-service.js';
 
 const urlParams = new URLSearchParams(window.location.search);
 
@@ -359,37 +359,25 @@ async function launchChatWithMessage(message, { initialOnly = false } = {}) {
     return null;
   }
 
-  if (initialOnly) {
-    await ensureInitialMessage({
+  await ensureChat({
+    chatId: metadata.chatId,
+    buyer_uid: metadata.buyerUid,
+    buyer_name: metadata.buyerName,
+    vendor_uid: metadata.vendorUid,
+    vendor_name: metadata.vendorName,
+    listing_id: metadata.productId,
+    listing_title: metadata.productTitle,
+    listing_image: metadata.productImage,
+  });
+
+  if (message && message.trim() !== '') {
+    await sendMessage({
       chatId: metadata.chatId,
-      buyerUid: metadata.buyerUid,
-      vendorUid: metadata.vendorUid,
-      productId: metadata.productId,
-      senderUid: metadata.buyerUid,
-      receiverUid: metadata.vendorUid,
-      senderType: 'buyer',
-      receiverType: 'vendor',
-      message,
-      buyerName: metadata.buyerName,
-      vendorName: metadata.vendorName,
-      productTitle: metadata.productTitle,
-      productImage: metadata.productImage,
-    });
-  } else {
-    await sendChatMessage({
-      chatId: metadata.chatId,
-      buyerUid: metadata.buyerUid,
-      vendorUid: metadata.vendorUid,
-      productId: metadata.productId,
-      senderUid: metadata.buyerUid,
-      receiverUid: metadata.vendorUid,
-      senderType: 'buyer',
-      receiverType: 'vendor',
-      message,
-      buyerName: metadata.buyerName,
-      vendorName: metadata.vendorName,
-      productTitle: metadata.productTitle,
-      productImage: metadata.productImage,
+      as: 'buyer',
+      sender_uid: metadata.buyerUid,
+      text: message,
+      buyer_uid: metadata.buyerUid,
+      vendor_uid: metadata.vendorUid,
     });
   }
 
@@ -431,7 +419,11 @@ if (chatWithVendorBtn) {
     chatWithVendorBtn.classList.add('is-loading');
     chatWithVendorBtn.setAttribute('aria-busy', 'true');
     try {
-      await launchChatWithMessage('Is this still available?', { initialOnly: true });
+      const metadata = resolveChatMetadata();
+      const intro = metadata?.productTitle
+        ? `Hi, I'm interested in ${metadata.productTitle}.`
+        : 'Hi, I am interested in this listing.';
+      await launchChatWithMessage(intro, { initialOnly: true });
     } catch (error) {
       console.error('Unable to open chat', error);
       alert('Unable to open chat right now. Please try again.');
