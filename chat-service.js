@@ -244,6 +244,19 @@ export async function ensureChat(meta) {
   return { chatId, ...payload };
 }
 
+export async function fetchChatSummary(chatId) {
+  const id = getSafeUid(chatId);
+  try {
+    const snapshot = await getDoc(chatDoc(id));
+    if (snapshot.exists()) {
+      return { id: snapshot.id, ...snapshot.data() };
+    }
+  } catch (error) {
+    console.error('[chat] fetchChatSummary failed', error);
+  }
+  return null;
+}
+
 export function subscribeChatsForBuyer(buyerUid, callback) {
   const uid = getSafeUid(buyerUid);
   const q = query(collection(db, CHATS_COLLECTION), where('buyer_uid', '==', uid), limit(100));
