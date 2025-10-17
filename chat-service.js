@@ -1,713 +1,505 @@
-import { db } from './firebase.js';
+import { app, db } from './firebase.js';
 import {
+  addDoc,
   collection,
   doc,
+  getDoc,
   getDocs,
+  increment,
   limit,
   onSnapshot,
   orderBy,
   query,
-  runTransaction,
   serverTimestamp,
   setDoc,
-  startAfter,
+  updateDoc,
   where,
   writeBatch,
 } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
+import { uploadToCloudinary } from './cloudinary.js';
 
-const COLLECTION_SUMMARIES = 'chat_summaries';
-const COLLECTION_MESSAGES = 'messages';
-const COLLECTION_TYPING = 'typing';
+const CHATS_COLLECTION = 'chats';
+const TYPING_COLLECTION = 'typing';
+const MESSAGE_SUBCOLLECTION = 'messages';
+const MAX_MESSAGES_TO_MARK = 200;
+const OFFLINE_STORAGE_KEY = 'yustam-offline-messages';
+const isBrowser = typeof window !== 'undefined' && typeof document !== 'undefined';
 
-const toastQueue = [];
-let activeToast = null;
+let firebaseInitialised = false;
+let toastQueue = [];
+let toastActive = false;
+const offlineQueue = [];
+
+function ensureToastRoot() {
+  if (!isBrowser) return null;
+  let root = document.querySelector('.yustam-toast-root');
+  if (!root) {
+    root = document.createElement('div');
+    root.className = 'yustam-toast-root';
+    root.setAttribute('role', 'status');
+    root.setAttribute('aria-live', 'polite');
+    document.body.appendChild(root);
+  }
+  return root;
+}
+
+function dequeueToast() {
+  if (!toastQueue.length) {
+    toastActive = false;
+    return;
+  }
+  toastActive = true;
+  const message = toastQueue.shift();
+  const root = ensureToastRoot();
+  if (!root) {
+    toastActive = false;
+    console.warn('[chat] Toast skipped:', message);
+    return;
+  }
+  const toast = document.createElement('div');
+  toast.className = 'yustam-toast';
+  toast.textContent = message;
+  root.appendChild(toast);
+  requestAnimationFrame(() => toast.classList.add('is-visible'));
+  window.setTimeout(() => {
+    toast.classList.remove('is-visible');
+    window.setTimeout(() => {
+      toast.remove();
+      dequeueToast();
+    }, 220);
+  }, 4600);
+}
 
 function showToast(message) {
   if (!message) return;
+  if (!isBrowser) {
+    console.warn('[chat]', message);
+    return;
+  }
   toastQueue.push(String(message));
-  if (activeToast) return;
-  const container = document.getElementById('toast-root') || createToastContainer();
-  const next = () => {
-    if (!toastQueue.length) {
-      activeToast = null;
-      return;
-    }
-    activeToast = toastQueue.shift();
-    const toast = document.createElement('div');
-    toast.className = 'chat-toast';
-    toast.textContent = activeToast;
-    container.appendChild(toast);
-    window.setTimeout(() => {
-      toast.classList.add('is-visible');
-    }, 10);
-    window.setTimeout(() => {
-      toast.classList.remove('is-visible');
-      window.setTimeout(() => {
-        toast.remove();
-        activeToast = null;
-        next();
-      }, 260);
-    }, 4200);
-  };
-  next();
+  if (!toastActive) {
+    dequeueToast();
+  }
 }
 
-function createToastContainer() {
-  const container = document.createElement('div');
-  container.id = 'toast-root';
-  container.className = 'chat-toast-root';
-  document.body.appendChild(container);
-  return container;
-}
-
-function normaliseUid(value) {
+function normaliseString(value) {
   return String(value || '').trim();
 }
 
-function safeToDate(value) {
-  if (!value) return null;
-  if (value instanceof Date) return value;
-  if (typeof value.toDate === 'function') return value.toDate();
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
+function getSafeUid(value) {
+  const uid = normaliseString(value);
+  if (!uid) {
+    throw new Error('Missing participant UID.');
+  }
+  return uid;
 }
 
-function clampText(text, length = 160) {
-  const value = String(text || '').trim();
-  if (!value) return '';
-  if (value.length <= length) return value;
-  return `${value.slice(0, length)}â€¦`;
+function restoreOfflineQueue() {
+  if (!isBrowser || typeof localStorage === 'undefined') return;
+  try {
+    const raw = localStorage.getItem(OFFLINE_STORAGE_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return;
+    parsed.forEach((item) => {
+      if (item && item.chatId && item.payload) {
+        offlineQueue.push(item);
+      }
+    });
+  } catch (error) {
+    console.warn('[chat] Unable to restore offline queue', error);
+  }
+}
+
+function persistOfflineQueue() {
+  if (!isBrowser || typeof localStorage === 'undefined') return;
+  try {
+    if (!offlineQueue.length) {
+      localStorage.removeItem(OFFLINE_STORAGE_KEY);
+      return;
+    }
+    localStorage.setItem(OFFLINE_STORAGE_KEY, JSON.stringify(offlineQueue));
+  } catch (error) {
+    console.warn('[chat] Unable to persist offline queue', error);
+  }
+}
+
+async function flushOfflineQueue() {
+  if (!isBrowser || typeof navigator === 'undefined' || !navigator.onLine || !offlineQueue.length) return;
+  const queueCopy = [...offlineQueue];
+  offlineQueue.length = 0;
+  persistOfflineQueue();
+  for (const item of queueCopy) {
+    try {
+      await sendMessage(item.payload);
+    } catch (error) {
+      console.error('[chat] Failed to flush offline message', error);
+      offlineQueue.push(item);
+      persistOfflineQueue();
+      break;
+    }
+  }
+}
+
+if (isBrowser) {
+  window.addEventListener('online', () => {
+    showToast('Back online — sending queued messages.');
+    flushOfflineQueue();
+  });
+}
+
+export function initFirebase() {
+  if (!firebaseInitialised) {
+    firebaseInitialised = true;
+    restoreOfflineQueue();
+    flushOfflineQueue();
+  }
+  return app;
 }
 
 export function buildChatId(vendorUid, buyerUid, listingId) {
-  const vendor = normaliseUid(vendorUid);
-  const buyer = normaliseUid(buyerUid);
-  const listing = normaliseUid(listingId);
-  if (!vendor || !buyer || !listing) {
-    console.warn('[chat] buildChatId missing identifiers');
-    return '';
+  const vendor = getSafeUid(vendorUid);
+  const buyer = getSafeUid(buyerUid);
+  const listing = normaliseString(listingId);
+  if (!listing) {
+    throw new Error('Missing listing identifier.');
   }
   return `${vendor}__${buyer}__${listing}`;
 }
 
-export function getUserContext() {
-  const context = window.__CHAT_CONTEXT__ || {};
-  if (!context.role || (context.role === 'buyer' && !context.buyer_uid) || (context.role === 'vendor' && !context.vendor_uid)) {
-    return { role: 'guest' };
-  }
-  return context;
-}
-
-function getListingContext(chatId) {
-  const threadContext = window.__CHAT_THREADS__?.[chatId] || window.__CHAT_THREAD__ || {};
-  return threadContext;
-}
-
-function typingDoc(chatId) {
-  return doc(collection(db, COLLECTION_TYPING), chatId);
-}
-
-function summaryDoc(chatId) {
-  return doc(collection(db, COLLECTION_SUMMARIES), chatId);
+function chatDoc(chatId) {
+  return doc(collection(db, CHATS_COLLECTION), chatId);
 }
 
 function messagesCollection(chatId) {
-  return collection(db, COLLECTION_MESSAGES, chatId, 'items');
+  return collection(db, CHATS_COLLECTION, chatId, MESSAGE_SUBCOLLECTION);
 }
 
-function handleFirestoreError(prefix, error) {
-  console.error(`[chat] ${prefix}`, error);
-  showToast('Something went wrong. Please try again.');
+function typingDoc(chatId) {
+  return doc(collection(db, TYPING_COLLECTION), chatId);
 }
 
-function reshapeSummaryDoc(docSnap) {
-  const data = docSnap.data();
-  const lastTs = safeToDate(data?.last_ts) || null;
-  return {
-    id: docSnap.id,
-    chatId: docSnap.id,
-    buyer_uid: data?.buyer_uid || '',
-    vendor_uid: data?.vendor_uid || '',
-    listing_id: data?.listing_id || '',
-    buyer_name: data?.buyer_name || 'Buyer',
-    vendor_name: data?.vendor_name || 'Vendor',
-    listing_title: data?.listing_title || 'Listing',
-    listing_image: data?.listing_image || '',
-    last_text: data?.last_text || '',
-    last_ts: lastTs,
-    last_sender_uid: data?.last_sender_uid || '',
-    last_sender_role: data?.last_sender_role || '',
-    unread_for_buyer: Number(data?.unread_for_buyer || 0),
-    unread_for_vendor: Number(data?.unread_for_vendor || 0),
-  };
-}
-
-function isMissingIndexError(error) {
-  if (!error) return false;
-  const code = error.code || error?.cause?.code;
-  if (code !== 'failed-precondition') return false;
-  const message = String(error.message || '').toLowerCase();
-  return message.includes('index');
-}
-
-function mapRestSummary(raw, viewerRole) {
-  if (!raw) return null;
-  const role = viewerRole === 'vendor' ? 'vendor' : 'buyer';
-  const buyerUid = raw.buyerUid || '';
-  const vendorUid = raw.vendorUid || '';
-  const listingTitle = raw.productTitle || 'Listing';
-  const listingImage = raw.productImage || '';
-  const lastTimestamp = raw.lastMessageAt || raw.updatedAt || raw.createdAt || null;
-  const lastTs = safeToDate(lastTimestamp);
-  const lastSenderUid = raw.lastSenderUid || '';
-  let lastSenderRole = '';
-  if (lastSenderUid) {
-    if (lastSenderUid === buyerUid) {
-      lastSenderRole = 'buyer';
-    } else if (lastSenderUid === vendorUid) {
-      lastSenderRole = 'vendor';
-    } else {
-      lastSenderRole = role;
-    }
+export async function ensureChat(meta) {
+  const chatId = getSafeUid(meta?.chatId || meta?.chat_id);
+  const buyerUid = getSafeUid(meta?.buyer_uid || meta?.buyerUid);
+  const vendorUid = getSafeUid(meta?.vendor_uid || meta?.vendorUid);
+  const listingId = normaliseString(meta?.listing_id || meta?.listingId);
+  if (!listingId) {
+    throw new Error('Missing listing identifier.');
   }
-
-  const summary = {
-    id: raw.chatId,
-    chatId: raw.chatId,
+  const payload = {
+    chat_id: chatId,
     buyer_uid: buyerUid,
+    buyer_name: normaliseString(meta?.buyer_name || meta?.buyerName),
+    buyer_avatar: normaliseString(meta?.buyer_avatar || meta?.buyerAvatar),
     vendor_uid: vendorUid,
-    listing_id: raw.productId || '',
-    buyer_name: raw.buyerName || (role === 'vendor' ? raw.counterpartyName || 'Buyer' : 'Buyer'),
-    vendor_name: raw.vendorName || (role === 'buyer' ? raw.counterpartyName || 'Vendor' : 'Vendor'),
-    listing_title: listingTitle,
-    listing_image: listingImage,
-    last_text: clampText(raw.lastMessagePreview || ''),
-    last_ts: lastTs,
-    last_sender_uid: lastSenderUid,
-    last_sender_role: lastSenderRole,
-    unread_for_buyer: role === 'buyer' ? Number(raw.unreadCount || 0) : 0,
-    unread_for_vendor: role === 'vendor' ? Number(raw.unreadCount || 0) : 0,
+    vendor_name: normaliseString(meta?.vendor_name || meta?.vendorName),
+    vendor_avatar: normaliseString(meta?.vendor_avatar || meta?.vendorAvatar),
+    listing_id: listingId,
+    listing_title: normaliseString(meta?.listing_title || meta?.listingTitle),
+    listing_image: normaliseString(meta?.listing_image || meta?.listingImage),
+    last_ts: serverTimestamp(),
+    last_text: normaliseString(meta?.last_text || ''),
+    last_type: normaliseString(meta?.last_type || 'system') || 'system',
+    unread_for_buyer: Number(meta?.unread_for_buyer || 0),
+    unread_for_vendor: Number(meta?.unread_for_vendor || 0),
   };
 
-  return summary;
+  const chatRef = chatDoc(chatId);
+  const snapshot = await getDoc(chatRef);
+  if (!snapshot.exists()) {
+    await setDoc(chatRef, payload);
+  } else {
+    await updateDoc(chatRef, {
+      buyer_uid: payload.buyer_uid,
+      buyer_name: payload.buyer_name,
+      buyer_avatar: payload.buyer_avatar,
+      vendor_uid: payload.vendor_uid,
+      vendor_name: payload.vendor_name,
+      vendor_avatar: payload.vendor_avatar,
+      listing_id: payload.listing_id,
+      listing_title: payload.listing_title,
+      listing_image: payload.listing_image,
+    });
+  }
+  return { chatId, ...payload };
 }
 
-function createRestSummariesController({ pageSize, onUpdate, onError }) {
-  let stopped = false;
-  let pollTimer = null;
-  let currentRole = 'buyer';
-
-  const fetchLatest = async () => {
-    try {
-      const params = new URLSearchParams();
-      params.set('limit', String(pageSize));
-      const response = await fetch(`./fetch-chats.php?${params.toString()}`, {
-        credentials: 'same-origin',
-        headers: {
-          Accept: 'application/json',
-        },
-      });
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+export function subscribeChatsForBuyer(buyerUid, callback) {
+  const uid = getSafeUid(buyerUid);
+  const q = query(
+    collection(db, CHATS_COLLECTION),
+    where('buyer_uid', '==', uid),
+    orderBy('last_ts', 'desc'),
+    limit(50)
+  );
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const chats = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+      callback(chats);
+    },
+    (error) => {
+      console.error('[chat] subscribeChatsForBuyer', error);
+      if (error?.code === 'failed-precondition') {
+        showToast('Missing Firestore index for buyer chats.');
+      } else {
+        showToast('Unable to load chats.');
       }
-      const payload = await response.json();
-      if (!payload?.success) {
-        throw new Error(payload?.message || 'Unable to load chats.');
-      }
-      currentRole = payload.role === 'vendor' ? 'vendor' : 'buyer';
-      const items = Array.isArray(payload.conversations)
-        ? payload.conversations
-            .map((entry) => mapRestSummary(entry, currentRole))
-            .filter(Boolean)
-        : [];
-      if (stopped) {
-        return items;
-      }
-      onUpdate?.(items, {
-        append: false,
-        hasMore: false,
-        fromRealtime: false,
-        source: 'rest',
-      });
-      return items;
-    } catch (error) {
-      if (stopped) {
-        return [];
-      }
-      console.error('[chat] rest summaries failed', error);
-      showToast('Loading conversations from backup. Some updates may be delayed.');
-      onError?.(error);
-      return [];
     }
-  };
+  );
+}
 
-  const start = async () => {
-    await fetchLatest();
-    if (stopped) return;
-    pollTimer = window.setInterval(() => {
-      fetchLatest();
-    }, 15000);
-  };
-
-  const stop = () => {
-    stopped = true;
-    if (pollTimer) {
-      window.clearInterval(pollTimer);
-      pollTimer = null;
+export function subscribeChatsForVendor(vendorUid, callback) {
+  const uid = getSafeUid(vendorUid);
+  const q = query(
+    collection(db, CHATS_COLLECTION),
+    where('vendor_uid', '==', uid),
+    orderBy('last_ts', 'desc'),
+    limit(50)
+  );
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const chats = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+      callback(chats);
+    },
+    (error) => {
+      console.error('[chat] subscribeChatsForVendor', error);
+      if (error?.code === 'failed-precondition') {
+        showToast('Missing Firestore index for vendor chats.');
+      } else {
+        showToast('Unable to load chats.');
+      }
     }
-  };
+  );
+}
+
+export function subscribeMessages(chatId, callback) {
+  const id = getSafeUid(chatId);
+  const q = query(messagesCollection(id), orderBy('ts', 'asc'), limit(500));
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const messages = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+      callback(messages);
+    },
+    (error) => {
+      console.error('[chat] subscribeMessages', error);
+      showToast('Unable to load messages.');
+    }
+  );
+}
+
+function normaliseMessagePayload(input) {
+  const chatId = getSafeUid(input?.chatId || input?.chat_id);
+  const senderRole = normaliseString(input?.as || input?.sender_role);
+  const senderUid = getSafeUid(input?.sender_uid || input?.senderUid || input?.viewerUid);
+  const text = normaliseString(input?.text || input?.message);
+  const imageUrl = normaliseString(input?.image_url || input?.imageUrl);
+  const voiceUrl = normaliseString(input?.voice_url || input?.voiceUrl);
+  const duration = Number(input?.duration || input?.voice_duration || 0);
+  const buyerUid = normaliseString(input?.buyer_uid || input?.buyerUid || '');
+  const vendorUid = normaliseString(input?.vendor_uid || input?.vendorUid || '');
+
+  if (!text && !imageUrl && !voiceUrl) {
+    throw new Error('Please write a message or attach media.');
+  }
+
+  let type = 'text';
+  if (imageUrl) type = 'image';
+  if (voiceUrl) type = 'voice';
 
   return {
-    start,
-    stop,
-    async loadMore() {
-      return [];
-    },
+    chatId,
+    senderRole: senderRole === 'vendor' ? 'vendor' : 'buyer',
+    senderUid,
+    text,
+    imageUrl,
+    voiceUrl,
+    duration,
+    buyerUid,
+    vendorUid,
+    type,
   };
 }
 
-export function listSummariesForUser(options = {}) {
-  const { pageSize = 20, onUpdate, onError } = options;
-  const context = getUserContext();
-  const role = context.role;
-  const userUid = role === 'buyer' ? context.buyer_uid : context.vendor_uid;
-  if (!role || !userUid) {
-    const error = new Error('Missing chat user context.');
-    console.warn('[chat] listSummariesForUser', error);
-    onError?.(error);
-    return { unsubscribe: () => {}, loadMore: async () => [] };
-  }
+async function writeMessage(payload) {
+  const { chatId, senderRole, senderUid, text, imageUrl, voiceUrl, duration, buyerUid, vendorUid, type } = payload;
+  const messageData = {
+    ts: serverTimestamp(),
+    sender_uid: senderUid,
+    sender_role: senderRole,
+    text: text || null,
+    image_url: imageUrl || null,
+    voice_url: voiceUrl || null,
+    duration: duration || null,
+    type,
+    read_by: { [senderUid]: true },
+  };
+  const messageRef = await addDoc(messagesCollection(chatId), messageData);
 
-  const field = role === 'buyer' ? 'buyer_uid' : 'vendor_uid';
-  const summariesRef = collection(db, COLLECTION_SUMMARIES);
-  const constraints = [where(field, '==', userUid), orderBy('last_ts', 'desc'), limit(pageSize)];
-  const q = query(summariesRef, ...constraints);
-
-  let lastVisible = null;
-  let hasMore = true;
-  let mode = 'firestore';
-  let firestoreUnsubscribe = () => {};
-  let restController = null;
-
-  const activateRestFallback = (reason) => {
-    if (mode === 'rest') return;
-    console.warn('[chat] Switching to REST chat summaries fallback.', reason);
-    mode = 'rest';
-    firestoreUnsubscribe?.();
-    showToast('Realtime chat index unavailable. Showing the latest conversations in compatibility mode.');
-    restController = createRestSummariesController({ pageSize, onUpdate, onError });
-    restController.start();
+  const chatRef = chatDoc(chatId);
+  const chatUpdates = {
+    last_ts: serverTimestamp(),
+    last_text:
+      type === 'text'
+        ? text
+        : type === 'image'
+        ? '🖼️ Photo'
+        : type === 'voice'
+        ? '🎤 Voice note'
+        : type,
+    last_type: type,
+    last_sender_uid: senderUid,
+    last_sender_role: senderRole,
   };
 
-  try {
-    firestoreUnsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        if (mode !== 'firestore') {
-          return;
-        }
-        if (!snapshot.empty) {
-          lastVisible = snapshot.docs[snapshot.docs.length - 1];
-        }
-        const items = snapshot.docs.map(reshapeSummaryDoc);
-        hasMore = snapshot.size >= pageSize;
-        onUpdate?.(items, { append: false, hasMore, fromRealtime: true });
-      },
-      (error) => {
-        if (isMissingIndexError(error)) {
-          activateRestFallback(error);
-          return;
-        }
-        handleFirestoreError('listSummariesForUser subscribe failed', error);
-        onError?.(error);
-      },
-    );
-  } catch (error) {
-    if (isMissingIndexError(error)) {
-      activateRestFallback(error);
-    } else {
-      handleFirestoreError('listSummariesForUser subscribe failed', error);
-      onError?.(error);
-    }
+  if (senderRole === 'buyer') {
+    chatUpdates.unread_for_vendor = increment(1);
+    chatUpdates.unread_for_buyer = 0;
+  } else {
+    chatUpdates.unread_for_buyer = increment(1);
+    chatUpdates.unread_for_vendor = 0;
   }
 
-  async function loadMore() {
-    if (mode === 'rest') {
-      return restController?.loadMore?.() ?? [];
-    }
-    if (!hasMore || !lastVisible) return [];
-    try {
-      const nextQuery = query(
-        summariesRef,
-        where(field, '==', userUid),
-        orderBy('last_ts', 'desc'),
-        startAfter(lastVisible),
-        limit(pageSize),
-      );
-      const nextSnapshot = await getDocs(nextQuery);
-      if (nextSnapshot.empty) {
-        hasMore = false;
-        return [];
-      }
-      lastVisible = nextSnapshot.docs[nextSnapshot.docs.length - 1];
-      const items = nextSnapshot.docs.map(reshapeSummaryDoc);
-      hasMore = nextSnapshot.size >= pageSize;
-      onUpdate?.(items, { append: true, hasMore, fromRealtime: false });
-      return items;
-    } catch (error) {
-      if (isMissingIndexError(error)) {
-        activateRestFallback(error);
-        return restController?.loadMore?.() ?? [];
-      }
-      handleFirestoreError('listSummariesForUser loadMore failed', error);
-      onError?.(error);
-      return [];
-    }
+  if (buyerUid) {
+    chatUpdates.buyer_uid = buyerUid;
+  }
+  if (vendorUid) {
+    chatUpdates.vendor_uid = vendorUid;
   }
 
-  return {
-    unsubscribe() {
-      if (mode === 'rest') {
-        restController?.stop?.();
-      } else {
-        firestoreUnsubscribe?.();
-      }
-    },
-    loadMore,
-  };
+  await setDoc(chatRef, chatUpdates, { merge: true });
+
+  return { id: messageRef.id, ...messageData };
 }
 
-export async function markThreadRead(chatId) {
-  const context = getUserContext();
-  const role = context.role;
-  const userUid = role === 'buyer' ? context.buyer_uid : context.vendor_uid;
-  if (!chatId || !role || !userUid) return;
-
+export async function sendMessage(input) {
   try {
-    await runTransaction(db, async (transaction) => {
-      const summaryRef = summaryDoc(chatId);
-      const summarySnap = await transaction.get(summaryRef);
-      if (!summarySnap.exists()) return;
-      const unreadField = role === 'buyer' ? 'unread_for_buyer' : 'unread_for_vendor';
-      transaction.update(summaryRef, {
-        [unreadField]: 0,
-      });
-    });
-    const messagesRef = messagesCollection(chatId);
-    const unreadQuery = query(
-      messagesRef,
-      where('receiver_uid', '==', userUid),
-      where('read', '==', false),
-    );
-    const unreadSnapshot = await getDocs(unreadQuery);
-    if (!unreadSnapshot.empty) {
-      const batch = writeBatch(db);
-      unreadSnapshot.forEach((docSnap) => {
-        batch.update(docSnap.ref, {
-          read: true,
-          read_at: serverTimestamp(),
-        });
-      });
-      await batch.commit();
+    const payload = normaliseMessagePayload(input);
+    const isOffline = !isBrowser || typeof navigator === 'undefined' ? false : navigator.onLine === false;
+    if (isOffline) {
+      offlineQueue.push({ chatId: payload.chatId, payload });
+      persistOfflineQueue();
+      showToast('Message saved offline — will send when online.');
+      return { queued: true };
     }
+    const result = await writeMessage(payload);
+    return { sent: true, result };
   } catch (error) {
-    handleFirestoreError('markThreadRead failed', error);
-  }
-}
-
-export async function setTyping(chatId, role, isTyping) {
-  if (!chatId || !role) return;
-  try {
-    await setDoc(
-      typingDoc(chatId),
-      {
-        [role]: Boolean(isTyping),
-        updated_at: serverTimestamp(),
-      },
-      { merge: true },
-    );
-  } catch (error) {
-    handleFirestoreError('setTyping failed', error);
-  }
-}
-
-export async function sendMessage(chatId, payload = {}) {
-  const context = getUserContext();
-  const role = context.role;
-  const senderUid = role === 'buyer' ? context.buyer_uid : context.vendor_uid;
-  if (!chatId || !role || !senderUid) {
-    throw new Error('Cannot send message without a valid chat and user.');
-  }
-
-  const {
-    text = '',
-    imageUrl = '',
-    width = null,
-    height = null,
-    audioUrl = '',
-    audioDurationMs = null,
-  } = payload;
-  const trimmedText = text.trim();
-  if (!trimmedText && !imageUrl && !audioUrl) {
-    throw new Error('Message content required.');
-  }
-
-  const threadContext = getListingContext(chatId);
-  const buyerUid = threadContext.buyer_uid || context.buyer_uid || '';
-  const vendorUid = threadContext.vendor_uid || context.vendor_uid || '';
-  const listingId = threadContext.listing_id || threadContext.listingId || '';
-  const buyerName = threadContext.buyer_name || threadContext.buyerName || 'Buyer';
-  const vendorName = threadContext.vendor_name || threadContext.vendorName || 'Vendor';
-  const listingTitle = threadContext.listing_title || threadContext.listingTitle || 'Listing';
-  const listingImage = threadContext.listing_image || threadContext.listingImage || '';
-
-  const receiverRole = role === 'buyer' ? 'vendor' : 'buyer';
-  const receiverUid = receiverRole === 'buyer' ? buyerUid : vendorUid;
-  if (!buyerUid || !vendorUid || !listingId) {
-    throw new Error('Conversation metadata missing.');
-  }
-
-  const summaryRef = summaryDoc(chatId);
-  const messagesRef = messagesCollection(chatId);
-
-  try {
-    await runTransaction(db, async (transaction) => {
-      const now = serverTimestamp();
-      const preview = trimmedText || (audioUrl ? '[Voice message]' : imageUrl ? '[Photo]' : '');
-      const summarySnapshot = await transaction.get(summaryRef);
-      const summaryData = summarySnapshot.exists() ? summarySnapshot.data() : {};
-      const unreadField = receiverRole === 'buyer' ? 'unread_for_buyer' : 'unread_for_vendor';
-      const senderUnreadField = role === 'buyer' ? 'unread_for_buyer' : 'unread_for_vendor';
-
-      const nextSummary = {
-        chatId,
-        buyer_uid: buyerUid,
-        vendor_uid: vendorUid,
-        listing_id: listingId,
-        buyer_name: buyerName,
-        vendor_name: vendorName,
-        listing_title: listingTitle,
-        listing_image: listingImage,
-        last_text: clampText(preview),
-        last_ts: now,
-        last_sender_uid: senderUid,
-        last_sender_role: role,
-        unread_for_buyer: role === 'buyer' ? 0 : Number(summaryData.unread_for_buyer || 0) + 1,
-        unread_for_vendor: role === 'vendor' ? 0 : Number(summaryData.unread_for_vendor || 0) + 1,
-      };
-
-      if (role === 'buyer') {
-        nextSummary.unread_for_vendor = Number(summaryData.unread_for_vendor || 0) + 1;
-        nextSummary.unread_for_buyer = 0;
-      } else {
-        nextSummary.unread_for_buyer = Number(summaryData.unread_for_buyer || 0) + 1;
-        nextSummary.unread_for_vendor = 0;
-      }
-
-      transaction.set(summaryRef, nextSummary, { merge: true });
-
-      const messageRef = doc(messagesRef);
-      transaction.set(messageRef, {
-        text: trimmedText,
-        image_url: imageUrl || '',
-        image_width: width || null,
-        image_height: height || null,
-        audio_url: audioUrl || '',
-        audio_duration_ms: audioDurationMs || null,
-        sender_role: role,
-        sender_uid: senderUid,
-        receiver_role: receiverRole,
-        receiver_uid: receiverUid,
-        ts: now,
-        read: false,
-      });
-    });
-  } catch (error) {
-    handleFirestoreError('sendMessage failed', error);
+    console.error('[chat] sendMessage error', error);
+    showToast(error?.message || 'Unable to send message.');
     throw error;
   }
 }
 
-function buildThreadMetadataFromOptions(options = {}) {
-  return {
-    chatId: options.chatId,
-    buyer_uid: options.buyerUid || options.buyer_uid || '',
-    buyer_name: options.buyerName || options.buyer_name || 'Buyer',
-    vendor_uid: options.vendorUid || options.vendor_uid || '',
-    vendor_name: options.vendorName || options.vendor_name || 'Vendor',
-    listing_id: options.productId || options.listing_id || '',
-    listing_title: options.productTitle || options.listing_title || 'Listing',
-    listing_image: options.productImage || options.listing_image || '',
-  };
-}
-
-function buildContextOverride(options = {}) {
-  if (options.senderType === 'vendor' || options.sender_role === 'vendor') {
-    return {
-      role: 'vendor',
-      vendor_uid: options.senderUid || options.sender_uid || options.vendorUid || '',
-      vendor_name: options.vendorName || 'Vendor',
-    };
-  }
-  return {
-    role: 'buyer',
-    buyer_uid: options.senderUid || options.sender_uid || options.buyerUid || '',
-    buyer_name: options.buyerName || 'Buyer',
-  };
-}
-
-export async function sendChatMessage(options = {}) {
-  const metadata = buildThreadMetadataFromOptions(options);
-  if (!metadata.chatId) throw new Error('Missing chat identifier.');
-  const contextOverride = buildContextOverride(options);
-  const previousContext = window.__CHAT_CONTEXT__;
-  const hadThread = Boolean(window.__CHAT_THREADS__?.[metadata.chatId]);
-  setThreadContext(metadata.chatId, metadata);
-  window.__CHAT_CONTEXT__ = contextOverride;
+export async function setTyping(chatId, role, isTyping) {
   try {
-    await ensureSummary(metadata.chatId, metadata);
-    const payload = {};
-    if (options.imageUrl) {
-      payload.imageUrl = options.imageUrl;
+    const id = getSafeUid(chatId);
+    const docRef = typingDoc(id);
+    const update = { updatedAt: serverTimestamp() };
+    if (role === 'buyer') {
+      update.buyer = Boolean(isTyping);
+    } else if (role === 'vendor') {
+      update.vendor = Boolean(isTyping);
     }
-    if (options.audioUrl) {
-      payload.audioUrl = options.audioUrl;
-      if (options.audioDurationMs !== undefined) {
-        payload.audioDurationMs = options.audioDurationMs;
-      }
-    }
-    if (options.message) {
-      payload.text = options.message;
-    }
-    if (!payload.text && !payload.imageUrl && !payload.audioUrl) {
-      throw new Error('Message content required.');
-    }
-    await sendMessage(metadata.chatId, payload);
-  } finally {
-    if (!hadThread) {
-      clearThreadContext(metadata.chatId);
-    }
-    if (previousContext === undefined) {
-      delete window.__CHAT_CONTEXT__;
-    } else {
-      window.__CHAT_CONTEXT__ = previousContext;
-    }
-  }
-}
-
-export async function ensureInitialMessage(options = {}) {
-  const metadata = buildThreadMetadataFromOptions(options);
-  if (!metadata.chatId) return false;
-  await ensureSummary(metadata.chatId, metadata);
-  const snapshot = await getDocs(query(messagesCollection(metadata.chatId), limit(1)));
-  if (!snapshot.empty) {
-    return false;
-  }
-  await sendChatMessage(options);
-  return true;
-}
-
-export function subscribeToMessages(chatId, callback, onError) {
-  if (!chatId) return () => {};
-  const messagesRef = messagesCollection(chatId);
-  const q = query(messagesRef, orderBy('ts', 'asc'), limit(400));
-  return onSnapshot(
-    q,
-    (snapshot) => {
-      const messages = snapshot.docs.map((docSnap) => {
-        const data = docSnap.data();
-        return {
-          id: docSnap.id,
-          text: data?.text || '',
-          image_url: data?.image_url || '',
-          image_width: data?.image_width || null,
-          image_height: data?.image_height || null,
-          audio_url: data?.audio_url || '',
-          audio_duration_ms: data?.audio_duration_ms ?? null,
-          sender_role: data?.sender_role || 'buyer',
-          sender_uid: data?.sender_uid || '',
-          receiver_role: data?.receiver_role || 'vendor',
-          receiver_uid: data?.receiver_uid || '',
-          ts: safeToDate(data?.ts),
-          read: Boolean(data?.read),
-          read_at: safeToDate(data?.read_at || null),
-        };
-      });
-      callback(messages);
-    },
-    (error) => {
-      handleFirestoreError('subscribeToMessages failed', error);
-      onError?.(error);
-    },
-  );
-}
-
-export function subscribeToSummary(chatId, callback, onError) {
-  if (!chatId) return () => {};
-  return onSnapshot(
-    summaryDoc(chatId),
-    (docSnap) => {
-      if (!docSnap.exists()) {
-        callback(null);
-        return;
-      }
-      callback(reshapeSummaryDoc(docSnap));
-    },
-    (error) => {
-      handleFirestoreError('subscribeToSummary failed', error);
-      onError?.(error);
-    },
-  );
-}
-
-export function subscribeToTyping(chatId, callback, onError) {
-  if (!chatId) return () => {};
-  return onSnapshot(
-    typingDoc(chatId),
-    (docSnap) => {
-      callback(docSnap.exists() ? docSnap.data() : { buyer: false, vendor: false });
-    },
-    (error) => {
-      handleFirestoreError('subscribeToTyping failed', error);
-      onError?.(error);
-    },
-  );
-}
-
-export async function ensureSummary(chatId, metadata = {}) {
-  if (!chatId) return;
-  try {
-    await setDoc(
-      summaryDoc(chatId),
-      {
-        chatId,
-        buyer_uid: metadata.buyer_uid || '',
-        vendor_uid: metadata.vendor_uid || '',
-        listing_id: metadata.listing_id || '',
-        buyer_name: metadata.buyer_name || 'Buyer',
-        vendor_name: metadata.vendor_name || 'Vendor',
-        listing_title: metadata.listing_title || 'Listing',
-        listing_image: metadata.listing_image || '',
-        last_ts: serverTimestamp(),
-      },
-      { merge: true },
-    );
+    await setDoc(docRef, update, { merge: true });
   } catch (error) {
-    handleFirestoreError('ensureSummary failed', error);
+    console.error('[chat] setTyping', error);
   }
 }
 
-export function setThreadContext(chatId, context = {}) {
-  if (!window.__CHAT_THREADS__) {
-    window.__CHAT_THREADS__ = {};
+export async function markRead(chatId, role, viewerUid) {
+  try {
+    const id = getSafeUid(chatId);
+    const uid = getSafeUid(viewerUid);
+    const messagesRef = messagesCollection(id);
+    const q = query(messagesRef, orderBy('ts', 'desc'), limit(MAX_MESSAGES_TO_MARK));
+    const snapshot = await getDocs(q);
+    const batch = writeBatch(db);
+    snapshot.docs.forEach((docSnap) => {
+      batch.update(docSnap.ref, { [`read_by.${uid}`]: true });
+    });
+    await batch.commit();
+
+    const chatRef = chatDoc(id);
+    const unreadField = role === 'buyer' ? 'unread_for_buyer' : 'unread_for_vendor';
+    await updateDoc(chatRef, { [unreadField]: 0 });
+  } catch (error) {
+    console.error('[chat] markRead', error);
   }
-  window.__CHAT_THREADS__[chatId] = context;
 }
 
-export function clearThreadContext(chatId) {
-  if (window.__CHAT_THREADS__) {
-    delete window.__CHAT_THREADS__[chatId];
+export function subscribeTyping(chatId, callback) {
+  const id = getSafeUid(chatId);
+  return onSnapshot(
+    typingDoc(id),
+    (snapshot) => {
+      callback(snapshot.exists() ? snapshot.data() : {});
+    },
+    (error) => {
+      console.error('[chat] subscribeTyping', error);
+    }
+  );
+}
+
+export async function recordVoice(options = {}) {
+  if (!isBrowser || !navigator.mediaDevices?.getUserMedia) {
+    throw new Error('Voice recording is not supported on this device.');
   }
+  const constraints = { audio: true };
+  const stream = await navigator.mediaDevices.getUserMedia(constraints);
+  const recorder = new MediaRecorder(stream, options);
+  const chunks = [];
+  return {
+    stream,
+    recorder,
+    start: () => {
+      chunks.length = 0;
+      recorder.addEventListener('dataavailable', (event) => {
+        if (event.data && event.data.size > 0) {
+          chunks.push(event.data);
+        }
+      });
+      recorder.start();
+    },
+    stop: () =>
+      new Promise((resolve, reject) => {
+        const cleanup = () => {
+          stream.getTracks().forEach((track) => track.stop());
+        };
+        recorder.addEventListener('error', (event) => {
+          cleanup();
+          reject(event.error || new Error('Recording failed.'));
+        });
+        recorder.addEventListener('stop', () => {
+          const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
+          cleanup();
+          resolve(blob);
+        });
+        recorder.stop();
+      }),
+    cancel: () => {
+      recorder.stop();
+      stream.getTracks().forEach((track) => track.stop());
+    },
+  };
+}
+
+export async function uploadVoiceToCloudinary(blob, metadata = {}) {
+  if (!(blob instanceof Blob)) {
+    throw new Error('Invalid voice data.');
+  }
+  const file = new File([blob], metadata.filename || `voice-${Date.now()}.webm`, {
+    type: blob.type || 'audio/webm',
+  });
+  const response = await uploadToCloudinary(file, {
+    folder: 'yustam/chats/voice',
+    tags: ['voice', 'chat'],
+  });
+  return response.url;
 }
 
 export { showToast };
+
