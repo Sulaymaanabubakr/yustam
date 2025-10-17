@@ -162,10 +162,13 @@ function yustam_firestore_get_document(string $path): ?array
     throw new RuntimeException('Firestore get failed: ' . $response['body']);
 }
 
-function yustam_firestore_run_query(array $structuredQuery): array
+function yustam_firestore_run_query(array $query): array
 {
     $endpoint = yustam_chat_firestore_endpoint('/documents:runQuery');
-    $response = yustam_http_json('POST', $endpoint, ['structuredQuery' => $structuredQuery]);
+    if (!isset($query['structuredQuery'])) {
+        $query = ['structuredQuery' => $query];
+    }
+    $response = yustam_http_json('POST', $endpoint, $query);
     if ($response['status'] >= 200 && $response['status'] < 300) {
         $lines = array_filter(array_map('trim', explode("\n", trim($response['body']))));
         $results = [];
