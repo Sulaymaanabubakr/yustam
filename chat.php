@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/session-path.php';
+require_once __DIR__ . '/chat-storage.php';
 session_start();
 
 $buyerUid = isset($_SESSION['buyer_uid']) ? trim((string) $_SESSION['buyer_uid']) : '';
@@ -18,7 +19,12 @@ $listingImage = isset($_GET['listing_image']) ? trim((string) $_GET['listing_ima
 
 if ($chatParam !== '') {
     $chatId = $chatParam;
-    $parts = explode('__', $chatParam);
+    $parts = [];
+    if (strpos($chatParam, '__') !== false) {
+        $parts = explode('__', $chatParam);
+    } elseif (strpos($chatParam, '_') !== false) {
+        $parts = explode('_', $chatParam);
+    }
     if (count($parts) >= 3) {
         $vendorUid = $parts[0] ?: $vendorUid;
         $buyerUid = $parts[1] ?: $buyerUid;
@@ -34,6 +40,39 @@ if ($listingTitle === '' && isset($_GET['productTitle'])) {
 }
 if ($listingImage === '' && isset($_GET['productImage'])) {
     $listingImage = trim((string) $_GET['productImage']);
+}
+
+$conversationRecord = null;
+if ($chatId !== '') {
+    try {
+        $chatDb = yustam_chat_connection();
+        $conversationRecord = yustam_chat_fetch_conversation($chatDb, $chatId);
+    } catch (Throwable $exception) {
+        error_log('[chat] Unable to load conversation metadata: ' . $exception->getMessage());
+    }
+    if (is_array($conversationRecord) && !empty($conversationRecord)) {
+        if ($vendorUid === '' && !empty($conversationRecord['vendor_uid'])) {
+            $vendorUid = (string) $conversationRecord['vendor_uid'];
+        }
+        if ($buyerUid === '' && !empty($conversationRecord['buyer_uid'])) {
+            $buyerUid = (string) $conversationRecord['buyer_uid'];
+        }
+        if ($listingId === '' && !empty($conversationRecord['product_id'])) {
+            $listingId = (string) $conversationRecord['product_id'];
+        }
+        if (($listingTitle === '' || $listingTitle === 'Listing') && !empty($conversationRecord['product_title'])) {
+            $listingTitle = (string) $conversationRecord['product_title'];
+        }
+        if ($listingImage === '' && !empty($conversationRecord['product_image'])) {
+            $listingImage = (string) $conversationRecord['product_image'];
+        }
+        if (($buyerName === '' || $buyerName === 'Buyer') && !empty($conversationRecord['buyer_name'])) {
+            $buyerName = (string) $conversationRecord['buyer_name'];
+        }
+        if (($vendorName === '' || $vendorName === 'Vendor') && !empty($conversationRecord['vendor_name'])) {
+            $vendorName = (string) $conversationRecord['vendor_name'];
+        }
+    }
 }
 
 if ($buyerUid === '' && isset($_GET['buyerUid'])) {
@@ -651,7 +690,7 @@ $defaultAvatar = 'https://images.unsplash.com/photo-1521120413309-42fb5463e6da?a
     data-back-link="<?= htmlspecialchars($backLink, ENT_QUOTES, 'UTF-8'); ?>"
 >
     <header class="chat-header">
-        <a class="back-button" href="<?= htmlspecialchars($backLink, ENT_QUOTES, 'UTF-8'); ?>" aria-label="Back to chats">
+        <a class="back-button" id="chat-back-button" href="<?= htmlspecialchars($backLink, ENT_QUOTES, 'UTF-8'); ?>" aria-label="Back to chats">
             <i class="ri-arrow-left-line" aria-hidden="true"></i>
         </a>
         <div class="chat-peer">

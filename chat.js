@@ -23,6 +23,7 @@ const fileInput = document.getElementById('file-input');
 const attachmentRow = document.getElementById('attachment-row');
 const participantNameEl = document.getElementById('participant-name');
 const participantStatusEl = document.getElementById('participant-status');
+const backButton = document.getElementById('chat-back-button');
 
 if (!root) {
   throw new Error('Chat root element not found.');
@@ -31,55 +32,160 @@ if (!root) {
 const chatId = root.dataset.chatId || '';
 const role = root.dataset.role || 'guest';
 const currentUid = root.dataset.currentUid || '';
-const buyerUid = root.dataset.buyerUid || '';
-const buyerName = root.dataset.buyerName || 'Buyer';
-const vendorUid = root.dataset.vendorUid || '';
-const vendorName = root.dataset.vendorName || 'Vendor';
-const listingId = root.dataset.listingId || '';
-const listingTitle = root.dataset.listingTitle || 'Listing';
-const listingImage = root.dataset.listingImage || '';
-const counterpartyRole = root.dataset.counterpartyRole || '';
-const counterpartyName = root.dataset.counterpartyName || '';
+let buyerUid = root.dataset.buyerUid || '';
+let buyerName = root.dataset.buyerName || 'Buyer';
+let vendorUid = root.dataset.vendorUid || '';
+let vendorName = root.dataset.vendorName || 'Vendor';
+let listingId = root.dataset.listingId || '';
+let listingTitle = root.dataset.listingTitle || 'Listing';
+let listingImage = root.dataset.listingImage || '';
+let counterpartyRole = root.dataset.counterpartyRole || '';
+let counterpartyName = root.dataset.counterpartyName || '';
+const backLink = root.dataset.backLink || '';
 
-const context = {
-  chatId,
-  role,
-  currentUid,
-  buyerUid,
-  buyerName,
-  vendorUid,
-  vendorName,
-  listingId,
-  listingTitle,
-  listingImage,
-  counterpartyRole,
-  counterpartyName,
-};
-
-if (!chatId || !currentUid) {
-  console.warn('[chat] Missing identifiers', context);
+function parseChatIdentifierParts(id) {
+  if (!id) return { vendor: '', buyer: '', listing: '' };
+  const separator = id.includes('__') ? '__' : '_';
+  const parts = id.split(separator);
+  return {
+    vendor: parts[0] || '',
+    buyer: parts[1] || '',
+    listing: parts[2] || '',
+  };
 }
 
-setThreadContext(chatId, {
-  chatId,
-  buyer_uid: buyerUid,
-  buyer_name: buyerName,
-  vendor_uid: vendorUid,
-  vendor_name: vendorName,
-  listing_id: listingId,
-  listing_title: listingTitle,
-  listing_image: listingImage,
-});
+const identifierParts = parseChatIdentifierParts(chatId);
+if (!vendorUid && identifierParts.vendor) {
+  vendorUid = identifierParts.vendor;
+}
+if (!buyerUid && identifierParts.buyer) {
+  buyerUid = identifierParts.buyer;
+}
+if (!listingId && identifierParts.listing) {
+  listingId = identifierParts.listing;
+}
 
-ensureSummary(chatId, {
-  buyer_uid: buyerUid,
-  buyer_name: buyerName,
-  vendor_uid: vendorUid,
-  vendor_name: vendorName,
-  listing_id: listingId,
-  listing_title: listingTitle,
-  listing_image: listingImage,
-});
+function syncDatasetFromMetadata() {
+  root.dataset.buyerUid = buyerUid;
+  root.dataset.buyerName = buyerName;
+  root.dataset.vendorUid = vendorUid;
+  root.dataset.vendorName = vendorName;
+  root.dataset.listingId = listingId;
+  root.dataset.listingTitle = listingTitle;
+  root.dataset.listingImage = listingImage;
+  root.dataset.counterpartyRole = counterpartyRole;
+  root.dataset.counterpartyName = counterpartyName;
+}
+
+function updateParticipantFromMetadata() {
+  const displayName = counterpartyName || (role === 'buyer' ? vendorName : buyerName);
+  if (displayName && participantNameEl) {
+    participantNameEl.textContent = displayName;
+  }
+  if (participantStatusEl) {
+    participantStatusEl.textContent = listingTitle;
+  }
+}
+
+async function hydrateThreadMetadata() {
+  if (buyerUid && vendorUid && listingId) {
+    syncDatasetFromMetadata();
+    updateParticipantFromMetadata();
+    return;
+  }
+
+  try {
+    const params = new URLSearchParams({ scope: 'thread', chat_id: chatId });
+    const response = await fetch(`./fetch-chats.php?${params.toString()}`, {
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json' },
+    });
+    if (!response.ok) {
+      throw new Error(`metadata request failed with ${response.status}`);
+    }
+    const payload = await response.json();
+    const conversation = payload?.conversation;
+    if (conversation) {
+      buyerUid = conversation.buyerUid || buyerUid;
+      buyerName = conversation.buyerName || buyerName;
+      vendorUid = conversation.vendorUid || vendorUid;
+      vendorName = conversation.vendorName || vendorName;
+      listingId = conversation.productId || listingId;
+      listingTitle = conversation.productTitle || listingTitle;
+      listingImage = conversation.productImage || listingImage;
+      counterpartyRole = conversation.counterpartyRole || counterpartyRole;
+      counterpartyName = conversation.counterpartyName || counterpartyName;
+      if (!counterpartyName && counterpartyRole === 'buyer') {
+        counterpartyName = buyerName;
+      }
+      if (!counterpartyName && counterpartyRole === 'vendor') {
+        counterpartyName = vendorName;
+      }
+    }
+  } catch (error) {
+    console.error('[chat] metadata hydration failed', error);
+  }
+
+  if (!listingId) {
+    listingId = chatId;
+  }
+  if (!counterpartyRole) {
+    counterpartyRole = role === 'vendor' ? 'buyer' : role === 'buyer' ? 'vendor' : counterpartyRole;
+  }
+  if (!counterpartyName) {
+    counterpartyName = counterpartyRole === 'buyer' ? buyerName : vendorName;
+  }
+
+  syncDatasetFromMetadata();
+  updateParticipantFromMetadata();
+}
+
+function applyThreadContext() {
+  setThreadContext(chatId, {
+    chatId,
+    buyer_uid: buyerUid,
+    buyer_name: buyerName,
+    vendor_uid: vendorUid,
+    vendor_name: vendorName,
+    listing_id: listingId,
+    listing_title: listingTitle,
+    listing_image: listingImage,
+  });
+}
+
+function ensureSummaryWithMetadata() {
+  ensureSummary(chatId, {
+    buyer_uid: buyerUid,
+    buyer_name: buyerName,
+    vendor_uid: vendorUid,
+    vendor_name: vendorName,
+    listing_id: listingId,
+    listing_title: listingTitle,
+    listing_image: listingImage,
+  });
+}
+
+function getContextSnapshot() {
+  return {
+    chatId,
+    role,
+    currentUid,
+    buyerUid,
+    buyerName,
+    vendorUid,
+    vendorName,
+    listingId,
+    listingTitle,
+    listingImage,
+    counterpartyRole,
+    counterpartyName,
+  };
+}
+
+if (!chatId || !currentUid) {
+  console.warn('[chat] Missing identifiers', getContextSnapshot());
+}
+
 
 const state = {
   messages: [],
@@ -231,21 +337,48 @@ function handleMessages(messages) {
 
 function handleSummary(summary) {
   if (!summary) return;
-  if (role === 'buyer' && summary.vendor_name) {
-    participantNameEl.textContent = summary.vendor_name;
+
+  if (summary.buyer_uid) {
+    buyerUid = summary.buyer_uid || buyerUid;
   }
-  if (role === 'vendor' && summary.buyer_name) {
-    participantNameEl.textContent = summary.buyer_name;
+  if (summary.vendor_uid) {
+    vendorUid = summary.vendor_uid || vendorUid;
+  }
+  if (summary.buyer_name) {
+    buyerName = summary.buyer_name || buyerName;
+    if (role === 'vendor') {
+      counterpartyName = buyerName;
+    }
+  }
+  if (summary.vendor_name) {
+    vendorName = summary.vendor_name || vendorName;
+    if (role === 'buyer') {
+      counterpartyName = vendorName;
+    }
+  }
+  if (summary.listing_id) {
+    listingId = summary.listing_id || listingId;
+  }
+  if (summary.listing_title) {
+    listingTitle = summary.listing_title || listingTitle;
+  }
+  if (summary.listing_image) {
+    listingImage = summary.listing_image || listingImage;
   }
 
-  if (summary.last_ts) {
+  if (!counterpartyRole) {
+    counterpartyRole = role === 'vendor' ? 'buyer' : 'vendor';
+  }
+
+  syncDatasetFromMetadata();
+  updateParticipantFromMetadata();
+  applyThreadContext();
+
+  if (summary.last_ts && participantStatusEl) {
     const lastSeen = summary.last_ts.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    participantStatusEl.textContent = `${listingTitle} · Updated ${lastSeen}`;
-  } else {
-    participantStatusEl.textContent = listingTitle;
+    participantStatusEl.textContent = `${listingTitle} - Updated ${lastSeen}`;
   }
 }
-
 function handleTyping(snapshot) {
   state.typing = snapshot || { buyer: false, vendor: false };
   const isOtherTyping = role === 'buyer' ? state.typing.vendor : state.typing.buyer;
@@ -255,7 +388,7 @@ function handleTyping(snapshot) {
   } else if (state.messages.length) {
     const lastTs = state.messages[state.messages.length - 1]?.ts;
     if (lastTs) {
-      participantStatusEl.textContent = `${listingTitle} · Updated ${lastTs.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+      participantStatusEl.textContent = `${listingTitle} - Updated ${lastTs.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
     } else {
       participantStatusEl.textContent = listingTitle;
     }
@@ -456,6 +589,12 @@ function init() {
     showToast('Conversation not found.');
     return;
   }
+  if (backButton && backLink) {
+    backButton.addEventListener('click', (event) => {
+      event.preventDefault();
+      window.location.replace(backLink);
+    });
+  }
   initSubscriptions();
   markThreadRead(chatId);
   resizeTextarea();
@@ -485,4 +624,16 @@ function init() {
   window.addEventListener('beforeunload', destroy);
 }
 
-init();
+async function bootstrap() {
+  try {
+    await hydrateThreadMetadata();
+    applyThreadContext();
+    ensureSummaryWithMetadata();
+    init();
+  } catch (error) {
+    console.error('[chat] bootstrap failed', error);
+    showToast('Unable to load this conversation. Please refresh.');
+  }
+}
+
+bootstrap();
