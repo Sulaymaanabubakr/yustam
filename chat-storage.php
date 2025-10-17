@@ -69,6 +69,8 @@ function yustam_chat_ensure_tables(mysqli $db): void
             `receiver_type` ENUM(\'buyer\', \'vendor\') NOT NULL,
             `message_text` TEXT NULL,
             `image_url` TEXT NULL,
+            `audio_url` TEXT NULL,
+            `audio_duration_ms` INT UNSIGNED NULL,
             `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             `seen` TINYINT(1) NOT NULL DEFAULT 0,
             `seen_at` DATETIME NULL,
@@ -144,6 +146,22 @@ function yustam_chat_ensure_tables(mysqli $db): void
             $db->query(sprintf('ALTER TABLE `%s` ADD COLUMN `sender_name` VARCHAR(150) NULL AFTER `sender_type`', $messages));
         } catch (Throwable $exception) {
             error_log('chat ensure sender_name: ' . $exception->getMessage());
+        }
+    }
+
+    if (!in_array('audio_url', $messageCols, true)) {
+        try {
+            $db->query(sprintf('ALTER TABLE `%s` ADD COLUMN `audio_url` TEXT NULL AFTER `image_url`', $messages));
+        } catch (Throwable $exception) {
+            error_log('chat ensure audio_url: ' . $exception->getMessage());
+        }
+    }
+
+    if (!in_array('audio_duration_ms', $messageCols, true)) {
+        try {
+            $db->query(sprintf('ALTER TABLE `%s` ADD COLUMN `audio_duration_ms` INT UNSIGNED NULL AFTER `audio_url`', $messages));
+        } catch (Throwable $exception) {
+            error_log('chat ensure audio_duration_ms: ' . $exception->getMessage());
         }
     }
 }
@@ -229,18 +247,33 @@ function yustam_chat_insert_message(
     string $receiverUid,
     string $receiverType,
     ?string $text,
-    ?string $imageUrl
+    ?string $imageUrl,
+    ?string $audioUrl,
+    ?int $audioDurationMs
 ): array {
     $sql = sprintf(
-        'INSERT INTO `%s` (chat_id, sender_uid, sender_type, sender_name, receiver_uid, receiver_type, message_text, image_url, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())',
+        'INSERT INTO `%s` (chat_id, sender_uid, sender_type, sender_name, receiver_uid, receiver_type, message_text, image_url, audio_url, audio_duration_ms, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())',
         yustam_chat_messages_table()
     );
     $stmt = $db->prepare($sql);
     if (!$stmt) {
         throw new RuntimeException('Unable to prepare message insert.');
     }
-    $stmt->bind_param('ssssssss', $chatId, $senderUid, $senderType, $senderName, $receiverUid, $receiverType, $text, $imageUrl);
+    $audioDurationValue = $audioDurationMs !== null ? (int) $audioDurationMs : 0;
+    $stmt->bind_param(
+        'sssssssssi',
+        $chatId,
+        $senderUid,
+        $senderType,
+        $senderName,
+        $receiverUid,
+        $receiverType,
+        $text,
+        $imageUrl,
+        $audioUrl,
+        $audioDurationValue
+    );
     $stmt->execute();
     $messageId = (int) $stmt->insert_id;
     $stmt->close();
@@ -252,7 +285,13 @@ function yustam_chat_insert_message(
             $preview = substr($text, 0, 120);
         }
     } else {
-        $preview = $imageUrl ? '[Photo]' : '';
+        if ($audioUrl) {
+            $preview = '[Voice message]';
+        } elseif ($imageUrl) {
+            $preview = '[Photo]';
+        } else {
+            $preview = '';
+        }
     }
 
     $updateSql = sprintf(
@@ -277,6 +316,8 @@ function yustam_chat_insert_message(
         'receiver_type' => $receiverType,
         'message_text' => $text,
         'image_url' => $imageUrl,
+        'audio_url' => $audioUrl,
+        'audio_duration_ms' => $audioDurationMs,
         'created_at' => date('Y-m-d H:i:s')
     ];
 }
@@ -288,7 +329,7 @@ function yustam_chat_fetch_messages(mysqli $db, string $chatId, ?int $afterId = 
     $types = '';
 
     $sql = sprintf(
-        'SELECT id, chat_id, sender_uid, sender_type, sender_name, receiver_uid, receiver_type, message_text, image_url, created_at, seen, seen_at
+        'SELECT id, chat_id, sender_uid, sender_type, sender_name, receiver_uid, receiver_type, message_text, image_url, audio_url, audio_duration_ms, created_at, seen, seen_at
          FROM `%s`
          WHERE chat_id = ?',
         yustam_chat_messages_table()

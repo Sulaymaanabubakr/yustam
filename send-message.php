@@ -51,6 +51,8 @@ $productImage = trim((string)($payload['product_image'] ?? ''));
 $chatId = trim((string)($payload['chat_id'] ?? ''));
 $messageText = trim((string)($payload['message'] ?? ''));
 $imageUrl = trim((string)($payload['image_url'] ?? ''));
+$audioUrl = trim((string)($payload['audio_url'] ?? ''));
+$audioDurationMs = isset($payload['audio_duration_ms']) ? (int) $payload['audio_duration_ms'] : null;
 $buyerNumeric = isset($payload['buyer_numeric_id']) ? (int)$payload['buyer_numeric_id'] : null;
 $vendorNumeric = isset($payload['vendor_numeric_id']) ? (int)$payload['vendor_numeric_id'] : null;
 
@@ -64,9 +66,9 @@ if ($chatId === '' || $buyerUid === '' || $vendorUid === '') {
     exit;
 }
 
-if ($messageText === '' && $imageUrl === '') {
+if ($messageText === '' && $imageUrl === '' && $audioUrl === '') {
     http_response_code(422);
-    echo json_encode(['success' => false, 'message' => 'Write a message or attach an image.']);
+    echo json_encode(['success' => false, 'message' => 'Write a message or attach a file.']);
     exit;
 }
 
@@ -167,7 +169,9 @@ try {
         $receiverUid,
         $receiverType,
         $messageText !== '' ? $messageText : null,
-        $imageUrl !== '' ? $imageUrl : null
+        $imageUrl !== '' ? $imageUrl : null,
+        $audioUrl !== '' ? $audioUrl : null,
+        $audioDurationMs
     );
 
     echo json_encode([
