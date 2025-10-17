@@ -170,6 +170,7 @@ $threadBootstrapJson = json_encode($threadBootstrap, JSON_UNESCAPED_UNICODE | JS
             margin: 0 auto;
             width: 100%;
             height: 100vh;
+            position: relative;
         }
 
         header.chat-header {
@@ -192,6 +193,8 @@ $threadBootstrapJson = json_encode($threadBootstrap, JSON_UNESCAPED_UNICODE | JS
             overflow: hidden;
             background: linear-gradient(135deg, rgba(243, 115, 30, 0.22), rgba(0, 77, 64, 0.18));
             flex-shrink: 0;
+            display: grid;
+            place-items: center;
         }
 
         .header-avatar img {
@@ -257,6 +260,11 @@ $threadBootstrapJson = json_encode($threadBootstrap, JSON_UNESCAPED_UNICODE | JS
             overflow-y: auto;
             padding: 18px 20px 100px;
             scroll-behavior: smooth;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            align-items: flex-start;
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0.64));
         }
 
         .chat-scroll::-webkit-scrollbar {
@@ -269,10 +277,10 @@ $threadBootstrapJson = json_encode($threadBootstrap, JSON_UNESCAPED_UNICODE | JS
         }
 
         .message {
-            display: inline-flex;
+            display: flex;
             flex-direction: column;
-            max-width: min(420px, 75%);
-            margin-bottom: 12px;
+            max-width: min(420px, 78%);
+            margin: 0;
             padding: 12px 16px;
             border-radius: 18px;
             gap: 6px;
@@ -280,17 +288,27 @@ $threadBootstrapJson = json_encode($threadBootstrap, JSON_UNESCAPED_UNICODE | JS
             box-shadow: 0 12px 24px rgba(0, 0, 0, 0.08);
             line-height: 1.4;
             font-size: 0.95rem;
+            background: var(--bubble-received);
+            color: var(--ink);
+            align-self: flex-start;
+            transition: transform 160ms ease, box-shadow 160ms ease;
         }
 
         .message.sent {
             margin-left: auto;
             background: var(--bubble-sent);
             color: #fefefe;
+            align-self: flex-end;
         }
 
         .message.received {
             background: var(--bubble-received);
             color: var(--ink);
+        }
+
+        .message:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 16px 28px rgba(0, 0, 0, 0.12);
         }
 
         .message .meta {
@@ -307,6 +325,8 @@ $threadBootstrapJson = json_encode($threadBootstrap, JSON_UNESCAPED_UNICODE | JS
             overflow: hidden;
             max-height: 280px;
             display: block;
+            background: rgba(0, 0, 0, 0.08);
+            margin: -4px -4px 4px;
         }
 
         .message-image img {
@@ -320,6 +340,9 @@ $threadBootstrapJson = json_encode($threadBootstrap, JSON_UNESCAPED_UNICODE | JS
             display: flex;
             align-items: center;
             gap: 12px;
+            background: rgba(255, 255, 255, 0.12);
+            border-radius: 14px;
+            padding: 10px 14px;
         }
 
         .voice-wave {
@@ -341,6 +364,29 @@ $threadBootstrapJson = json_encode($threadBootstrap, JSON_UNESCAPED_UNICODE | JS
             transition: width 120ms linear;
         }
 
+        .voice-player button {
+            border: none;
+            background: rgba(0, 0, 0, 0.08);
+            color: var(--emerald);
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+            cursor: pointer;
+        }
+
+        .message.sent .voice-player {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .message.sent .voice-player button {
+            background: rgba(255, 255, 255, 0.28);
+            color: var(--emerald);
+        }
+
         .typing-banner {
             position: absolute;
             bottom: 100px;
@@ -349,6 +395,7 @@ $threadBootstrapJson = json_encode($threadBootstrap, JSON_UNESCAPED_UNICODE | JS
             display: flex;
             justify-content: center;
             pointer-events: none;
+            padding: 0 20px;
         }
 
         .typing-pill {
@@ -381,7 +428,8 @@ $threadBootstrapJson = json_encode($threadBootstrap, JSON_UNESCAPED_UNICODE | JS
         .composer-input {
             display: flex;
             flex-direction: column;
-            gap: 8px;
+            gap: 10px;
+            align-items: stretch;
         }
 
         .composer button {
@@ -401,7 +449,7 @@ $threadBootstrapJson = json_encode($threadBootstrap, JSON_UNESCAPED_UNICODE | JS
         .composer textarea {
             resize: none;
             border: none;
-            background: rgba(0, 0, 0, 0.04);
+            background: rgba(255, 255, 255, 0.9);
             padding: 12px 14px;
             border-radius: 18px;
             font-size: 0.95rem;
@@ -410,10 +458,13 @@ $threadBootstrapJson = json_encode($threadBootstrap, JSON_UNESCAPED_UNICODE | JS
             line-height: 1.4;
             min-height: 44px;
             outline: none;
+            color: var(--ink);
+            box-shadow: inset 0 0 0 1px rgba(0, 77, 64, 0.08);
         }
 
         .composer textarea:focus {
             background: rgba(0, 77, 64, 0.08);
+            box-shadow: inset 0 0 0 1px rgba(0, 77, 64, 0.28);
         }
 
         .attachment-preview {
@@ -421,6 +472,7 @@ $threadBootstrapJson = json_encode($threadBootstrap, JSON_UNESCAPED_UNICODE | JS
             gap: 12px;
             padding: 0 16px;
             margin-bottom: 6px;
+            flex-wrap: wrap;
         }
 
         .attachment-preview figure {
@@ -430,6 +482,7 @@ $threadBootstrapJson = json_encode($threadBootstrap, JSON_UNESCAPED_UNICODE | JS
             border-radius: 18px;
             overflow: hidden;
             margin: 0;
+            box-shadow: 0 10px 18px rgba(0, 0, 0, 0.12);
         }
 
         .attachment-preview img {
@@ -468,10 +521,16 @@ $threadBootstrapJson = json_encode($threadBootstrap, JSON_UNESCAPED_UNICODE | JS
             gap: 6px;
             cursor: pointer;
             box-shadow: 0 16px 32px rgba(0, 0, 0, 0.18);
+            transition: transform 120ms ease, box-shadow 120ms ease;
         }
 
         .scroll-bottom.is-visible {
             display: inline-flex;
+        }
+
+        .scroll-bottom:is(:hover, :focus-visible) {
+            transform: translateY(-2px);
+            box-shadow: 0 20px 36px rgba(0, 0, 0, 0.22);
         }
 
         .offline-banner {
@@ -498,6 +557,39 @@ $threadBootstrapJson = json_encode($threadBootstrap, JSON_UNESCAPED_UNICODE | JS
             .composer {
                 padding-bottom: calc(16px + env(safe-area-inset-bottom));
             }
+
+            .voice-player {
+                flex-wrap: wrap;
+                gap: 10px;
+            }
+        }
+
+        .yustam-toast-root {
+            position: fixed;
+            inset: auto 50% 22px auto;
+            translate: 50% 0;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            z-index: 4000;
+        }
+
+        .yustam-toast {
+            background: rgba(0, 77, 64, 0.95);
+            color: #fefefe;
+            padding: 14px 18px;
+            border-radius: 16px;
+            min-width: 240px;
+            transform: translateY(16px);
+            opacity: 0;
+            transition: transform 220ms ease, opacity 220ms ease;
+            box-shadow: 0 18px 36px rgba(0, 0, 0, 0.25);
+            text-align: center;
+        }
+
+        .yustam-toast.is-visible {
+            transform: translateY(0);
+            opacity: 1;
         }
     </style>
 </head>

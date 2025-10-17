@@ -65,9 +65,18 @@ const counterpartyLabel = counterparty.name || (role === 'buyer' ? 'Vendor' : 'B
 chatTitleEl.textContent = counterpartyLabel;
 chatSubtitleEl.textContent = listing.title || 'Listing';
 
-if (listing.image) {
-  headerAvatar.querySelector('img').src = listing.image;
+function updateHeaderMedia() {
+  if (!headerAvatar) return;
+  const imgEl = headerAvatar.querySelector('img');
+  if (!imgEl) return;
+  if (listing.image) {
+    imgEl.src = listing.image;
+  } else if (counterparty.avatar) {
+    imgEl.src = counterparty.avatar;
+  }
 }
+
+updateHeaderMedia();
 
 function updateOfflineBanner() {
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {
@@ -267,18 +276,13 @@ async function loadChatSummary() {
     if (!summary) return;
     if (summary.listing_title) {
       listing.title = summary.listing_title;
-      chatSubtitleEl.textContent = listing.title;
-    } else if (!listing.title) {
-      chatSubtitleEl.textContent = 'Listing';
     }
     if (summary.listing_image) {
       listing.image = summary.listing_image;
-      headerAvatar.querySelector('img').src = listing.image;
     }
     if (role === 'buyer') {
       if (summary.vendor_name) {
         counterparty.name = summary.vendor_name;
-        chatTitleEl.textContent = counterparty.name;
       }
       if (summary.vendor_avatar) {
         counterparty.avatar = summary.vendor_avatar;
@@ -286,12 +290,14 @@ async function loadChatSummary() {
     } else {
       if (summary.buyer_name) {
         counterparty.name = summary.buyer_name;
-        chatTitleEl.textContent = counterparty.name;
       }
       if (summary.buyer_avatar) {
         counterparty.avatar = summary.buyer_avatar;
       }
     }
+    chatTitleEl.textContent = counterparty.name || counterpartyLabel;
+    chatSubtitleEl.textContent = listing.title || 'Listing';
+    updateHeaderMedia();
   } catch (error) {
     console.error('Unable to load chat summary', error);
   }
@@ -446,6 +452,11 @@ async function stopVoiceRecording() {
       duration,
       buyer_uid: buyerIdentifier,
       vendor_uid: vendorIdentifier,
+      buyer_name: role === 'buyer' ? viewer.name : counterparty.name,
+      vendor_name: role === 'vendor' ? viewer.name : counterparty.name,
+      listing_id: listingId,
+      listing_title: listing.title,
+      listing_image: listing.image,
     });
     scrollToBottom(true);
   } catch (error) {
