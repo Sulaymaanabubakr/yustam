@@ -63,130 +63,125 @@ $chatContext = [
     <style>
         :root {
             color-scheme: light;
-            --buyer-bg: linear-gradient(180deg, #f8f2ea 0%, #ffffff 100%);
-            --buyer-card: rgba(255, 255, 255, 0.82);
-            --buyer-border: rgba(29, 78, 67, 0.18);
-            --buyer-accent: #047857;
-            --buyer-accent-soft: rgba(6, 95, 70, 0.08);
-            --buyer-text: #1f2937;
-            --buyer-subtle: rgba(17, 24, 39, 0.68);
-            --buyer-glass: rgba(255, 255, 255, 0.65);
-            --buyer-shadow: 0 24px 40px rgba(15, 23, 42, 0.12);
-            --buyer-chip-bg: rgba(16, 185, 129, 0.12);
-            --buyer-chip-text: #047857;
+            font-synthesis: none;
         }
 
-        * {
+        *, *::before, *::after {
             box-sizing: border-box;
         }
 
         body {
             margin: 0;
             min-height: 100vh;
-            font-family: 'Inter', system-ui, sans-serif;
-            background: var(--buyer-bg);
-            color: var(--buyer-text);
-            padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
-        }
-
-        header {
+            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--page-bg, linear-gradient(160deg, #e3f6ef 0%, #fbfefc 70%));
+            color: var(--text-primary, #0f172a);
             display: flex;
-            flex-direction: column;
-            gap: 18px;
-            padding: 32px clamp(16px, 7vw, 120px) 12px;
+            justify-content: center;
+            align-items: center;
+            padding: clamp(18px, 4vw, 38px);
         }
 
-        .header-top {
+        body.chat-index {
+            --accent: #047857;
+            --accent-strong: #0f766e;
+            --accent-soft: rgba(4, 120, 87, 0.12);
+            --page-bg: linear-gradient(170deg, rgba(4, 120, 87, 0.08) 0%, rgba(255, 255, 255, 0.9) 100%);
+            --surface: rgba(255, 255, 255, 0.92);
+            --surface-alt: rgba(4, 120, 87, 0.08);
+            --surface-strong: rgba(255, 255, 255, 0.75);
+            --text-primary: #0f172a;
+            --text-secondary: rgba(15, 23, 42, 0.7);
+            --divider: rgba(15, 23, 42, 0.06);
+            --badge-bg: #047857;
+            --badge-text: #f0fdf4;
+            --time-color: rgba(15, 23, 42, 0.55);
+            --shadow-soft: 0 26px 60px rgba(4, 120, 87, 0.18);
+        }
+
+        body.chat-index--buyer {
+            --page-bg: radial-gradient(circle at top left, rgba(4, 120, 87, 0.08), transparent 65%), linear-gradient(170deg, #f3fdf9 0%, #ffffff 70%);
+        }
+
+        body.chat-index--vendor {
+            --accent: #14b8a6;
+            --accent-strong: #0f766e;
+            --accent-soft: rgba(20, 184, 166, 0.18);
+            --page-bg: radial-gradient(circle at 80% 10%, rgba(15, 118, 110, 0.25), transparent 55%), linear-gradient(160deg, #03131a 0%, #0a2129 60%);
+            --surface: rgba(12, 26, 34, 0.88);
+            --surface-alt: rgba(4, 120, 87, 0.22);
+            --surface-strong: rgba(12, 24, 30, 0.82);
+            --text-primary: #e2f1f0;
+            --text-secondary: rgba(226, 241, 240, 0.7);
+            --divider: rgba(148, 210, 203, 0.2);
+            --badge-bg: #38d39f;
+            --badge-text: #03221d;
+            --time-color: rgba(178, 228, 220, 0.75);
+            --shadow-soft: 0 28px 70px rgba(3, 30, 33, 0.55);
+        }
+
+        .chat-window {
+            width: min(960px, 100%);
+            display: grid;
+            grid-template-rows: auto auto 1fr;
+            background: var(--surface);
+            border-radius: 28px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            box-shadow: var(--shadow-soft);
+            backdrop-filter: blur(16px);
+        }
+
+        .chat-header {
+            background: linear-gradient(135deg, rgba(4, 120, 87, 0.92), rgba(14, 165, 120, 0.78));
+            color: #f0fdf4;
+            padding: 24px clamp(20px, 5vw, 36px) 20px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            gap: 16px;
+            gap: 18px;
         }
 
-        h1 {
+        body.chat-index--vendor .chat-header {
+            background: linear-gradient(135deg, rgba(20, 184, 166, 0.9), rgba(14, 165, 233, 0.8));
+            color: #e6fffb;
+        }
+
+        body.chat-index--vendor .chat-header__titles p {
+            color: rgba(230, 255, 251, 0.86);
+        }
+
+        .chat-header__titles h1 {
             margin: 0;
-            font-size: clamp(1.8rem, 4vw, 2.6rem);
+            font-size: clamp(1.4rem, 3vw, 1.95rem);
             font-weight: 700;
-            letter-spacing: -0.02em;
+            letter-spacing: -0.01em;
         }
 
-        .subtitle {
-            margin: 0;
-            font-size: 0.95rem;
-            color: var(--buyer-subtle);
+        .chat-header__titles p {
+            margin: 6px 0 0;
+            color: rgba(240, 253, 244, 0.88);
+            font-size: 0.94rem;
         }
 
-        .search-bar {
-            position: relative;
-            background: var(--buyer-glass);
-            border: 1px solid var(--buyer-border);
-            border-radius: 20px;
-            padding: 12px 20px;
+        .chat-header__actions {
             display: flex;
             align-items: center;
             gap: 12px;
-            box-shadow: var(--buyer-shadow);
-            backdrop-filter: blur(14px);
-        }
-
-        .search-bar input {
-            border: none;
-            outline: none;
-            flex: 1;
-            font-size: 1rem;
-            background: transparent;
-            color: inherit;
-        }
-
-        main {
-            padding: 0 clamp(16px, 7vw, 120px) 80px;
-        }
-
-        .chat-list {
-            display: grid;
-            gap: 16px;
-        }
-
-        .chat-card {
-            display: grid;
-            grid-template-columns: auto 1fr auto;
-            gap: 16px;
-            align-items: center;
-            padding: 18px;
-            border-radius: 24px;
-            background: var(--buyer-card);
-            border: 1px solid var(--buyer-border);
-            backdrop-filter: blur(18px);
-            box-shadow: var(--buyer-shadow);
-            cursor: pointer;
-            text-decoration: none;
-            color: inherit;
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
-        }
-
-        .chat-card:hover,
-        .chat-card:focus-visible {
-            transform: translateY(-3px);
-            box-shadow: 0 30px 45px rgba(15, 23, 42, 0.18);
-        }
-
-        .chat-card:focus-visible {
-            outline: 2px solid rgba(16, 185, 129, 0.6);
-            outline-offset: 4px;
         }
 
         .chat-avatar {
-            position: relative;
-            width: 64px;
-            height: 64px;
-            border-radius: 22px;
-            overflow: hidden;
-            background: linear-gradient(135deg, rgba(6, 95, 70, 0.92), rgba(59, 130, 246, 0.42));
+            width: 54px;
+            height: 54px;
+            border-radius: 18px;
+            background: rgba(255, 255, 255, 0.22);
+            border: 1px solid rgba(255, 255, 255, 0.35);
             display: grid;
             place-items: center;
-            color: #f9fafb;
             font-weight: 600;
-            font-size: 1.2rem;
+            letter-spacing: 0.02em;
+            color: inherit;
+            overflow: hidden;
         }
 
         .chat-avatar img {
@@ -195,66 +190,135 @@ $chatContext = [
             object-fit: cover;
         }
 
-        .chat-info {
+        .chat-tools {
+            padding: 18px clamp(18px, 4vw, 32px);
+            background: var(--surface-strong);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            border-bottom: 1px solid var(--divider);
+        }
+
+        .chat-search {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            background: rgba(255, 255, 255, 0.18);
+            border-radius: 18px;
+            border: 1px solid rgba(15, 23, 42, 0.05);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+        }
+
+        body.chat-index--vendor .chat-search {
+            background: rgba(4, 120, 87, 0.18);
+            border-color: rgba(20, 184, 166, 0.28);
+        }
+
+        .chat-search i {
+            font-size: 1.05rem;
+            color: var(--accent);
+        }
+
+        .chat-search input {
+            border: none;
+            background: transparent;
+            color: var(--text-primary);
+            font-size: 1rem;
+            width: 100%;
+            outline: none;
+        }
+
+        .chat-scroll {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .chat-list {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-item {
+            display: grid;
+            grid-template-columns: auto 1fr auto;
+            gap: 14px;
+            padding: 18px clamp(20px, 4vw, 28px);
+            cursor: pointer;
+            transition: background 0.18s ease;
+        }
+
+        .chat-item:not(:last-child) {
+            border-bottom: 1px solid var(--divider);
+        }
+
+        .chat-item:hover,
+        .chat-item:focus-visible {
+            background: rgba(4, 120, 87, 0.08);
+            outline: none;
+        }
+
+        .chat-item__avatar {
+            width: 52px;
+            height: 52px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, rgba(4, 120, 87, 0.18), rgba(14, 165, 120, 0.22));
+            display: grid;
+            place-items: center;
+            font-weight: 600;
+            color: var(--accent);
+            overflow: hidden;
+        }
+
+        body.chat-index--vendor .chat-item__avatar {
+            background: linear-gradient(135deg, rgba(13, 148, 136, 0.3), rgba(56, 189, 248, 0.32));
+            color: #d5fffa;
+        }
+
+        .chat-item__avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .chat-item__content {
             display: flex;
             flex-direction: column;
             gap: 6px;
+            min-width: 0;
         }
 
-        .chat-info h2 {
-            margin: 0;
-            font-size: 1.05rem;
-            font-weight: 600;
-        }
-
-        .chat-info .listing {
+        .chat-item__title {
             display: flex;
             align-items: center;
             gap: 6px;
-            font-size: 0.86rem;
-            color: var(--buyer-subtle);
-        }
-
-        .chat-info .last-message {
-            font-size: 0.94rem;
-            color: rgba(17, 24, 39, 0.72);
+            font-weight: 600;
+            font-size: 1rem;
+            color: var(--text-primary);
+            white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
-            max-width: clamp(200px, 40vw, 520px);
         }
 
-        .chat-meta {
-            display: flex;
-            align-items: flex-end;
-            flex-direction: column;
-            gap: 10px;
-            font-size: 0.85rem;
-            color: rgba(17, 24, 39, 0.6);
+        .chat-item__subtitle {
+            margin: 0;
+            font-size: 0.92rem;
+            color: var(--text-secondary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
-        .chat-meta .typing {
+        .chat-item__subtitle .typing-dots {
+            color: var(--accent);
+        }
+
+        .chat-item__typing {
             display: inline-flex;
             align-items: center;
             gap: 6px;
-            padding: 4px 10px;
-            border-radius: 999px;
-            background: var(--buyer-chip-bg);
-            color: var(--buyer-chip-text);
-            font-size: 0.78rem;
-            font-weight: 600;
-        }
-
-        .chat-meta .unread {
-            min-width: 32px;
-            padding: 4px 10px;
-            border-radius: 999px;
-            background: var(--buyer-accent);
-            color: white;
-            font-weight: 600;
-            text-align: center;
+            color: var(--accent);
+            font-weight: 500;
         }
 
         .typing-dots {
@@ -266,71 +330,116 @@ $chatContext = [
             width: 6px;
             height: 6px;
             border-radius: 50%;
-            background: var(--buyer-accent);
-            opacity: 0.4;
-            animation: typingBounce 1s infinite;
+            background: currentColor;
+            opacity: 0.45;
+            animation: typingBounce 1.2s infinite ease-in-out;
         }
 
         .typing-dots span:nth-child(2) {
-            animation-delay: 0.16s;
+            animation-delay: 0.2s;
         }
 
         .typing-dots span:nth-child(3) {
-            animation-delay: 0.32s;
+            animation-delay: 0.4s;
         }
 
-        .chat-thumbnail {
-            position: relative;
-            width: 64px;
-            height: 64px;
-            border-radius: 18px;
+        .chat-item__listing {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.85rem;
+            color: var(--time-color);
+            white-space: nowrap;
             overflow: hidden;
-            box-shadow: inset 0 0 0 1px rgba(6, 95, 70, 0.12);
+            text-overflow: ellipsis;
         }
 
-        .chat-thumbnail img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
+        .chat-item__meta {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 10px;
+            font-size: 0.8rem;
+            color: var(--time-color);
         }
 
-        .chat-card .chat-thumbnail {
-            grid-column: 1;
-            grid-row: 1 / span 3;
-            order: -1;
-        }
-
-        .empty-state {
-            margin-top: 48px;
-            padding: 56px 24px;
-            border-radius: 30px;
-            background: rgba(255, 255, 255, 0.68);
-            border: 1px dashed var(--buyer-border);
-            text-align: center;
-            display: grid;
-            gap: 12px;
-            justify-items: center;
-            color: var(--buyer-subtle);
-        }
-
-        .empty-state h2 {
-            margin: 0;
+        .chat-item__time {
             font-weight: 600;
-            color: var(--buyer-text);
         }
 
-        .loader {
+        .chat-item__badge {
+            min-width: 24px;
+            padding: 2px 8px;
+            border-radius: 999px;
+            background: var(--badge-bg);
+            color: var(--badge-text);
+            font-weight: 600;
+            text-align: center;
+            font-size: 0.72rem;
+        }
+
+        .chat-item__status {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            color: var(--time-color);
+            font-size: 0.74rem;
+        }
+
+        .chat-item__status i {
+            font-size: 0.9rem;
+        }
+
+        .chat-placeholder {
+            display: none;
+            padding: 64px 24px;
+            text-align: center;
+            color: var(--text-secondary);
+        }
+
+        .chat-placeholder[hidden] {
+            display: none !important;
+        }
+
+        .chat-placeholder.is-visible {
             display: grid;
             place-items: center;
-            padding: 48px 0;
+            gap: 12px;
+        }
+
+        .chat-placeholder i {
+            font-size: 2.4rem;
+            color: var(--accent-strong);
+        }
+
+        .chat-placeholder h2 {
+            margin: 0;
+            font-size: 1.12rem;
+            color: var(--text-primary);
+        }
+
+        .chat-placeholder p {
+            margin: 0;
+            max-width: 340px;
+            font-size: 0.95rem;
+        }
+
+        .chat-placeholder button {
+            border: none;
+            background: var(--accent);
+            color: var(--badge-text);
+            padding: 8px 18px;
+            border-radius: 999px;
+            font-weight: 600;
+            cursor: pointer;
         }
 
         .spinner {
-            width: 32px;
-            height: 32px;
+            width: 40px;
+            height: 40px;
             border-radius: 50%;
-            border: 3px solid rgba(5, 150, 105, 0.18);
-            border-top-color: var(--buyer-accent);
+            border: 3px solid rgba(4, 120, 87, 0.18);
+            border-top-color: var(--accent);
             animation: spin 1s linear infinite;
         }
 
@@ -352,86 +461,73 @@ $chatContext = [
         }
 
         @media (max-width: 720px) {
-            header {
-                padding: 24px 18px 12px;
+            body {
+                padding: 0;
+                background: var(--surface);
             }
 
-            main {
-                padding: 0 18px 120px;
+            .chat-window {
+                border-radius: 0;
+                min-height: 100vh;
             }
 
-            .chat-card {
-                grid-template-columns: auto 1fr;
+            .chat-header {
+                padding: 20px 18px 16px;
             }
 
-            .chat-card .chat-thumbnail {
-                display: none;
+            .chat-tools {
+                padding: 12px 16px;
             }
-        }
 
-        .chat-toast-root {
-            position: fixed;
-            bottom: clamp(16px, 4vw, 32px);
-            left: 50%;
-            transform: translateX(-50%);
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            z-index: 9999;
-            pointer-events: none;
-        }
-
-        .chat-toast {
-            background: rgba(17, 24, 39, 0.82);
-            color: white;
-            padding: 12px 20px;
-            border-radius: 999px;
-            opacity: 0;
-            transform: translateY(12px);
-            transition: opacity 0.26s ease, transform 0.26s ease;
-            pointer-events: auto;
-        }
-
-        .chat-toast.is-visible {
-            opacity: 1;
-            transform: translateY(0);
+            .chat-item {
+                padding: 16px;
+            }
         }
     </style>
 </head>
-<body data-buyer-uid="<?= htmlspecialchars($buyerUid, ENT_QUOTES, 'UTF-8'); ?>">
-<header>
-    <div class="header-top">
-        <div>
+<body class="chat-index chat-index--buyer" data-buyer-uid="<?= htmlspecialchars($buyerUid, ENT_QUOTES, 'UTF-8'); ?>">
+<div class="chat-window">
+    <header class="chat-header">
+        <div class="chat-header__titles">
             <h1>Messages</h1>
-            <p class="subtitle">Conversations with your vendors</p>
+            <p>Stay connected with your vendors</p>
         </div>
-        <div class="chat-avatar" aria-hidden="true">
-            <?php if ($buyerAvatar !== ''): ?>
-                <img src="<?= htmlspecialchars($buyerAvatar, ENT_QUOTES, 'UTF-8'); ?>" alt="<?= htmlspecialchars($buyerName, ENT_QUOTES, 'UTF-8'); ?>">
-            <?php else: ?>
-                <?= htmlspecialchars(substr($buyerName, 0, 2) ?: 'BY', ENT_QUOTES, 'UTF-8'); ?>
-            <?php endif; ?>
+        <div class="chat-header__actions">
+            <div class="chat-avatar" aria-hidden="true">
+                <?php if ($buyerAvatar !== ''): ?>
+                    <img src="<?= htmlspecialchars($buyerAvatar, ENT_QUOTES, 'UTF-8'); ?>" alt="<?= htmlspecialchars($buyerName, ENT_QUOTES, 'UTF-8'); ?>">
+                <?php else: ?>
+                    <?= htmlspecialchars(substr($buyerName, 0, 2) ?: 'BY', ENT_QUOTES, 'UTF-8'); ?>
+                <?php endif; ?>
+            </div>
         </div>
+    </header>
+    <div class="chat-tools">
+        <label class="chat-search" for="chat-search">
+            <i class="ri-search-line" aria-hidden="true"></i>
+            <input id="chat-search" type="search" placeholder="Search vendors or listings" autocomplete="off">
+        </label>
     </div>
-    <label class="search-bar" for="chat-search">
-        <i class="ri-search-line" aria-hidden="true"></i>
-        <input id="chat-search" type="search" placeholder="Search vendors or listings" autocomplete="off">
-    </label>
-</header>
-<main>
-    <section class="chat-list" id="chat-list" role="list"></section>
-    <div class="loader" id="chat-loader" hidden>
-        <div class="spinner" role="status" aria-label="Loading chats"></div>
-    </div>
-    <div class="empty-state" id="chat-empty" hidden>
-        <span style="font-size:2rem">💬</span>
-        <h2>No messages yet</h2>
-        <p>Start a conversation from a product page to connect with vendors.</p>
-    </div>
-    <div class="loader" id="chat-error" hidden>
-        <p role="alert">Unable to load chats. <button type="button" id="chat-retry">Retry</button></p>
-    </div>
-</main>
+    <main class="chat-scroll">
+        <section class="chat-list" id="chat-list" role="list"></section>
+
+        <div class="chat-placeholder is-visible" id="chat-loader" hidden>
+            <div class="spinner" role="status" aria-label="Loading chats"></div>
+        </div>
+
+        <div class="chat-placeholder is-visible" id="chat-empty" hidden>
+            <i class="ri-chat-smile-2-line" aria-hidden="true"></i>
+            <h2>No messages yet</h2>
+            <p>Start a conversation from a product page to connect with vendors.</p>
+        </div>
+
+        <div class="chat-placeholder is-visible" id="chat-error" hidden>
+            <i class="ri-signal-wifi-error-line" aria-hidden="true"></i>
+            <p role="alert">Unable to load chats.</p>
+            <button type="button" id="chat-retry">Retry</button>
+        </div>
+    </main>
+</div>
 <script>
     window.__CHAT_CONTEXT__ = <?= json_encode($chatContext, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 </script>

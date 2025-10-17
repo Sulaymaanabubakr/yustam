@@ -24,6 +24,11 @@ const attachmentRow = document.getElementById('attachment-row');
 const participantNameEl = document.getElementById('participant-name');
 const participantStatusEl = document.getElementById('participant-status');
 const backButton = document.getElementById('chat-back-button');
+const recordButton = document.getElementById('record-button');
+const recordingIndicator = document.getElementById('recording-indicator');
+const recordingTimerEl = document.getElementById('recording-timer');
+const recordingCancelBtn = document.getElementById('recording-cancel');
+const recordingSendBtn = document.getElementById('recording-send');
 
 if (!root) {
   throw new Error('Chat root element not found.');
@@ -165,6 +170,270 @@ function ensureSummaryWithMetadata() {
   });
 }
 
+function formatDuration(ms) {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
+
+function resetRecordingUI() {
+  state.recording = false;
+  state.recordingSendOnStop = false;
+  if (state.recordingTimer) {
+    window.clearInterval(state.recordingTimer);
+    state.recordingTimer = null;
+  }
+  if (recordingIndicator) {
+    recordingIndicator.hidden = true;
+    recordingIndicator.classList.remove('is-uploading');
+  }
+  if (recordingTimerEl) {
+    recordingTimerEl.textContent = '0:00';
+  }
+  if (recordButton) {
+    recordButton.classList.remove('is-recording');
+    recordButton.innerHTML = '<i class="ri-mic-line"></i>';
+    recordButton.disabled = false;
+  }
+  if (recordingCancelBtn) recordingCancelBtn.disabled = false;
+  if (recordingSendBtn) recordingSendBtn.disabled = false;
+  if (state.recordingStream) {
+    state.recordingStream.getTracks().forEach((track) => track.stop());
+    state.recordingStream = null;
+  }
+  state.mediaRecorder = null;
+  state.audioChunks = [];
+  state.recordingStartTs = 0;
+  state.pendingAudioUpload = null;
+  updateSendButton();
+}
+
+function updateRecordingTimer() {
+  if (!state.recording || !state.recordingStartTs || !recordingTimerEl) return;
+  const elapsed = Date.now() - state.recordingStartTs;
+  recordingTimerEl.textContent = formatDuration(elapsed);
+}
+
+function showRecordingUI() {
+  if (recordButton) {
+    recordButton.classList.add('is-recording');
+    recordButton.innerHTML = '<i class="ri-stop-circle-line"></i>';
+  }
+  if (recordingIndicator) {
+    recordingIndicator.hidden = false;
+  }
+  updateRecordingTimer();
+  if (state.recordingTimer) {
+    window.clearInterval(state.recordingTimer);
+  }
+  state.recordingTimer = window.setInterval(updateRecordingTimer, 300);
+  updateSendButton();
+}
+
+async function startRecording() {
+  if (state.recording) {
+    return;
+  }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    showToast('Your browser does not support voice messages.');
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    state.recordingStream = stream;
+    state.audioChunks = [];
+    const mediaRecorder = new MediaRecorder(stream);
+    state.mediaRecorder = mediaRecorder;
+    mediaRecorder.addEventListener('dataavailable', (event) => {
+      if (event.data && event.data.size > 0) {
+        state.audioChunks.push(event.data);
+      }
+    });
+    mediaRecorder.addEventListener('stop', () => finalizeRecording());
+    mediaRecorder.start();
+    state.recording = true;
+    state.recordingSendOnStop = true;
+    state.recordingStartTs = Date.now();
+    showRecordingUI();
+  } catch (error) {
+    console.error('[chat] startRecording failed', error);
+    showToast('Microphone access is required for voice messages.');
+    resetRecordingUI();
+  }
+}
+
+function stopRecording(shouldSend = true) {
+  if (!state.recording) return;
+  state.recordingSendOnStop = shouldSend;
+  if (state.mediaRecorder && state.mediaRecorder.state !== 'inactive') {
+    state.mediaRecorder.stop();
+  } else {
+    finalizeRecording();
+  }
+}
+
+function finalizeRecording() {
+  if (!state.recording) {
+    resetRecordingUI();
+    return;
+  }
+  if (!state.recordingSendOnStop) {
+    resetRecordingUI();
+    return;
+  }
+  if (!state.audioChunks.length) {
+    showToast('Recording was too short.');
+    resetRecordingUI();
+    return;
+  }
+  if (recordingIndicator) {
+    recordingIndicator.classList.add('is-uploading');
+  }
+  if (recordingCancelBtn) recordingCancelBtn.disabled = true;
+  if (recordingSendBtn) recordingSendBtn.disabled = true;
+  if (recordButton) recordButton.disabled = true;
+
+  const blob = new Blob(state.audioChunks, { type: 'audio/webm' });
+  const durationMs = Math.max(0, Date.now() - state.recordingStartTs);
+
+  updateSendButton();
+  state.pendingAudioUpload = uploadToCloudinary(blob, {
+    folder: 'yustam/chats/audio',
+    tags: ['chat', 'audio', chatId],
+  })
+    .then(async (result) => {
+      await sendMessage(chatId, { audioUrl: result.url, audioDurationMs: durationMs });
+      showToast('Voice message sent.');
+    })
+    .catch((error) => {
+      console.error('[chat] voice upload failed', error);
+      showToast('Unable to send voice message.');
+    })
+    .finally(() => {
+      resetRecordingUI();
+    });
+}
+
+function cancelRecording() {
+  if (!state.recording) return;
+  state.recordingSendOnStop = false;
+  if (state.mediaRecorder && state.mediaRecorder.state !== 'inactive') {
+    state.mediaRecorder.stop();
+  } else {
+    resetRecordingUI();
+  }
+  showToast('Recording cancelled.');
+  updateSendButton();
+}
+
+function stopActiveAudio(resetPosition = true) {
+  if (!state.currentAudio) return;
+  const { audio, playButton, progressBar, timer, durationMs } = state.currentAudio;
+  try {
+    audio.pause();
+    if (resetPosition) {
+      audio.currentTime = 0;
+      if (progressBar) progressBar.style.width = '0%';
+      const total = durationMs ?? (audio.duration && isFinite(audio.duration) ? Math.round(audio.duration * 1000) : 0);
+      if (timer) {
+        timer.textContent = `${formatDuration(0)} / ${formatDuration(total)}`;
+      }
+    }
+  } catch (error) {
+    console.warn('[chat] stopActiveAudio', error);
+  }
+  if (playButton) playButton.innerHTML = '<i class="ri-play-fill"></i>';
+  state.currentAudio = null;
+}
+
+function createAudioMessageContent(message) {
+  const wrapper = document.createElement('div');
+  wrapper.className = 'message-audio';
+
+  const playButton = document.createElement('button');
+  playButton.type = 'button';
+  playButton.className = 'audio-play';
+  playButton.innerHTML = '<i class="ri-play-fill"></i>';
+
+  const waveform = document.createElement('div');
+  waveform.className = 'audio-waveform';
+
+  const progress = document.createElement('div');
+  progress.className = 'audio-progress';
+  const progressBar = document.createElement('div');
+  progressBar.className = 'audio-progress-bar';
+  progress.appendChild(progressBar);
+  waveform.appendChild(progress);
+
+  const timer = document.createElement('span');
+  timer.className = 'audio-timer';
+  let knownDurationMs = typeof message.audio_duration_ms === 'number' && message.audio_duration_ms > 0 ? message.audio_duration_ms : null;
+  timer.textContent = `${formatDuration(0)} / ${formatDuration(knownDurationMs || 0)}`;
+
+  const audio = new Audio(message.audio_url);
+  audio.preload = 'metadata';
+
+  audio.addEventListener('loadedmetadata', () => {
+    if (!knownDurationMs && audio.duration && isFinite(audio.duration)) {
+      knownDurationMs = Math.round(audio.duration * 1000);
+      timer.textContent = `${formatDuration(0)} / ${formatDuration(knownDurationMs)}`;
+    }
+  });
+
+  audio.addEventListener('timeupdate', () => {
+    if (audio.duration && isFinite(audio.duration)) {
+      const percent = (audio.currentTime / audio.duration) * 100;
+      progressBar.style.width = `${Math.min(100, percent)}%`;
+    }
+    const total = knownDurationMs || (audio.duration && isFinite(audio.duration) ? Math.round(audio.duration * 1000) : 0);
+    timer.textContent = `${formatDuration(Math.round(audio.currentTime * 1000))} / ${formatDuration(total)}`;
+  });
+
+  audio.addEventListener('ended', () => {
+    const total = knownDurationMs || (audio.duration && isFinite(audio.duration) ? Math.round(audio.duration * 1000) : 0);
+    progressBar.style.width = '100%';
+    timer.textContent = `${formatDuration(total)} / ${formatDuration(total)}`;
+    playButton.innerHTML = '<i class="ri-play-fill"></i>';
+    state.currentAudio = null;
+  });
+
+  audio.addEventListener('pause', () => {
+    playButton.innerHTML = '<i class="ri-play-fill"></i>';
+  });
+
+  audio.addEventListener('play', () => {
+    playButton.innerHTML = '<i class="ri-pause-fill"></i>';
+  });
+
+  playButton.addEventListener('click', () => {
+    if (state.currentAudio && state.currentAudio.audio !== audio) {
+      stopActiveAudio();
+    }
+    if (audio.paused) {
+      audio
+        .play()
+        .then(() => {
+          const total = knownDurationMs || (audio.duration && isFinite(audio.duration) ? Math.round(audio.duration * 1000) : 0);
+          timer.textContent = `${formatDuration(Math.round(audio.currentTime * 1000))} / ${formatDuration(total)}`;
+          state.currentAudio = { audio, playButton, progressBar, timer, durationMs: total };
+        })
+        .catch((error) => {
+          console.error('[chat] audio playback failed', error);
+          showToast('Unable to play voice message.');
+        });
+    } else {
+      stopActiveAudio(false);
+    }
+  });
+
+  wrapper.appendChild(playButton);
+  wrapper.appendChild(waveform);
+  wrapper.appendChild(timer);
+
+  return wrapper;
+}
+
 function getContextSnapshot() {
   return {
     chatId,
@@ -194,6 +463,15 @@ const state = {
   sending: false,
   typingTimeout: null,
   pending: [],
+  recording: false,
+  recordingStream: null,
+  mediaRecorder: null,
+  audioChunks: [],
+  recordingStartTs: 0,
+  recordingTimer: null,
+  pendingAudioUpload: null,
+  recordingSendOnStop: false,
+  currentAudio: null,
   unsubMessages: null,
   unsubSummary: null,
   unsubTyping: null,
@@ -264,6 +542,10 @@ function renderMessage(message) {
     bubble.appendChild(figure);
   }
 
+  if (message.audio_url) {
+    bubble.appendChild(createAudioMessageContent(message));
+  }
+
   if (message.text) {
     const textEl = document.createElement('p');
     textEl.className = 'message-text';
@@ -281,11 +563,19 @@ function renderMessage(message) {
   if (isOwn) {
     const status = document.createElement('span');
     status.className = 'message-status';
-    status.textContent = message.read ? '✓✓' : '✓';
     status.title = message.read ? 'Seen' : 'Sent';
+    status.setAttribute('aria-label', status.title);
+    const statusIcon = document.createElement('i');
+    statusIcon.className = message.read ? 'ri-check-double-line' : 'ri-check-line';
+    statusIcon.setAttribute('aria-hidden', 'true');
+    status.appendChild(statusIcon);
+    if (message.read) {
+      status.classList.add('is-read');
+    }
     meta.appendChild(status);
   }
   bubble.appendChild(meta);
+
 
   wrapper.innerHTML = '';
   wrapper.appendChild(bubble);
@@ -297,6 +587,7 @@ function renderMessage(message) {
 
 function renderMessages(messages) {
   if (!stream) return;
+  stopActiveAudio();
   const previousScrollBottom = body.scrollHeight - body.scrollTop - body.clientHeight;
   const wasAtBottom = isNearBottom();
   stream.innerHTML = '';
@@ -384,7 +675,7 @@ function handleTyping(snapshot) {
   const isOtherTyping = role === 'buyer' ? state.typing.vendor : state.typing.buyer;
   if (isOtherTyping) {
     participantStatusEl.innerHTML =
-      '<span class="typing-indicator">typing…<span><i></i><i></i><i></i></span></span>';
+      '<span class="typing-indicator">typing&hellip;<span><i></i><i></i><i></i></span></span>';
   } else if (state.messages.length) {
     const lastTs = state.messages[state.messages.length - 1]?.ts;
     if (lastTs) {
@@ -400,7 +691,8 @@ function handleTyping(snapshot) {
 function updateSendButton() {
   const hasText = Boolean(textarea.value.trim());
   const hasAttachments = state.pending.some((item) => item.status !== 'removed');
-  sendButton.disabled = state.sending || (!hasText && !hasAttachments);
+  const recordingBusy = state.recording || Boolean(state.pendingAudioUpload);
+  sendButton.disabled = state.sending || recordingBusy || (!hasText && !hasAttachments);
 }
 
 function resizeTextarea() {
@@ -577,6 +869,11 @@ function initSubscriptions() {
 }
 
 function destroy() {
+  if (state.recording) {
+    state.recordingSendOnStop = false;
+    cancelRecording();
+  }
+  stopActiveAudio();
   state.unsubMessages?.();
   state.unsubSummary?.();
   state.unsubTyping?.();
@@ -621,6 +918,19 @@ function init() {
     updateSendButton();
   });
 
+  if (recordButton) {
+    recordButton.addEventListener('click', () => {
+      if (state.recording) {
+        stopRecording(true);
+      } else {
+        startRecording();
+      }
+    });
+  }
+
+  recordingCancelBtn?.addEventListener('click', () => cancelRecording());
+  recordingSendBtn?.addEventListener('click', () => stopRecording(true));
+
   window.addEventListener('beforeunload', destroy);
 }
 
@@ -637,3 +947,5 @@ async function bootstrap() {
 }
 
 bootstrap();
+
+

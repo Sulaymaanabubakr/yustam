@@ -70,31 +70,53 @@ function initials(name) {
 
 function buildCard(chat) {
   const typingState = state.typing.get(chat.chatId) || {};
-  const typingLabel = typingState.buyer ? 'Buyer is typing' : '';
-  const typingHtml = typingLabel
-    ? `<span class="typing" role="status" aria-live="polite">${createTypingDots()} ${escapeHtml(typingLabel)}</span>`
-    : '';
-  const unread = chat.unread_for_vendor > 0;
-  const unreadLabel = unread ? (chat.unread_for_vendor > 9 ? '9+' : chat.unread_for_vendor) : '';
+  const isTyping = Boolean(typingState.buyer);
   const href = `chat.php?chat=${encodeURIComponent(chat.chatId)}`;
+  const lastTime = chat.last_ts ? formatTime(chat.last_ts) : '';
+  const unread = Number(chat.unread_for_vendor || 0);
+  const unreadLabel = unread > 9 ? '9+' : unread || '';
+  const lastSenderRole = chat.last_sender_role || '';
+  const buyerUnread = Number(chat.unread_for_buyer || 0);
 
-  const lastTime = chat.last_ts ? formatTime(chat.last_ts) : '-';
+  const baseSnippet = chat.last_text || 'Reply quickly to close the sale';
+  const snippetText =
+    lastSenderRole === 'vendor' && !isTyping ? `You: ${baseSnippet}` : baseSnippet;
+
+  const typingHtml = isTyping
+    ? `<span class="chat-item__typing" role="status" aria-live="polite">${createTypingDots()} <span>Buyer is typing</span></span>`
+    : escapeHtml(snippetText);
+
+  const statusIcon =
+    !isTyping && lastSenderRole === 'vendor'
+      ? `<span class="chat-item__status" aria-label="${buyerUnread ? 'Message sent' : 'Seen'}">
+            <i class="${buyerUnread ? 'ri-check-line' : 'ri-check-double-line'}" aria-hidden="true"></i>
+         </span>`
+      : '';
 
   return `
-    <article class="chat-card" role="listitem" tabindex="0" data-chat-id="${escapeHtml(chat.chatId)}" data-href="${href}">
-      <div class="chat-thumbnail">
-        ${chat.listing_image ? `<img src="${escapeHtml(chat.listing_image)}" alt="${escapeHtml(chat.listing_title)}">` : ''}
+    <article class="chat-item" role="listitem" tabindex="0" data-chat-id="${escapeHtml(
+      chat.chatId,
+    )}" data-href="${href}">
+      <div class="chat-item__avatar" aria-hidden="true">${escapeHtml(
+        initials(chat.buyer_name),
+      )}</div>
+      <div class="chat-item__content">
+        <div class="chat-item__title">${escapeHtml(chat.buyer_name)}</div>
+        <p class="chat-item__subtitle">${typingHtml}</p>
+        <div class="chat-item__listing"><i class="ri-shopping-bag-3-line" aria-hidden="true"></i><span>${escapeHtml(
+          chat.listing_title,
+        )}</span></div>
       </div>
-      <div class="chat-avatar" aria-hidden="true">${escapeHtml(initials(chat.buyer_name))}</div>
-      <div class="chat-info">
-        <h2>${escapeHtml(chat.buyer_name)}</h2>
-        <p class="last-message">${escapeHtml(chat.last_text || 'Reply quickly to close the sale')}</p>
-        <div class="listing"><i class="ri-shopping-bag-3-line" aria-hidden="true"></i>${escapeHtml(chat.listing_title)}</div>
-      </div>
-      <div class="chat-meta">
-        <span class="time">${escapeHtml(lastTime)}</span>
-        ${typingHtml}
-        ${unread ? `<span class="unread" aria-label="${escapeHtml(unreadLabel)} unread messages">${escapeHtml(unreadLabel)}</span>` : ''}
+      <div class="chat-item__meta">
+        <span class="chat-item__time">${escapeHtml(lastTime)}</span>
+        ${statusIcon}
+        ${
+          unread
+            ? `<span class="chat-item__badge" aria-label="${escapeHtml(
+                unreadLabel,
+              )} unread messages">${escapeHtml(unreadLabel)}</span>`
+            : ''
+        }
       </div>
     </article>
   `;

@@ -76,7 +76,7 @@ function clampText(text, length = 160) {
   const value = String(text || '').trim();
   if (!value) return '';
   if (value.length <= length) return value;
-  return `${value.slice(0, length)}…`;
+  return `${value.slice(0, length)}â€¦`;
 }
 
 export function buildChatId(vendorUid, buyerUid, listingId) {
@@ -439,9 +439,16 @@ export async function sendMessage(chatId, payload = {}) {
     throw new Error('Cannot send message without a valid chat and user.');
   }
 
-  const { text = '', imageUrl = '', width = null, height = null } = payload;
+  const {
+    text = '',
+    imageUrl = '',
+    width = null,
+    height = null,
+    audioUrl = '',
+    audioDurationMs = null,
+  } = payload;
   const trimmedText = text.trim();
-  if (!trimmedText && !imageUrl) {
+  if (!trimmedText && !imageUrl && !audioUrl) {
     throw new Error('Message content required.');
   }
 
@@ -466,7 +473,7 @@ export async function sendMessage(chatId, payload = {}) {
   try {
     await runTransaction(db, async (transaction) => {
       const now = serverTimestamp();
-      const preview = trimmedText || (imageUrl ? '📷 Photo' : '');
+      const preview = trimmedText || (audioUrl ? '[Voice message]' : imageUrl ? '[Photo]' : '');
       const summarySnapshot = await transaction.get(summaryRef);
       const summaryData = summarySnapshot.exists() ? summarySnapshot.data() : {};
       const unreadField = receiverRole === 'buyer' ? 'unread_for_buyer' : 'unread_for_vendor';
@@ -505,6 +512,8 @@ export async function sendMessage(chatId, payload = {}) {
         image_url: imageUrl || '',
         image_width: width || null,
         image_height: height || null,
+        audio_url: audioUrl || '',
+        audio_duration_ms: audioDurationMs || null,
         sender_role: role,
         sender_uid: senderUid,
         receiver_role: receiverRole,
@@ -561,10 +570,16 @@ export async function sendChatMessage(options = {}) {
     if (options.imageUrl) {
       payload.imageUrl = options.imageUrl;
     }
+    if (options.audioUrl) {
+      payload.audioUrl = options.audioUrl;
+      if (options.audioDurationMs !== undefined) {
+        payload.audioDurationMs = options.audioDurationMs;
+      }
+    }
     if (options.message) {
       payload.text = options.message;
     }
-    if (!payload.text && !payload.imageUrl) {
+    if (!payload.text && !payload.imageUrl && !payload.audioUrl) {
       throw new Error('Message content required.');
     }
     await sendMessage(metadata.chatId, payload);
@@ -607,6 +622,8 @@ export function subscribeToMessages(chatId, callback, onError) {
           image_url: data?.image_url || '',
           image_width: data?.image_width || null,
           image_height: data?.image_height || null,
+          audio_url: data?.audio_url || '',
+          audio_duration_ms: data?.audio_duration_ms ?? null,
           sender_role: data?.sender_role || 'buyer',
           sender_uid: data?.sender_uid || '',
           receiver_role: data?.receiver_role || 'vendor',
