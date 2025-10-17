@@ -153,8 +153,7 @@ $threadBootstrapJson = json_encode($threadBootstrap, JSON_UNESCAPED_UNICODE | JS
         body {
             margin: 0;
             min-height: 100vh;
-            background: url('https://res.cloudinary.com/dpc16a0vd/image/upload/v1715442114/yustam/chat-wallpaper.png') repeat;
-            background-size: 420px;
+            background: radial-gradient(circle at top left, rgba(246, 239, 230, 0.88), rgba(255, 255, 255, 0.92));
             font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
             color: var(--ink);
             display: flex;
