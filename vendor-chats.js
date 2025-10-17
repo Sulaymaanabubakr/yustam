@@ -169,6 +169,16 @@ function openChat(chat) {
   const url = new URL('chat.php', window.location.origin);
   url.searchParams.set('ch', chatId);
   url.searchParams.set('as', 'vendor');
+  url.searchParams.set('vendor_uid', vendor.uid);
+  if (vendor.name) url.searchParams.set('vendor_name', vendor.name);
+  if (vendor.avatar) url.searchParams.set('vendor_avatar', vendor.avatar);
+  if (chat.buyer_uid) url.searchParams.set('buyer_uid', chat.buyer_uid);
+  if (chat.buyer_name) url.searchParams.set('buyer_name', chat.buyer_name);
+  if (chat.buyer_avatar) url.searchParams.set('buyer_avatar', chat.buyer_avatar);
+  const listingId = chat.listing_id || chat.listingId;
+  if (listingId) url.searchParams.set('listing', listingId);
+  if (chat.listing_title) url.searchParams.set('listing_title', chat.listing_title);
+  if (chat.listing_image) url.searchParams.set('listing_image', chat.listing_image);
   window.location.href = url.toString();
 }
 

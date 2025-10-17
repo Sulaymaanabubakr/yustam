@@ -17,6 +17,7 @@ if (!in_array($role, ['buyer', 'vendor'], true)) {
 $listingId = isset($_GET['listing']) ? trim((string)$_GET['listing']) : '';
 $listingTitle = isset($_GET['listing_title']) ? trim((string)$_GET['listing_title']) : '';
 $listingImage = isset($_GET['listing_image']) ? trim((string)$_GET['listing_image']) : '';
+$counterpartyAvatar = '';
 
 if ($role === 'buyer') {
     if (!isset($_SESSION['buyer_id'])) {
@@ -46,6 +47,7 @@ if ($role === 'buyer') {
     $counterpartyRole = 'vendor';
     $counterpartyUid = isset($_GET['vendor_uid']) ? trim((string)$_GET['vendor_uid']) : '';
     $counterpartyName = isset($_GET['vendor_name']) ? trim((string)$_GET['vendor_name']) : '';
+    $counterpartyAvatar = isset($_GET['vendor_avatar']) ? trim((string)$_GET['vendor_avatar']) : '';
 } else {
     if (!isset($_SESSION['vendor_id'])) {
         header('Location: vendor-login.html');
@@ -91,6 +93,7 @@ if ($role === 'buyer') {
     $counterpartyRole = 'buyer';
     $counterpartyUid = isset($_GET['buyer_uid']) ? trim((string)$_GET['buyer_uid']) : '';
     $counterpartyName = isset($_GET['buyer_name']) ? trim((string)$_GET['buyer_name']) : '';
+    $counterpartyAvatar = isset($_GET['buyer_avatar']) ? trim((string)$_GET['buyer_avatar']) : '';
 }
 
 if ($chatId === '') {
@@ -107,6 +110,7 @@ $threadBootstrap = [
         'role' => $counterpartyRole,
         'uid' => $counterpartyUid,
         'name' => $counterpartyName,
+        'avatar' => $counterpartyAvatar ?? '',
     ],
     'listing' => [
         'id' => $listingId,
