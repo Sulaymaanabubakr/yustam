@@ -688,8 +688,8 @@ $defaultAvatar = 'https://images.unsplash.com/photo-1521120413309-42fb5463e6da?a
     </footer>
 </div>
 <script>
-    window.__CHAT_CONTEXT__ = <?= json_encode($chatContext, JSON_UNESCAPED_SLASHES); ?>;
-    window.__CHAT_THREAD__ = <?= json_encode($threadContext, JSON_UNESCAPED_SLASHES); ?>;
+    window.__CHAT_CONTEXT__ = <?= json_encode($chatContext, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+    window.__CHAT_THREAD__ = <?= json_encode($threadContext, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
 </script>
 <script type="module" src="./chat.js"></script>
 </body>

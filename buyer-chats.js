@@ -19,7 +19,10 @@ const state = {
   filtered: [],
   typing: new Map(),
   unsubscribe: null,
+  loadMore: null,
   search: '',
+  hasMore: false,
+  loadingMore: false,
 };
 
 function setLoading(isLoading) {
@@ -66,15 +69,16 @@ function initials(name) {
 }
 
 function buildCard(chat) {
-  const typing = state.typing.get(chat.chatId)?.vendor ? 'Vendor typing' : '';
-  const typingHtml = typing
-    ? `<span class="typing" role="status">${createTypingDots()} typing…</span>`
+  const typingState = state.typing.get(chat.chatId) || {};
+  const typingLabel = typingState.vendor ? 'Vendor is typing' : '';
+  const typingHtml = typingLabel
+    ? `<span class="typing" role="status" aria-live="polite">${createTypingDots()} ${escapeHtml(typingLabel)}</span>`
     : '';
   const unread = chat.unread_for_buyer > 0;
   const unreadLabel = unread ? (chat.unread_for_buyer > 9 ? '9+' : chat.unread_for_buyer) : '';
   const href = `chat.php?chat=${encodeURIComponent(chat.chatId)}`;
 
-  const lastTime = chat.last_ts ? formatTime(chat.last_ts) : '—';
+  const lastTime = chat.last_ts ? formatTime(chat.last_ts) : '-';
 
   return `
     <article class="chat-card" role="listitem" tabindex="0" data-chat-id="${escapeHtml(chat.chatId)}" data-href="${href}">
@@ -102,9 +106,7 @@ function render() {
 
   if (!state.filtered.length) {
     listEl.hidden = true;
-    if (state.ready) {
-      if (emptyEl) emptyEl.hidden = false;
-    }
+    if (state.ready && emptyEl) emptyEl.hidden = false;
     return;
   }
 
@@ -116,6 +118,7 @@ function render() {
     const wrapper = document.createElement('div');
     wrapper.innerHTML = buildCard(chat);
     const card = wrapper.firstElementChild;
+    if (!card) return;
     card.addEventListener('click', () => {
       window.location.href = card.dataset.href;
     });
@@ -145,7 +148,7 @@ function filterChats(term) {
 }
 
 function ensureTypingSubscription(chatId) {
-  if (typingSubscriptions.has(chatId)) return;
+  if (!chatId || typingSubscriptions.has(chatId)) return;
   const unsubscribe = subscribeToTyping(
     chatId,
     (snapshot) => {
@@ -168,7 +171,7 @@ function handleUpdate(chats, meta = { append: false }) {
   setLoading(false);
   setError(false);
 
-  if (meta.append) {
+  if (meta?.append) {
     const merged = new Map();
     state.items.forEach((item) => merged.set(item.chatId, item));
     chats.forEach((item) => merged.set(item.chatId, item));
@@ -178,8 +181,10 @@ function handleUpdate(chats, meta = { append: false }) {
     clearTypingSubscriptions();
   }
 
+  state.hasMore = Boolean(meta?.hasMore);
   state.items.forEach((chat) => ensureTypingSubscription(chat.chatId));
   filterChats(state.search);
+  maybePrefetchMore();
 }
 
 function handleError(error) {
@@ -191,6 +196,42 @@ function handleError(error) {
   showToast('Unable to load chats right now.');
 }
 
+async function loadMoreIfNeeded() {
+  if (!state.loadMore || state.loadingMore || !state.hasMore) return;
+  state.loadingMore = true;
+  try {
+    await state.loadMore();
+  } catch (error) {
+    console.error('[buyer-chats] loadMore failed', error);
+  } finally {
+    state.loadingMore = false;
+  }
+}
+
+function isNearPageBottom(offset = 200) {
+  const scrollY = window.scrollY || window.pageYOffset || 0;
+  const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+  const doc = document.documentElement;
+  const scrollHeight = doc.scrollHeight || document.body.scrollHeight || 0;
+  return scrollY + viewportHeight >= scrollHeight - offset;
+}
+
+function maybePrefetchMore() {
+  if (!state.hasMore || state.loadingMore || !state.loadMore) return;
+  const doc = document.documentElement;
+  const viewportHeight = window.innerHeight || doc.clientHeight || 0;
+  if (doc.scrollHeight <= viewportHeight + 160) {
+    loadMoreIfNeeded();
+  }
+}
+
+function handleWindowScroll() {
+  if (!state.hasMore) return;
+  if (isNearPageBottom()) {
+    loadMoreIfNeeded();
+  }
+}
+
 function init() {
   if (!listEl) return;
   setLoading(true);
@@ -200,6 +241,7 @@ function init() {
     onError: handleError,
   });
   state.unsubscribe = subscription.unsubscribe;
+  state.loadMore = subscription.loadMore;
 
   if (retryBtn) {
     retryBtn.addEventListener('click', () => {
@@ -207,12 +249,17 @@ function init() {
       setLoading(true);
       state.unsubscribe?.();
       clearTypingSubscriptions();
+      state.items = [];
+      state.filtered = [];
+      state.hasMore = false;
+      state.loadingMore = false;
       const nextSub = listSummariesForUser({
         pageSize: 20,
         onUpdate: handleUpdate,
         onError: handleError,
       });
       state.unsubscribe = nextSub.unsubscribe;
+      state.loadMore = nextSub.loadMore;
     });
   }
 
@@ -222,10 +269,13 @@ function init() {
     });
   }
 
+  window.addEventListener('scroll', handleWindowScroll, { passive: true });
+
   window.addEventListener('beforeunload', () => {
+    window.removeEventListener('scroll', handleWindowScroll);
     state.unsubscribe?.();
     clearTypingSubscriptions();
   });
 }
 
-init();
+init();
