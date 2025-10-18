@@ -1661,16 +1661,19 @@ const createListingDocument = (formValues, imageUrls) => {
     }
   });
 
-  return {
-    ...filteredValues,
-    category: categorySelect.value,
-    subcategory: subcategorySelect.value,
-    vendorID: currentUser.uid,
-    status: 'pending',
-    imageUrls,
-    createdAt: serverTimestamp(),
+    const vendorUid = getStoredYustamUid();
+
+    return {
+      ...filteredValues,
+      category: categorySelect.value,
+      subcategory: subcategorySelect.value,
+      vendorID: currentUser.uid,
+      ...(vendorUid ? { vendorUid } : {}),
+      status: 'pending',
+      imageUrls,
+      createdAt: serverTimestamp(),
+    };
   };
-};
 
 const handleSubmit = async () => {
   if (!currentUser) {
@@ -1748,3 +1751,22 @@ onAuthStateChanged(auth, (user) => {
   currentUser = user;
   toggleLoader(false);
 });
+const getStoredYustamUid = () => {
+  try {
+    const sessionUid = sessionStorage.getItem('yustam_uid');
+    if (sessionUid && sessionUid.trim()) {
+      return sessionUid.trim();
+    }
+  } catch (error) {
+    console.warn('[post] unable to read session UID', error);
+  }
+  try {
+    const localUid = localStorage.getItem('yustam_uid');
+    if (localUid && localUid.trim()) {
+      return localUid.trim();
+    }
+  } catch (error) {
+    console.warn('[post] unable to read local UID', error);
+  }
+  return '';
+};

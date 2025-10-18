@@ -3,6 +3,7 @@ require_once __DIR__ . '/session-path.php';
 session_start();
 
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/api/chat/firebase.php';
 
 if (!isset($_SESSION['vendor_id'])) {
     if (isset($_GET['format']) && $_GET['format'] === 'json') {
@@ -94,6 +95,110 @@ try {
     $listingStmt->close();
 } catch (Throwable $e) {
     error_log('Dashboard listing query failed: ' . $e->getMessage());
+}
+
+if ($vendorUid !== '') {
+    try {
+        $firestoreListings = [];
+        $firestoreTotal = 0;
+        $firestoreActive = 0;
+        $firestoreViews = 0;
+
+        $fireQuery = [
+            'from' => [
+                ['collectionId' => 'listings'],
+            ],
+            'where' => [
+                'fieldFilter' => [
+                    'field' => ['fieldPath' => 'vendorUid'],
+                    'op' => 'EQUAL',
+                    'value' => yustam_firestore_string($vendorUid),
+                ],
+            ],
+            'limit' => 200,
+        ];
+
+        $fireResults = yustam_firestore_run_query($fireQuery);
+        $activeStatuses = ['active', 'published', 'approved', 'live'];
+
+        foreach ($fireResults as $result) {
+            if (!isset($result['document']['fields'])) {
+                continue;
+            }
+            $fields = [];
+            foreach ($result['document']['fields'] as $key => $value) {
+                $fields[$key] = yustam_firestore_decode($value);
+            }
+
+            $firestoreTotal++;
+
+            $statusValue = strtolower((string)($fields['status'] ?? ''));
+            if (in_array($statusValue, $activeStatuses, true)) {
+                $firestoreActive++;
+            }
+
+            $viewsCandidate = $fields['views'] ?? ($fields['viewCount'] ?? 0);
+            if (is_array($viewsCandidate)) {
+                $firestoreViews += (int)($viewsCandidate['total'] ?? 0);
+            } else {
+                $firestoreViews += (int)$viewsCandidate;
+            }
+
+            $docName = $result['document']['name'] ?? '';
+            $docId = $fields['id'] ?? ($docName !== '' ? basename($docName) : '');
+            $title = $fields['title'] ?? ($fields['productName'] ?? 'Untitled');
+
+            $priceCandidate = $fields['price'] ?? ($fields['amount'] ?? 0);
+            if (is_string($priceCandidate)) {
+                $priceCandidate = preg_replace('/[^0-9.]/', '', $priceCandidate);
+            }
+            $price = is_numeric($priceCandidate) ? (float)$priceCandidate : 0.0;
+
+            $createdRaw = $fields['createdAt'] ?? ($fields['created_at'] ?? '');
+            if (is_array($createdRaw) && isset($createdRaw['seconds'])) {
+                $createdRaw = '@' . (int)$createdRaw['seconds'];
+            }
+            $addedOn = '-';
+            $addedTimestamp = 0;
+            if (is_string($createdRaw) && $createdRaw !== '') {
+                $timestamp = strtotime($createdRaw);
+                if ($timestamp !== false) {
+                    $addedOn = date('j M Y', $timestamp);
+                    $addedTimestamp = $timestamp;
+                }
+            }
+
+            $firestoreListings[] = [
+                'title' => $title,
+                'price' => $price,
+                'status' => $statusValue !== '' ? ucwords($statusValue) : 'Pending',
+                'added_on' => $addedOn,
+                'link' => $docId !== '' ? 'product.php?id=' . urlencode($docId) : '#',
+                'sort_ts' => $addedTimestamp,
+            ];
+        }
+
+        if ($firestoreTotal > 0) {
+            usort(
+                $firestoreListings,
+                static function (array $left, array $right): int {
+                    return ($right['sort_ts'] ?? 0) <=> ($left['sort_ts'] ?? 0);
+                }
+            );
+            $firestoreListings = array_slice($firestoreListings, 0, 25);
+            foreach ($firestoreListings as &$listingRow) {
+                unset($listingRow['sort_ts']);
+            }
+            unset($listingRow);
+
+            $stats['total_listings'] = $firestoreTotal;
+            $stats['active_listings'] = $firestoreActive;
+            $stats['total_views'] = $firestoreViews;
+            $listings = $firestoreListings;
+        }
+    } catch (Throwable $fireException) {
+        error_log('Vendor dashboard Firestore query failed: ' . $fireException->getMessage());
+    }
 }
 
 if (isset($_GET['format']) && $_GET['format'] === 'json') {
