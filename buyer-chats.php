@@ -60,34 +60,26 @@ $uidJson = json_encode($buyerUid, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHE
             margin: 0;
             padding: 0;
             height: 100%;
-            background: #f4f7f8;
+            background: #0b0b0b;
             font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
         }
 
+        .chat-shell {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
         .chat-frame {
+            flex: 1 1 auto;
             width: 100%;
-            height: 100%;
             border: none;
             display: block;
         }
 
-        .chat-shell {
-            position: relative;
-            min-height: 100vh;
-        }
-
-        .chat-shell::after {
-            content: "";
-            position: fixed;
-            inset: 0;
-            background: linear-gradient(180deg, rgba(0, 86, 75, 0.12), transparent 42%);
-            pointer-events: none;
-            z-index: -1;
-        }
-
         .chat-fallback {
-            position: absolute;
-            inset: 0;
+            flex: 1 1 auto;
             display: flex;
             align-items: center;
             justify-content: center;
