@@ -195,7 +195,9 @@ $placeholderImage = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABA
             min-height: 100vh;
             font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
             color: var(--ink);
-            background: linear-gradient(145deg, rgba(0, 77, 64, 0.95), rgba(0, 77, 64, 0.75));
+            background:
+                radial-gradient(circle at top left, rgba(234, 220, 207, 0.92), rgba(255, 255, 255, 0.95)),
+                linear-gradient(145deg, rgba(243, 115, 30, 0.08), rgba(0, 77, 64, 0.06));
             display: flex;
             flex-direction: column;
         }
@@ -222,13 +224,13 @@ $placeholderImage = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABA
             margin: 32px auto 0;
             padding: 16px 24px;
             border-radius: var(--radius-md);
-            border: 1px solid rgba(255, 255, 255, 0.18);
-            background: rgba(255, 255, 255, 0.08);
-            backdrop-filter: blur(12px);
+            border: 1px solid rgba(0, 77, 64, 0.12);
+            background: rgba(255, 255, 255, 0.92);
+            box-shadow: 0 14px 32px rgba(15, 106, 83, 0.12);
             display: flex;
             align-items: center;
             justify-content: space-between;
-            color: var(--white);
+            color: var(--emerald);
             gap: 16px;
         }
 
@@ -245,15 +247,16 @@ $placeholderImage = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABA
             gap: 8px;
             padding: 10px 18px;
             border-radius: 999px;
-            color: var(--white);
-            border: 1px solid rgba(255, 255, 255, 0.25);
-            background: rgba(255, 255, 255, 0.12);
-            transition: background 0.25s ease, transform 0.25s ease;
+            color: var(--emerald);
+            border: 1px solid rgba(0, 77, 64, 0.18);
+            background: rgba(243, 115, 30, 0.14);
+            transition: background 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease;
         }
 
         .nav-button:hover {
-            background: rgba(255, 255, 255, 0.2);
+            background: rgba(243, 115, 30, 0.2);
             transform: translateY(-1px);
+            box-shadow: 0 12px 22px rgba(243, 115, 30, 0.26);
         }
 
         .product-shell {

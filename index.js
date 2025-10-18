@@ -92,8 +92,3 @@
                 }
             });
         });
-
-
-import { app } from "./firebase.js";
-  console.log("🔥 Script is running!");
-  console.log("✅ Firebase Connected:", app.name);

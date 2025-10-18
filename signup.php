@@ -65,15 +65,17 @@ try {
         $firebaseUser = yustam_firebase_create_user($email, $password, $name);
         $firebaseUid = (string) ($firebaseUser['localId'] ?? '');
         if ($firebaseUid === '') {
-            throw new RuntimeException('Firebase did not return a UID.');
+            throw new RuntimeException('Authentication service did not return a UID.');
         }
-    } catch (Throwable $firebaseError) {
-        $message = $firebaseError->getMessage();
-        if (stripos($message, 'EMAIL_EXISTS') !== false) {
+    } catch (YustamFirebaseAuthException $firebaseError) {
+        if (strtoupper($firebaseError->getErrorCode()) === 'EMAIL_EXISTS') {
             echo json_encode(['success' => false, 'message' => 'This email is already registered.']);
             exit;
         }
-        error_log('Vendor signup Firebase error: ' . $firebaseError->getMessage());
+        echo json_encode(['success' => false, 'message' => $firebaseError->getMessage()]);
+        exit;
+    } catch (Throwable $firebaseError) {
+        error_log('Vendor signup auth error: ' . $firebaseError->getMessage());
         throw $firebaseError;
     }
 
@@ -180,6 +182,7 @@ try {
             error_log('Vendor signup cleanup failed: ' . $cleanupError->getMessage());
         }
     }
+    error_log('Vendor signup failed: ' . $e->getMessage());
     http_response_code(500);
-    echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
+    echo json_encode(['success' => false, 'message' => 'We could not create your account right now. Please try again.']);
 }

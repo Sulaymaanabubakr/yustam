@@ -27,7 +27,7 @@ try {
     $auth = yustam_firebase_sign_in_with_password($email, $password);
     $firebaseUid = (string) ($auth['localId'] ?? '');
     if ($firebaseUid === '') {
-        throw new RuntimeException('Firebase did not return a UID.');
+        throw new RuntimeException('Authentication service did not return a UID.');
     }
 
     $firebaseEmail = strtolower((string) ($auth['email'] ?? $email));
@@ -141,7 +141,11 @@ try {
         'firebase_uid' => $firebaseUid,
         'role' => 'vendor',
     ]);
+} catch (YustamFirebaseAuthException $authError) {
+    http_response_code(400);
+    echo json_encode(['success' => false, 'message' => $authError->getMessage()]);
 } catch (Throwable $e) {
+    error_log('Vendor login failed: ' . $e->getMessage());
     http_response_code(500);
-    echo json_encode(['success' => false, 'message' => 'Authentication error: ' . $e->getMessage()]);
+    echo json_encode(['success' => false, 'message' => 'Unable to sign in. Please try again.']);
 }

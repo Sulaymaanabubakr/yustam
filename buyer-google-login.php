@@ -35,7 +35,7 @@ try {
 $firebaseUid = (string) ($firebaseUser['localId'] ?? '');
 if ($firebaseUid === '') {
     http_response_code(500);
-    echo json_encode(['success' => false, 'message' => 'Invalid Firebase response.']);
+    echo json_encode(['success' => false, 'message' => 'Unable to verify your Google account.']);
     exit;
 }
 

@@ -363,7 +363,7 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.4/fireba
             return;
           }
         } else {
-          console.warn('Firebase admin user not available; continuing with PHP session only.');
+          console.warn('Auth admin user not available; continuing with PHP session only.');
         }
         if(!window.Chart){
           await loadChartJs();

@@ -11,7 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
     notifUpdates: true,
     twoFactor: false,
     loginAlert: true,
-    theme: 'system',
+    theme: 'light',
   };
 
   const initialSettings = window.__INITIAL_VENDOR_SETTINGS__ || {};
@@ -92,6 +92,9 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const syncThemeOptions = (value) => {
+    if (!themeRadios.length && !themeOptions.length) {
+      return;
+    }
     themeOptions.forEach((option) => option.classList.remove('active'));
     themeRadios.forEach((radio) => {
       const isMatch = radio.value === value;
@@ -101,16 +104,15 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   };
 
-  const applyThemePreference = (preference) => {
-    const value = ['light', 'dark', 'system'].includes(preference) ? preference : 'system';
+  const applyThemePreference = () => {
     if (themeManager) {
-      themeManager.setPreference(value);
+      themeManager.setPreference('light');
     } else {
-      document.body.classList.toggle('theme-dark', value === 'dark');
-      document.body.classList.toggle('theme-light', value !== 'dark');
+      document.body.classList.remove('theme-dark');
+      document.body.classList.add('theme-light');
     }
-    settings.theme = value;
-    syncThemeOptions(value);
+    settings.theme = 'light';
+    syncThemeOptions('light');
   };
 
   const persistLocalSnapshot = (state) => {
@@ -126,7 +128,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!input) return;
       input.checked = Boolean(state[key]);
     });
-    syncThemeOptions(state.theme || 'system');
+    syncThemeOptions('light');
   };
 
   const setSavingState = (saving) => {
@@ -142,7 +144,7 @@ document.addEventListener('DOMContentLoaded', () => {
     notifUpdates: !!toggleIds.notifUpdates?.checked,
     twoFactor: !!toggleIds.twoFactor?.checked,
     loginAlert: !!toggleIds.loginAlert?.checked,
-    theme: (themeRadios.find((radio) => radio.checked)?.value) || settings.theme || 'system',
+    theme: 'light',
   });
 
   const saveSettings = async () => {
@@ -152,7 +154,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setSavingState(true);
 
     try {
-      applyThemePreference(updatedSettings.theme);
+      applyThemePreference();
 
       const response = await fetch(settingsEndpoint, {
         method: 'POST',
@@ -192,7 +194,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!payload?.success || !payload.settings) return;
       settings = { ...DEFAULT_SETTINGS, ...payload.settings };
       applySettingsToUI(settings);
-      applyThemePreference(settings.theme);
+      applyThemePreference();
       persistLocalSnapshot(settings);
     } catch (error) {
       console.warn('Unable to refresh settings:', error);
@@ -200,24 +202,16 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   applySettingsToUI(settings);
-  applyThemePreference(settings.theme || 'system');
+  applyThemePreference();
   fetchLatestSettings();
 
   if (themeManager?.subscribe) {
-    unsubscribeTheme = themeManager.subscribe(({ preference }) => {
-      settings.theme = preference;
-      syncThemeOptions(preference);
+    unsubscribeTheme = themeManager.subscribe(() => {
+      settings.theme = 'light';
+      syncThemeOptions('light');
       persistLocalSnapshot(settings);
     });
   }
-
-  themeRadios.forEach((radio) => {
-    radio.addEventListener('change', (event) => {
-      const value = event.target.value;
-      applyThemePreference(value);
-      persistLocalSnapshot({ ...settings, theme: value });
-    });
-  });
 
   saveButton?.addEventListener('click', saveSettings);
 

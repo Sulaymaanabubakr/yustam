@@ -406,19 +406,9 @@
     document.head.appendChild(style);
   };
 
-  const storedPreference = () => {
-    try {
-      return localStorage.getItem(STORAGE_KEY) || 'system';
-    } catch {
-      return 'system';
-    }
-  };
+  const storedPreference = () => 'light';
 
-  const resolveTheme = (preference) => {
-    if (preference === 'light' || preference === 'dark') return preference;
-    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-    return prefersDark ? 'dark' : 'light';
-  };
+  const resolveTheme = () => 'light';
 
   const applyPalette = (palette) => {
     Object.entries(palette).forEach(([prop, value]) => {
@@ -454,8 +444,8 @@
   };
 
   const applyPreference = (preference, { skipSave = false } = {}) => {
-    const sanitized = ['light', 'dark', 'system'].includes(preference) ? preference : 'system';
-    const resolved = resolveTheme(sanitized);
+    const sanitized = 'light';
+    const resolved = 'light';
 
     if (!skipSave) {
       try {
@@ -465,22 +455,22 @@
       }
     }
 
-    const palette = resolved === 'dark' ? DARK : LIGHT;
+    const palette = LIGHT;
     applyPalette(palette);
 
     root.dataset.themePreference = sanitized;
     root.dataset.theme = resolved;
-    root.classList.toggle('theme-dark', resolved === 'dark');
-    root.classList.toggle('theme-light', resolved !== 'dark');
+    root.classList.remove('theme-dark');
+    root.classList.add('theme-light');
 
     ensureBody(() => {
       document.body.dataset.themePreference = sanitized;
       document.body.dataset.theme = resolved;
-      document.body.classList.toggle('theme-dark', resolved === 'dark');
-      document.body.classList.toggle('theme-light', resolved !== 'dark');
+      document.body.classList.remove('theme-dark');
+      document.body.classList.add('theme-light');
     });
 
-    applyRules(resolved === 'dark');
+    applyRules(false);
     broadcast(sanitized, resolved);
   };
 

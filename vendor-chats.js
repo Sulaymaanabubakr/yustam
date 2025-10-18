@@ -206,6 +206,10 @@ function openChat(chat) {
   if (chat.listing_id) { params.set('listing', chat.listing_id); }
   if (chat.listing_title) { params.set('listing_title', chat.listing_title); }
   if (chat.listing_image) { params.set('listing_image', chat.listing_image); }
+  const buyerUid = chat.buyer_uid || chat.buyerUid || chat.buyer_id || chat.buyerId || '';
+  const vendorUid = chat.vendor_uid || chat.vendorUid || vendor.uid;
+  if (buyerUid) params.set('buyer', buyerUid);
+  if (vendorUid) params.set('vendor', vendorUid);
   window.location.href = `chat-thread.php?${params.toString()}`;
 }
 

@@ -5,6 +5,97 @@ require_once __DIR__ . '/firebase-support.php';
 
 const YUSTAM_FIREBASE_IDENTITY_SCOPE = 'https://www.googleapis.com/auth/identitytoolkit';
 
+class YustamFirebaseAuthException extends RuntimeException
+{
+    private string $errorCode;
+
+    public function __construct(string $message, string $errorCode = '', ?Throwable $previous = null)
+    {
+        parent::__construct($message, 0, $previous);
+        $this->errorCode = $errorCode;
+    }
+
+    public function getErrorCode(): string
+    {
+        return $this->errorCode;
+    }
+}
+
+function yustam_firebase_extract_error_details(?string $body): array
+{
+    $raw = is_string($body) ? trim($body) : '';
+    $code = '';
+    $message = '';
+
+    if ($raw !== '') {
+        $decoded = json_decode($raw, true);
+        if (is_array($decoded)) {
+            if (isset($decoded['error'])) {
+                $error = $decoded['error'];
+                if (is_array($error)) {
+                    if (isset($error['message']) && is_string($error['message'])) {
+                        $message = trim($error['message']);
+                    }
+                    if (isset($error['status']) && is_string($error['status']) && $code === '') {
+                        $code = trim($error['status']);
+                    }
+                }
+            }
+        }
+
+        if ($code === '' && $message === '') {
+            if (preg_match('/auth\/([A-Z0-9_\-]+)/i', $raw, $matches)) {
+                $code = strtoupper($matches[1]);
+            } elseif (preg_match('/"message"\s*:\s*"([^"]+)"/i', $raw, $matches)) {
+                $message = trim($matches[1]);
+            }
+        }
+    }
+
+    if ($code === '' && $message !== '') {
+        $code = strtoupper(preg_replace('/[^A-Z0-9_]+/', '_', $message));
+    }
+
+    return [
+        'code' => $code,
+        'message' => $message,
+        'raw' => $raw,
+    ];
+}
+
+function yustam_firebase_error_message_for_code(string $code, string $fallback): string
+{
+    $map = [
+        'EMAIL_EXISTS' => 'This email is already registered.',
+        'ERROR_EMAIL_ALREADY_IN_USE' => 'This email is already registered.',
+        'INVALID_EMAIL' => 'Invalid email address.',
+        'MISSING_EMAIL' => 'Please enter your email address.',
+        'INVALID_PASSWORD' => 'Incorrect email or password.',
+        'MISSING_PASSWORD' => 'Please enter your password.',
+        'WEAK_PASSWORD' => 'Password must be at least 6 characters.',
+        'EMAIL_NOT_FOUND' => 'We couldn\'t find an account with that email.',
+        'USER_NOT_FOUND' => 'We couldn\'t find an account with that email.',
+        'USER_DISABLED' => 'This account has been disabled. Contact support for help.',
+        'OPERATION_NOT_ALLOWED' => 'Email and password sign-in is currently unavailable.',
+        'TOO_MANY_ATTEMPTS_TRY_LATER' => 'Too many attempts. Please wait a moment and try again.',
+        'INVALID_LOGIN_CREDENTIALS' => 'Incorrect email or password.',
+        'INVALID_ID_TOKEN' => 'Your session has expired. Please sign in again.',
+    ];
+
+    $upperCode = strtoupper(trim($code));
+    return $map[$upperCode] ?? $fallback;
+}
+
+function yustam_firebase_throw(string $fallbackMessage, array $errorDetails): void
+{
+    $code = $errorDetails['code'] ?? '';
+    $message = yustam_firebase_error_message_for_code($code, $fallbackMessage);
+    if (!empty($errorDetails['raw'])) {
+        error_log('YUSTAM auth service error (' . ($code ?: 'unknown') . '): ' . $errorDetails['raw']);
+    }
+    throw new YustamFirebaseAuthException($message, $code);
+}
+
 function yustam_firebase_identity_base_url(): string
 {
     return 'https://identitytoolkit.googleapis.com/v1';
@@ -63,12 +154,13 @@ function yustam_firebase_create_user(string $email, string $password, ?string $d
     );
 
     if ($response['status'] < 200 || $response['status'] >= 300) {
-        throw new RuntimeException('Firebase create user failed: ' . $response['body']);
+        $details = yustam_firebase_extract_error_details($response['body'] ?? null);
+        yustam_firebase_throw('We could not create your account. Please try again.', $details);
     }
 
     $data = json_decode($response['body'], true);
     if (!is_array($data) || empty($data['localId'])) {
-        throw new RuntimeException('Firebase create user response missing localId.');
+        throw new YustamFirebaseAuthException('We could not create your account. Please try again.');
     }
 
     return $data;
@@ -90,12 +182,13 @@ function yustam_firebase_sign_in_with_password(string $email, string $password):
     $response = yustam_firebase_identity_web_request('POST', 'accounts:signInWithPassword', $payload);
 
     if ($response['status'] < 200 || $response['status'] >= 300) {
-        throw new RuntimeException('Firebase sign-in failed: ' . $response['body']);
+        $details = yustam_firebase_extract_error_details($response['body'] ?? null);
+        yustam_firebase_throw('Unable to sign in with email and password.', $details);
     }
 
     $data = json_decode($response['body'], true);
     if (!is_array($data) || empty($data['localId'])) {
-        throw new RuntimeException('Firebase sign-in response missing localId.');
+        throw new YustamFirebaseAuthException('Unable to sign in. Please try again.');
     }
 
     return $data;
@@ -112,12 +205,13 @@ function yustam_firebase_lookup_id_token(string $idToken): array
     $response = yustam_firebase_identity_web_request('POST', 'accounts:lookup', $payload);
 
     if ($response['status'] < 200 || $response['status'] >= 300) {
-        throw new RuntimeException('Firebase token lookup failed: ' . $response['body']);
+        $details = yustam_firebase_extract_error_details($response['body'] ?? null);
+        yustam_firebase_throw('Unable to verify your account details.', $details);
     }
 
     $data = json_decode($response['body'], true);
     if (!is_array($data) || empty($data['users']) || !is_array($data['users'])) {
-        throw new RuntimeException('Firebase lookup did not return a user.');
+        throw new YustamFirebaseAuthException('Unable to verify your account details.');
     }
 
     return $data['users'][0];
@@ -145,7 +239,8 @@ function yustam_firebase_get_user_by_uid(string $firebaseUid): ?array
     );
 
     if ($response['status'] < 200 || $response['status'] >= 300) {
-        throw new RuntimeException('Firebase admin lookup failed: ' . $response['body']);
+        $details = yustam_firebase_extract_error_details($response['body'] ?? null);
+        yustam_firebase_throw('Unable to load account information.', $details);
     }
 
     $data = json_decode($response['body'], true);
@@ -176,12 +271,13 @@ function yustam_firebase_generate_password_reset_link(string $email, string $con
     );
 
     if ($response['status'] < 200 || $response['status'] >= 300) {
-        throw new RuntimeException('Firebase password reset link failed: ' . $response['body']);
+        $details = yustam_firebase_extract_error_details($response['body'] ?? null);
+        yustam_firebase_throw('Unable to generate a password reset link right now.', $details);
     }
 
     $data = json_decode($response['body'], true);
     if (empty($data['oobLink'])) {
-        throw new RuntimeException('Firebase password reset response missing oobLink.');
+        throw new YustamFirebaseAuthException('Unable to generate a password reset link right now.');
     }
 
     return (string) $data['oobLink'];
@@ -207,12 +303,13 @@ function yustam_firebase_generate_email_verification_link(string $email, string 
     );
 
     if ($response['status'] < 200 || $response['status'] >= 300) {
-        throw new RuntimeException('Firebase email verification link failed: ' . $response['body']);
+        $details = yustam_firebase_extract_error_details($response['body'] ?? null);
+        yustam_firebase_throw('Unable to generate a verification link right now.', $details);
     }
 
     $data = json_decode($response['body'], true);
     if (empty($data['oobLink'])) {
-        throw new RuntimeException('Firebase email verification response missing oobLink.');
+        throw new YustamFirebaseAuthException('Unable to generate a verification link right now.');
     }
 
     return (string) $data['oobLink'];
