@@ -243,7 +243,9 @@ function App() {
     return (
       <div className="App">
         <AppContextProvider>
-          <StatusScreen variant="loading" message="Connecting to chat…" />
+          <div className="App__content">
+            <StatusScreen variant="loading" message="Connecting to chat…" />
+          </div>
         </AppContextProvider>
       </div>
     );
@@ -253,11 +255,13 @@ function App() {
     return (
       <div className="App">
         <AppContextProvider>
-          <StatusScreen
-            variant="error"
-            message={errorMessage}
-            details={errorDetails}
-          />
+          <div className="App__content">
+            <StatusScreen
+              variant="error"
+              message={errorMessage}
+              details={errorDetails}
+            />
+          </div>
         </AppContextProvider>
       </div>
     );
@@ -266,15 +270,17 @@ function App() {
   return (
     <div className="App">
       <AppContextProvider>
-        {loggedInUser ? (
-          <CometChatHome />
-        ) : (
-          <StatusScreen
-            variant="loading"
-            message="Preparing chat…"
-            details="Awaiting chat session."
-          />
-        )}
+        <div className="App__content">
+          {loggedInUser ? (
+            <CometChatHome />
+          ) : (
+            <StatusScreen
+              variant="loading"
+              message="Preparing chat…"
+              details="Awaiting chat session."
+            />
+          )}
+        </div>
       </AppContextProvider>
     </div>
   );
