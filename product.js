@@ -421,6 +421,25 @@ async function sendQuickCometMessage(metadata, message) {
   return data;
 }
 
+function persistChatFocus(metadata) {
+  if (!metadata || !metadata.vendorUid) return;
+  const record = {
+    uid: metadata.vendorUid,
+    name: metadata.vendorName || '',
+    timestamp: Date.now(),
+  };
+  try {
+    window.sessionStorage?.setItem('yustam_chat_focus', JSON.stringify(record));
+  } catch (error) {
+    console.warn('Unable to persist chat focus in sessionStorage', error);
+  }
+  try {
+    window.localStorage?.setItem('yustam_chat_focus', JSON.stringify(record));
+  } catch (error) {
+    console.warn('Unable to persist chat focus in localStorage', error);
+  }
+}
+
 async function launchChatWithMessage(message) {
   if (!ensureBuyerAuthenticated()) return null;
   const metadata = resolveChatMetadata();
@@ -441,6 +460,7 @@ async function launchChatWithMessage(message) {
     throw error;
   }
 
+  persistChatFocus(metadata);
   window.location.href = 'buyer-chats.php';
   return metadata;
 }

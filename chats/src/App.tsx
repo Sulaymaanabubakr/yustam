@@ -1,9 +1,10 @@
 import "./App.css";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useContext } from "react";
 import { CometChat } from "@cometchat/chat-sdk-javascript";
 import { CometChatUIKitLoginListener } from "@cometchat/chat-uikit-react";
 import { CometChatHome } from "CometChat/components/CometChatHome/CometChatHome";
 import { AppContextProvider } from "CometChat/context/AppContext";
+import { AppContext } from "CometChat/context/AppContext";
 import { useCometChatContext } from "CometChat/context/CometChatContext";
 import useSystemColorScheme from "CometChat/customHooks";
 import "@cometchat/chat-uikit-react/css-variables.css";
@@ -114,16 +115,46 @@ const StatusScreen: React.FC<StatusScreenProps> = ({
   );
 };
 
-function App() {
+const CHAT_FOCUS_STORAGE_KEY = "yustam_chat_focus";
+
+const consumeChatFocus = (): { uid: string; name?: string } | null => {
+  if (typeof window === "undefined") return null;
+  const read = (storage: Storage) => {
+    try {
+      const raw = storage.getItem(CHAT_FOCUS_STORAGE_KEY);
+      if (!raw) return null;
+      storage.removeItem(CHAT_FOCUS_STORAGE_KEY);
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed.uid === "string" && parsed.uid.trim().length) {
+        return {
+          uid: parsed.uid.trim(),
+          name:
+            typeof parsed.name === "string" && parsed.name.trim().length
+              ? parsed.name.trim()
+              : undefined,
+        };
+      }
+    } catch (error) {
+      console.warn("Unable to read chat focus request", error);
+    }
+    return null;
+  };
+
+  return read(window.sessionStorage) || read(window.localStorage);
+};
+
+const AppWithContext: React.FC = () => {
   const [loggedInUser, setLoggedInUser] = useState<CometChat.User | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [errorDetails, setErrorDetails] = useState<string | null>(null);
+  const [defaultUser, setDefaultUser] = useState<CometChat.User | null>(null);
 
   const { styleFeatures, setStyleFeatures } = useCometChatContext();
   const systemTheme = useSystemColorScheme();
   const existingUIKitUser = CometChatUIKitLoginListener?.getLoggedInUser();
   useThemeStyles(styleFeatures, systemTheme, setStyleFeatures, loggedInUser);
+  const { setAppState } = useContext(AppContext);
 
   useEffect(() => {
     const listenerId = "yustam-auto-login";
@@ -239,14 +270,34 @@ function App() {
     }
   }, [existingUIKitUser]);
 
+  useEffect(() => {
+    if (!loggedInUser) return;
+    const focusRequest = consumeChatFocus();
+    if (!focusRequest) return;
+
+    if (focusRequest.uid === loggedInUser.getUid()) {
+      setDefaultUser(null);
+      return;
+    }
+
+    CometChat.getUser(focusRequest.uid)
+      .then((user) => {
+        setDefaultUser(user);
+        setAppState({ type: "updateSelectedItemUser", payload: undefined });
+        setAppState({ type: "updateSelectedItem", payload: undefined });
+        setAppState({ type: "updateSelectedItemGroup", payload: undefined });
+      })
+      .catch((error) => {
+        console.error("Unable to fetch chat focus user", error);
+      });
+  }, [loggedInUser, setAppState]);
+
   if (isInitializing) {
     return (
       <div className="App">
-        <AppContextProvider>
-          <div className="App__content">
-            <StatusScreen variant="loading" message="Connecting to chat…" />
-          </div>
-        </AppContextProvider>
+        <div className="App__content">
+          <StatusScreen variant="loading" message="Connecting to chat…" />
+        </div>
       </div>
     );
   }
@@ -254,36 +305,51 @@ function App() {
   if (errorMessage) {
     return (
       <div className="App">
-        <AppContextProvider>
-          <div className="App__content">
-            <StatusScreen
-              variant="error"
-              message={errorMessage}
-              details={errorDetails}
-            />
-          </div>
-        </AppContextProvider>
+        <div className="App__content">
+          <StatusScreen
+            variant="error"
+            message={errorMessage}
+            details={errorDetails}
+          />
+        </div>
       </div>
     );
   }
 
   return (
     <div className="App">
-      <AppContextProvider>
-        <div className="App__content">
-          {loggedInUser ? (
-            <CometChatHome />
-          ) : (
-            <StatusScreen
-              variant="loading"
-              message="Preparing chat…"
-              details="Awaiting chat session."
-            />
-          )}
-        </div>
-      </AppContextProvider>
+      <div className="App__content">
+        {loggedInUser ? (
+          <CometChatHome defaultUser={defaultUser ?? undefined} />
+        ) : (
+          <StatusScreen
+            variant="loading"
+            message=\ \Preparing chat…\\
+            details="Awaiting chat session."
+          />
+        )}
+      </div>
     </div>
   );
 }
 
+function App() {
+  return (
+    <AppContextProvider>
+      <AppWithContext />
+    </AppContextProvider>
+  );
+}
 export default App;
+
+
+
+
+
+
+
+
+
+
+
+
