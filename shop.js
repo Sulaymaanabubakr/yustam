@@ -19,6 +19,44 @@ const vendorShowcaseBadges = document.getElementById('vendorShowcaseBadges');
 const vendorShowcaseMeta = document.getElementById('vendorShowcaseMeta');
 const clearVendorFilterBtn = document.getElementById('clearVendorFilter');
 
+const loginToggle = document.querySelector('.login-toggle');
+const loginMenu = document.getElementById('loginMenu');
+
+if (loginToggle && loginMenu) {
+  const closeMenu = () => {
+    loginMenu.classList.remove('is-visible');
+    loginMenu.setAttribute('aria-hidden', 'true');
+    loginToggle.setAttribute('aria-expanded', 'false');
+  };
+
+  const handleOutside = (event) => {
+    if (!loginMenu.classList.contains('is-visible')) {
+      return;
+    }
+    if (!loginMenu.contains(event.target) && !loginToggle.contains(event.target)) {
+      closeMenu();
+    } else {
+      document.addEventListener('click', handleOutside, { once: true });
+    }
+  };
+
+  loginToggle.addEventListener('click', () => {
+    const willOpen = !loginMenu.classList.contains('is-visible');
+    loginMenu.classList.toggle('is-visible', willOpen);
+    loginMenu.setAttribute('aria-hidden', willOpen ? 'false' : 'true');
+    loginToggle.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+    if (willOpen) {
+      setTimeout(() => document.addEventListener('click', handleOutside, { once: true }));
+    }
+  });
+
+  loginMenu.addEventListener('click', (event) => {
+    if (event.target.closest('a')) {
+      closeMenu();
+    }
+  });
+}
+
 const searchInput = document.getElementById('searchInput');
 const categoryFilter = document.getElementById('categoryFilter');
 const locationFilter = document.getElementById('locationFilter');

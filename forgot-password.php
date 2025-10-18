@@ -81,8 +81,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'message' => 'If an account matches this email, a password reset link will arrive shortly.'
         ]);
     } catch (Throwable $e) {
+        error_log('Password reset request failed: ' . $e->getMessage());
         http_response_code(500);
-        echo json_encode(['success' => false, 'message' => 'Server error: ' . $e->getMessage()]);
+        echo json_encode(['success' => false, 'message' => 'We could not process your request right now. Please try again.']);
     }
     exit;
 }

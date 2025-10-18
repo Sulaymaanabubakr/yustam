@@ -466,7 +466,7 @@ import { auth, db } from './firebase.js';
                             return;
                         }
                     } else {
-                        console.warn('Firebase admin user not available; continuing with PHP session only.');
+                        console.warn('Auth admin user not available; continuing with PHP session only.');
                     }
 
                     loader.hidden = true;

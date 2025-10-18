@@ -28,7 +28,7 @@ $defaultSettings = [
     'notifUpdates' => true,
     'twoFactor' => false,
     'loginAlert' => true,
-    'theme' => 'system',
+    'theme' => 'light',
 ];
 
 $settings = $defaultSettings;
@@ -352,37 +352,34 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
       box-shadow: 0 24px 40px rgba(243, 115, 30, 0.36);
     }
 
-    .theme-options {
+    .theme-info {
       display: grid;
       gap: 12px;
-    }
-
-    .theme-option {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 14px 16px;
+      padding: 18px;
       border-radius: 18px;
-      border: 1px solid rgba(15, 106, 83, 0.2);
-      background: rgba(243, 235, 224, 0.6);
-      transition: var(--transition);
+      background: rgba(243, 235, 224, 0.65);
+      border: 1px solid rgba(15, 106, 83, 0.22);
     }
 
-    .theme-option input[type="radio"] {
-      accent-color: var(--orange);
-      width: 18px;
-      height: 18px;
+    .theme-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 16px;
+      border-radius: 999px;
+      background: rgba(243, 115, 30, 0.14);
+      color: var(--orange);
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+      font-size: 0.85rem;
     }
 
-    .theme-option.active {
-      border-color: rgba(15, 106, 83, 0.45);
-      box-shadow: 0 14px 28px rgba(15, 106, 83, 0.2);
-      transform: translateY(-2px);
-    }
-
-    body.theme-dark .theme-option {
-      background: rgba(255, 255, 255, 0.06);
-      border-color: rgba(255, 255, 255, 0.1);
+    .theme-note {
+      margin: 0;
+      color: rgba(22, 22, 22, 0.7);
+      font-size: 0.95rem;
+      line-height: 1.5;
     }
 
     .danger-card {
@@ -681,21 +678,11 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
       </section>
 
       <section class="glass-card" aria-labelledby="themeHeading">
-        <h2 id="themeHeading">Theme Preferences</h2>
-        <p class="description">Personalise the dashboard vibe to suit your workflow and lighting.</p>
-        <div class="theme-options">
-          <label class="theme-option" for="themeLight">
-            <input type="radio" name="theme" id="themeLight" value="light">
-            <span>Light Mode</span>
-          </label>
-          <label class="theme-option" for="themeDark">
-            <input type="radio" name="theme" id="themeDark" value="dark">
-            <span>Dark Mode</span>
-          </label>
-          <label class="theme-option" for="themeSystem">
-            <input type="radio" name="theme" id="themeSystem" value="system">
-            <span>System Default</span>
-          </label>
+        <h2 id="themeHeading">Theme</h2>
+        <p class="description">YUSTAM now ships with a consistent light experience to keep every storefront bright and on-brand.</p>
+        <div class="theme-info" role="status" aria-live="polite">
+          <span class="theme-pill"><i class="ri-sun-line" aria-hidden="true"></i>Light mode active</span>
+          <p class="theme-note">This setting is applied automatically across your dashboard and customer-facing pages.</p>
         </div>
       </section>
 

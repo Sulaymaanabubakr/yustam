@@ -10,6 +10,7 @@ import {
   uploadVoiceToCloudinary,
   showToast,
   fetchChatSummary,
+  deleteConversation,
 } from './chat-service.js';
 import { uploadToCloudinary } from './cloudinary.js';
 
@@ -70,6 +71,7 @@ const chatTitleEl = document.getElementById('chatTitle');
 const chatSubtitleEl = document.getElementById('chatSubtitle');
 const backButton = document.getElementById('backButton');
 const infoButton = document.getElementById('infoButton');
+const deleteButton = document.getElementById('deleteChatBtn');
 
 let messagesState = [];
 let unsubscribeMessages = null;
@@ -101,6 +103,30 @@ function updateHeaderMedia() {
 }
 
 updateHeaderMedia();
+
+if (deleteButton) {
+  deleteButton.addEventListener('click', async () => {
+    const confirmed = window.confirm('Delete this conversation? This action cannot be undone.');
+    if (!confirmed) {
+      return;
+    }
+
+    deleteButton.disabled = true;
+    deleteButton.setAttribute('aria-busy', 'true');
+    try {
+      await deleteConversation(thread.chatId);
+      showToast('Conversation removed.', 'success');
+      setTimeout(() => {
+        window.location.href = role === 'vendor' ? 'vendor-chats.php' : 'buyer-chats.php';
+      }, 600);
+    } catch (error) {
+      showToast(error?.message || 'Unable to delete conversation.', 'error');
+    } finally {
+      deleteButton.disabled = false;
+      deleteButton.removeAttribute('aria-busy');
+    }
+  });
+}
 
 function updateOfflineBanner() {
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {

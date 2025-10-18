@@ -196,6 +196,31 @@ async function ensureChatViaApi(payload) {
   return result;
 }
 
+export async function deleteConversation(chatId) {
+  const id = getSafeUid(chatId);
+  if (!isBrowser || typeof fetch !== 'function') {
+    throw new Error('Unable to reach chat service.');
+  }
+
+  const response = await fetch('./api/chat/chat-open.php', {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    credentials: 'include',
+    body: JSON.stringify({ chat_id: id }),
+  });
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || !payload?.success) {
+    throw new Error(payload?.message || 'Unable to delete this conversation.');
+  }
+
+  fallbackChatCache.delete(id);
+  return payload;
+}
+
 async function fetchMessagesViaApi(chatId) {
   if (!isBrowser || typeof fetch !== 'function') {
     throw new Error('Unable to load messages without fetch support.');

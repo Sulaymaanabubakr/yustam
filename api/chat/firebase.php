@@ -162,6 +162,19 @@ function yustam_firestore_get_document(string $path): ?array
     throw new RuntimeException('Firestore get failed: ' . $response['body']);
 }
 
+function yustam_firestore_delete_document(string $path): void
+{
+    $endpoint = yustam_chat_firestore_endpoint('/documents/' . $path);
+    $response = yustam_http_json('DELETE', $endpoint);
+    if ($response['status'] === 404) {
+        return;
+    }
+    if ($response['status'] >= 200 && $response['status'] < 300) {
+        return;
+    }
+    throw new RuntimeException('Firestore delete failed: ' . $response['body']);
+}
+
 function yustam_firestore_run_query(array $query): array
 {
     $endpoint = yustam_chat_firestore_endpoint('/documents:runQuery');
@@ -187,6 +200,37 @@ function yustam_firestore_run_query(array $query): array
         return $results;
     }
     throw new RuntimeException('Firestore query failed: ' . $response['body']);
+}
+
+function yustam_firestore_list_subcollection_documents(string $parentDocument, string $collectionId, int $limit = 100): array
+{
+    $results = yustam_firestore_run_query([
+        'parent' => $parentDocument,
+        'structuredQuery' => [
+            'from' => [
+                ['collectionId' => $collectionId],
+            ],
+            'limit' => $limit,
+        ],
+    ]);
+
+    $documents = [];
+    foreach ($results as $result) {
+        if (isset($result['document']['name'])) {
+            $documents[] = (string)$result['document']['name'];
+        }
+    }
+
+    return $documents;
+}
+
+function yustam_firestore_relative_path(string $documentName): string
+{
+    $prefix = sprintf('projects/%s/databases/(default)/documents/', yustam_chat_project_id());
+    if (strpos($documentName, $prefix) === 0) {
+        return substr($documentName, strlen($prefix));
+    }
+    return ltrim($documentName, '/');
 }
 
 function yustam_firestore_document_path(string ...$segments): string
