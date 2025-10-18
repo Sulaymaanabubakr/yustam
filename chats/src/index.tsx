@@ -11,6 +11,22 @@ import { CometChatProvider } from "CometChat/context/CometChatContext";
 import { COMETCHAT_CONSTANTS } from "./cometchat-config";
 
 export { COMETCHAT_CONSTANTS } from "./cometchat-config";
+
+function clearPreloader() {
+  try {
+    const body = document.body;
+    if (body) {
+      body.classList.remove("cometchat-loading");
+    }
+    const screen = document.getElementById("preload-screen");
+    if (screen) {
+      screen.classList.add("hidden");
+      screen.remove();
+    }
+  } catch (error) {
+    console.warn("Unable to clear preloader", error);
+  }
+}
 /**
  * Initialize CometChat if credentials are available, otherwise render the app directly.
  */
@@ -29,21 +45,41 @@ if (
   /**
    * Initialize CometChat UIKit and render the application inside the CometChatProvider.
    */
-  CometChatUIKit.init(uiKitSettings)?.then((response) => {
-    setupLocalization();
-    const root = ReactDOM.createRoot(
-      document.getElementById("root") as HTMLElement
-    );
-    root.render(
-      <CometChatProvider>
-        <App />
-      </CometChatProvider>
-    );
-  });
+  CometChatUIKit.init(uiKitSettings)
+    ?.then(() => {
+      clearPreloader();
+      setupLocalization();
+      const root = ReactDOM.createRoot(
+        document.getElementById("root") as HTMLElement
+      );
+      root.render(
+        <CometChatProvider>
+          <App />
+        </CometChatProvider>
+      );
+    })
+    .catch((error) => {
+      console.error("CometChat init failed", error);
+      clearPreloader();
+      const root = ReactDOM.createRoot(
+        document.getElementById("root") as HTMLElement
+      );
+      root.render(
+        <div className="App" style={{ gap: "20px" }}>
+          <div className="cometchat-credentials__logo">
+            <img src={cometChatLogo} alt="CometChat Logo" />
+          </div>
+          <div className="cometchat-credentials__header">
+            Chat is temporarily unavailable. Please refresh this page.
+          </div>
+        </div>
+      );
+    });
 } else {
   /**
    * If credentials are missing, render the app without initializing CometChat.
    */
+  clearPreloader();
   const root = ReactDOM.createRoot(
     document.getElementById("root") as HTMLElement
   );

@@ -180,22 +180,7 @@ function renderChats(chats) {
 }
 
 function openChat(chat) {
-  const chatId = chat.chat_id || chat.id;
-  if (!chatId) return;
-  const url = new URL('chat.php', window.location.origin);
-  url.searchParams.set('ch', chatId);
-  url.searchParams.set('as', 'buyer');
-  url.searchParams.set('buyer_uid', buyer.uid);
-  if (buyer.name) url.searchParams.set('buyer_name', buyer.name);
-  if (buyer.avatar) url.searchParams.set('buyer_avatar', buyer.avatar);
-  if (chat.vendor_uid) url.searchParams.set('vendor_uid', chat.vendor_uid);
-  if (chat.vendor_name) url.searchParams.set('vendor_name', chat.vendor_name);
-  if (chat.vendor_avatar) url.searchParams.set('vendor_avatar', chat.vendor_avatar);
-  const listingId = chat.listing_id || chat.listingId;
-  if (listingId) url.searchParams.set('listing', listingId);
-  if (chat.listing_title) url.searchParams.set('listing_title', chat.listing_title);
-  if (chat.listing_image) url.searchParams.set('listing_image', chat.listing_image);
-  window.location.href = url.toString();
+  window.location.href = 'buyer-chats.php';
 }
 
 function subscribeToChats() {
