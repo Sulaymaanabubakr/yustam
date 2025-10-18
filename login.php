@@ -5,6 +5,7 @@ require_once __DIR__ . '/session-path.php';
 session_start();
 
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/cometchat.php';
 header('Content-Type: application/json');
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -59,6 +60,14 @@ try {
     $_SESSION['vendor_name'] = $user['full_name'] ?? '';
     $_SESSION['vendor_email'] = $user['email'];
     $_SESSION['vendor_uid'] = $vendorUid;
+    $_SESSION['yustam_uid'] = $vendorUid;
+    $_SESSION['yustam_role'] = 'vendor';
+
+    yustam_cometchat_call_internal_endpoint(
+        $vendorUid,
+        $_SESSION['vendor_name'] !== '' ? $_SESSION['vendor_name'] : ($user['full_name'] ?? $vendorUid),
+        'vendor'
+    );
 
     // Update last login
     if (yustam_vendor_table_has_column('updated_at')) {

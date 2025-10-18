@@ -4,6 +4,7 @@ session_start();
 
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/send-email.php';
+require_once __DIR__ . '/cometchat.php';
 
 header('Content-Type: application/json');
 
@@ -42,6 +43,14 @@ try {
         $_SESSION['vendor_name'] = $user['full_name'] ?? $name;
         $_SESSION['vendor_email'] = $email;
         $_SESSION['vendor_uid'] = $vendorUid;
+        $_SESSION['yustam_uid'] = $vendorUid;
+        $_SESSION['yustam_role'] = 'vendor';
+
+        yustam_cometchat_call_internal_endpoint(
+            $vendorUid,
+            $_SESSION['vendor_name'] ?: ($user['full_name'] ?? $vendorUid),
+            'vendor'
+        );
 
         echo json_encode([
             'success' => true,
@@ -127,6 +136,14 @@ try {
     $_SESSION['vendor_name'] = $fallbackName;
     $_SESSION['vendor_email'] = $email;
     $_SESSION['vendor_uid'] = $vendorUid;
+    $_SESSION['yustam_uid'] = $vendorUid;
+    $_SESSION['yustam_role'] = 'vendor';
+
+    yustam_cometchat_call_internal_endpoint(
+        $vendorUid,
+        $fallbackName,
+        'vendor'
+    );
 
     $host = !empty($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : 'yustam.com.ng';
     $dashboardUrl = 'https://' . $host . '/vendor-dashboard.php';
