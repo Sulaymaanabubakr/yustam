@@ -64,10 +64,10 @@ const vendorSinceEl = document.getElementById('vendorSince');
 const vendorStorefrontLink = document.getElementById('vendorStorefrontLink');
 const vendorWhatsappLink = document.getElementById('vendorWhatsappLink');
 const vendorAvatarEl = document.getElementById('vendorAvatar');
+const floatingCallBtn = document.getElementById('floatingCallBtn');
 const floatingWhatsappBtn = document.getElementById('floatingWhatsappBtn');
 const chatWithVendorBtn = document.getElementById('chatWithVendorBtn');
-const PLACEHOLDER_IMAGE =
-  'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=1200&q=80';
+const PLACEHOLDER_IMAGE = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
 
 const safeTrim = (value) => (typeof value === 'string' ? value.trim() : '');
 
@@ -241,20 +241,45 @@ const normalisePhoneForWhatsapp = (phone) => {
 
 const setLinkState = (anchor, href, label) => {
   if (!anchor) return;
-  if (!href || !label) {
+  const displayLabel = anchor.dataset.displayLabel;
+  const labelNode = anchor.querySelector('[data-contact-label]');
+  const valueNode = anchor.querySelector('[data-contact-value]');
+
+  const applyDisabled = () => {
     anchor.href = '#';
-    anchor.textContent = label || 'Unavailable';
     anchor.setAttribute('aria-disabled', 'true');
     anchor.classList.add('is-disabled');
     anchor.style.pointerEvents = 'none';
     anchor.style.opacity = '0.6';
+    if (displayLabel) {
+      if (labelNode && displayLabel) labelNode.textContent = displayLabel;
+      if (valueNode) valueNode.textContent = 'Unavailable';
+      anchor.setAttribute('aria-label', `${displayLabel || 'Contact'} unavailable`);
+    } else {
+      const textContent = label || 'Unavailable';
+      anchor.textContent = textContent;
+      anchor.setAttribute('aria-label', textContent);
+    }
+  };
+
+  if (!href || !label) {
+    applyDisabled();
+    return;
+  }
+
+  anchor.href = href;
+  anchor.setAttribute('aria-disabled', 'false');
+  anchor.classList.remove('is-disabled');
+  anchor.style.pointerEvents = '';
+  anchor.style.opacity = '';
+
+  if (displayLabel) {
+    if (labelNode && displayLabel) labelNode.textContent = displayLabel;
+    if (valueNode) valueNode.textContent = label;
+    anchor.setAttribute('aria-label', valueNode ? `${displayLabel}: ${label}` : displayLabel);
   } else {
-    anchor.href = href;
     anchor.textContent = label;
-    anchor.setAttribute('aria-disabled', 'false');
-    anchor.classList.remove('is-disabled');
-    anchor.style.pointerEvents = '';
-    anchor.style.opacity = '';
+    anchor.setAttribute('aria-label', label);
   }
 };
 
@@ -432,7 +457,7 @@ async function launchChatWithMessage(message) {
   if (metadata.productImage) params.set('listing_image', metadata.productImage);
   if (message && message.trim()) params.set('prefill', message.trim());
 
-  window.location.href = chat-thread.php?;
+  window.location.href = `chat-thread.php?${params.toString()}`;
   return metadata;
 }
 
@@ -682,7 +707,7 @@ const updateCategoryLine = (category, subcategory) => {
     categoryLineEl.hidden = true;
     return;
   }
-  categoryLabelEl.textContent = parts.join(' · ');
+  categoryLabelEl.textContent = parts.join(' / ');
   categoryLineEl.hidden = false;
 };
 
@@ -699,6 +724,29 @@ const updateStatusBadge = (status) => {
   productStatusEl.textContent = label;
   productStatusEl.className = 'status-chip';
   productStatusEl.classList.add(`status-${normalized}`);
+};
+
+const updateCallLinks = () => {
+  const phoneValue = (currentVendorPhone || '').trim();
+  if (!floatingCallBtn) return;
+
+  if (phoneValue) {
+    const telHref = `tel:${phoneValue.replace(/\s+/g, '')}`;
+    floatingCallBtn.classList.remove('is-disabled');
+    floatingCallBtn.removeAttribute('aria-disabled');
+    floatingCallBtn.onclick = () => {
+      window.location.href = telHref;
+    };
+    const callLabel = currentVendorName ? `Call ${currentVendorName}` : 'Call vendor';
+    floatingCallBtn.setAttribute('aria-label', `${callLabel} at ${phoneValue}`);
+  } else {
+    floatingCallBtn.classList.add('is-disabled');
+    floatingCallBtn.setAttribute('aria-disabled', 'true');
+    floatingCallBtn.onclick = () => {
+      alert('Vendor phone number is not available yet.');
+    };
+    floatingCallBtn.setAttribute('aria-label', 'Call vendor unavailable');
+  }
 };
 
 const updateWhatsappLinks = () => {
@@ -778,6 +826,7 @@ const applyVendorData = (vendor, vendorIdValue) => {
     const phone = vendor.phone || vendor.contactPhone || '';
     currentVendorPhone = phone;
     setLinkState(vendorPhoneLink, phone ? `tel:${phone.replace(/\s+/g, '')}` : null, phone || 'Unavailable');
+    updateCallLinks();
 
     const locationParts = [vendor.location, vendor.city, vendor.state, vendor.region, vendor.address]
       .map((part) => (typeof part === 'string' ? part.trim() : ''))
@@ -829,6 +878,8 @@ const applyVendorData = (vendor, vendorIdValue) => {
     applyVendorBadges(currentVendorPlan, currentVendorVerification);
     setLinkState(vendorEmailLink, null, 'Unavailable');
     setLinkState(vendorPhoneLink, null, 'Unavailable');
+    currentVendorPhone = '';
+    updateCallLinks();
     if (vendorBusinessEl) vendorBusinessEl.hidden = true;
     if (vendorLocationRow) vendorLocationRow.hidden = true;
     if (vendorSinceRow) vendorSinceRow.hidden = true;
@@ -950,4 +1001,5 @@ const loadListing = async () => {
 
 updateQuickChatDataset();
 updateNegotiationSuggestion();
+updateCallLinks();
 loadListing();

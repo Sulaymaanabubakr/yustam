@@ -44,6 +44,9 @@ if (!$vendor) {
 $vendorData = is_array($vendor) ? $vendor : [];
 $vendorUid = yustam_vendor_assign_uid_if_missing($db, $vendorData);
 $_SESSION['vendor_uid'] = $vendorUid;
+if (!empty($vendorData['firebase_uid'])) {
+    $_SESSION['vendor_firebase_uid'] = trim((string) $vendorData['firebase_uid']);
+}
 if (isset($vendorData['email']) && $vendorData['email'] !== '') {
     $_SESSION['vendor_email'] = $vendorData['email'];
 }
