@@ -157,6 +157,62 @@ function yustam_cometchat_register_user(
 }
 
 /**
+ * Send a text message between two CometChat users via the REST API.
+ *
+ * @param string               $senderUid
+ * @param string               $receiverUid
+ * @param string               $text
+ * @param array<string, mixed> $metadata
+ *
+ * @return array<string, mixed>
+ */
+function yustam_cometchat_send_text_message(
+    string $senderUid,
+    string $receiverUid,
+    string $text,
+    array $metadata = []
+): array {
+    if (!yustam_cometchat_rest_credentials_ready()) {
+        return [
+            'success' => false,
+            'reason' => 'CometChat REST credentials are not configured on the server.',
+            'http_code' => 0,
+        ];
+    }
+
+    $sender = trim($senderUid);
+    $receiver = trim($receiverUid);
+    $payload = [
+        'category' => 'message',
+        'type' => 'text',
+        'receiver' => $receiver,
+        'receiverType' => 'user',
+        'sender' => $sender,
+        'data' => [
+            'text' => $text,
+        ],
+    ];
+
+    if (!empty($metadata)) {
+        $payload['data']['metadata'] = $metadata;
+    }
+
+    $response = yustam_cometchat_execute_rest_request(
+        'POST',
+        yustam_cometchat_rest_url('messages'),
+        $payload
+    );
+
+    $httpCode = (int) ($response['http_code'] ?? 0);
+
+    return [
+        'success' => $httpCode >= 200 && $httpCode < 300,
+        'http_code' => $httpCode,
+        'response' => $response['response'] ?? null,
+    ];
+}
+
+/**
  * Call the internal API endpoint that wraps CometChat user creation.
  *
  * @param string      $uid

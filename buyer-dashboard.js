@@ -170,14 +170,7 @@ function createChatPreview(chat, index) {
   card.appendChild(meta);
 
   card.addEventListener('click', () => {
-    const destination = new URL('chat.php', window.location.href);
-    destination.searchParams.set('chatId', chat.chatId);
-    if (chat.productId) destination.searchParams.set('productId', chat.productId);
-    if (chat.vendorUid) destination.searchParams.set('vendorUid', chat.vendorUid);
-    if (chat.buyerUid) destination.searchParams.set('buyerUid', chat.buyerUid);
-    if (displayName) destination.searchParams.set('participantName', displayName);
-    if (productTitle) destination.searchParams.set('productTitle', productTitle);
-    window.location.href = destination.toString();
+    window.location.href = 'buyer-chats.php';
   });
 
   return card;

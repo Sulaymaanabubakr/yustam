@@ -1,8 +1,9 @@
 import { db } from './firebase.js';
 import { deleteDoc, doc, getDoc, setDoc } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
-import { buildChatId, ensureChat, sendMessage } from './chat-service.js';
 
 const urlParams = new URLSearchParams(window.location.search);
+const COMETCHAT_CREATE_USER_ENDPOINT = '/api/cometchat/create-user.php';
+const COMETCHAT_QUICK_MESSAGE_ENDPOINT = '/api/cometchat/send-message.php';
 
 const readStoredUid = () => {
   if (typeof window === 'undefined') return '';
@@ -68,6 +69,15 @@ const floatingWhatsappBtn = document.getElementById('floatingWhatsappBtn');
 const chatWithVendorBtn = document.getElementById('chatWithVendorBtn');
 const PLACEHOLDER_IMAGE =
   'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=1200&q=80';
+
+const safeTrim = (value) => (typeof value === 'string' ? value.trim() : '');
+
+const buildChatId = (buyerUidValue, vendorUidValue) => {
+  const buyerPart = safeTrim(buyerUidValue);
+  const vendorPart = safeTrim(vendorUidValue);
+  if (!buyerPart || !vendorPart) return '';
+  return `${buyerPart}_${vendorPart}`;
+};
 
 let currentProductName = productNameEl?.textContent?.trim?.() || '';
 let currentProductPrice = 0;
@@ -360,20 +370,58 @@ function resolveChatMetadata() {
   };
 }
 
-function buildChatPageUrl(metadata) {
-  const url = new URL('chat.php', window.location.origin);
-  url.searchParams.set('chat', metadata.chatId);
-  url.searchParams.set('buyerUid', metadata.buyerUid);
-  url.searchParams.set('vendorUid', metadata.vendorUid);
-  url.searchParams.set('listing', metadata.productId);
-  url.searchParams.set('listing_title', metadata.productTitle);
-  if (metadata.productImage) url.searchParams.set('listing_image', metadata.productImage);
-  url.searchParams.set('vendorName', metadata.vendorName);
-  url.searchParams.set('buyerName', metadata.buyerName);
-  return url.toString();
+async function syncCometChatUser(uid, name, role = '', avatar = '') {
+  const trimmedUid = safeTrim(uid);
+  if (!trimmedUid) return;
+  try {
+    const formData = new FormData();
+    formData.append('uid', trimmedUid);
+    if (name) formData.append('name', name);
+    if (role) formData.append('role', role);
+    if (avatar) formData.append('avatar', avatar);
+    await fetch(COMETCHAT_CREATE_USER_ENDPOINT, {
+      method: 'POST',
+      body: formData,
+      credentials: 'same-origin',
+    });
+  } catch (error) {
+    console.warn('[product] CometChat user sync failed', error);
+  }
 }
 
-async function launchChatWithMessage(message, { initialOnly = false } = {}) {
+async function sendQuickCometMessage(metadata, message) {
+  const text = safeTrim(message);
+  if (!text) {
+    return { success: true, skipped: true };
+  }
+
+  const response = await fetch(COMETCHAT_QUICK_MESSAGE_ENDPOINT, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    credentials: 'same-origin',
+    body: JSON.stringify({
+      receiver_uid: metadata.vendorUid,
+      receiver_name: metadata.vendorName,
+      receiver_role: 'vendor',
+      message: text,
+      listing_id: metadata.productId,
+      listing_title: metadata.productTitle,
+      listing_image: metadata.productImage,
+    }),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data?.success) {
+    const reason = data?.message || 'Unable to reach chat server.';
+    throw new Error(reason);
+  }
+
+  return data;
+}
+
+async function launchChatWithMessage(message) {
   if (!ensureBuyerAuthenticated()) return null;
   const metadata = resolveChatMetadata();
   if (!metadata) {
@@ -381,29 +429,19 @@ async function launchChatWithMessage(message, { initialOnly = false } = {}) {
     return null;
   }
 
-  await ensureChat({
-    chatId: metadata.chatId,
-    buyer_uid: metadata.buyerUid,
-    buyer_name: metadata.buyerName,
-    vendor_uid: metadata.vendorUid,
-    vendor_name: metadata.vendorName,
-    listing_id: metadata.productId,
-    listing_title: metadata.productTitle,
-    listing_image: metadata.productImage,
-  });
+  await Promise.all([
+    syncCometChatUser(metadata.buyerUid, metadata.buyerName, 'buyer'),
+    syncCometChatUser(metadata.vendorUid, metadata.vendorName, 'vendor'),
+  ]);
 
-  if (message && message.trim() !== '') {
-    await sendMessage({
-      chatId: metadata.chatId,
-      as: 'buyer',
-      sender_uid: metadata.buyerUid,
-      text: message,
-      buyer_uid: metadata.buyerUid,
-      vendor_uid: metadata.vendorUid,
-    });
+  try {
+    await sendQuickCometMessage(metadata, message);
+  } catch (error) {
+    console.error('[product] quick message failed', error);
+    throw error;
   }
 
-  window.location.href = buildChatPageUrl(metadata);
+  window.location.href = 'buyer-chats.php';
   return metadata;
 }
 
@@ -425,7 +463,7 @@ if (quickChatForm && quickMessageInput) {
       await launchChatWithMessage(message);
     } catch (error) {
       console.error('Unable to start chat', error);
-      alert('Unable to send message right now. Please try again.');
+      alert(error?.message || 'Unable to send message right now. Please try again.');
     } finally {
       if (quickMessageSubmit) {
         quickMessageSubmit.disabled = false;
@@ -445,10 +483,10 @@ if (chatWithVendorBtn) {
       const intro = metadata?.productTitle
         ? `Hi, I'm interested in ${metadata.productTitle}.`
         : 'Hi, I am interested in this listing.';
-      await launchChatWithMessage(intro, { initialOnly: true });
+      await launchChatWithMessage(intro);
     } catch (error) {
       console.error('Unable to open chat', error);
-      alert('Unable to open chat right now. Please try again.');
+      alert(error?.message || 'Unable to open chat right now. Please try again.');
       chatWithVendorBtn.disabled = false;
       chatWithVendorBtn.classList.remove('is-loading');
       chatWithVendorBtn.removeAttribute('aria-busy');
