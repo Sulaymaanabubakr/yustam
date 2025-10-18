@@ -687,3 +687,29 @@ function yustam_chat_reset_unread(string $chatId, string $role): void
     $stmt->execute();
     $stmt->close();
 }
+
+function yustam_chat_delete_conversation(string $chatId): void
+{
+    $chatId = trim($chatId);
+    if ($chatId === '') {
+        throw new InvalidArgumentException('Chat ID is required for deletion.');
+    }
+
+    $conn = yustam_chat_connection();
+
+    $deleteMessages = $conn->prepare('DELETE FROM `chat_messages` WHERE `chat_id` = ?');
+    if (!$deleteMessages) {
+        throw new RuntimeException('Unable to prepare chat message deletion statement: ' . $conn->error);
+    }
+    $deleteMessages->bind_param('s', $chatId);
+    $deleteMessages->execute();
+    $deleteMessages->close();
+
+    $deleteSummary = $conn->prepare('DELETE FROM `chat_summaries` WHERE `chat_id` = ?');
+    if (!$deleteSummary) {
+        throw new RuntimeException('Unable to prepare chat summary deletion statement: ' . $conn->error);
+    }
+    $deleteSummary->bind_param('s', $chatId);
+    $deleteSummary->execute();
+    $deleteSummary->close();
+}

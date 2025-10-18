@@ -112,8 +112,14 @@ const buildListingCard = (item) => {
   status.className = `status-pill ${statusValue ? `status-${statusValue}` : 'status-draft'}`;
   status.textContent = item.status || 'Draft';
 
+  const views = document.createElement('span');
+  views.className = 'listing-views';
+  const viewCount = typeof item.views === 'number' ? item.views : Number(item.views || 0);
+  views.textContent = `${formatNumber(viewCount)} views`;
+
   meta.appendChild(price);
   meta.appendChild(status);
+  meta.appendChild(views);
 
   const actions = document.createElement('div');
   actions.className = 'listing-actions';

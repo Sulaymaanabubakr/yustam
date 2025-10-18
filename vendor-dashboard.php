@@ -82,15 +82,18 @@ try {
     $listingStmt->execute();
     $listingResult = $listingStmt->get_result();
     while ($row = $listingResult->fetch_assoc()) {
+        $statusValue = strtolower(trim((string)($row['status'] ?? '')));
+        $isActive = in_array($statusValue, ['active', 'published', 'approved', 'live', 'available'], true);
         $listings[] = [
             'title' => $row['title'] ?? 'Untitled',
             'price' => $row['price'] ?? 0,
             'status' => $row['status'] ?? 'Draft',
             'added_on' => isset($row['created_at']) ? date('j M Y', strtotime($row['created_at'])) : '—',
-            'link' => 'product.html?id=' . ($row['id'] ?? ''),
+            'link' => 'product.php?id=' . ($row['id'] ?? ''),
+            'views' => (int)($row['views'] ?? 0),
         ];
         $stats['total_listings']++;
-        if (strtolower($row['status'] ?? '') === 'active') {
+        if ($isActive) {
             $stats['active_listings']++;
         }
         $stats['total_views'] += (int)($row['views'] ?? 0);
@@ -122,7 +125,7 @@ if ($vendorUid !== '') {
         ];
 
         $fireResults = yustam_firestore_run_query($fireQuery);
-        $activeStatuses = ['active', 'published', 'approved', 'live'];
+        $activeStatuses = ['active', 'published', 'approved', 'live', 'available'];
 
         foreach ($fireResults as $result) {
             if (!isset($result['document']['fields'])) {
@@ -141,11 +144,13 @@ if ($vendorUid !== '') {
             }
 
             $viewsCandidate = $fields['views'] ?? ($fields['viewCount'] ?? 0);
+            $viewsCount = 0;
             if (is_array($viewsCandidate)) {
-                $firestoreViews += (int)($viewsCandidate['total'] ?? 0);
+                $viewsCount = (int)($viewsCandidate['total'] ?? 0);
             } else {
-                $firestoreViews += (int)$viewsCandidate;
+                $viewsCount = (int)$viewsCandidate;
             }
+            $firestoreViews += $viewsCount;
 
             $docName = $result['document']['name'] ?? '';
             $docId = $fields['id'] ?? ($docName !== '' ? basename($docName) : '');
@@ -177,6 +182,7 @@ if ($vendorUid !== '') {
                 'status' => $statusValue !== '' ? ucwords($statusValue) : 'Pending',
                 'added_on' => $addedOn,
                 'link' => $docId !== '' ? 'product.php?id=' . urlencode($docId) : '#',
+                'views' => $viewsCount,
                 'sort_ts' => $addedTimestamp,
             ];
         }
@@ -548,6 +554,11 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
             gap: 0.6rem;
             font-size: 0.85rem;
             color: rgba(17, 17, 17, 0.6);
+        }
+
+        .listing-views {
+            font-weight: 500;
+            color: rgba(17, 17, 17, 0.55);
         }
 
         .status-pill {

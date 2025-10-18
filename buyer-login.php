@@ -6,7 +6,7 @@ require_once __DIR__ . '/buyer-storage.php';
 require_once __DIR__ . '/firebase-admin.php';
 
 /**
- * After a successful login, persist the Firebase UID to web storage and redirect.
+ * After a successful login, persist the authentication UID to web storage and redirect.
  */
 function yustam_emit_login_redirect(string $redirectUrl, string $uid): void
 {
@@ -33,13 +33,13 @@ function yustam_emit_login_redirect(string $redirectUrl, string $uid): void
                 localStorage.setItem('firebase_uid', uid);
                 sessionStorage.setItem('firebase_uid', uid);
             } catch (err) {
-                console.warn('Unable to persist Firebase UID in dedicated keys', err);
+                console.warn('Unable to persist sign-in UID in dedicated keys', err);
             }
             localStorage.setItem('yustam_uid', uid);
             sessionStorage.setItem('yustam_uid', uid);
         }
     } catch (storageError) {
-        console.warn('Unable to persist Firebase UID', storageError);
+        console.warn('Unable to persist sign-in UID', storageError);
     }
     window.location.replace({$redirectJson});
 })();
@@ -86,7 +86,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $authResponse = yustam_firebase_sign_in_with_password($email, $password);
             $firebaseUid = (string) ($authResponse['localId'] ?? '');
             if ($firebaseUid === '') {
-                throw new RuntimeException('Firebase login did not include a UID.');
+                throw new RuntimeException('Authentication service did not include a UID.');
             }
 
             $firebaseEmail = strtolower((string) ($authResponse['email'] ?? $email));
@@ -131,14 +131,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['yustam_role'] = 'buyer';
 
             yustam_emit_login_redirect('buyer-dashboard.php', $firebaseUid);
-        } catch (Throwable $authError) {
-            $message = $authError->getMessage();
-            if (stripos($message, 'INVALID_PASSWORD') !== false || stripos($message, 'EMAIL_NOT_FOUND') !== false) {
+        } catch (YustamFirebaseAuthException $authError) {
+            $code = strtoupper($authError->getErrorCode());
+            if (in_array($code, ['INVALID_PASSWORD', 'EMAIL_NOT_FOUND', 'USER_NOT_FOUND', 'INVALID_LOGIN_CREDENTIALS'], true)) {
                 $errorMessage = 'Incorrect email or password';
             } else {
-                error_log('Buyer Firebase login error: ' . $authError->getMessage());
-                $errorMessage = 'Unable to sign in. Please try again.';
+                $errorMessage = $authError->getMessage();
             }
+        } catch (Throwable $authError) {
+            error_log('Buyer login failed: ' . $authError->getMessage());
+            $errorMessage = 'Unable to sign in. Please try again.';
         }
     }
 }

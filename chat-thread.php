@@ -4,6 +4,7 @@ session_start();
 
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/buyer-storage.php';
+require_once __DIR__ . '/api/chat/firebase.php';
 
 if (!isset($_SESSION['buyer_id']) && !isset($_SESSION['vendor_id'])) {
     header('Location: buyer-login.php');
@@ -105,6 +106,28 @@ if ($chatId !== '') {
         $counterparty['name'] = $role === 'buyer'
             ? trim((string)$chatSummary['vendor_name'])
             : trim((string)$chatSummary['buyer_name']);
+    } else {
+        try {
+            $document = yustam_firestore_get_document('chats/' . $chatId);
+            if ($document && isset($document['fields'])) {
+                $fields = [];
+                foreach ($document['fields'] as $key => $value) {
+                    $fields[$key] = yustam_firestore_decode($value);
+                }
+                $buyerUid = $buyerUid ?: trim((string)($fields['buyer_uid'] ?? ''));
+                $vendorUid = $vendorUid ?: trim((string)($fields['vendor_uid'] ?? ''));
+                $listing['id'] = $listing['id'] ?: trim((string)($fields['listing_id'] ?? ''));
+                $listing['title'] = $listing['title'] ?: trim((string)($fields['listing_title'] ?? ''));
+                $listing['image'] = $listing['image'] ?: trim((string)($fields['listing_image'] ?? ''));
+                if ($counterparty['name'] === '') {
+                    $counterparty['name'] = $role === 'buyer'
+                        ? trim((string)($fields['vendor_name'] ?? ''))
+                        : trim((string)($fields['buyer_name'] ?? ''));
+                }
+            }
+        } catch (Throwable $fireError) {
+            error_log('chat-thread Firestore summary lookup failed: ' . $fireError->getMessage());
+        }
     }
 }
 
@@ -225,6 +248,22 @@ $bootstrap = [
         .thread-header button:hover {
             transform: translateY(-1px);
             box-shadow: 0 12px 24px rgba(15, 106, 83, 0.15);
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .thread-header button.danger {
+            background: rgba(220, 65, 47, 0.12);
+            color: #dc412f;
+            border: 1px solid rgba(220, 65, 47, 0.2);
+        }
+
+        .thread-header button.danger:hover {
+            box-shadow: 0 12px 24px rgba(220, 65, 47, 0.18);
+            background: rgba(220, 65, 47, 0.18);
         }
 
         .header-avatar {
@@ -439,6 +478,12 @@ $bootstrap = [
             .thread-header .header-avatar {
                 display: none;
             }
+            .header-actions {
+                gap: 6px;
+            }
+            .thread-header button {
+                padding: 10px;
+            }
         }
     </style>
 </head>
@@ -455,9 +500,14 @@ $bootstrap = [
                 <h1 id="chatTitle"><?= htmlspecialchars($counterparty['name'] ?: ($role === 'buyer' ? 'Vendor' : 'Buyer')) ?></h1>
                 <p id="chatSubtitle"><?= htmlspecialchars($listing['title'] ?: 'Marketplace listing') ?></p>
             </div>
-            <button type="button" id="infoButton">
-                <i class="ri-information-line"></i>
-            </button>
+            <div class="header-actions">
+                <button type="button" id="infoButton">
+                    <i class="ri-information-line"></i>
+                </button>
+                <button type="button" id="deleteChatBtn" class="danger" aria-label="Delete conversation">
+                    <i class="ri-delete-bin-6-line"></i>
+                </button>
+            </div>
         </header>
         <div id="offlineBanner">You are offline. Messages will send when you're back online.</div>
         <main class="thread-main">
