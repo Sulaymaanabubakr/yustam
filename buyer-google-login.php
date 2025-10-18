@@ -4,6 +4,7 @@ session_start();
 
 require_once __DIR__ . '/buyer-storage.php';
 require_once __DIR__ . '/send-email.php';
+require_once __DIR__ . '/cometchat.php';
 
 header('Content-Type: application/json');
 
@@ -30,6 +31,19 @@ try {
         $_SESSION['buyer_email'] = $existing['email'];
         $_SESSION['buyer_uid'] = $existing['buyer_uid'] ?? null;
 
+        if (!empty($_SESSION['buyer_uid'])) {
+            $_SESSION['yustam_uid'] = $_SESSION['buyer_uid'];
+            $_SESSION['yustam_role'] = 'buyer';
+
+            $avatar = $existing['avatar'] ?? $existing['profile_photo'] ?? null;
+            yustam_cometchat_call_internal_endpoint(
+                (string) $_SESSION['buyer_uid'],
+                $_SESSION['buyer_name'] ?? 'Buyer',
+                'buyer',
+                is_string($avatar) ? $avatar : null
+            );
+        }
+
         echo json_encode([
             'success' => true,
             'redirect' => 'buyer-dashboard.php',
@@ -50,6 +64,19 @@ try {
     $_SESSION['buyer_name'] = $buyer['name'];
     $_SESSION['buyer_email'] = $buyer['email'];
     $_SESSION['buyer_uid'] = $buyer['buyer_uid'] ?? null;
+
+    if (!empty($_SESSION['buyer_uid'])) {
+        $_SESSION['yustam_uid'] = $_SESSION['buyer_uid'];
+        $_SESSION['yustam_role'] = 'buyer';
+
+        $avatar = $buyer['avatar'] ?? $buyer['profile_photo'] ?? null;
+        yustam_cometchat_call_internal_endpoint(
+            (string) $_SESSION['buyer_uid'],
+            $_SESSION['buyer_name'] ?? $buyer['name'],
+            'buyer',
+            is_string($avatar) ? $avatar : null
+        );
+    }
 
     $host = !empty($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : 'yustam.com.ng';
     $dashboardUrl = 'https://' . $host . '/buyer-dashboard.php';

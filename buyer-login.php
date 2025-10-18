@@ -3,8 +3,55 @@ require_once __DIR__ . '/session-path.php';
 session_start();
 
 require_once __DIR__ . '/buyer-storage.php';
+require_once __DIR__ . '/cometchat.php';
+
+/**
+ * After a successful login, persist the UID to web storage and redirect.
+ */
+function yustam_emit_login_redirect(string $redirectUrl, string $uid): void
+{
+    $uidJson = json_encode($uid, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    $redirectJson = json_encode($redirectUrl, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    $escapedRedirect = htmlspecialchars($redirectUrl, ENT_QUOTES, 'UTF-8');
+
+    header('Content-Type: text/html; charset=UTF-8');
+    echo <<<HTML
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Redirecting…</title>
+    <meta http-equiv="refresh" content="0;url={$escapedRedirect}">
+</head>
+<body>
+<script>
+(function () {
+    try {
+        var uid = {$uidJson};
+        if (typeof uid === 'string' && uid.trim().length) {
+            localStorage.setItem('yustam_uid', uid);
+            sessionStorage.setItem('yustam_uid', uid);
+        }
+    } catch (storageError) {
+        console.warn('Unable to persist CometChat UID', storageError);
+    }
+    window.location.replace({$redirectJson});
+})();
+</script>
+<noscript>
+    <p>Login successful. Continue to your dashboard: <a href="{$escapedRedirect}">Dashboard</a></p>
+</noscript>
+</body>
+</html>
+HTML;
+    exit;
+}
 
 if (isset($_SESSION['buyer_id'])) {
+    if (!empty($_SESSION['buyer_uid'])) {
+        $_SESSION['yustam_uid'] = $_SESSION['buyer_uid'];
+        $_SESSION['yustam_role'] = 'buyer';
+    }
     header('Location: buyer-dashboard.php');
     exit;
 }
@@ -29,6 +76,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['buyer_name'] = $buyer['name'] ?? 'Buyer';
             $_SESSION['buyer_uid'] = $buyer['buyer_uid'] ?? null;
             $_SESSION['buyer_email'] = $buyer['email'] ?? $email;
+            $_SESSION['yustam_uid'] = $_SESSION['buyer_uid'] ?? null;
+            $_SESSION['yustam_role'] = 'buyer';
+
+            if (!empty($_SESSION['buyer_uid'])) {
+                $avatar = $buyer['avatar'] ?? $buyer['profile_photo'] ?? null;
+                yustam_cometchat_call_internal_endpoint(
+                    (string) $_SESSION['buyer_uid'],
+                    $_SESSION['buyer_name'] ?? 'Buyer',
+                    'buyer',
+                    is_string($avatar) ? $avatar : null
+                );
+                yustam_emit_login_redirect('buyer-dashboard.php', (string) $_SESSION['buyer_uid']);
+            }
+
             header('Location: buyer-dashboard.php');
             exit;
         }
