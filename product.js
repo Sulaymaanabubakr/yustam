@@ -1,9 +1,8 @@
 import { db } from './firebase.js';
+import { buildChatId as computeChatId } from './chat-service.js';
 import { deleteDoc, doc, getDoc, setDoc } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
 
 const urlParams = new URLSearchParams(window.location.search);
-const COMETCHAT_CREATE_USER_ENDPOINT = '/api/cometchat/create-user.php';
-const COMETCHAT_QUICK_MESSAGE_ENDPOINT = '/api/cometchat/send-message.php';
 
 const readStoredUid = () => {
   if (typeof window === 'undefined') return '';
@@ -359,7 +358,7 @@ function resolveChatMetadata() {
     return null;
   }
   return {
-    chatId: buildChatId(buyerChatUid, vendorChatUid),
+    chatId: computeChatId(buyerChatUid, vendorChatUid),
     buyerUid: buyerChatUid,
     vendorUid: vendorChatUid,
     productId: listingId,
@@ -369,31 +368,6 @@ function resolveChatMetadata() {
     buyerName: buyerName || 'Buyer',
   };
 }
-
-async function syncCometChatUser(uid, name, role = '', avatar = '') {
-  const trimmedUid = safeTrim(uid);
-  if (!trimmedUid) return;
-  try {
-    const formData = new FormData();
-    formData.append('uid', trimmedUid);
-    if (name) formData.append('name', name);
-    if (role) formData.append('role', role);
-    if (avatar) formData.append('avatar', avatar);
-    await fetch(COMETCHAT_CREATE_USER_ENDPOINT, {
-      method: 'POST',
-      body: formData,
-      credentials: 'same-origin',
-    });
-  } catch (error) {
-    console.warn('[product] CometChat user sync failed', error);
-  }
-}
-
-async function sendQuickCometMessage(metadata, message) {
-  const text = safeTrim(message);
-  if (!text) {
-    return { success: true, skipped: true };
-  }
 
   const response = await fetch(COMETCHAT_QUICK_MESSAGE_ENDPOINT, {
     method: 'POST',
@@ -448,20 +422,17 @@ async function launchChatWithMessage(message) {
     return null;
   }
 
-  await Promise.all([
-    syncCometChatUser(metadata.buyerUid, metadata.buyerName, 'buyer'),
-    syncCometChatUser(metadata.vendorUid, metadata.vendorName, 'vendor'),
-  ]);
-
-  try {
-    await sendQuickCometMessage(metadata, message);
-  } catch (error) {
-    console.error('[product] quick message failed', error);
-    throw error;
-  }
-
   persistChatFocus(metadata);
-  window.location.href = 'buyer-chats.php';
+
+  const params = new URLSearchParams({
+    chat: metadata.chatId,
+    listing: metadata.productId || '',
+  });
+  if (metadata.productTitle) params.set('listing_title', metadata.productTitle);
+  if (metadata.productImage) params.set('listing_image', metadata.productImage);
+  if (message && message.trim()) params.set('prefill', message.trim());
+
+  window.location.href = chat-thread.php?;
   return metadata;
 }
 

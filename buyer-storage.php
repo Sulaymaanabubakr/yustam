@@ -27,6 +27,7 @@ function yustam_buyers_ensure_schema(mysqli $conn): void
 CREATE TABLE IF NOT EXISTS `buyers` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `buyer_uid` VARCHAR(20) NOT NULL UNIQUE,
+    `firebase_uid` VARCHAR(128) DEFAULT NULL UNIQUE,
     `name` VARCHAR(150) NOT NULL,
     `email` VARCHAR(150) NOT NULL UNIQUE,
     `phone` VARCHAR(30) DEFAULT NULL,
@@ -47,6 +48,9 @@ SQL;
             throw new RuntimeException('Unable to add provider column to buyers table: ' . $conn->error);
         }
     }
+    if ($providerColumn instanceof mysqli_result) {
+        $providerColumn->free();
+    }
 
     $uidColumn = $conn->query("SHOW COLUMNS FROM `buyers` LIKE 'buyer_uid'");
     if ($uidColumn && $uidColumn->num_rows === 0) {
@@ -56,6 +60,16 @@ SQL;
     }
     if ($uidColumn instanceof mysqli_result) {
         $uidColumn->free();
+    }
+
+    $firebaseColumn = $conn->query("SHOW COLUMNS FROM `buyers` LIKE 'firebase_uid'");
+    if ($firebaseColumn && $firebaseColumn->num_rows === 0) {
+        if (!$conn->query("ALTER TABLE `buyers` ADD COLUMN `firebase_uid` VARCHAR(128) DEFAULT NULL UNIQUE AFTER `buyer_uid`")) {
+            throw new RuntimeException('Unable to add firebase_uid column to buyers table: ' . $conn->error);
+        }
+    }
+    if ($firebaseColumn instanceof mysqli_result) {
+        $firebaseColumn->free();
     }
 }
 
@@ -116,6 +130,7 @@ function yustam_buyers_ensure_uid(array $buyer): array
 
     for ($attempt = 0; $attempt < $maxAttempts; $attempt++) {
         $uidParam = yustam_buyers_generate_uid($conn);
+
         try {
             $stmt->execute();
             $buyer['buyer_uid'] = $uidParam;
@@ -138,14 +153,26 @@ function yustam_buyers_ensure_uid(array $buyer): array
 /**
  * Inserts a new buyer record.
  */
-function yustam_buyers_create(string $name, string $email, string $phone, string $passwordHash, string $provider = 'email'): array
-{
+function yustam_buyers_create(
+    string $firebaseUid,
+    string $name,
+    string $email,
+    string $phone,
+    string $passwordHash,
+    string $provider = 'email',
+    ?string $joinedAt = null
+): array {
+    $trimmedFirebase = trim($firebaseUid);
+    if ($trimmedFirebase === '') {
+        throw new InvalidArgumentException('Firebase UID is required when creating a buyer.');
+    }
+
     $conn = yustam_buyers_connection();
     $lowerEmail = strtolower($email);
     $normalizedPhone = trim($phone);
-    $joinedAt = gmdate('Y-m-d H:i:s');
+    $joinedAt = $joinedAt ?: gmdate('Y-m-d H:i:s');
 
-    $sql = 'INSERT INTO `buyers` (buyer_uid, name, email, phone, password, provider, joined_at) VALUES (?, ?, ?, ?, ?, ?, ?)';
+    $sql = 'INSERT INTO `buyers` (buyer_uid, firebase_uid, name, email, phone, password, provider, joined_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
     $stmt = $conn->prepare($sql);
 
     if (!$stmt) {
@@ -153,7 +180,7 @@ function yustam_buyers_create(string $name, string $email, string $phone, string
     }
 
     $buyerUid = '';
-    $stmt->bind_param('sssssss', $buyerUid, $name, $lowerEmail, $normalizedPhone, $passwordHash, $provider, $joinedAt);
+    $stmt->bind_param('ssssssss', $buyerUid, $trimmedFirebase, $name, $lowerEmail, $normalizedPhone, $passwordHash, $provider, $joinedAt);
 
     $maxAttempts = 5;
     $created = false;
@@ -166,9 +193,20 @@ function yustam_buyers_create(string $name, string $email, string $phone, string
             $created = true;
             break;
         } catch (mysqli_sql_exception $exception) {
-            if ((int) $exception->getCode() === 1062 && stripos($exception->getMessage(), 'buyer_uid') !== false) {
-                $stmt->reset();
-                continue;
+            if ((int) $exception->getCode() === 1062) {
+                $message = $exception->getMessage();
+                if (stripos($message, 'buyer_uid') !== false) {
+                    $stmt->reset();
+                    continue;
+                }
+                if (stripos($message, 'firebase_uid') !== false) {
+                    $stmt->close();
+                    throw new RuntimeException('A buyer with this Firebase UID already exists.');
+                }
+                if (stripos($message, 'email') !== false) {
+                    $stmt->close();
+                    throw new RuntimeException('A buyer with this email already exists.');
+                }
             }
 
             $stmt->close();
@@ -187,6 +225,7 @@ function yustam_buyers_create(string $name, string $email, string $phone, string
     return [
         'id' => $newId,
         'buyer_uid' => $buyerUid,
+        'firebase_uid' => $trimmedFirebase,
         'name' => $name,
         'email' => $lowerEmail,
         'phone' => $normalizedPhone,
@@ -197,12 +236,59 @@ function yustam_buyers_create(string $name, string $email, string $phone, string
 }
 
 /**
+ * Persists a Firebase UID against an existing buyer record.
+ */
+function yustam_buyers_set_firebase_uid(int $buyerId, string $firebaseUid): void
+{
+    $trimmed = trim($firebaseUid);
+    if ($trimmed === '') {
+        throw new InvalidArgumentException('Firebase UID cannot be empty.');
+    }
+
+    $conn = yustam_buyers_connection();
+    $stmt = $conn->prepare('UPDATE `buyers` SET `firebase_uid` = ? WHERE `id` = ? LIMIT 1');
+    if (!$stmt) {
+        throw new RuntimeException('Failed to prepare buyer firebase UID statement: ' . $conn->error);
+    }
+
+    $stmt->bind_param('si', $trimmed, $buyerId);
+    $stmt->execute();
+    $stmt->close();
+}
+
+/**
+ * Retrieves a buyer by Firebase UID.
+ */
+function yustam_buyers_find_by_firebase_uid(string $firebaseUid): ?array
+{
+    $trimmed = trim($firebaseUid);
+    if ($trimmed === '') {
+        return null;
+    }
+
+    $conn = yustam_buyers_connection();
+    $stmt = $conn->prepare('SELECT id, buyer_uid, firebase_uid, name, email, phone, password, provider, joined_at FROM buyers WHERE firebase_uid = ? LIMIT 1');
+
+    if (!$stmt) {
+        throw new RuntimeException('Failed to prepare buyer firebase lookup: ' . $conn->error);
+    }
+
+    $stmt->bind_param('s', $trimmed);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $buyer = $result ? $result->fetch_assoc() : null;
+    $stmt->close();
+
+    return $buyer ?: null;
+}
+
+/**
  * Retrieves a buyer by email address.
  */
 function yustam_buyers_find_by_email(string $email): ?array
 {
     $conn = yustam_buyers_connection();
-    $stmt = $conn->prepare('SELECT id, buyer_uid, name, email, phone, password, provider, joined_at FROM buyers WHERE email = ? LIMIT 1');
+    $stmt = $conn->prepare('SELECT id, buyer_uid, firebase_uid, name, email, phone, password, provider, joined_at FROM buyers WHERE email = ? LIMIT 1');
 
     if (!$stmt) {
         throw new RuntimeException('Failed to prepare buyer lookup statement: ' . $conn->error);
@@ -226,7 +312,7 @@ function yustam_buyers_find_by_email(string $email): ?array
 function yustam_buyers_find(int $id): ?array
 {
     $conn = yustam_buyers_connection();
-    $stmt = $conn->prepare('SELECT id, buyer_uid, name, email, phone, password, provider, joined_at FROM buyers WHERE id = ? LIMIT 1');
+    $stmt = $conn->prepare('SELECT id, buyer_uid, firebase_uid, name, email, phone, password, provider, joined_at FROM buyers WHERE id = ? LIMIT 1');
 
     if (!$stmt) {
         throw new RuntimeException('Failed to prepare buyer lookup statement: ' . $conn->error);

@@ -4,6 +4,7 @@ ini_set('display_errors', 1);
 
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/send-email.php';
+require_once __DIR__ . '/firebase-admin.php';
 
 header('Content-Type: application/json');
 
@@ -40,6 +41,8 @@ if ($password !== $confirm) {
     exit;
 }
 
+$firebaseUid = '';
+
 try {
     $db = get_db_connection();
     $vendorTable = YUSTAM_VENDORS_TABLE;
@@ -58,12 +61,28 @@ try {
     }
     $check->close();
 
+    try {
+        $firebaseUser = yustam_firebase_create_user($email, $password, $name);
+        $firebaseUid = (string) ($firebaseUser['localId'] ?? '');
+        if ($firebaseUid === '') {
+            throw new RuntimeException('Firebase did not return a UID.');
+        }
+    } catch (Throwable $firebaseError) {
+        $message = $firebaseError->getMessage();
+        if (stripos($message, 'EMAIL_EXISTS') !== false) {
+            echo json_encode(['success' => false, 'message' => 'This email is already registered.']);
+            exit;
+        }
+        error_log('Vendor signup Firebase error: ' . $firebaseError->getMessage());
+        throw $firebaseError;
+    }
+
     $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
     $verificationToken = bin2hex(random_bytes(32));
 
     $insertSql = sprintf(
-        "INSERT INTO `%s` (vendor_uid, full_name, email, phone, password, business_name, category, provider, verification_token, verified, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 'email', ?, 0, NOW(), NOW())",
+        "INSERT INTO `%s` (vendor_uid, firebase_uid, full_name, email, phone, password, business_name, category, provider, verification_token, verified, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'email', ?, 0, NOW(), NOW())",
         $vendorTable
     );
     $stmt = $db->prepare($insertSql);
@@ -72,7 +91,7 @@ try {
     }
 
     $vendorUid = '';
-    $stmt->bind_param('ssssssss', $vendorUid, $name, $email, $phone, $hashedPassword, $businessName, $category, $verificationToken);
+    $stmt->bind_param('sssssssss', $vendorUid, $firebaseUid, $name, $email, $phone, $hashedPassword, $businessName, $category, $verificationToken);
 
     $maxAttempts = 5;
     $created = false;
@@ -150,6 +169,17 @@ try {
 
     echo json_encode(['success' => true, 'message' => 'Account created! Please check your email to verify your account.']);
 } catch (Throwable $e) {
+    if ($firebaseUid !== '') {
+        try {
+            yustam_firebase_identity_admin_request(
+                'POST',
+                sprintf('projects/%s/accounts:delete', yustam_firebase_project_id()),
+                ['localId' => $firebaseUid]
+            );
+        } catch (Throwable $cleanupError) {
+            error_log('Vendor signup cleanup failed: ' . $cleanupError->getMessage());
+        }
+    }
     http_response_code(500);
     echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
 }

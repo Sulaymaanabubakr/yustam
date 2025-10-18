@@ -4,7 +4,7 @@ session_start();
 
 require_once __DIR__ . '/buyer-storage.php';
 require_once __DIR__ . '/send-email.php';
-require_once __DIR__ . '/cometchat.php';
+require_once __DIR__ . '/firebase-admin.php';
 
 header('Content-Type: application/json');
 
@@ -13,76 +13,93 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-$name = trim($_POST['name'] ?? '');
-$email = strtolower(trim($_POST['email'] ?? ''));
+$idToken = trim($_POST['idToken'] ?? '');
+$explicitEmail = strtolower(trim($_POST['email'] ?? ''));
+$explicitName = trim($_POST['name'] ?? '');
 $provider = trim($_POST['provider'] ?? 'google');
 
-if ($email === '') {
-    echo json_encode(['success' => false, 'message' => 'Email is required.']);
+if ($idToken === '') {
+    echo json_encode(['success' => false, 'message' => 'Missing Google sign-in token.']);
     exit;
 }
 
 try {
-    $existing = yustam_buyers_find_by_email($email);
-    if ($existing) {
-        $existing = yustam_buyers_ensure_uid($existing);
-        $_SESSION['buyer_id'] = (int)$existing['id'];
-        $_SESSION['buyer_name'] = $existing['name'] ?? ($name ?: 'Buyer');
-        $_SESSION['buyer_email'] = $existing['email'];
-        $_SESSION['buyer_uid'] = $existing['buyer_uid'] ?? null;
+    $firebaseUser = yustam_firebase_lookup_id_token($idToken);
+} catch (Throwable $e) {
+    error_log('Buyer Google login token verification failed: ' . $e->getMessage());
+    http_response_code(401);
+    echo json_encode(['success' => false, 'message' => 'Unable to verify Google sign-in. Please try again.']);
+    exit;
+}
 
-        if (!empty($_SESSION['buyer_uid'])) {
-            $_SESSION['yustam_uid'] = $_SESSION['buyer_uid'];
-            $_SESSION['yustam_role'] = 'buyer';
+$firebaseUid = (string) ($firebaseUser['localId'] ?? '');
+if ($firebaseUid === '') {
+    http_response_code(500);
+    echo json_encode(['success' => false, 'message' => 'Invalid Firebase response.']);
+    exit;
+}
 
-            $avatar = $existing['avatar'] ?? $existing['profile_photo'] ?? null;
-            yustam_cometchat_call_internal_endpoint(
-                (string) $_SESSION['buyer_uid'],
-                $_SESSION['buyer_name'] ?? 'Buyer',
-                'buyer',
-                is_string($avatar) ? $avatar : null
-            );
-        }
+$email = strtolower(trim($firebaseUser['email'] ?? $explicitEmail));
+if ($email === '') {
+    echo json_encode(['success' => false, 'message' => 'Your Google account does not have an email address.']);
+    exit;
+}
 
-        echo json_encode([
-            'success' => true,
-            'redirect' => 'buyer-dashboard.php',
-            'message' => 'Welcome back, ' . htmlspecialchars($existing['name'] ?? ($name ?: 'Buyer')),
-            'uid' => $existing['buyer_uid'] ?? null,
-            'role' => 'buyer'
-        ]);
+$displayName = trim($firebaseUser['displayName'] ?? $explicitName);
+if ($displayName === '') {
+    $displayName = 'Google Buyer';
+}
+
+$buyer = yustam_buyers_find_by_firebase_uid($firebaseUid);
+if (!$buyer) {
+    $existingByEmail = yustam_buyers_find_by_email($email);
+    if ($existingByEmail) {
+        yustam_buyers_set_firebase_uid((int) $existingByEmail['id'], $firebaseUid);
+        $buyer = yustam_buyers_find((int) $existingByEmail['id']);
+    }
+}
+
+$createdNewBuyer = false;
+
+if (!$buyer) {
+    $randomPassword = password_hash(bin2hex(random_bytes(16)), PASSWORD_DEFAULT);
+    try {
+        $buyer = yustam_buyers_create($firebaseUid, $displayName, $email, '', $randomPassword, $provider ?: 'google');
+        $createdNewBuyer = true;
+    } catch (Throwable $createError) {
+        error_log('Buyer Google login storage error: ' . $createError->getMessage());
+        http_response_code(500);
+        echo json_encode(['success' => false, 'message' => 'Unable to create your account. Please try again.']);
         exit;
     }
-
-    $fallbackName = $name !== '' ? $name : 'Google Buyer';
-    $randomPassword = bin2hex(random_bytes(12));
-    $passwordHash = password_hash($randomPassword, PASSWORD_DEFAULT);
-
-    $buyer = yustam_buyers_create($fallbackName, $email, '', $passwordHash, $provider ?: 'google');
-
-    $_SESSION['buyer_id'] = (int)$buyer['id'];
-    $_SESSION['buyer_name'] = $buyer['name'];
-    $_SESSION['buyer_email'] = $buyer['email'];
-    $_SESSION['buyer_uid'] = $buyer['buyer_uid'] ?? null;
-
-    if (!empty($_SESSION['buyer_uid'])) {
-        $_SESSION['yustam_uid'] = $_SESSION['buyer_uid'];
-        $_SESSION['yustam_role'] = 'buyer';
-
-        $avatar = $buyer['avatar'] ?? $buyer['profile_photo'] ?? null;
-        yustam_cometchat_call_internal_endpoint(
-            (string) $_SESSION['buyer_uid'],
-            $_SESSION['buyer_name'] ?? $buyer['name'],
-            'buyer',
-            is_string($avatar) ? $avatar : null
-        );
+} else {
+    $conn = yustam_buyers_connection();
+    $update = $conn->prepare('UPDATE `buyers` SET `name` = ?, `email` = ?, `provider` = ? WHERE `id` = ? LIMIT 1');
+    if ($update) {
+        $update->bind_param('sssi', $displayName, $email, $provider, $buyer['id']);
+        $update->execute();
+        $update->close();
+        $buyer = yustam_buyers_find((int) $buyer['id']);
     }
+}
 
+$buyer = yustam_buyers_ensure_uid($buyer);
+
+$_SESSION['buyer_id'] = (int) $buyer['id'];
+$_SESSION['buyer_name'] = $buyer['name'] ?? $displayName;
+$_SESSION['buyer_email'] = $buyer['email'] ?? $email;
+$_SESSION['buyer_uid'] = $buyer['buyer_uid'] ?? null;
+$_SESSION['buyer_firebase_uid'] = $firebaseUid;
+$_SESSION['firebase_uid'] = $firebaseUid;
+$_SESSION['yustam_uid'] = $firebaseUid;
+$_SESSION['yustam_role'] = 'buyer';
+
+if ($createdNewBuyer) {
     $host = !empty($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : 'yustam.com.ng';
     $dashboardUrl = 'https://' . $host . '/buyer-dashboard.php';
 
     $welcomeBody = "
-      <h2 style=\"margin:0 0 12px; font-family:'Inter',Arial,sans-serif; color:#0f6a53;\">Welcome to YUSTAM Marketplace, {$buyer['name']}!</h2>
+      <h2 style=\"margin:0 0 12px; font-family:'Inter',Arial,sans-serif; color:#0f6a53;\">Welcome to YUSTAM Marketplace, {$displayName}!</h2>
       <p style=\"margin:0 0 12px; font-family:'Inter',Arial,sans-serif; color:#333333; line-height:1.6;\">
         Your buyer account has been created via Google sign-in. Start exploring fresh listings, save your favourites, and connect with trusted vendors.
       </p>
@@ -97,19 +114,16 @@ try {
       </p>
     ";
 
-    if (!sendEmail($buyer['email'], 'Welcome to YUSTAM Marketplace', $welcomeBody)) {
-        error_log('Buyer Google login: failed to send welcome email to ' . $buyer['email']);
+    if (!sendEmail($email, 'Welcome to YUSTAM Marketplace', $welcomeBody)) {
+        error_log('Buyer Google login: failed to send welcome email to ' . $email);
     }
-
-    echo json_encode([
-        'success' => true,
-        'redirect' => 'buyer-dashboard.php',
-        'message' => 'Welcome, ' . htmlspecialchars($buyer['name']) . '! Your account has been created.',
-        'uid' => $buyer['buyer_uid'] ?? null,
-        'role' => 'buyer'
-    ]);
-} catch (Throwable $e) {
-    error_log('Buyer Google login error: ' . $e->getMessage());
-    http_response_code(500);
-    echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
 }
+
+echo json_encode([
+    'success' => true,
+    'redirect' => 'buyer-dashboard.php',
+    'message' => 'Welcome back, ' . htmlspecialchars($buyer['name'] ?? $displayName),
+    'firebase_uid' => $firebaseUid,
+    'uid' => $firebaseUid,
+    'role' => 'buyer',
+]);

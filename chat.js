@@ -32,11 +32,13 @@ function persistUid(uid) {
   if (typeof window === 'undefined') return;
   try {
     window.sessionStorage?.setItem('yustam_uid', value);
+    window.sessionStorage?.setItem('firebase_uid', value);
   } catch (error) {
     console.warn('Unable to persist session uid', error);
   }
   try {
     window.localStorage?.setItem('yustam_uid', value);
+    window.localStorage?.setItem('firebase_uid', value);
   } catch (error) {
     console.warn('Unable to persist uid', error);
   }
@@ -44,19 +46,17 @@ function persistUid(uid) {
 
 persistUid(viewer?.uid);
 
-const chatParts = (thread.chatId || '').split('_');
-const buyerIdFromChat = chatParts[0] || '';
-const vendorIdFromChat = chatParts[1] || '';
-const buyerIdentifier =
-  (role === 'buyer' ? viewer.uid : counterparty.uid) || buyerIdFromChat || '';
-const vendorIdentifier =
-  (role === 'vendor' ? viewer.uid : counterparty.uid) || vendorIdFromChat || '';
+const buyerIdentifier = thread.buyer?.uid || (role === 'buyer' ? viewer.uid : counterparty.uid) || '';
+const vendorIdentifier = thread.vendor?.uid || (role === 'vendor' ? viewer.uid : counterparty.uid) || '';
 const listingId = listing.id || '';
 
 const messageListEl = document.getElementById('messageList');
 const typingBannerEl = document.getElementById('typingBanner');
 const scrollToBottomBtn = document.getElementById('scrollToBottom');
 const messageInput = document.getElementById('messageInput');
+if (messageInput && thread.prefill) {
+  messageInput.value = thread.prefill;
+}
 const sendButton = document.getElementById('sendButton');
 const emojiButton = document.getElementById('emojiButton');
 const imageInput = document.getElementById('imageInput');

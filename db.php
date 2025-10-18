@@ -44,16 +44,26 @@ function yustam_vendor_ensure_uid_column(mysqli $conn): void
     try {
         $table = YUSTAM_VENDORS_TABLE;
         $check = $conn->query("SHOW COLUMNS FROM `{$table}` LIKE 'vendor_uid'");
+        $hasVendorUid = false;
         if ($check instanceof mysqli_result) {
-            $exists = $check->num_rows > 0;
+            $hasVendorUid = $check->num_rows > 0;
             $check->free();
-            if ($exists) {
-                return;
-            }
         }
-        $conn->query("ALTER TABLE `{$table}` ADD COLUMN `vendor_uid` VARCHAR(20) DEFAULT NULL UNIQUE AFTER `id`");
+        if (!$hasVendorUid) {
+            $conn->query("ALTER TABLE `{$table}` ADD COLUMN `vendor_uid` VARCHAR(20) DEFAULT NULL UNIQUE AFTER `id`");
+        }
+
+        $firebaseCheck = $conn->query("SHOW COLUMNS FROM `{$table}` LIKE 'firebase_uid'");
+        $hasFirebaseUid = false;
+        if ($firebaseCheck instanceof mysqli_result) {
+            $hasFirebaseUid = $firebaseCheck->num_rows > 0;
+            $firebaseCheck->free();
+        }
+        if (!$hasFirebaseUid) {
+            $conn->query("ALTER TABLE `{$table}` ADD COLUMN `firebase_uid` VARCHAR(128) DEFAULT NULL UNIQUE AFTER `vendor_uid`");
+        }
     } catch (Throwable $exception) {
-        error_log('Unable to ensure vendor_uid column: ' . $exception->getMessage());
+        error_log('Unable to ensure vendor uid columns: ' . $exception->getMessage());
     }
 }
 
@@ -188,6 +198,77 @@ function yustam_vendor_assign_uid_if_missing(mysqli $conn, array &$vendor): stri
     throw new RuntimeException('Unable to assign vendor UID after multiple attempts.');
 }
 
+function yustam_vendor_set_firebase_uid(int $vendorId, string $firebaseUid, ?mysqli $conn = null): void
+{
+    $trimmed = trim($firebaseUid);
+    if ($trimmed === '') {
+        throw new InvalidArgumentException('Firebase UID cannot be empty.');
+    }
+
+    $conn = $conn ?: get_db_connection();
+    yustam_vendor_ensure_uid_column($conn);
+
+    $sql = sprintf('UPDATE `%s` SET `firebase_uid` = ? WHERE `id` = ? LIMIT 1', YUSTAM_VENDORS_TABLE);
+    $stmt = $conn->prepare($sql);
+    if (!$stmt) {
+        throw new RuntimeException('Unable to prepare vendor firebase UID update statement: ' . $conn->error);
+    }
+    $stmt->bind_param('si', $trimmed, $vendorId);
+    $stmt->execute();
+    $stmt->close();
+}
+
+function yustam_vendor_find_by_firebase_uid(string $firebaseUid, ?mysqli $conn = null): ?array
+{
+    $trimmed = trim($firebaseUid);
+    if ($trimmed === '') {
+        return null;
+    }
+
+    $conn = $conn ?: get_db_connection();
+    yustam_vendor_ensure_uid_column($conn);
+
+    $sql = sprintf('SELECT * FROM `%s` WHERE `firebase_uid` = ? LIMIT 1', YUSTAM_VENDORS_TABLE);
+    $stmt = $conn->prepare($sql);
+    if (!$stmt) {
+        throw new RuntimeException('Unable to prepare vendor firebase lookup statement: ' . $conn->error);
+    }
+    $stmt->bind_param('s', $trimmed);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $vendor = $result ? $result->fetch_assoc() : null;
+    $stmt->close();
+
+    return $vendor ?: null;
+}
+
+function yustam_vendor_find_by_email(string $email, ?mysqli $conn = null): ?array
+{
+    $normalized = strtolower(trim($email));
+    if ($normalized === '') {
+        return null;
+    }
+
+    $conn = $conn ?: get_db_connection();
+    $table = YUSTAM_VENDORS_TABLE;
+    if (!preg_match('/^[A-Za-z0-9_]+$/', $table)) {
+        throw new RuntimeException('Invalid vendor table name.');
+    }
+
+    $sql = sprintf('SELECT * FROM `%s` WHERE `email` = ? LIMIT 1', $table);
+    $stmt = $conn->prepare($sql);
+    if (!$stmt) {
+        throw new RuntimeException('Unable to prepare vendor email lookup statement: ' . $conn->error);
+    }
+    $stmt->bind_param('s', $normalized);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $vendor = $result ? $result->fetch_assoc() : null;
+    $stmt->close();
+
+    return $vendor ?: null;
+}
+
 /**
  * Admin table helpers
  */
@@ -310,22 +391,33 @@ function yustam_chat_connection(): mysqli
     return $conn;
 }
 
+function yustam_chat_build_id(string $buyerUid, string $vendorUid): string
+{
+    $buyer = trim($buyerUid);
+    $vendor = trim($vendorUid);
+    if ($buyer === '' || $vendor === '') {
+        throw new InvalidArgumentException('Buyer and vendor Firebase UIDs are required to build chat id.');
+    }
+
+    return hash('fnv164', $buyer . '|' . $vendor);
+}
+
 function yustam_chat_ensure_tables(mysqli $conn): void
 {
     $summariesSql = <<<SQL
 CREATE TABLE IF NOT EXISTS `chat_summaries` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
-    `chat_id` VARCHAR(120) NOT NULL,
-    `buyer_uid` VARCHAR(60) NOT NULL,
+    `chat_id` CHAR(16) NOT NULL,
+    `buyer_uid` VARCHAR(128) NOT NULL,
     `buyer_name` VARCHAR(150) DEFAULT NULL,
-    `vendor_uid` VARCHAR(60) NOT NULL,
+    `vendor_uid` VARCHAR(128) NOT NULL,
     `vendor_name` VARCHAR(150) DEFAULT NULL,
     `listing_id` VARCHAR(80) DEFAULT NULL,
     `listing_title` VARCHAR(255) DEFAULT NULL,
     `listing_image` VARCHAR(255) DEFAULT NULL,
     `last_message` TEXT NULL,
     `last_type` VARCHAR(20) NOT NULL DEFAULT 'text',
-    `last_sender_uid` VARCHAR(60) DEFAULT NULL,
+    `last_sender_uid` VARCHAR(128) DEFAULT NULL,
     `last_sender_role` VARCHAR(20) DEFAULT NULL,
     `unread_for_buyer` INT UNSIGNED NOT NULL DEFAULT 0,
     `unread_for_vendor` INT UNSIGNED NOT NULL DEFAULT 0,
@@ -344,11 +436,11 @@ SQL;
     $messagesSql = <<<SQL
 CREATE TABLE IF NOT EXISTS `chat_messages` (
     `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-    `chat_id` VARCHAR(120) NOT NULL,
+    `chat_id` CHAR(16) NOT NULL,
     `message_id` VARCHAR(64) NOT NULL,
-    `sender_uid` VARCHAR(60) NOT NULL,
+    `sender_uid` VARCHAR(128) NOT NULL,
     `sender_role` VARCHAR(20) NOT NULL,
-    `receiver_uid` VARCHAR(60) DEFAULT NULL,
+    `receiver_uid` VARCHAR(128) DEFAULT NULL,
     `text` TEXT NULL,
     `image_url` VARCHAR(512) DEFAULT NULL,
     `voice_url` VARCHAR(512) DEFAULT NULL,
@@ -362,6 +454,24 @@ CREATE TABLE IF NOT EXISTS `chat_messages` (
 SQL;
     if (!$conn->query($messagesSql)) {
         throw new RuntimeException('Unable to ensure chat_messages table: ' . $conn->error);
+    }
+
+    $alterStatements = [
+        "ALTER TABLE `chat_summaries` MODIFY `chat_id` CHAR(16) NOT NULL",
+        "ALTER TABLE `chat_summaries` MODIFY `buyer_uid` VARCHAR(128) NOT NULL",
+        "ALTER TABLE `chat_summaries` MODIFY `vendor_uid` VARCHAR(128) NOT NULL",
+        "ALTER TABLE `chat_summaries` MODIFY `last_sender_uid` VARCHAR(128) DEFAULT NULL",
+        "ALTER TABLE `chat_messages` MODIFY `chat_id` CHAR(16) NOT NULL",
+        "ALTER TABLE `chat_messages` MODIFY `sender_uid` VARCHAR(128) NOT NULL",
+        "ALTER TABLE `chat_messages` MODIFY `receiver_uid` VARCHAR(128) DEFAULT NULL",
+    ];
+
+    foreach ($alterStatements as $statement) {
+        try {
+            $conn->query($statement);
+        } catch (Throwable $alterError) {
+            error_log('Chat table alteration skipped: ' . $alterError->getMessage());
+        }
     }
 }
 

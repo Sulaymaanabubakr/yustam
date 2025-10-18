@@ -7,11 +7,13 @@ const syncYustamUid = (uid) => {
   const value = typeof uid === 'string' ? uid.trim() : '';
   if (!value) return;
   try {
+    sessionStorage.setItem('firebase_uid', value);
     sessionStorage.setItem('yustam_uid', value);
   } catch (error) {
     console.warn('Unable to persist session uid', error);
   }
   try {
+    localStorage.setItem('firebase_uid', value);
     localStorage.setItem('yustam_uid', value);
   } catch (error) {
     console.warn('Unable to persist uid', error);
@@ -48,10 +50,14 @@ googleBtn?.addEventListener('click', async () => {
     const result = await signInWithPopup(auth, provider);
     const user = result.user;
 
+    const idToken = await user.getIdToken();
+
     const formData = new FormData();
     formData.append('email', user.email);
     formData.append('name', user.displayName || '');
     formData.append('provider', 'google');
+    formData.append('idToken', idToken);
+    formData.append('uid', user.uid || '');
 
     const response = await fetch('buyer-google-login.php', {
       method: 'POST',
@@ -64,8 +70,8 @@ googleBtn?.addEventListener('click', async () => {
       throw new Error(data?.message || 'Unable to sign in with Google.');
     }
 
-    if (data && data.uid) {
-      syncYustamUid(data.uid);
+    if (data && (data.uid || data.firebase_uid)) {
+      syncYustamUid(data.firebase_uid || data.uid);
     }
 
     showToast(data.message || 'Signed in successfully. Redirecting.');
