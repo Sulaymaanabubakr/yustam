@@ -70,7 +70,7 @@
       "last 1 safari version"
     ]
   },
-  "homepage": "https://www.cometchat.com",
+  "homepage": "/chats",
   "main": "src/index.tsx",
   "license": "SEE LICENSE IN LICENSE.md",
   "bugs": {
