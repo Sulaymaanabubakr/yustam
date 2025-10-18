@@ -65,9 +65,16 @@ const readStoredUid = (): string | null => {
   return null;
 };
 
-const StatusScreen: React.FC<{ variant: StatusVariant; message: string }> = ({
+interface StatusScreenProps {
+  variant: StatusVariant;
+  message: string;
+  details?: string | null;
+}
+
+const StatusScreen: React.FC<StatusScreenProps> = ({
   variant,
   message,
+  details,
 }) => {
   const baseColor = variant === "error" ? "#b3261e" : "#0f6a53";
   return (
@@ -81,9 +88,28 @@ const StatusScreen: React.FC<{ variant: StatusVariant; message: string }> = ({
         textAlign: "center",
         fontWeight: 600,
         color: baseColor,
+        flexDirection: "column",
+        gap: "12px",
       }}
     >
-      {message}
+      <span>{message}</span>
+      {details ? (
+        <code
+          style={{
+            fontSize: "0.85rem",
+            fontWeight: 500,
+            color: "#5b5b5b",
+            backgroundColor: "rgba(0,0,0,0.06)",
+            padding: "8px 12px",
+            borderRadius: "8px",
+            maxWidth: "420px",
+            wordBreak: "break-word",
+          }}
+          aria-live="polite"
+        >
+          {details}
+        </code>
+      ) : null}
     </div>
   );
 };
@@ -92,6 +118,7 @@ function App() {
   const [loggedInUser, setLoggedInUser] = useState<CometChat.User | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [errorDetails, setErrorDetails] = useState<string | null>(null);
 
   const { styleFeatures, setStyleFeatures } = useCometChatContext();
   const systemTheme = useSystemColorScheme();
@@ -114,6 +141,7 @@ function App() {
           setErrorMessage(
             "You have been signed out of chat. Please log in to YUSTAM again."
           );
+          setErrorDetails(null);
           setIsInitializing(false);
         },
       })
@@ -133,6 +161,7 @@ function App() {
             persistUid(alreadyLoggedIn.getUid());
             setLoggedInUser(alreadyLoggedIn);
             setErrorMessage(null);
+            setErrorDetails(null);
           }
           return;
         }
@@ -143,6 +172,7 @@ function App() {
             setErrorMessage(
               "Chat session missing. Please log out and log back into YUSTAM."
             );
+            setErrorDetails(null);
           }
           return;
         }
@@ -155,13 +185,35 @@ function App() {
           persistUid(user.getUid());
           setLoggedInUser(user);
           setErrorMessage(null);
+          setErrorDetails(null);
         }
       } catch (error) {
         console.error("CometChat auto-login failed", error);
+
+        let details: string | null = null;
+        if (error && typeof error === "object") {
+          const maybeException = error as Record<string, unknown>;
+          const code =
+            typeof maybeException["code"] === "string"
+              ? maybeException["code"]
+              : null;
+          const message =
+            typeof maybeException["message"] === "string"
+              ? maybeException["message"]
+              : null;
+          details = [code, message]
+            .filter((value) => typeof value === "string" && value.length > 0)
+            .join(" · ");
+        }
+        if (!details && error instanceof Error) {
+          details = error.message;
+        }
+
         if (isActive) {
           setErrorMessage(
             "We couldn't connect to chat right now. Please refresh this page."
           );
+          setErrorDetails(details);
         }
       } finally {
         if (isActive) {
@@ -182,6 +234,7 @@ function App() {
       persistUid(existingUIKitUser.getUid());
       setLoggedInUser(existingUIKitUser);
       setErrorMessage(null);
+      setErrorDetails(null);
       setIsInitializing(false);
     }
   }, [existingUIKitUser]);
@@ -200,7 +253,11 @@ function App() {
     return (
       <div className="App">
         <AppContextProvider>
-          <StatusScreen variant="error" message={errorMessage} />
+          <StatusScreen
+            variant="error"
+            message={errorMessage}
+            details={errorDetails}
+          />
         </AppContextProvider>
       </div>
     );
@@ -209,7 +266,15 @@ function App() {
   return (
     <div className="App">
       <AppContextProvider>
-        {loggedInUser ? <CometChatHome /> : <StatusScreen variant="loading" message="Preparing chat…" />}
+        {loggedInUser ? (
+          <CometChatHome />
+        ) : (
+          <StatusScreen
+            variant="loading"
+            message="Preparing chat…"
+            details="Awaiting chat session."
+          />
+        )}
       </AppContextProvider>
     </div>
   );
