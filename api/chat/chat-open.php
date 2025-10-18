@@ -9,15 +9,115 @@ require_once __DIR__ . '/firebase.php';
 
 header('Content-Type: application/json');
 
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    http_response_code(405);
-    echo json_encode(['success' => false, 'message' => 'Only POST allowed']);
+$method = $_SERVER['REQUEST_METHOD'] ?? 'POST';
+$input = json_decode((string)file_get_contents('php://input'), true);
+if (!is_array($input)) {
+    $input = $method === 'GET' ? $_GET : $_POST;
+}
+
+if ($method === 'DELETE') {
+    $chatId = trim((string)($input['chat_id'] ?? $input['chatId'] ?? $_GET['chat'] ?? ''));
+    if ($chatId === '') {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'message' => 'Chat ID is required.']);
+        exit;
+    }
+
+    $sessionRole = '';
+    $sessionUid = '';
+    if (!empty($_SESSION['vendor_firebase_uid'])) {
+        $sessionRole = 'vendor';
+        $sessionUid = trim((string)$_SESSION['vendor_firebase_uid']);
+    } elseif (!empty($_SESSION['buyer_firebase_uid'])) {
+        $sessionRole = 'buyer';
+        $sessionUid = trim((string)$_SESSION['buyer_firebase_uid']);
+    } elseif (!empty($_SESSION['firebase_uid'])) {
+        $sessionRole = $_SESSION['yustam_role'] ?? '';
+        $sessionUid = trim((string)$_SESSION['firebase_uid']);
+    }
+
+    if ($sessionRole === '' || $sessionUid === '') {
+        http_response_code(401);
+        echo json_encode(['success' => false, 'message' => 'Please sign in to manage chats.']);
+        exit;
+    }
+
+    $summary = null;
+    try {
+        $summary = yustam_chat_fetch_summary($chatId);
+    } catch (Throwable $lookupError) {
+        error_log('chat-open delete summary lookup failed: ' . $lookupError->getMessage());
+    }
+
+    $buyerUid = trim((string)($summary['buyer_uid'] ?? ($input['buyer_uid'] ?? $input['buyerUid'] ?? '')));
+    $vendorUid = trim((string)($summary['vendor_uid'] ?? ($input['vendor_uid'] ?? $input['vendorUid'] ?? '')));
+
+    if ($summary === null) {
+        try {
+            $document = yustam_firestore_get_document('chats/' . $chatId);
+            if ($document && isset($document['fields'])) {
+                $fields = [];
+                foreach ($document['fields'] as $key => $value) {
+                    $fields[$key] = yustam_firestore_decode($value);
+                }
+                $buyerUid = $buyerUid ?: trim((string)($fields['buyer_uid'] ?? ''));
+                $vendorUid = $vendorUid ?: trim((string)($fields['vendor_uid'] ?? ''));
+            }
+        } catch (Throwable $firestoreLookup) {
+            error_log('chat-open delete Firestore lookup failed: ' . $firestoreLookup->getMessage());
+        }
+    }
+
+    $sessionUidLower = strtolower($sessionUid);
+    $buyerMatches = $buyerUid !== '' && strtolower($buyerUid) === $sessionUidLower;
+    $vendorMatches = $vendorUid !== '' && strtolower($vendorUid) === $sessionUidLower;
+
+    $authorised = ($sessionRole === 'buyer' && $buyerMatches) || ($sessionRole === 'vendor' && $vendorMatches);
+
+    if (!$authorised) {
+        http_response_code(403);
+        echo json_encode(['success' => false, 'message' => 'You do not have permission to remove this chat.']);
+        exit;
+    }
+
+    try {
+        yustam_chat_delete_conversation($chatId);
+    } catch (Throwable $deleteError) {
+        error_log('chat-open delete mysql failed: ' . $deleteError->getMessage());
+        http_response_code(500);
+        echo json_encode(['success' => false, 'message' => 'Unable to delete this conversation right now.']);
+        exit;
+    }
+
+    try {
+        $parentDocument = yustam_firestore_document_path('chats', $chatId);
+        $batchSize = 200;
+        do {
+            $documents = yustam_firestore_list_subcollection_documents($parentDocument, 'messages', $batchSize);
+            foreach ($documents as $documentName) {
+                $relative = yustam_firestore_relative_path($documentName);
+                yustam_firestore_delete_document($relative);
+            }
+        } while (!empty($documents) && count($documents) === $batchSize);
+
+        yustam_firestore_delete_document('typing/' . $chatId);
+        yustam_firestore_delete_document('chats/' . $chatId);
+    } catch (Throwable $firestoreDelete) {
+        error_log('chat-open delete Firestore cleanup failed: ' . $firestoreDelete->getMessage());
+    }
+
+    echo json_encode([
+        'success' => true,
+        'chat_id' => $chatId,
+        'message' => 'Conversation deleted successfully.',
+    ]);
     exit;
 }
 
-$input = json_decode((string)file_get_contents('php://input'), true);
-if (!is_array($input)) {
-    $input = $_POST;
+if ($method !== 'POST') {
+    http_response_code(405);
+    echo json_encode(['success' => false, 'message' => 'Only POST allowed']);
+    exit;
 }
 
 $buyerUid = trim((string)($input['buyer_uid'] ?? $input['buyerUid'] ?? ($_SESSION['buyer_firebase_uid'] ?? ($_SESSION['firebase_uid'] ?? ''))));
