@@ -30,6 +30,9 @@ let toastQueue = [];
 let toastActive = false;
 const offlineQueue = [];
 const fallbackChatCache = new Map();
+const FNV_OFFSET = 0xcbf29ce484222325n;
+const FNV_PRIME = 0x100000001b3n;
+const FNV_MOD = 0xffffffffffffffffn;
 
 function ensureToastRoot() {
   if (!isBrowser) return null;
@@ -270,7 +273,13 @@ export function initFirebase() {
 export function buildChatId(buyerUid, vendorUid) {
   const buyer = getSafeUid(buyerUid);
   const vendor = getSafeUid(vendorUid);
-  return `${buyer}_${vendor}`;
+  const input = `${buyer}|${vendor}`;
+  let hash = FNV_OFFSET;
+  for (let index = 0; index < input.length; index += 1) {
+    hash ^= BigInt(input.charCodeAt(index));
+    hash = (hash * FNV_PRIME) & FNV_MOD;
+  }
+  return hash.toString(16).padStart(16, '0');
 }
 
 function chatDoc(chatId) {
@@ -286,9 +295,10 @@ function typingDoc(chatId) {
 }
 
 export async function ensureChat(meta) {
-  const chatId = getSafeUid(meta?.chatId || meta?.chat_id);
   const buyerUid = getSafeUid(meta?.buyer_uid || meta?.buyerUid);
   const vendorUid = getSafeUid(meta?.vendor_uid || meta?.vendorUid);
+  const providedChatId = normaliseString(meta?.chatId || meta?.chat_id);
+  const chatId = providedChatId ? getSafeUid(providedChatId) : buildChatId(buyerUid, vendorUid);
   const listingId = normaliseString(meta?.listing_id || meta?.listingId);
   if (!listingId) {
     throw new Error('Missing listing identifier.');
@@ -501,32 +511,21 @@ export function subscribeMessages(chatId, callback) {
 }
 
 function normaliseMessagePayload(input) {
-  const chatId = getSafeUid(input?.chatId || input?.chat_id);
   const senderRole = normaliseString(input?.as || input?.sender_role);
   const senderUid = getSafeUid(input?.sender_uid || input?.senderUid || input?.viewerUid);
   const text = normaliseString(input?.text || input?.message);
   const imageUrl = normaliseString(input?.image_url || input?.imageUrl);
   const voiceUrl = normaliseString(input?.voice_url || input?.voiceUrl);
   const duration = Number(input?.duration || input?.voice_duration || 0);
-  let buyerUid = normaliseString(input?.buyer_uid || input?.buyerUid || '');
-  let vendorUid = normaliseString(input?.vendor_uid || input?.vendorUid || '');
+  const buyerUid = getSafeUid(input?.buyer_uid || input?.buyerUid);
+  const vendorUid = getSafeUid(input?.vendor_uid || input?.vendorUid);
   const buyerName = normaliseString(input?.buyer_name || input?.buyerName || '');
   const vendorName = normaliseString(input?.vendor_name || input?.vendorName || '');
   const listingId = normaliseString(input?.listing_id || input?.listingId || '');
   const listingTitle = normaliseString(input?.listing_title || input?.listingTitle || '');
   const listingImage = normaliseString(input?.listing_image || input?.listingImage || '');
-
-  if (!buyerUid || !vendorUid) {
-    const parts = chatId.split('_');
-    if (parts.length >= 2) {
-      if (!buyerUid) {
-        [buyerUid] = parts;
-      }
-      if (!vendorUid) {
-        vendorUid = parts[1];
-      }
-    }
-  }
+  const providedChatId = normaliseString(input?.chatId || input?.chat_id);
+  const chatId = providedChatId ? getSafeUid(providedChatId) : buildChatId(buyerUid, vendorUid);
 
   if (!text && !imageUrl && !voiceUrl) {
     throw new Error('Please write a message or attach media.');
@@ -834,4 +833,5 @@ export async function uploadVoiceToCloudinary(blob, metadata = {}) {
 }
 
 export { showToast };
+
 

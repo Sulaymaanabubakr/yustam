@@ -1,11 +1,13 @@
 <?php
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
+
 require_once __DIR__ . '/session-path.php';
 session_start();
 
 require_once __DIR__ . '/db.php';
-require_once __DIR__ . '/cometchat.php';
+require_once __DIR__ . '/firebase-admin.php';
+
 header('Content-Type: application/json');
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -22,71 +24,124 @@ if ($email === '' || $password === '') {
 }
 
 try {
+    $auth = yustam_firebase_sign_in_with_password($email, $password);
+    $firebaseUid = (string) ($auth['localId'] ?? '');
+    if ($firebaseUid === '') {
+        throw new RuntimeException('Firebase did not return a UID.');
+    }
+
+    $firebaseEmail = strtolower((string) ($auth['email'] ?? $email));
+    $displayName = trim((string) ($auth['displayName'] ?? ''));
+    if ($displayName === '') {
+        $displayName = 'Vendor';
+    }
+
     $db = get_db_connection();
-    $vendorTable = YUSTAM_VENDORS_TABLE;
-    if (!preg_match('/^[A-Za-z0-9_]+$/', $vendorTable)) {
-        throw new RuntimeException('Invalid vendor table name.');
+    $vendor = yustam_vendor_find_by_firebase_uid($firebaseUid, $db);
+    if (!$vendor && $firebaseEmail !== '') {
+        $vendor = yustam_vendor_find_by_email($firebaseEmail, $db);
+        if ($vendor) {
+            yustam_vendor_set_firebase_uid((int) $vendor['id'], $firebaseUid, $db);
+            $vendor = yustam_vendor_find_by_firebase_uid($firebaseUid, $db) ?: $vendor;
+        }
     }
 
-    $stmt = $db->prepare(sprintf(
-        'SELECT id, vendor_uid, full_name, email, password, verified FROM `%s` WHERE email = ? LIMIT 1',
-        $vendorTable
-    ));
-    $stmt->bind_param("s", $email);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    $user = $result->fetch_assoc();
-    $stmt->close();
+    if (!$vendor) {
+        $vendorTable = YUSTAM_VENDORS_TABLE;
+        if (!preg_match('/^[A-Za-z0-9_]+$/', $vendorTable)) {
+            throw new RuntimeException('Invalid vendor table name.');
+        }
 
-    if (!$user) {
-        echo json_encode(['success' => false, 'message' => 'Incorrect email or password.']);
-        exit;
+        $businessName = $displayName . ' Store';
+        $category = 'General';
+        $provider = 'email';
+        $verified = 1;
+        $phone = '';
+        $passwordHash = password_hash($password, PASSWORD_DEFAULT);
+
+        $insertSql = sprintf(
+            'INSERT INTO `%s` (vendor_uid, firebase_uid, full_name, email, phone, password, business_name, category, provider, verification_token, verified, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, NOW(), NOW())',
+            $vendorTable
+        );
+        $stmt = $db->prepare($insertSql);
+        if (!$stmt) {
+            throw new RuntimeException('Unable to prepare vendor creation statement.');
+        }
+
+        $vendorUid = '';
+        $stmt->bind_param('sssssssssi', $vendorUid, $firebaseUid, $displayName, $firebaseEmail, $phone, $passwordHash, $businessName, $category, $provider, $verified);
+
+        $maxAttempts = 5;
+        $created = false;
+        for ($attempt = 0; $attempt < $maxAttempts; $attempt++) {
+            $vendorUid = yustam_generate_vendor_uid($db);
+            try {
+                $stmt->execute();
+                $created = true;
+                break;
+            } catch (mysqli_sql_exception $exception) {
+                if ((int) $exception->getCode() === 1062 && stripos($exception->getMessage(), 'vendor_uid') !== false) {
+                    $stmt->reset();
+                    continue;
+                }
+                $stmt->close();
+                throw $exception;
+            }
+        }
+
+        if (!$created) {
+            $stmt->close();
+            throw new RuntimeException('Unable to generate a unique vendor UID. Please try again.');
+        }
+
+        $stmt->close();
+        $vendor = yustam_vendor_find_by_firebase_uid($firebaseUid, $db);
+        if (!$vendor) {
+            throw new RuntimeException('Vendor record could not be created.');
+        }
+    } else {
+        if (isset($vendor['verified']) && (int) $vendor['verified'] === 0) {
+            echo json_encode(['success' => false, 'message' => 'Please verify your email before logging in.']);
+            exit;
+        }
+        $update = $db->prepare(sprintf('UPDATE `%s` SET full_name = ?, email = ?, updated_at = NOW() WHERE id = ? LIMIT 1', YUSTAM_VENDORS_TABLE));
+        if ($update) {
+            $update->bind_param('ssi', $displayName, $firebaseEmail, $vendor['id']);
+            $update->execute();
+            $update->close();
+            $vendor = yustam_vendor_find_by_firebase_uid($firebaseUid, $db) ?: $vendor;
+        }
     }
 
-    if (!password_verify($password, $user['password'])) {
-        echo json_encode(['success' => false, 'message' => 'Incorrect email or password.']);
-        exit;
-    }
+    $vendorUid = yustam_vendor_assign_uid_if_missing($db, $vendor);
 
-    if (array_key_exists('verified', $user) && (int)$user['verified'] === 0) {
-        echo json_encode(['success' => false, 'message' => 'Please verify your email before logging in.']);
-        exit;
-    }
-
-    $vendorUid = yustam_vendor_assign_uid_if_missing($db, $user);
-
-    // Create session
-    $_SESSION['vendor_id'] = $user['id'];
-    $_SESSION['vendor_name'] = $user['full_name'] ?? '';
-    $_SESSION['vendor_email'] = $user['email'];
-    $_SESSION['vendor_uid'] = $vendorUid;
-    $_SESSION['yustam_uid'] = $vendorUid;
-    $_SESSION['yustam_role'] = 'vendor';
-
-    yustam_cometchat_call_internal_endpoint(
-        $vendorUid,
-        $_SESSION['vendor_name'] !== '' ? $_SESSION['vendor_name'] : ($user['full_name'] ?? $vendorUid),
-        'vendor'
-    );
-
-    // Update last login
     if (yustam_vendor_table_has_column('updated_at')) {
-        $update = $db->prepare(sprintf('UPDATE `%s` SET updated_at = NOW() WHERE id = ?', $vendorTable));
-        $update->bind_param("i", $user['id']);
-        $update->execute();
-        $update->close();
+        $updateLastLogin = $db->prepare(sprintf('UPDATE `%s` SET updated_at = NOW() WHERE id = ?', YUSTAM_VENDORS_TABLE));
+        if ($updateLastLogin) {
+            $updateLastLogin->bind_param('i', $vendor['id']);
+            $updateLastLogin->execute();
+            $updateLastLogin->close();
+        }
     }
+
+    $_SESSION['vendor_id'] = (int) $vendor['id'];
+    $_SESSION['vendor_name'] = $displayName;
+    $_SESSION['vendor_email'] = $firebaseEmail;
+    $_SESSION['vendor_uid'] = $vendorUid;
+    $_SESSION['vendor_firebase_uid'] = $firebaseUid;
+    $_SESSION['firebase_uid'] = $firebaseUid;
+    $_SESSION['yustam_uid'] = $firebaseUid;
+    $_SESSION['yustam_role'] = 'vendor';
 
     echo json_encode([
         'success' => true,
         'message' => 'Login successful. Redirecting...',
         'redirect' => 'vendor-dashboard.php',
-        'uid' => $vendorUid,
-        'role' => 'vendor'
+        'uid' => $firebaseUid,
+        'firebase_uid' => $firebaseUid,
+        'role' => 'vendor',
     ]);
-
 } catch (Throwable $e) {
     http_response_code(500);
-    echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
+    echo json_encode(['success' => false, 'message' => 'Authentication error: ' . $e->getMessage()]);
 }
-?>

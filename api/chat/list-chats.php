@@ -39,12 +39,12 @@ $role = strtolower(trim((string)($_GET['role'] ?? $_POST['role'] ?? '')));
 $uid = trim((string)($_GET['uid'] ?? $_POST['uid'] ?? ''));
 
 if (!in_array($role, ['buyer', 'vendor'], true)) {
-    if (isset($_SESSION['buyer_uid'])) {
+    if (isset($_SESSION['buyer_firebase_uid'])) {
         $role = 'buyer';
-        $uid = (string)$_SESSION['buyer_uid'];
-    } elseif (isset($_SESSION['vendor_uid'])) {
+        $uid = (string)$_SESSION['buyer_firebase_uid'];
+    } elseif (isset($_SESSION['vendor_firebase_uid'])) {
         $role = 'vendor';
-        $uid = (string)$_SESSION['vendor_uid'];
+        $uid = (string)$_SESSION['vendor_firebase_uid'];
     }
 }
 

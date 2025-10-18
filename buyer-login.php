@@ -3,10 +3,10 @@ require_once __DIR__ . '/session-path.php';
 session_start();
 
 require_once __DIR__ . '/buyer-storage.php';
-require_once __DIR__ . '/cometchat.php';
+require_once __DIR__ . '/firebase-admin.php';
 
 /**
- * After a successful login, persist the UID to web storage and redirect.
+ * After a successful login, persist the Firebase UID to web storage and redirect.
  */
 function yustam_emit_login_redirect(string $redirectUrl, string $uid): void
 {
@@ -29,11 +29,17 @@ function yustam_emit_login_redirect(string $redirectUrl, string $uid): void
     try {
         var uid = {$uidJson};
         if (typeof uid === 'string' && uid.trim().length) {
+            try {
+                localStorage.setItem('firebase_uid', uid);
+                sessionStorage.setItem('firebase_uid', uid);
+            } catch (err) {
+                console.warn('Unable to persist Firebase UID in dedicated keys', err);
+            }
             localStorage.setItem('yustam_uid', uid);
             sessionStorage.setItem('yustam_uid', uid);
         }
     } catch (storageError) {
-        console.warn('Unable to persist CometChat UID', storageError);
+        console.warn('Unable to persist Firebase UID', storageError);
     }
     window.location.replace({$redirectJson});
 })();
@@ -48,10 +54,19 @@ HTML;
 }
 
 if (isset($_SESSION['buyer_id'])) {
-    if (!empty($_SESSION['buyer_uid'])) {
-        $_SESSION['yustam_uid'] = $_SESSION['buyer_uid'];
-        $_SESSION['yustam_role'] = 'buyer';
+    if (!empty($_SESSION['buyer_firebase_uid'])) {
+        $_SESSION['firebase_uid'] = $_SESSION['buyer_firebase_uid'];
+    } elseif (!empty($_SESSION['firebase_uid'])) {
+        $_SESSION['buyer_firebase_uid'] = $_SESSION['firebase_uid'];
     }
+
+    if (!empty($_SESSION['firebase_uid'])) {
+        $_SESSION['yustam_uid'] = $_SESSION['firebase_uid'];
+    } elseif (!empty($_SESSION['buyer_uid'])) {
+        $_SESSION['yustam_uid'] = $_SESSION['buyer_uid'];
+    }
+
+    $_SESSION['yustam_role'] = 'buyer';
     header('Location: buyer-dashboard.php');
     exit;
 }
@@ -67,31 +82,63 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($email === '' || $password === '') {
         $errorMessage = 'Enter both your email and password.';
     } else {
-        $buyer = yustam_buyers_find_by_email($email);
-        if (!$buyer || !password_verify($password, $buyer['password'])) {
-            $errorMessage = 'Incorrect email or password';
-        } else {
-            $buyer = yustam_buyers_ensure_uid($buyer);
-            $_SESSION['buyer_id'] = (int)$buyer['id'];
-            $_SESSION['buyer_name'] = $buyer['name'] ?? 'Buyer';
-            $_SESSION['buyer_uid'] = $buyer['buyer_uid'] ?? null;
-            $_SESSION['buyer_email'] = $buyer['email'] ?? $email;
-            $_SESSION['yustam_uid'] = $_SESSION['buyer_uid'] ?? null;
-            $_SESSION['yustam_role'] = 'buyer';
-
-            if (!empty($_SESSION['buyer_uid'])) {
-                $avatar = $buyer['avatar'] ?? $buyer['profile_photo'] ?? null;
-                yustam_cometchat_call_internal_endpoint(
-                    (string) $_SESSION['buyer_uid'],
-                    $_SESSION['buyer_name'] ?? 'Buyer',
-                    'buyer',
-                    is_string($avatar) ? $avatar : null
-                );
-                yustam_emit_login_redirect('buyer-dashboard.php', (string) $_SESSION['buyer_uid']);
+        try {
+            $authResponse = yustam_firebase_sign_in_with_password($email, $password);
+            $firebaseUid = (string) ($authResponse['localId'] ?? '');
+            if ($firebaseUid === '') {
+                throw new RuntimeException('Firebase login did not include a UID.');
             }
 
-            header('Location: buyer-dashboard.php');
-            exit;
+            $firebaseEmail = strtolower((string) ($authResponse['email'] ?? $email));
+            $displayName = trim((string) ($authResponse['displayName'] ?? ''));
+
+            $buyer = yustam_buyers_find_by_firebase_uid($firebaseUid);
+            if (!$buyer && $firebaseEmail !== '') {
+                $existingByEmail = yustam_buyers_find_by_email($firebaseEmail);
+                if ($existingByEmail) {
+                    yustam_buyers_set_firebase_uid((int) $existingByEmail['id'], $firebaseUid);
+                    $buyer = yustam_buyers_find((int) $existingByEmail['id']);
+                }
+            }
+
+            if (!$buyer) {
+                $fallbackName = $displayName !== '' ? $displayName : 'YUSTAM Buyer';
+                $passwordHash = password_hash($password, PASSWORD_DEFAULT);
+                $buyer = yustam_buyers_create($firebaseUid, $fallbackName, $firebaseEmail ?: $email, '', $passwordHash, 'email');
+            } else {
+                $desiredName = $displayName !== '' ? $displayName : ($buyer['name'] ?? 'Buyer');
+                $desiredEmail = $firebaseEmail ?: ($buyer['email'] ?? $email);
+                if ($desiredName !== ($buyer['name'] ?? '') || $desiredEmail !== ($buyer['email'] ?? '')) {
+                    $conn = yustam_buyers_connection();
+                    $update = $conn->prepare('UPDATE `buyers` SET `name` = ?, `email` = ? WHERE `id` = ? LIMIT 1');
+                    if ($update) {
+                        $update->bind_param('ssi', $desiredName, $desiredEmail, $buyer['id']);
+                        $update->execute();
+                        $update->close();
+                        $buyer = yustam_buyers_find((int) $buyer['id']);
+                    }
+                }
+            }
+
+            $buyer = yustam_buyers_ensure_uid($buyer);
+            $_SESSION['buyer_id'] = (int) ($buyer['id'] ?? 0);
+            $_SESSION['buyer_name'] = $buyer['name'] ?? ($displayName !== '' ? $displayName : 'Buyer');
+            $_SESSION['buyer_uid'] = $buyer['buyer_uid'] ?? null;
+            $_SESSION['buyer_email'] = $buyer['email'] ?? $firebaseEmail ?: $email;
+            $_SESSION['buyer_firebase_uid'] = $firebaseUid;
+            $_SESSION['firebase_uid'] = $firebaseUid;
+            $_SESSION['yustam_uid'] = $firebaseUid;
+            $_SESSION['yustam_role'] = 'buyer';
+
+            yustam_emit_login_redirect('buyer-dashboard.php', $firebaseUid);
+        } catch (Throwable $authError) {
+            $message = $authError->getMessage();
+            if (stripos($message, 'INVALID_PASSWORD') !== false || stripos($message, 'EMAIL_NOT_FOUND') !== false) {
+                $errorMessage = 'Incorrect email or password';
+            } else {
+                error_log('Buyer Firebase login error: ' . $authError->getMessage());
+                $errorMessage = 'Unable to sign in. Please try again.';
+            }
         }
     }
 }

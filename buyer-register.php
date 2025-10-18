@@ -3,6 +3,7 @@ require_once __DIR__ . '/session-path.php';
 session_start();
 
 require_once __DIR__ . '/buyer-storage.php';
+require_once __DIR__ . '/firebase-admin.php';
 
 if (isset($_SESSION['buyer_id'])) {
     header('Location: buyer-dashboard.php');
@@ -15,6 +16,7 @@ $old = [
     'email' => '',
     'phone' => '',
 ];
+$formError = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $name = trim($_POST['name'] ?? '');
@@ -53,19 +55,61 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $errors['confirm_password'] = 'Passwords do not match.';
     }
 
+    $firebaseUid = '';
+
     if (!$errors) {
-        $passwordHash = password_hash($password, PASSWORD_DEFAULT);
-        $buyer = yustam_buyers_create($name, $email, $phone, $passwordHash, 'email');
-
-        $_SESSION['buyer_id'] = $buyer['id'];
-        $_SESSION['buyer_name'] = $buyer['name'];
-        if (isset($buyer['buyer_uid'])) {
-            $_SESSION['buyer_uid'] = $buyer['buyer_uid'];
+        try {
+            $firebaseUser = yustam_firebase_create_user($email, $password, $name);
+            $firebaseUid = (string) ($firebaseUser['localId'] ?? '');
+            if ($firebaseUid === '') {
+                throw new RuntimeException('Firebase did not return a UID.');
+            }
+        } catch (Throwable $firebaseError) {
+            $message = $firebaseError->getMessage();
+            if (stripos($message, 'EMAIL_EXISTS') !== false) {
+                $errors['email'] = 'An account with this email already exists.';
+            } else {
+                error_log('Buyer registration Firebase error: ' . $firebaseError->getMessage());
+                $formError = 'We could not create your account right now. Please try again.';
+            }
         }
-        $_SESSION['buyer_email'] = $buyer['email'] ?? $email;
+    }
 
-        header('Location: buyer-dashboard.php');
-        exit;
+    if (!$errors && $firebaseUid !== '') {
+        $passwordHash = password_hash($password, PASSWORD_DEFAULT);
+        $buyer = null;
+
+        try {
+            $buyer = yustam_buyers_create($firebaseUid, $name, $email, $phone, $passwordHash, 'email');
+        } catch (Throwable $storageError) {
+            $formError = 'We were unable to finish registration. Please try again.';
+            error_log('Buyer registration storage error: ' . $storageError->getMessage());
+
+            try {
+                $existing = yustam_firebase_get_user_by_uid($firebaseUid);
+                if ($existing) {
+                    yustam_firebase_identity_admin_request(
+                        'POST',
+                        sprintf('projects/%s/accounts:delete', yustam_firebase_project_id()),
+                        ['localId' => $firebaseUid]
+                    );
+                }
+            } catch (Throwable $cleanupError) {
+                error_log('Buyer registration cleanup failed: ' . $cleanupError->getMessage());
+            }
+        }
+
+        if (!empty($buyer) && $formError === '') {
+            $_SESSION['buyer_id'] = (int) $buyer['id'];
+            $_SESSION['buyer_name'] = $buyer['name'];
+            $_SESSION['buyer_email'] = $buyer['email'] ?? $email;
+            $_SESSION['buyer_uid'] = $buyer['buyer_uid'] ?? null;
+            $_SESSION['buyer_firebase_uid'] = $firebaseUid;
+            $_SESSION['firebase_uid'] = $firebaseUid;
+
+            header('Location: buyer-dashboard.php');
+            exit;
+        }
     }
 }
 ?>
@@ -166,11 +210,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             box-shadow: 0 0 0 4px rgba(217, 48, 37, 0.16);
         }
 
-        .field-error {
-            color: var(--error);
-            font-size: 0.82rem;
-            margin: 0;
-        }
+.field-error {
+    color: var(--error);
+    font-size: 0.82rem;
+    margin: 0;
+}
+
+.form-error-banner {
+    background: rgba(217, 48, 37, 0.12);
+    border: 1px solid rgba(217, 48, 37, 0.32);
+    border-radius: 14px;
+    color: #a3211a;
+    padding: 12px 16px;
+    font-weight: 600;
+}
 
         .auth-footer {
             display: grid;
@@ -230,6 +283,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
         <form method="post" novalidate>
             <div class="auth-body">
+                <?php if ($formError): ?>
+                    <div class="form-error-banner"><?= htmlspecialchars($formError) ?></div>
+                <?php endif; ?>
                 <div class="field-group">
                     <label for="name">Full Name</label>
                     <input type="text" id="name" name="name" value="<?= htmlspecialchars($old['name']) ?>" <?= isset($errors['name']) ? 'class="error"' : '' ?> required>

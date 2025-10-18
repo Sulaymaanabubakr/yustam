@@ -19,11 +19,13 @@ const persistUid = (uid) => {
   if (!value || typeof window === 'undefined') return;
   try {
     window.sessionStorage?.setItem('yustam_uid', value);
+    window.sessionStorage?.setItem('firebase_uid', value);
   } catch (error) {
     console.warn('Unable to persist buyer session uid', error);
   }
   try {
     window.localStorage?.setItem('yustam_uid', value);
+    window.localStorage?.setItem('firebase_uid', value);
   } catch (error) {
     console.warn('Unable to persist buyer uid', error);
   }
@@ -101,8 +103,8 @@ function scheduleRender() {
 function messagePreview(chat) {
   const type = chat.last_type || 'text';
   const text = (chat.last_text || '').trim();
-  if (type === 'image') return '🖼️ Photo';
-  if (type === 'voice') return '🎤 Voice note';
+  if (type === 'image') return 'Photo';
+  if (type === 'voice') return 'Voice note';
   if (text) return text.length > 96 ? `${text.slice(0, 93)}…` : text;
   return 'New conversation';
 }
@@ -180,7 +182,13 @@ function renderChats(chats) {
 }
 
 function openChat(chat) {
-  window.location.href = 'buyer-chats.php';
+  const chatId = chat.chat_id || chat.id;
+  if (!chatId) return;
+  const params = new URLSearchParams({ chat: chatId });
+  if (chat.listing_id) { params.set('listing', chat.listing_id); }
+  if (chat.listing_title) { params.set('listing_title', chat.listing_title); }
+  if (chat.listing_image) { params.set('listing_image', chat.listing_image); }
+  window.location.href = chat-thread.php?;
 }
 
 function subscribeToChats() {

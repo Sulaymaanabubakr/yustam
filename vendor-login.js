@@ -14,11 +14,13 @@ const syncYustamUid = (uid) => {
   const value = typeof uid === 'string' ? uid.trim() : '';
   if (!value) return;
   try {
+    sessionStorage.setItem('firebase_uid', value);
     sessionStorage.setItem('yustam_uid', value);
   } catch (error) {
     console.warn('Unable to persist session uid', error);
   }
   try {
+    localStorage.setItem('firebase_uid', value);
     localStorage.setItem('yustam_uid', value);
   } catch (error) {
     console.warn('Unable to persist uid', error);
@@ -85,8 +87,8 @@ const handleEmailLogin = async (event) => {
       return;
     }
 
-    if (data && data.uid) {
-      syncYustamUid(data.uid);
+    if (data && (data.firebase_uid || data.uid)) {
+      syncYustamUid(data.firebase_uid || data.uid);
     }
 
     setMessage('Signed in successfully. Redirecting.', 'success');
@@ -159,10 +161,14 @@ const handleGoogleLogin = async () => {
       throw new Error('We could not complete Google sign-in. Please try again.');
     }
 
+    const idToken = await user.getIdToken();
+
     const payload = new FormData();
     payload.append('email', user.email);
     payload.append('name', user.displayName || '');
     payload.append('provider', 'google');
+    payload.append('idToken', idToken);
+    payload.append('uid', user.uid || '');
 
     const response = await fetch('google-login.php', {
       method: 'POST',
@@ -177,8 +183,8 @@ const handleGoogleLogin = async () => {
       return;
     }
 
-    if (data && data.uid) {
-      syncYustamUid(data.uid);
+    if (data && (data.firebase_uid || data.uid)) {
+      syncYustamUid(data.firebase_uid || data.uid);
     }
 
     setMessage('Welcome back, redirecting.', 'success');

@@ -20,10 +20,9 @@ if (!is_array($input)) {
     $input = $_POST;
 }
 
-$chatId = trim((string)($input['chat_id'] ?? $input['chatId'] ?? ''));
-$buyerUid = trim((string)($input['buyer_uid'] ?? $input['buyerUid'] ?? ($_SESSION['buyer_uid'] ?? '')));
+$buyerUid = trim((string)($input['buyer_uid'] ?? $input['buyerUid'] ?? ($_SESSION['buyer_firebase_uid'] ?? ($_SESSION['firebase_uid'] ?? ''))));
 $buyerName = trim((string)($input['buyer_name'] ?? $input['buyerName'] ?? ($_SESSION['buyer_name'] ?? 'Buyer')));
-$vendorUid = trim((string)($input['vendor_uid'] ?? $input['vendorUid'] ?? ($_SESSION['vendor_uid'] ?? '')));
+$vendorUid = trim((string)($input['vendor_uid'] ?? $input['vendorUid'] ?? ($_SESSION['vendor_firebase_uid'] ?? ($_SESSION['firebase_uid'] ?? ''))));
 $vendorName = trim((string)($input['vendor_name'] ?? $input['vendorName'] ?? ($_SESSION['vendor_name'] ?? 'Vendor')));
 $listingId = trim((string)($input['listing_id'] ?? $input['listingId'] ?? ''));
 $listingTitle = trim((string)($input['listing_title'] ?? $input['listingTitle'] ?? ''));
@@ -35,10 +34,7 @@ if ($buyerUid === '' || $vendorUid === '') {
     exit;
 }
 
-$canonicalChatId = $buyerUid . '_' . $vendorUid;
-if ($chatId === '' || $chatId !== $canonicalChatId) {
-    $chatId = $canonicalChatId;
-}
+$chatId = yustam_chat_build_id($buyerUid, $vendorUid);
 
 $timestamp = gmdate('Y-m-d H:i:s');
 $existingSummary = null;

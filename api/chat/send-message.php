@@ -20,14 +20,13 @@ if (!is_array($input)) {
     $input = $_POST;
 }
 
-$chatId = trim((string)($input['chat_id'] ?? $input['chatId'] ?? ''));
 $role = strtolower(trim((string)($input['as'] ?? $input['role'] ?? '')));
 $text = trim((string)($input['text'] ?? $input['message'] ?? ''));
 $imageUrl = trim((string)($input['image_url'] ?? $input['imageUrl'] ?? ''));
 $voiceUrl = trim((string)($input['voice_url'] ?? $input['voiceUrl'] ?? ''));
 $duration = isset($input['duration']) ? (float)$input['duration'] : null;
-$buyerUid = trim((string)($input['buyer_uid'] ?? $input['buyerUid'] ?? ''));
-$vendorUid = trim((string)($input['vendor_uid'] ?? $input['vendorUid'] ?? ''));
+$buyerUid = trim((string)($input['buyer_uid'] ?? $input['buyerUid'] ?? ($_SESSION['buyer_firebase_uid'] ?? '')));
+$vendorUid = trim((string)($input['vendor_uid'] ?? $input['vendorUid'] ?? ($_SESSION['vendor_firebase_uid'] ?? '')));
 $buyerName = trim((string)($input['buyer_name'] ?? $input['buyerName'] ?? ($_SESSION['buyer_name'] ?? 'Buyer')));
 $vendorName = trim((string)($input['vendor_name'] ?? $input['vendorName'] ?? ($_SESSION['vendor_name'] ?? 'Vendor')));
 $listingId = trim((string)($input['listing_id'] ?? $input['listingId'] ?? ''));
@@ -35,9 +34,9 @@ $listingTitle = trim((string)($input['listing_title'] ?? $input['listingTitle'] 
 $listingImage = trim((string)($input['listing_image'] ?? $input['listingImage'] ?? ''));
 
 if (!in_array($role, ['buyer', 'vendor'], true)) {
-    if (isset($_SESSION['buyer_uid'])) {
+    if (isset($_SESSION['buyer_firebase_uid'])) {
         $role = 'buyer';
-    } elseif (isset($_SESSION['vendor_uid'])) {
+    } elseif (isset($_SESSION['vendor_firebase_uid'])) {
         $role = 'vendor';
     } else {
         http_response_code(400);
@@ -47,13 +46,13 @@ if (!in_array($role, ['buyer', 'vendor'], true)) {
 }
 
 if ($role === 'buyer') {
-    $senderUid = trim((string)($_SESSION['buyer_uid'] ?? ''));
+    $senderUid = trim((string)($_SESSION['buyer_firebase_uid'] ?? ''));
     $senderName = trim((string)($_SESSION['buyer_name'] ?? $buyerName));
     if ($buyerUid === '') {
         $buyerUid = $senderUid;
     }
 } else {
-    $senderUid = trim((string)($_SESSION['vendor_uid'] ?? ''));
+    $senderUid = trim((string)($_SESSION['vendor_firebase_uid'] ?? ''));
     $senderName = trim((string)($_SESSION['vendor_name'] ?? $vendorName));
     if ($vendorUid === '') {
         $vendorUid = $senderUid;
@@ -72,10 +71,7 @@ if ($buyerUid === '' || $vendorUid === '') {
     exit;
 }
 
-$canonicalChatId = $buyerUid . '_' . $vendorUid;
-if ($chatId === '' || $chatId !== $canonicalChatId) {
-    $chatId = $canonicalChatId;
-}
+$chatId = yustam_chat_build_id($buyerUid, $vendorUid);
 
 if ($text === '' && $imageUrl === '' && $voiceUrl === '') {
     http_response_code(422);
