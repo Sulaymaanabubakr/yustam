@@ -352,6 +352,17 @@ $bootstrap = [
             gap: 12px;
         }
 
+        .prefill-notice {
+            font-size: 0.85rem;
+            color: var(--muted);
+            background: rgba(15, 106, 83, 0.08);
+            padding: 8px 12px;
+            border-radius: 12px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
         #attachmentPreview {
             display: none;
             background: rgba(15, 106, 83, 0.06);
@@ -469,6 +480,10 @@ $bootstrap = [
                 <button type="button" id="attachButton"><i class="ri-attachment-2"></i></button>
                 <button type="button" id="sendButton" data-mode="voice"><i class="ri-mic-line"></i></button>
             </div>
+            <p id="prefillNotice" class="prefill-notice" hidden>
+                <i class="ri-edit-2-line" aria-hidden="true"></i>
+                <span>We added your message from the product page. Tap send when you&rsquo;re ready.</span>
+            </p>
         </footer>
     </div>
     <script>

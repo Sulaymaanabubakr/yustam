@@ -213,6 +213,17 @@ $bootstrap = [
             line-height: 1.4;
         }
 
+        .chat-content small.chat-preview {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .chat-content small.chat-preview i {
+            font-size: 1rem;
+            color: var(--emerald);
+        }
+
         .chat-content small.typing-indicator {
             color: var(--sunset);
             font-weight: 600;

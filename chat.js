@@ -54,8 +54,10 @@ const messageListEl = document.getElementById('messageList');
 const typingBannerEl = document.getElementById('typingBanner');
 const scrollToBottomBtn = document.getElementById('scrollToBottom');
 const messageInput = document.getElementById('messageInput');
-if (messageInput && thread.prefill) {
-  messageInput.value = thread.prefill;
+const prefillNotice = document.getElementById('prefillNotice');
+const hasPrefill = typeof thread.prefill === 'string' && thread.prefill.trim().length > 0;
+if (messageInput && hasPrefill) {
+  messageInput.value = thread.prefill.trim();
 }
 const sendButton = document.getElementById('sendButton');
 const emojiButton = document.getElementById('emojiButton');
@@ -267,6 +269,9 @@ messageInput?.addEventListener('input', () => {
   autoResizeTextarea();
   toggleSendMode();
   startTyping();
+  if (hasPrefill && prefillNotice) {
+    prefillNotice.setAttribute('hidden', 'hidden');
+  }
 });
 
 function autoResizeTextarea() {
@@ -291,6 +296,17 @@ function toggleSendMode() {
 }
 
 toggleSendMode();
+
+if (messageInput && hasPrefill) {
+  if (prefillNotice) {
+    prefillNotice.removeAttribute('hidden');
+  }
+  window.requestAnimationFrame(() => {
+    const length = messageInput.value.length;
+    messageInput.focus();
+    messageInput.setSelectionRange(length, length);
+  });
+}
 
 async function loadChatSummary() {
   try {
@@ -390,6 +406,9 @@ async function sendCurrentMessage() {
       listing_image: listing.image,
     });
     messageInput.value = '';
+    if (prefillNotice) {
+      prefillNotice.setAttribute('hidden', 'hidden');
+    }
     pendingImageFile = null;
     attachmentPreview?.setAttribute('hidden', 'hidden');
     attachmentPreview.innerHTML = '';

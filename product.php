@@ -8,28 +8,60 @@ if ($productId === '') {
 }
 $productTitle = 'Loading listing...';
 $productPrice = 0;
+
 $vendorUidParam = isset($_GET['vendorUid']) ? trim((string) $_GET['vendorUid']) : '';
 $vendorIdParam = isset($_GET['vendorId']) ? trim((string) $_GET['vendorId']) : '';
-$vendorUidSession = isset($_SESSION['vendor_uid']) ? (string) $_SESSION['vendor_uid'] : '';
-$vendorNumericIdSession = isset($_SESSION['vendor_id']) ? (string) $_SESSION['vendor_id'] : '';
-$vendorId = $vendorUidParam !== '' ? $vendorUidParam : ($vendorIdParam !== '' ? $vendorIdParam : ($vendorUidSession !== '' ? $vendorUidSession : $vendorNumericIdSession));
-$vendorName = 'Marketplace Vendor';
-$buyerNumericId = isset($_SESSION['buyer_id']) ? (string) $_SESSION['buyer_id'] : '';
-$buyerUid = isset($_SESSION['buyer_uid']) ? (string) $_SESSION['buyer_uid'] : '';
-$buyerId = $buyerUid !== '' ? $buyerUid : $buyerNumericId;
-$buyerName = $_SESSION['buyer_name'] ?? '';
-$vendorNumericId = $vendorNumericIdSession;
-$vendorUid = $vendorUidSession !== '' ? $vendorUidSession : ($vendorUidParam !== '' ? $vendorUidParam : '');
-if ($vendorUid === '' && $vendorId !== '' && $vendorId !== $vendorNumericId) {
+$vendorFirebaseUidSession = isset($_SESSION['vendor_firebase_uid']) ? trim((string) $_SESSION['vendor_firebase_uid']) : '';
+$vendorLegacyUidSession = isset($_SESSION['vendor_uid']) ? trim((string) $_SESSION['vendor_uid']) : '';
+$vendorNumericIdSession = isset($_SESSION['vendor_id']) ? trim((string) $_SESSION['vendor_id']) : '';
+
+$vendorId = '';
+foreach ([$vendorUidParam, $vendorIdParam, $vendorFirebaseUidSession, $vendorLegacyUidSession, $vendorNumericIdSession] as $candidate) {
+    if ($candidate !== '') {
+        $vendorId = $candidate;
+        break;
+    }
+}
+
+$vendorUid = $vendorFirebaseUidSession;
+if ($vendorUid === '' && $vendorUidParam !== '') {
+    $vendorUid = $vendorUidParam;
+} elseif ($vendorUid === '' && $vendorLegacyUidSession !== '') {
+    $vendorUid = $vendorLegacyUidSession;
+} elseif ($vendorUid === '' && $vendorIdParam !== '' && $vendorIdParam !== $vendorNumericIdSession) {
+    $vendorUid = $vendorIdParam;
+}
+if ($vendorUid === '' && $vendorId !== '' && $vendorId !== $vendorNumericIdSession) {
     $vendorUid = $vendorId;
 }
+$vendorUid = trim((string) $vendorUid);
+
+$vendorName = 'Marketplace Vendor';
+
+$buyerNumericId = isset($_SESSION['buyer_id']) ? (string) $_SESSION['buyer_id'] : '';
+$buyerFirebaseUidSession = isset($_SESSION['buyer_firebase_uid']) ? trim((string) $_SESSION['buyer_firebase_uid']) : '';
+$buyerUidSession = isset($_SESSION['buyer_uid']) ? trim((string) $_SESSION['buyer_uid']) : '';
+$buyerGenericUidSession = isset($_SESSION['firebase_uid']) ? trim((string) $_SESSION['firebase_uid']) : '';
+
+$buyerUid = '';
+foreach ([$buyerFirebaseUidSession, $buyerUidSession, $buyerGenericUidSession] as $candidate) {
+    if ($candidate !== '') {
+        $buyerUid = $candidate;
+        break;
+    }
+}
+$buyerId = $buyerUid !== '' ? $buyerUid : $buyerNumericId;
+$buyerName = trim((string) ($_SESSION['buyer_name'] ?? ''));
 if ($buyerUid === '' && $buyerId !== '' && $buyerId !== $buyerNumericId) {
     $buyerUid = $buyerId;
 }
 
+$vendorNumericId = $vendorNumericIdSession;
+$buyerLabel = $buyerName !== '' ? $buyerName : 'Buyer';
+
 function yustam_format_plan_label(?string $plan): string
 {
-    $plan = trim((string)$plan);
+    $plan = trim((string) $plan);
     if ($plan === '') {
         return 'Free Plan';
     }
@@ -39,10 +71,10 @@ function yustam_format_plan_label(?string $plan): string
 
 function yustam_slugify_plan(?string $plan): string
 {
-    $plan = strtolower(trim((string)$plan));
+    $plan = strtolower(trim((string) $plan));
     $plan = preg_replace('/plan$/', '', $plan);
     $plan = preg_replace('/[^a-z0-9]+/', '-', $plan);
-    $plan = trim((string)$plan, '-');
+    $plan = trim((string) $plan, '-');
 
     return $plan !== '' ? $plan : 'free';
 }
@@ -57,9 +89,9 @@ function yustam_normalise_verification($value): string
         return 'unverified';
     }
 
-    $value = strtolower(trim((string)$value));
+    $value = strtolower(trim((string) $value));
 
-    if (in_array($value, ['true', 'yes', 'verified', 'approved', 'active'], true)) {
+    if (in_array($value, ['1', 'true', 'yes', 'verified', 'approved', 'active'], true)) {
         return 'verified';
     }
 
@@ -67,7 +99,7 @@ function yustam_normalise_verification($value): string
         return 'pending';
     }
 
-    if (in_array($value, ['rejected', 'declined', 'failed', 'needs_changes', 'needs update', 'needs-update', 'no', 'false'], true)) {
+    if (in_array($value, ['rejected', 'declined', 'failed', 'needs_changes', 'needs update', 'needs-update', '0', 'false', 'no', 'unverified'], true)) {
         return 'unverified';
     }
 
@@ -121,6 +153,8 @@ $vendorProfileUrl = 'vendor-storefront.php';
 if (is_string($vendorId) && trim($vendorId) !== '') {
     $vendorProfileUrl .= '?vendorId=' . rawurlencode($vendorId);
 }
+
+$placeholderImage = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -135,27 +169,33 @@ if (is_string($vendorId) && trim($vendorId) !== '') {
     <style>
         :root {
             --emerald: #004D40;
-            --emerald-dark: #00695C;
+            --emerald-dark: #01382F;
+            --emerald-soft: rgba(0, 77, 64, 0.12);
             --orange: #F3731E;
-            --orange-deep: #E05E0E;
-            --beige: #EADCCF;
+            --orange-deep: #D95D12;
+            --beige: #F7F0E9;
             --white: #FFFFFF;
-            --ink: #111111;
-            --shadow-soft: 0 10px 30px rgba(0, 0, 0, 0.12);
-            --glass-bg: rgba(255, 255, 255, 0.85);
+            --ink: #101613;
+            --muted: rgba(16, 22, 19, 0.65);
+            --shadow-key: 0 24px 48px rgba(0, 0, 0, 0.14);
+            --shadow-soft: 0 16px 38px rgba(1, 56, 47, 0.12);
+            --radius-lg: 32px;
+            --radius-md: 18px;
+            --radius-sm: 12px;
         }
 
-        * {
+        *,
+        *::before,
+        *::after {
             box-sizing: border-box;
-            margin: 0;
-            padding: 0;
         }
 
         body {
-            font-family: 'Inter', sans-serif;
-            background: linear-gradient(135deg, var(--emerald), var(--emerald-dark));
+            margin: 0;
             min-height: 100vh;
+            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
             color: var(--ink);
+            background: linear-gradient(145deg, rgba(0, 77, 64, 0.95), rgba(0, 77, 64, 0.75));
             display: flex;
             flex-direction: column;
         }
@@ -167,501 +207,354 @@ if (is_string($vendorId) && trim($vendorId) !== '') {
 
         button {
             font-family: inherit;
+            border: none;
+            background: none;
             cursor: pointer;
         }
 
-        .save-btn {
-            background: rgba(255, 255, 255, 0.85);
-            border: 1px solid rgba(0, 77, 64, 0.2);
-            border-radius: 14px;
-            padding: 10px 16px;
-            font-weight: 600;
-            color: #004D40;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            transition: all 0.25s ease;
+        button:disabled,
+        [aria-disabled="true"] {
+            cursor: not-allowed;
         }
 
-        .save-btn:hover {
-            background: linear-gradient(135deg, #F3731E, #FF8A3C);
-            color: #fff;
-        }
-
-        .save-btn.active {
-            background: linear-gradient(135deg, #F3731E, #FF8A3C);
-            color: #fff;
-        }
-
-        .save-btn.active i {
-            content: "\f004";
-        }
-
-        .page-wrapper {
-            width: 100%;
-            max-width: 1100px;
-            margin: 0 auto;
-            padding: 100px 20px 120px;
-        }
-
-        h1, h2, h3, h4 {
-            font-family: 'Anton', sans-serif;
-            letter-spacing: 0.5px;
-        }
-
-        .glass-card {
-            background: var(--glass-bg);
-            border-radius: 20px;
-            box-shadow: var(--shadow-soft);
-            border: 1px solid rgba(255, 255, 255, 0.25);
-            backdrop-filter: blur(10px);
-            padding: 24px;
-            margin-bottom: 24px;
-            animation: fadeUp 0.6s ease forwards;
-            opacity: 0;
-        }
-
-        header {
-            position: sticky;
-            top: 0;
-            z-index: 100;
+        .product-nav {
+            width: min(1180px, calc(100% - 32px));
+            margin: 32px auto 0;
+            padding: 16px 24px;
+            border-radius: var(--radius-md);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            background: rgba(255, 255, 255, 0.08);
             backdrop-filter: blur(12px);
-            background: rgba(234, 220, 207, 0.6);
-            border-bottom: 2px solid rgba(243, 115, 30, 0.5);
-            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
-        }
-
-        .topbar {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 16px 20px;
+            color: var(--white);
+            gap: 16px;
         }
 
-        .topbar .title {
-            font-size: clamp(18px, 2.8vw, 26px);
-            color: var(--emerald);
+        .product-nav__brand {
+            font-family: 'Anton', sans-serif;
+            letter-spacing: 1px;
+            font-size: clamp(1.2rem, 2vw, 1.6rem);
+            text-transform: uppercase;
         }
 
-        .topbar button {
-            background: rgba(255, 255, 255, 0.7);
-            border: none;
-            border-radius: 12px;
-            width: 44px;
-            height: 44px;
+        .nav-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 18px;
+            border-radius: 999px;
+            color: var(--white);
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            background: rgba(255, 255, 255, 0.12);
+            transition: background 0.25s ease, transform 0.25s ease;
+        }
+
+        .nav-button:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateY(-1px);
+        }
+
+        .product-shell {
+            width: min(1180px, calc(100% - 32px));
+            margin: 32px auto 64px;
+            display: flex;
+            flex-direction: column;
+            gap: 32px;
+        }
+
+        .product-hero {
+            background: var(--white);
+            border-radius: var(--radius-lg);
+            padding: 32px;
             display: grid;
-            place-items: center;
-            color: var(--emerald);
-            transition: transform 0.25s ease, box-shadow 0.25s ease;
+            grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+            gap: 32px;
+            box-shadow: var(--shadow-key);
         }
 
-        .topbar button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
-        }
-
-        /* Header placeholder for accent line */
-        .accent-bar {
-            height: 3px;
-            background: linear-gradient(135deg, var(--orange), #FF8A3C);
-        }
-
-        /* <!-- Gallery --> */
-        .gallery {
+        .product-gallery {
             display: flex;
             flex-direction: column;
             gap: 16px;
         }
 
-        .gallery-main {
-            width: 100%;
-            aspect-ratio: 16 / 9;
-            background: rgba(255, 255, 255, 0.4);
-            border-radius: 18px;
+        .product-gallery__stage {
+            position: relative;
+            background: linear-gradient(135deg, var(--beige), rgba(243, 115, 30, 0.18));
+            border-radius: var(--radius-lg);
             overflow: hidden;
+            aspect-ratio: 4 / 3;
             display: flex;
             align-items: center;
             justify-content: center;
-            position: relative;
         }
 
-        .gallery-main img {
+        .product-gallery__stage img {
             width: 100%;
             height: 100%;
             object-fit: cover;
-            transition: opacity 0.4s ease;
+            opacity: 0;
+            transition: opacity 0.35s ease;
         }
 
-        .thumb-strip {
+        .product-gallery__thumbs {
             display: flex;
+            flex-wrap: wrap;
             gap: 12px;
-            overflow-x: auto;
-            padding-bottom: 6px;
         }
 
-        .thumb-strip button {
-            background: transparent;
-            border: none;
-            border-radius: 14px;
+        .product-gallery__thumbs button {
+            border: 1px solid transparent;
+            border-radius: var(--radius-sm);
+            padding: 0;
+            width: 72px;
+            height: 72px;
             overflow: hidden;
-            min-width: 92px;
-            height: 64px;
-            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
-            opacity: 0.7;
-            transition: opacity 0.3s ease, transform 0.3s ease;
+            background: rgba(0, 0, 0, 0.04);
+            cursor: pointer;
+            transition: border-color 0.25s ease, transform 0.25s ease;
         }
 
-        .thumb-strip button.active,
-        .thumb-strip button:hover {
-            opacity: 1;
-            transform: translateY(-3px);
-        }
-
-        .thumb-strip img {
+        .product-gallery__thumbs button img {
             width: 100%;
             height: 100%;
             object-fit: cover;
         }
 
-        /* <!-- Product Details Section --> */
-        .product-details {
-            display: grid;
-            gap: 20px;
+        .product-gallery__thumbs button.active {
+            border-color: var(--orange);
+            transform: translateY(-2px);
         }
 
-        .product-header {
+        .product-summary {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .product-summary__header {
             display: flex;
             flex-direction: column;
             gap: 12px;
         }
 
-        .product-title {
-            font-size: clamp(24px, 4vw, 36px);
-            color: var(--emerald);
-        }
-
-        .price-tag {
-            font-size: clamp(24px, 4vw, 32px);
-            font-weight: 700;
-            background: linear-gradient(135deg, var(--orange), #FF9E50);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        .status-chip {
+        .category-pill {
             display: inline-flex;
             align-items: center;
-            padding: 6px 14px;
+            gap: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            padding: 6px 12px;
+            border-radius: 999px;
+            background: var(--emerald-soft);
+            color: var(--emerald-dark);
+        }
+
+        .product-summary__header h1 {
+            font-size: clamp(1.8rem, 3vw, 2.6rem);
+            font-weight: 700;
+            margin: 0;
+            color: var(--emerald-dark);
+        }
+
+        .product-price {
+            font-size: clamp(1.6rem, 4vw, 2.4rem);
+            font-weight: 700;
+            color: var(--orange);
+            margin: 0;
+        }
+
+        .product-summary__cta {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .save-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 20px;
+            border-radius: 999px;
+            background: linear-gradient(135deg, var(--orange), var(--orange-deep));
+            color: var(--white);
+            font-weight: 600;
+            box-shadow: var(--shadow-soft);
+            transition: transform 0.25s ease, box-shadow 0.25s ease;
+        }
+
+        .save-btn i {
+            font-size: 1.2rem;
+        }
+
+        .save-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 16px 38px rgba(217, 93, 18, 0.32);
+        }
+
+        .save-btn.active {
+            background: linear-gradient(135deg, var(--emerald), var(--emerald-dark));
+        }
+
+        .storefront-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 11px 18px;
             border-radius: 999px;
             font-weight: 600;
-            font-size: 0.9rem;
-            background: rgba(0, 128, 0, 0.12);
-            color: var(--emerald);
-        }
-        .status-chip.status-pending {
-            background: rgba(243, 115, 30, 0.16);
-            color: var(--orange);
+            border: 1px solid rgba(0, 77, 64, 0.18);
+            color: var(--emerald-dark);
+            transition: background 0.25s ease, color 0.25s ease;
         }
 
-        .status-chip.status-suspended,
-        .status-chip.status-disabled,
-        .status-chip.status-unavailable {
-            background: rgba(17, 17, 17, 0.12);
-            color: rgba(17, 17, 17, 0.7);
-        }
-
-        .status-chip.status-sold,
-        .status-chip.status-soldout {
-            background: rgba(216, 67, 21, 0.16);
-            color: #d84315;
-        }
-
-        .category-line {
-            font-size: 0.95rem;
-            color: rgba(17, 17, 17, 0.7);
-            display: flex;
-            gap: 8px;
-            align-items: center;
-        }
-
-        .divider {
-            height: 1px;
-            width: 100%;
-            background: rgba(0, 0, 0, 0.08);
-        }
-
-        .product-description {
-            color: rgba(17, 17, 17, 0.78);
-            line-height: 1.7;
+        .storefront-link:hover {
+            background: rgba(0, 77, 64, 0.08);
         }
 
         .feature-list {
-            margin-top: 12px;
+            list-style: none;
+            margin: 0;
+            padding: 0;
             display: grid;
-            gap: 8px;
+            gap: 10px;
         }
 
         .feature-list li {
-            list-style: none;
-            display: flex;
-            align-items: flex-start;
-            gap: 8px;
-            color: rgba(17, 17, 17, 0.75);
-        }
-
-
-        .btn-primary,
-        .btn-accent {
-            flex: 1 1 200px;
-            min-height: 50px;
-            border-radius: 12px;
-            border: none;
-            font-weight: 600;
-            letter-spacing: 0.3px;
-            transition: transform 0.25s ease, box-shadow 0.25s ease, filter 0.25s ease;
-        }
-
-        .btn-primary {
-            background: rgba(0, 77, 64, 0.92);
-            color: var(--white);
-        }
-
-        .btn-accent {
-            background: linear-gradient(135deg, var(--orange), #FF8A3C);
-            color: var(--white);
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-        }
-
-        .btn-primary:hover,
-        .btn-accent:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.16);
-            filter: brightness(1.03);
-        }
-
-        /* <!-- Specifications --> */
-        .spec-card details {
-            background: rgba(255, 255, 255, 0.75);
-            border-radius: 16px;
-            padding: 16px 18px;
-            border: 1px solid rgba(0, 0, 0, 0.08);
-        }
-
-        .spec-card summary {
-            cursor: pointer;
-            font-weight: 600;
-            font-size: 1.1rem;
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 10px;
+            font-weight: 500;
+            color: var(--muted);
+        }
+
+        .feature-list li::before {
+            content: '\f13d';
+            font-family: 'remixicon';
+            color: var(--emerald);
+            font-size: 1rem;
+        }
+
+        .product-details-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 24px;
+        }
+
+        .detail-card {
+            background: rgba(255, 255, 255, 0.96);
+            border-radius: var(--radius-lg);
+            padding: 28px;
+            box-shadow: 0 12px 28px rgba(0, 0, 0, 0.06);
+            backdrop-filter: blur(6px);
+        }
+
+        .detail-card h2 {
+            margin: 0 0 16px;
+            font-size: 1.25rem;
+            color: var(--emerald-dark);
+        }
+
+        .product-description {
+            line-height: 1.6;
+            color: var(--muted);
+            margin: 0;
         }
 
         .spec-list {
-            margin-top: 14px;
             display: grid;
-            gap: 12px;
+            gap: 10px;
         }
 
         .spec-row {
             display: flex;
             justify-content: space-between;
-            gap: 16px;
-            padding-bottom: 10px;
-            border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-            color: rgba(17, 17, 17, 0.75);
+            gap: 12px;
+            padding: 10px 14px;
+            border-radius: var(--radius-sm);
+            background: rgba(0, 77, 64, 0.05);
+            color: var(--muted);
+            font-size: 0.95rem;
         }
+
+        .spec-row span {
+            font-weight: 500;
+            color: var(--emerald-dark);
+        }
+
         .spec-empty {
-            margin-top: 12px;
-            font-size: 0.9rem;
-            color: rgba(17, 17, 17, 0.55);
-        }
-
-        .spec-row:last-child {
-            border-bottom: none;
-            padding-bottom: 0;
-        }
-
-        /* <!-- Vendor Information Card --> */
-        .vendor-card {
-            display: grid;
-            gap: 16px;
-        }
-
-        .vendor-header {
-            display: flex;
-            align-items: center;
-            gap: 14px;
-        }
-
-        .vendor-avatar {
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
-            object-fit: cover;
-            border: 3px solid rgba(243, 115, 30, 0.4);
-        }
-
-        .vendor-text {
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-        }
-        .vendor-business {
             margin: 0;
             color: var(--muted);
             font-size: 0.95rem;
         }
 
-        .vendor-badges {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px;
-            margin-top: 2px;
-        }
-
-        .vendor-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 6px 12px;
-            border-radius: 999px;
-            font-size: 0.75rem;
-            font-weight: 600;
-            letter-spacing: 0.02em;
-            background: rgba(0, 77, 64, 0.12);
-            color: var(--emerald);
-        }
-
-        .vendor-badge i {
-            font-size: 0.9rem;
-        }
-
-        .vendor-plan-premium {
-            background: rgba(243, 115, 30, 0.16);
-            color: var(--orange-deep);
-        }
-
-        .vendor-plan-pro {
-            background: rgba(0, 77, 64, 0.16);
-            color: var(--emerald);
-        }
-
-        .vendor-plan-plus {
-            background: rgba(0, 77, 64, 0.12);
-            color: var(--emerald);
-        }
-
-        .vendor-plan-starter {
-            background: rgba(17, 17, 17, 0.08);
-            color: rgba(17, 17, 17, 0.68);
-        }
-
-        .vendor-plan-elite {
-            background: linear-gradient(125deg, rgba(243, 115, 30, 0.2), rgba(0, 77, 64, 0.22));
-            color: var(--emerald);
-        }
-
-        .vendor-plan-free {
-            background: rgba(17, 17, 17, 0.08);
-            color: rgba(17, 17, 17, 0.68);
-        }
-
-        .vendor-badge.verified {
-            background: rgba(0, 77, 64, 0.18);
-            color: var(--emerald);
-        }
-
-        .vendor-badge.pending {
-            background: rgba(255, 193, 7, 0.22);
-            color: #a46f00;
-        }
-
-        .vendor-badge.unverified {
-            background: rgba(217, 48, 37, 0.16);
-            color: #a32018;
-        }
-
-        .vendor-actions {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-        }
-        .vendor-actions .is-disabled {
-            pointer-events: none;
-            opacity: 0.6;
-        }
-
-        .vendor-actions a {
-            padding: 10px 18px;
-            border-radius: 12px;
-            background: linear-gradient(135deg, rgba(243, 115, 30, 0.9), rgba(255, 138, 60, 0.9));
-            color: var(--white);
-            font-weight: 600;
-            transition: transform 0.25s ease;
-        }
-
-        .vendor-actions a:hover {
-            transform: translateY(-2px);
-        }
-
         .quick-chat-card {
-            display: grid;
-            gap: 14px;
+            background: var(--white);
+            border-radius: var(--radius-lg);
+            padding: 28px;
+            box-shadow: var(--shadow-soft);
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
         }
 
         .quick-chat-card h3 {
-            font-family: 'Anton', sans-serif;
-            letter-spacing: 0.04em;
-            font-size: clamp(1.2rem, 3.4vw, 1.6rem);
-            color: var(--emerald);
+            margin: 0;
+            font-size: 1.35rem;
+            color: var(--emerald-dark);
         }
 
         .quick-chat-card p {
             margin: 0;
-            color: rgba(17, 17, 17, 0.72);
+            color: var(--muted);
+            line-height: 1.6;
         }
 
-        .quick-chat-card .quick-input {
-            display: grid;
-            grid-template-columns: 1fr auto;
-            background: rgba(255, 255, 255, 0.82);
-            border-radius: 20px;
-            padding: 10px 12px;
+        .quick-form {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .quick-input {
+            display: flex;
+            align-items: center;
             gap: 10px;
-            border: 1px solid rgba(0, 0, 0, 0.08);
-            box-shadow: 0 14px 28px rgba(0, 0, 0, 0.12);
-            backdrop-filter: blur(10px);
+            border: 1px solid rgba(0, 77, 64, 0.16);
+            border-radius: var(--radius-md);
+            padding: 6px 6px 6px 16px;
+            background: rgba(0, 77, 64, 0.04);
         }
 
-        #quickMessageInput {
+        .quick-input input {
+            flex: 1;
             border: none;
             background: transparent;
             font-size: 1rem;
-            color: rgba(17, 17, 17, 0.86);
+            font-family: inherit;
+            padding: 10px 0;
             outline: none;
+            color: var(--ink);
         }
 
-        #quickMessageSubmit {
-            border: none;
-            border-radius: 16px;
-            padding: 0 18px;
-            font-weight: 600;
-            background: linear-gradient(135deg, rgba(243, 115, 30, 0.95), rgba(255, 138, 60, 0.9));
-            color: #fff;
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            cursor: pointer;
+        .quick-input button {
+            width: 46px;
+            height: 46px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--emerald), var(--emerald-dark));
+            color: var(--white);
+            display: grid;
+            place-items: center;
+            font-size: 1.25rem;
             transition: transform 0.25s ease, box-shadow 0.25s ease;
         }
 
-        #quickMessageSubmit:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 12px 24px rgba(243, 115, 30, 0.4);
+        .quick-input button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 22px rgba(1, 56, 47, 0.24);
         }
 
         .quick-suggestions {
@@ -671,247 +564,369 @@ if (is_string($vendorId) && trim($vendorId) !== '') {
         }
 
         .suggestion-chip {
-            border: none;
             border-radius: 999px;
-            padding: 8px 14px;
-            background: rgba(234, 220, 207, 0.6);
-            color: rgba(17, 17, 17, 0.75);
-            font-weight: 600;
-            cursor: pointer;
-            transition: transform 0.25s ease, box-shadow 0.25s ease, background 0.25s ease;
+            padding: 8px 16px;
+            background: rgba(0, 77, 64, 0.08);
+            color: var(--emerald-dark);
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: background 0.25s ease, transform 0.25s ease;
         }
 
         .suggestion-chip:hover {
-            transform: translateY(-2px);
-            background: rgba(243, 115, 30, 0.15);
-            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.12);
+            background: rgba(0, 77, 64, 0.16);
+            transform: translateY(-1px);
         }
 
-        .quick-chat-card small {
-            color: rgba(17, 17, 17, 0.6);
+        .quick-note {
+            color: var(--muted);
+            font-size: 0.85rem;
         }
 
-        /* <!-- Related Products --> */
-        .related-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-            gap: 18px;
-        }
-
-        .related-card {
-            background: rgba(255, 255, 255, 0.78);
-            border-radius: 18px;
-            overflow: hidden;
-            box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12);
-            transition: transform 0.25s ease, box-shadow 0.25s ease;
+        .vendor-card {
+            background: rgba(255, 255, 255, 0.98);
+            border-radius: var(--radius-lg);
+            padding: 32px;
+            box-shadow: var(--shadow-key);
             display: flex;
             flex-direction: column;
+            gap: 24px;
         }
 
-        .related-card img {
-            width: 100%;
-            aspect-ratio: 4 / 3;
+        .vendor-card__header {
+            display: flex;
+            gap: 18px;
+            align-items: center;
+        }
+
+        .vendor-avatar {
+            width: 82px;
+            height: 82px;
+            border-radius: 50%;
             object-fit: cover;
+            border: 3px solid rgba(0, 77, 64, 0.18);
         }
 
-        .related-card .info {
-            padding: 14px 16px 18px;
-            display: grid;
+        .vendor-card__header h2 {
+            margin: 0;
+            font-size: 1.45rem;
+            color: var(--emerald-dark);
+        }
+
+        .vendor-business {
+            margin: 4px 0 0;
+            color: var(--muted);
+            font-weight: 500;
+        }
+
+        .vendor-badges {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 12px;
+        }
+
+        .vendor-badge {
+            display: inline-flex;
+            align-items: center;
             gap: 6px;
-        }
-
-        .related-card .info h4 {
-            font-size: 1rem;
-            color: var(--emerald);
-        }
-
-        .related-card .info p {
-            font-size: 0.9rem;
-            color: rgba(17, 17, 17, 0.7);
-        }
-
-        .related-card button {
-            margin-top: 6px;
-            padding: 10px 12px;
-            border-radius: 10px;
-            border: none;
-            background: rgba(0, 77, 64, 0.92);
-            color: var(--white);
+            padding: 6px 14px;
+            border-radius: 999px;
+            font-size: 0.85rem;
             font-weight: 600;
         }
 
-        .related-card:hover {
-            transform: translateY(-6px);
-            box-shadow: 0 14px 26px rgba(0, 0, 0, 0.16);
+        .vendor-badge.vendor-plan {
+            background: rgba(243, 115, 30, 0.15);
+            color: var(--orange-deep);
         }
 
-        /* <!-- Floating Action Buttons --> */
-        .floating-cta {
-            position: fixed;
-            bottom: 24px;
-            right: 20px;
-            display: grid;
-            gap: 14px;
-            z-index: 90;
+        .vendor-badge.vendor-verified.verified {
+            background: rgba(0, 77, 64, 0.16);
+            color: var(--emerald-dark);
         }
 
-        .floating-cta button {
-            width: 56px;
-            height: 56px;
-            border-radius: 50%;
-            border: none;
-            display: grid;
-            place-items: center;
-            color: var(--white);
-            font-size: 1.4rem;
-            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.16);
-            position: relative;
+        .vendor-badge.vendor-verified.pending {
+            background: rgba(243, 115, 30, 0.16);
+            color: var(--orange-deep);
+        }
+
+        .vendor-badge.vendor-verified.unverified {
+            background: rgba(16, 22, 19, 0.12);
+            color: var(--muted);
+        }
+
+        .vendor-card__contact {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .contact-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 18px;
+            border-radius: var(--radius-md);
+            font-weight: 600;
             transition: transform 0.25s ease, box-shadow 0.25s ease;
         }
 
-        .floating-cta button:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 16px 30px rgba(0, 0, 0, 0.2);
+        .contact-button i {
+            font-size: 1.25rem;
         }
 
-        .floating-cta button span {
-            position: absolute;
-            right: 65px;
-            background: rgba(0, 0, 0, 0.85);
+        .contact-button--phone {
+            background: linear-gradient(135deg, var(--emerald), var(--emerald-dark));
             color: var(--white);
-            padding: 6px 12px;
-            border-radius: 999px;
+            box-shadow: 0 14px 28px rgba(1, 56, 47, 0.24);
+        }
+
+        .contact-button--whatsapp {
+            background: linear-gradient(135deg, #25D366, #128C7E);
+            color: var(--white);
+            box-shadow: 0 14px 28px rgba(18, 140, 126, 0.26);
+        }
+
+        .contact-button.is-disabled {
+            background: rgba(16, 22, 19, 0.08);
+            color: rgba(16, 22, 19, 0.5);
+            box-shadow: none;
+        }
+
+        .contact-button:not(.is-disabled):hover {
+            transform: translateY(-2px);
+        }
+
+        .contact-button [data-contact-value] {
             font-size: 0.85rem;
-            opacity: 0;
-            transform: translateY(10px);
-            transition: opacity 0.25s ease, transform 0.25s ease;
+            font-weight: 500;
+            opacity: 0.85;
+        }
+
+        .vendor-card__details {
+            display: grid;
+            gap: 12px;
+        }
+
+        .vendor-card__detail {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            font-size: 0.95rem;
+            color: var(--muted);
+        }
+
+        .vendor-card__detail .label {
+            font-weight: 600;
+            color: var(--emerald-dark);
+            min-width: 120px;
+        }
+
+        .vendor-card__detail a[aria-disabled="true"] {
             pointer-events: none;
-            white-space: nowrap;
+            opacity: 0.6;
         }
 
-        .floating-cta button:hover span,
-        .floating-cta button:focus-visible span {
-            opacity: 1;
-            transform: translateY(0);
+        .status-chip {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            padding: 6px 14px;
+            border-radius: 999px;
+            background: rgba(0, 77, 64, 0.85);
+            color: var(--white);
+            font-size: 0.85rem;
+            font-weight: 600;
+            letter-spacing: 0.02em;
         }
 
-        .fab-chat {
-            background: linear-gradient(135deg, #25d366, #1ebe57);
+        .status-chip.status-pending {
+            background: rgba(243, 115, 30, 0.85);
         }
 
-        .fab-yustam {
-            background: linear-gradient(135deg, var(--orange), #ff8c42);
+        .status-chip.status-sold,
+        .status-chip.status-soldout,
+        .status-chip.unavailable,
+        .status-chip.status-unavailable {
+            background: rgba(16, 22, 19, 0.8);
         }
 
-        .fab-yustam.is-loading::after {
-            content: '';
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            border: 2px solid rgba(255, 255, 255, 0.4);
-            border-top-color: #fff;
-            animation: spin 1s linear infinite;
+        .status-chip.status-disabled,
+        .status-chip.status-suspended {
+            background: rgba(189, 0, 49, 0.82);
         }
 
-        .fab-yustam.is-loading i {
-            display: none;
+        .floating-cta {
+            position: fixed;
+            right: 24px;
+            bottom: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            z-index: 20;
         }
 
-        .floating-cta .is-disabled {
-            opacity: 0.55;
+        .floating-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 22px;
+            border-radius: 999px;
+            background: var(--white);
+            color: var(--emerald-dark);
+            font-weight: 600;
+            box-shadow: var(--shadow-soft);
+            transition: transform 0.25s ease, box-shadow 0.25s ease;
+        }
+
+        .floating-button i {
+            font-size: 1.35rem;
+        }
+
+        .floating-button--primary {
+            background: linear-gradient(135deg, var(--orange), var(--orange-deep));
+            color: var(--white);
+        }
+
+        .floating-button--whatsapp {
+            background: linear-gradient(135deg, #25D366, #128C7E);
+            color: var(--white);
+        }
+
+        .floating-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 18px 38px rgba(0, 0, 0, 0.18);
+        }
+
+        .floating-button.is-disabled {
+            background: rgba(255, 255, 255, 0.6);
+            color: rgba(16, 22, 19, 0.45);
+            box-shadow: none;
             cursor: not-allowed;
         }
 
-        .floating-cta .is-disabled:hover {
-            transform: none;
-            box-shadow: 0 10px 18px rgba(0, 0, 0, 0.12);
-        }
-
-        footer {
+        .product-footer {
             margin-top: auto;
-            background: rgba(234, 220, 207, 0.7);
-            backdrop-filter: blur(12px);
-            padding: 40px 20px 30px;
-            color: var(--emerald);
+            padding: 32px 16px 48px;
+            background: rgba(0, 0, 0, 0.12);
+            color: var(--white);
         }
 
-        .footer-content {
-            max-width: 1100px;
+        .product-footer__inner {
+            width: min(1180px, calc(100% - 32px));
             margin: 0 auto;
-            display: grid;
+            display: flex;
+            flex-direction: column;
             gap: 18px;
+            align-items: center;
             text-align: center;
         }
 
         .footer-links {
             display: flex;
-            justify-content: center;
-            gap: 16px;
             flex-wrap: wrap;
+            gap: 16px;
+            justify-content: center;
+            font-weight: 500;
         }
 
         .footer-links a {
-            color: var(--emerald);
-            font-weight: 600;
+            color: var(--white);
+            opacity: 0.85;
+        }
+
+        .footer-links a:hover {
+            opacity: 1;
         }
 
         .footer-social {
             display: flex;
-            gap: 12px;
-            justify-content: center;
-            font-size: 1.2rem;
+            gap: 14px;
+            font-size: 1.4rem;
         }
 
         .footer-social a {
-            color: var(--emerald);
-            transition: color 0.25s ease;
+            color: var(--white);
+            opacity: 0.85;
         }
 
         .footer-social a:hover {
-            color: var(--orange);
+            opacity: 1;
         }
 
-        .empty-state {
-            text-align: center;
-            padding: 40px 20px;
-            color: rgba(17, 17, 17, 0.6);
-        }
-
-        @keyframes fadeUp {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        @media (max-width: 768px) {
-            .page-wrapper {
-                padding: 90px 16px 110px;
+        @media (max-width: 1024px) {
+            .product-nav {
+                margin-top: 24px;
             }
 
+            .product-hero {
+                grid-template-columns: 1fr;
+            }
 
             .floating-cta {
                 right: 16px;
+                bottom: 16px;
+            }
+        }
+
+        @media (max-width: 720px) {
+            .product-nav {
+                flex-direction: column;
+                align-items: stretch;
                 gap: 12px;
             }
 
-            .floating-cta button span {
-                right: auto;
-                left: -10px;
-                transform: translate(-100%, 10px);
+            .nav-button {
+                width: 100%;
+                justify-content: center;
             }
 
-            .floating-cta button:hover span {
-                transform: translate(-100%, 0);
+            .product-shell {
+                margin: 24px auto 80px;
+                gap: 24px;
+            }
+
+            .product-hero {
+                padding: 20px;
+                gap: 20px;
+            }
+
+            .product-gallery__thumbs {
+                justify-content: flex-start;
+            }
+
+            .product-details-grid {
+                gap: 16px;
+            }
+
+            .detail-card,
+            .quick-chat-card,
+            .vendor-card {
+                padding: 22px;
+            }
+
+            .floating-cta {
+                position: sticky;
+                bottom: unset;
+                right: unset;
+                left: unset;
+                flex-direction: row;
+                justify-content: center;
+                margin: 0 auto 24px;
+            }
+
+            .floating-button {
+                flex: 1;
+                justify-content: center;
+                min-width: 0;
             }
         }
 
         @media (prefers-reduced-motion: reduce) {
-            *, *::before, *::after {
+            *,
+            *::before,
+            *::after {
                 animation-duration: 0.01ms !important;
                 animation-iteration-count: 1 !important;
                 transition-duration: 0.01ms !important;
@@ -923,128 +938,118 @@ if (is_string($vendorId) && trim($vendorId) !== '') {
 <body
     data-buyer-id="<?= htmlspecialchars($buyerNumericId, ENT_QUOTES, 'UTF-8'); ?>"
     data-buyer-uid="<?= htmlspecialchars($buyerUid, ENT_QUOTES, 'UTF-8'); ?>"
-    data-buyer-name="<?= htmlspecialchars($buyerName ?: 'Buyer', ENT_QUOTES, 'UTF-8'); ?>"
+    data-buyer-name="<?= htmlspecialchars($buyerLabel, ENT_QUOTES, 'UTF-8'); ?>"
     data-vendor-id="<?= htmlspecialchars($vendorNumericId, ENT_QUOTES, 'UTF-8'); ?>"
     data-vendor-uid="<?= htmlspecialchars($vendorUid, ENT_QUOTES, 'UTF-8'); ?>"
     data-vendor-name="<?= htmlspecialchars($vendorName, ENT_QUOTES, 'UTF-8'); ?>"
     data-vendor-plan="<?= htmlspecialchars($vendorPlan, ENT_QUOTES, 'UTF-8'); ?>"
     data-vendor-verified="<?= htmlspecialchars($vendorVerificationState, ENT_QUOTES, 'UTF-8'); ?>"
 >
-    <!-- Header -->
-    <header>
-        <div class="topbar">
-            <button aria-label="Back to shop" onclick="window.location.href='shop.html'">
-                <i class="ri-arrow-left-line"></i>
-            </button>
-            <h1 class="title">Product Details</h1>
-            <button aria-label="Go home" onclick="window.location.href='index.html'">
-                <i class="ri-home-4-line"></i>
-            </button>
+    <header class="product-nav">
+        <button type="button" class="nav-button" onclick="window.location.href='shop.html'" aria-label="Back to listings">
+            <i class="ri-arrow-left-line" aria-hidden="true"></i>
+            <span>Shop</span>
+        </button>
+        <div class="product-nav__brand">
+            <span>Product Overview</span>
         </div>
-        <div class="accent-bar" aria-hidden="true"></div>
+        <button type="button" class="nav-button" onclick="window.location.href='index.html'" aria-label="Go to homepage">
+            <i class="ri-home-4-line" aria-hidden="true"></i>
+            <span>Home</span>
+        </button>
     </header>
-
-    <main class="page-wrapper">
-        <!-- Gallery -->
-        <section class="glass-card gallery" aria-label="Product image gallery">
-            <div class="gallery-main">
-                <img id="productImage" src="https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=1200&q=80" alt="Product main image">
+    <main class="product-shell">
+        <section class="product-hero">
+            <div class="product-gallery">
+                <figure class="product-gallery__stage" aria-label="Product gallery">
+                    <img id="productImage" src="<?= htmlspecialchars($placeholderImage, ENT_QUOTES, 'UTF-8'); ?>" alt="Listing image preview" loading="lazy">
+                    <span id="productStatus" class="status-chip">Checking availability</span>
+                </figure>
+                <div id="thumbStrip" class="product-gallery__thumbs" aria-label="Listing gallery thumbnails"></div>
             </div>
-            <div id="thumbStrip" class="thumb-strip" role="list">
-                <button class="active" data-image="https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=1200&q=80" aria-label="View image 1" role="listitem">
-                    <img src="https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=400&q=80" alt="Thumbnail image 1">
-                </button>
-                <button data-image="https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=1200&q=80" aria-label="View image 2" role="listitem">
-                    <img src="https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=400&q=80" alt="Thumbnail image 2">
-                </button>
-                <button data-image="https://images.unsplash.com/photo-1458063048042-6e7bf3929aca?auto=format&fit=crop&w=1200&q=80" aria-label="View image 3" role="listitem">
-                    <img src="https://images.unsplash.com/photo-1458063048042-6e7bf3929aca?auto=format&fit=crop&w=400&q=80" alt="Thumbnail image 3">
-                </button>
-            </div>
-        </section>
-
-        <!-- Product Details Section -->
-        <section class="glass-card product-details" aria-labelledby="productName">
-            <div class="product-header">
-                <h2 id="productName" class="product-title"><?= htmlspecialchars($productTitle, ENT_QUOTES, 'UTF-8'); ?></h2>
-                <p id="productPrice" class="price-tag">&mdash;</p>
-                <button id="saveListingBtn" class="save-btn" type="button">
-                    <i class="ri-heart-line" aria-hidden="true"></i>
-                    Save
-                </button>
-                <span class="status-chip" id="productStatus">Checking availability</span>
-                <div class="category-line" id="categoryLine" hidden>
-                    <i class="ri-smartphone-line"></i>
-                    <span id="categoryLabel">Listing category</span>
+            <div class="product-summary">
+                <div class="product-summary__header">
+                    <span id="categoryLine" class="category-pill" hidden>
+                        <i class="ri-price-tag-3-line" aria-hidden="true"></i>
+                        <span id="categoryLabel"></span>
+                    </span>
+                    <h1 id="productName"><?= htmlspecialchars($productTitle, ENT_QUOTES, 'UTF-8'); ?></h1>
+                    <p id="productPrice" class="product-price">&ndash;</p>
                 </div>
-                <div class="divider" aria-hidden="true"></div>
-                <p id="productDesc" class="product-description">
-                    Listing description will appear here once loaded from the vendor.
-                </p>
+                <div class="product-summary__cta">
+                    <button id="saveListingBtn" class="save-btn" type="button">
+                        <i class="ri-heart-line" aria-hidden="true"></i>
+                        Save listing
+                    </button>
+                    <a
+                        id="vendorStorefrontLink"
+                        class="storefront-link"
+                        href="<?= htmlspecialchars($vendorProfileUrl, ENT_QUOTES, 'UTF-8'); ?>"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                    >
+                        Visit vendor storefront
+                    </a>
+                </div>
                 <ul id="featureList" class="feature-list" hidden></ul>
+                <input type="hidden" id="productId" value="<?= htmlspecialchars($productId, ENT_QUOTES, 'UTF-8'); ?>">
             </div>
-            <input type="hidden" id="productId" value="<?= htmlspecialchars($productId, ENT_QUOTES, 'UTF-8'); ?>">
         </section>
-
-        <!-- Specifications -->
-        <section class="glass-card spec-card" aria-label="Product specifications">
-            <details open>
-                <summary>
-                    <i class="ri-slideshow-line" aria-hidden="true"></i>
-                    Specifications
-                </summary>
+        <section class="product-details-grid">
+            <article class="detail-card">
+                <h2>About this listing</h2>
+                <p id="productDesc" class="product-description">
+                    We are gathering the full description from the vendor.
+                </p>
+            </article>
+            <article class="detail-card">
+                <h2>Specifications</h2>
                 <div id="specList" class="spec-list"></div>
-                <p id="specFallback" class="spec-empty" hidden>No additional specifications provided.</p>
-            </details>
+                <p id="specFallback" class="spec-empty">No additional specifications provided yet.</p>
+            </article>
         </section>
-        <!-- Quick Message Card -->
         <section
             id="quickChatCard"
-            class="glass-card quick-chat-card"
+            class="quick-chat-card"
             data-chat-id="<?= htmlspecialchars($chatId, ENT_QUOTES, 'UTF-8'); ?>"
             data-vendor-id="<?= htmlspecialchars($vendorNumericId, ENT_QUOTES, 'UTF-8'); ?>"
-            data-vendor-uid="<?= htmlspecialchars($vendorUid !== '' ? $vendorUid : $vendorNumericId, ENT_QUOTES, 'UTF-8'); ?>"
-            data-vendor-numeric-id="<?= htmlspecialchars($vendorNumericId, ENT_QUOTES, 'UTF-8'); ?>"
+            data-vendor-uid="<?= htmlspecialchars($vendorUid !== '' ? $vendorUid : ($vendorId !== '' ? $vendorId : $vendorNumericId), ENT_QUOTES, 'UTF-8'); ?>"
             data-vendor-name="<?= htmlspecialchars($vendorName, ENT_QUOTES, 'UTF-8'); ?>"
             data-buyer-id="<?= htmlspecialchars($buyerNumericId, ENT_QUOTES, 'UTF-8'); ?>"
             data-buyer-uid="<?= htmlspecialchars($buyerUid !== '' ? $buyerUid : $buyerNumericId, ENT_QUOTES, 'UTF-8'); ?>"
-            data-buyer-numeric-id="<?= htmlspecialchars($buyerNumericId, ENT_QUOTES, 'UTF-8'); ?>"
             data-product-id="<?= htmlspecialchars($productId, ENT_QUOTES, 'UTF-8'); ?>"
             data-product-title="<?= htmlspecialchars($productTitle, ENT_QUOTES, 'UTF-8'); ?>"
-            data-product-image="https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=400&q=80"
+            data-product-image="<?= htmlspecialchars($placeholderImage, ENT_QUOTES, 'UTF-8'); ?>"
         >
             <h3>Chat with <?= htmlspecialchars($vendorName, ENT_QUOTES, 'UTF-8'); ?></h3>
-            <p>Send a quick message about this listing. We'll open a secure YUSTAM chat with the vendor.</p>
+            <p>Send a quick message and we will open a secure YUSTAM chat so you can continue the conversation instantly.</p>
             <form id="quickChatForm" class="quick-form">
                 <div class="quick-input">
                     <input
                         id="quickMessageInput"
                         type="text"
                         name="quickMessage"
-                        placeholder="Ask about delivery, availability, or pricing"
+                        placeholder="Ask about pricing, delivery, or product condition"
                         autocomplete="off"
                     >
-                    <button id="quickMessageSubmit" type="submit">
+                    <button id="quickMessageSubmit" type="submit" aria-label="Send quick message">
                         <i class="ri-send-plane-fill" aria-hidden="true"></i>
-                        Send
                     </button>
                 </div>
             </form>
             <div class="quick-suggestions" aria-label="Quick message suggestions">
                 <button type="button" class="suggestion-chip" data-quick-message="Is this still available?">Is this still available?</button>
                 <button type="button" class="suggestion-chip" data-quick-message="Can I get a better price?">Can I get a better price?</button>
-                <button type="button" class="suggestion-chip" data-quick-message="Final price please?">Final price please?</button>
-                <button type="button" class="suggestion-chip" data-quick-message="Can you deliver to my area?">Can you deliver to my area?</button>
+                <button type="button" class="suggestion-chip" data-quick-message="What condition is it in?">What condition is it in?</button>
+                <button type="button" class="suggestion-chip" data-quick-message="Can you deliver to my location?">Can you deliver to my location?</button>
             </div>
-            <small>We'll pop open chat and drop your message in instantly.</small>
+            <small class="quick-note">We will prefill the chat with your message and notify the vendor immediately.</small>
         </section>
-
-        <!-- Vendor Information Card -->
-        <section class="glass-card vendor-card" aria-labelledby="vendorTitle">
-            <div class="vendor-header">
+        <section class="vendor-card" aria-labelledby="vendorTitle">
+            <header class="vendor-card__header">
                 <img id="vendorAvatar" src="logo.jpeg" alt="Vendor profile photo" class="vendor-avatar">
-                <div class="vendor-text">
-                    <h3 id="vendorTitle"><?= htmlspecialchars($vendorName, ENT_QUOTES, 'UTF-8'); ?></h3>
+                <div>
+                    <h2 id="vendorTitle"><?= htmlspecialchars($vendorName, ENT_QUOTES, 'UTF-8'); ?></h2>
                     <p id="vendorBusiness" class="vendor-business" hidden></p>
                     <div class="vendor-badges" id="vendorBadges">
                         <span
@@ -1063,81 +1068,68 @@ if (is_string($vendorId) && trim($vendorId) !== '') {
                         </span>
                     </div>
                 </div>
+            </header>
+            <div class="vendor-card__contact">
+                <a
+                    id="vendorPhoneLink"
+                    class="contact-button contact-button--phone is-disabled"
+                    href="#"
+                    aria-disabled="true"
+                    data-display-label="Call Vendor"
+                >
+                    <i class="ri-phone-line" aria-hidden="true"></i>
+                    <span data-contact-label>Call Vendor</span>
+                    <span data-contact-value>Unavailable</span>
+                </a>
+                <a
+                    id="vendorWhatsappLink"
+                    class="contact-button contact-button--whatsapp is-disabled"
+                    href="#"
+                    target="_blank"
+                    rel="noopener"
+                    aria-disabled="true"
+                    data-display-label="WhatsApp Vendor"
+                >
+                    <i class="ri-whatsapp-line" aria-hidden="true"></i>
+                    <span data-contact-label>WhatsApp Vendor</span>
+                </a>
             </div>
-            <div id="vendorInfo" class="vendor-details">
-                <p><strong>Contact:</strong> <a id="vendorEmailLink" href="#" aria-disabled="true">Unavailable</a> &middot; <a id="vendorPhoneLink" href="#" aria-disabled="true">Unavailable</a></p>
-                <p id="vendorLocationRow" hidden><strong>Location:</strong> <span id="vendorLocation"></span></p>
-                <p id="vendorSinceRow" hidden><strong>Member since:</strong> <span id="vendorSince"></span></p>
-            </div>
-            <div class="vendor-actions">
-                <a id="vendorStorefrontLink" href="<?= htmlspecialchars($vendorProfileUrl, ENT_QUOTES, 'UTF-8'); ?>" class="view-profile" target="_blank" rel="noopener noreferrer">View Vendor Storefront</a>
-                <a id="vendorWhatsappLink" href="#" class="email-vendor" target="_blank" rel="noopener" aria-disabled="true">WhatsApp Vendor</a>
-            </div>
-        </section>
-
-
-        <!-- Related Products -->
-        <section class="glass-card" aria-labelledby="relatedHeading">
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
-                <h3 id="relatedHeading" style="font-size: clamp(20px, 3vw, 26px); color: var(--emerald);">More from this Category</h3>
-                <a href="shop.html" style="color: var(--orange); font-weight: 600;">View all ▸</a>
-            </div>
-            <div id="relatedGrid" class="related-grid">
-                <article class="related-card" data-category="Phones" data-price="1200000">
-                    <img src="https://images.unsplash.com/photo-1510557880182-3d4d3cba35a5?auto=format&fit=crop&w=600&q=80" alt="Related product 1">
-                    <div class="info">
-                        <h4>Samsung Galaxy S24 Ultra</h4>
-                        <p>₦980,000</p>
-                        <button type="button" onclick="window.location.href='product.html?id=galaxyS24'">View</button>
-                    </div>
-                </article>
-                <article class="related-card" data-category="Phones" data-price="650000">
-                    <img src="https://images.unsplash.com/photo-1580915411954-282cb1c83cfe?auto=format&fit=crop&w=600&q=80" alt="Related product 2">
-                    <div class="info">
-                        <h4>Google Pixel 8 Pro</h4>
-                        <p>₦720,000</p>
-                        <button type="button" onclick="window.location.href='product.html?id=pixel8'">View</button>
-                    </div>
-                </article>
-                <article class="related-card" data-category="Phones" data-price="450000">
-                    <img src="https://images.unsplash.com/photo-1549923746-c502d488b3ea?auto=format&fit=crop&w=600&q=80" alt="Related product 3">
-                    <div class="info">
-                        <h4>OnePlus 12</h4>
-                        <p>₦540,000</p>
-                        <button type="button" onclick="window.location.href='product.html?id=oneplus12'">View</button>
-                    </div>
-                </article>
-                <article class="related-card" data-category="Phones" data-price="350000">
-                    <img src="https://images.unsplash.com/photo-1608897013039-887f21d8c804?auto=format&fit=crop&w=600&q=80" alt="Related product 4">
-                    <div class="info">
-                        <h4>Xiaomi 14 Pro</h4>
-                        <p>₦420,000</p>
-                        <button type="button" onclick="window.location.href='product.html?id=xiaomi14'">View</button>
-                    </div>
-                </article>
+            <div class="vendor-card__details">
+                <div class="vendor-card__detail">
+                    <span class="label">Email</span>
+                    <a id="vendorEmailLink" href="#" aria-disabled="true">Unavailable</a>
+                </div>
+                <div id="vendorLocationRow" class="vendor-card__detail" hidden>
+                    <span class="label">Location</span>
+                    <span id="vendorLocation"></span>
+                </div>
+                <div id="vendorSinceRow" class="vendor-card__detail" hidden>
+                    <span class="label">Member since</span>
+                    <span id="vendorSince"></span>
+                </div>
             </div>
         </section>
     </main>
-
-    <!-- Floating Action Buttons -->
-    <div class="floating-cta" aria-label="Quick purchase actions">
-        <button id="chatWithVendorBtn" class="fab-yustam" type="button" aria-label="Chat with vendor">
+    <div class="floating-cta" aria-label="Quick actions">
+        <button id="chatWithVendorBtn" class="floating-button floating-button--primary" type="button" aria-label="Chat with vendor">
             <i class="ri-message-3-fill" aria-hidden="true"></i>
-            <span>Chat with Vendor</span>
+            <span>Chat with vendor</span>
         </button>
-        <button id="floatingWhatsappBtn" class="fab-chat is-disabled" type="button" aria-label="Chat on WhatsApp" aria-disabled="true">
+        <button id="floatingCallBtn" class="floating-button is-disabled" type="button" aria-label="Call vendor" aria-disabled="true">
+            <i class="ri-phone-line" aria-hidden="true"></i>
+            <span>Call vendor</span>
+        </button>
+        <button id="floatingWhatsappBtn" class="floating-button floating-button--whatsapp is-disabled" type="button" aria-label="WhatsApp vendor" aria-disabled="true">
             <i class="ri-whatsapp-line" aria-hidden="true"></i>
-            <span>Chat on WhatsApp</span>
+            <span>WhatsApp vendor</span>
         </button>
     </div>
-
-    <!-- Footer -->
-    <footer>
-        <div class="footer-content">
+    <footer class="product-footer">
+        <div class="product-footer__inner">
             <nav class="footer-links" aria-label="Footer navigation">
                 <a href="index.html">Home</a>
                 <a href="shop.html">Shop</a>
-                <a href="vendor-register.html">Become a Vendor</a>
+                <a href="vendor-register.html">Become a vendor</a>
                 <a href="contact.html">Contact</a>
             </nav>
             <div class="footer-social" aria-label="Social media links">
@@ -1151,19 +1143,11 @@ if (is_string($vendorId) && trim($vendorId) !== '') {
                     <i class="ri-facebook-circle-line"></i>
                 </a>
             </div>
-            <small>© 2025 YUSTAM - All Rights Reserved.</small>
+            <small>&copy; <?= date('Y'); ?> YUSTAM Marketplace. All rights reserved.</small>
         </div>
     </footer>
-
-    <!-- Firebase Logic placeholder -->
-  <script src="theme-manager.js" defer></script>
-<script type="module" src="product.js"></script>
-<script type="module" src="firebase.js"></script>
+    <script src="theme-manager.js" defer></script>
+    <script type="module" src="product.js"></script>
+    <script type="module" src="firebase.js"></script>
 </body>
 </html>
-
-
-
-
-
-

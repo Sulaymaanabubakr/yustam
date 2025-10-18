@@ -101,12 +101,19 @@ function scheduleRender() {
 }
 
 function messagePreview(chat) {
-  const type = chat.last_type || 'text';
+  const type = (chat.last_type || 'text').toLowerCase();
   const text = (chat.last_text || '').trim();
-  if (type === 'image') return 'Photo';
-  if (type === 'voice') return 'Voice note';
-  if (text) return text.length > 96 ? `${text.slice(0, 93)}…` : text;
-  return 'New conversation';
+  if (type === 'image') {
+    return { icon: 'ri-image-line', label: 'Photo attachment' };
+  }
+  if (type === 'voice') {
+    return { icon: 'ri-mic-line', label: 'Voice note' };
+  }
+  if (text) {
+    const label = text.length > 96 ? `${text.slice(0, 93)}...` : text;
+    return { label };
+  }
+  return { label: 'New conversation' };
 }
 
 function renderChats(chats) {
@@ -150,9 +157,22 @@ function renderChats(chats) {
     subtitle.textContent = chat.listing_title || 'Listing';
 
     const preview = document.createElement('small');
-    preview.textContent = isVendorTyping ? 'Typing…' : messagePreview(chat);
     if (isVendorTyping) {
+      preview.textContent = 'Typing…';
       preview.classList.add('typing-indicator');
+    } else {
+      const previewData = messagePreview(chat);
+      if (previewData.icon) {
+        preview.classList.add('chat-preview');
+        const iconEl = document.createElement('i');
+        iconEl.className = previewData.icon;
+        iconEl.setAttribute('aria-hidden', 'true');
+        const labelSpan = document.createElement('span');
+        labelSpan.textContent = previewData.label;
+        preview.replaceChildren(iconEl, labelSpan);
+      } else {
+        preview.textContent = previewData.label;
+      }
     }
 
     content.append(title, subtitle, preview);
@@ -188,7 +208,7 @@ function openChat(chat) {
   if (chat.listing_id) { params.set('listing', chat.listing_id); }
   if (chat.listing_title) { params.set('listing_title', chat.listing_title); }
   if (chat.listing_image) { params.set('listing_image', chat.listing_image); }
-  window.location.href = chat-thread.php?;
+  window.location.href = `chat-thread.php?${params.toString()}`;
 }
 
 function subscribeToChats() {
