@@ -14,6 +14,22 @@ if (bootstrap.role !== 'buyer' || !bootstrap.buyer?.uid) {
 initFirebase();
 
 const buyer = bootstrap.buyer;
+const persistUid = (uid) => {
+  const value = typeof uid === 'string' ? uid.trim() : '';
+  if (!value || typeof window === 'undefined') return;
+  try {
+    window.sessionStorage?.setItem('yustam_uid', value);
+  } catch (error) {
+    console.warn('Unable to persist buyer session uid', error);
+  }
+  try {
+    window.localStorage?.setItem('yustam_uid', value);
+  } catch (error) {
+    console.warn('Unable to persist buyer uid', error);
+  }
+};
+
+persistUid(buyer.uid);
 const chatListEl = document.getElementById('chatList');
 const emptyStateEl = document.getElementById('emptyState');
 const newChatBtn = document.getElementById('newChatBtn');

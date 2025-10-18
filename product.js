@@ -4,12 +4,34 @@ import { buildChatId, ensureChat, sendMessage } from './chat-service.js';
 
 const urlParams = new URLSearchParams(window.location.search);
 
+const readStoredUid = () => {
+  if (typeof window === 'undefined') return '';
+  try {
+    const sessionValue = window.sessionStorage?.getItem('yustam_uid');
+    if (sessionValue && sessionValue.trim()) {
+      return sessionValue.trim();
+    }
+  } catch (error) {
+    console.warn('Unable to read session uid', error);
+  }
+  try {
+    const localValue = window.localStorage?.getItem('yustam_uid');
+    if (localValue && localValue.trim()) {
+      return localValue.trim();
+    }
+  } catch (error) {
+    console.warn('Unable to read stored uid', error);
+  }
+  return '';
+};
+
 const mainImage = document.getElementById('productImage') || document.getElementById('mainImage');
 const thumbStrip = document.getElementById('thumbStrip');
 const saveBtn = document.getElementById('saveListingBtn');
 const buyerUidParam = (urlParams.get('buyerUid') || '').trim();
 const buyerNumericParam = (urlParams.get('buyerNumericId') || urlParams.get('buyerId') || urlParams.get('buyer') || '').trim();
-const buyerUid = document.body?.dataset?.buyerUid || buyerUidParam || '';
+const storedBuyerUid = readStoredUid();
+const buyerUid = storedBuyerUid || document.body?.dataset?.buyerUid || buyerUidParam || '';
 const buyerNumericId = document.body?.dataset?.buyerId || buyerNumericParam || '';
 const buyerIdentifier = buyerNumericId || buyerUid || '';
 const buyerName = document.body?.dataset?.buyerName || 'Buyer';
@@ -327,7 +349,7 @@ function resolveChatMetadata() {
     return null;
   }
   return {
-    chatId: buildChatId(vendorChatUid, buyerChatUid, listingId),
+    chatId: buildChatId(buyerChatUid, vendorChatUid),
     buyerUid: buyerChatUid,
     vendorUid: vendorChatUid,
     productId: listingId,

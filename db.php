@@ -293,3 +293,287 @@ function yustam_admin_updated_column(): ?string
     }
     return null;
 }
+
+/**
+ * -------------------------------------------------------------------------
+ * Chat helpers
+ * -------------------------------------------------------------------------
+ */
+function yustam_chat_connection(): mysqli
+{
+    static $ensured = false;
+    $conn = get_db_connection();
+    if (!$ensured) {
+        yustam_chat_ensure_tables($conn);
+        $ensured = true;
+    }
+    return $conn;
+}
+
+function yustam_chat_ensure_tables(mysqli $conn): void
+{
+    $summariesSql = <<<SQL
+CREATE TABLE IF NOT EXISTS `chat_summaries` (
+    `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `chat_id` VARCHAR(120) NOT NULL,
+    `buyer_uid` VARCHAR(60) NOT NULL,
+    `buyer_name` VARCHAR(150) DEFAULT NULL,
+    `vendor_uid` VARCHAR(60) NOT NULL,
+    `vendor_name` VARCHAR(150) DEFAULT NULL,
+    `listing_id` VARCHAR(80) DEFAULT NULL,
+    `listing_title` VARCHAR(255) DEFAULT NULL,
+    `listing_image` VARCHAR(255) DEFAULT NULL,
+    `last_message` TEXT NULL,
+    `last_type` VARCHAR(20) NOT NULL DEFAULT 'text',
+    `last_sender_uid` VARCHAR(60) DEFAULT NULL,
+    `last_sender_role` VARCHAR(20) DEFAULT NULL,
+    `unread_for_buyer` INT UNSIGNED NOT NULL DEFAULT 0,
+    `unread_for_vendor` INT UNSIGNED NOT NULL DEFAULT 0,
+    `last_sent_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uniq_chat` (`chat_id`),
+    KEY `idx_buyer` (`buyer_uid`, `last_sent_at`),
+    KEY `idx_vendor` (`vendor_uid`, `last_sent_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+SQL;
+    if (!$conn->query($summariesSql)) {
+        throw new RuntimeException('Unable to ensure chat_summaries table: ' . $conn->error);
+    }
+
+    $messagesSql = <<<SQL
+CREATE TABLE IF NOT EXISTS `chat_messages` (
+    `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `chat_id` VARCHAR(120) NOT NULL,
+    `message_id` VARCHAR(64) NOT NULL,
+    `sender_uid` VARCHAR(60) NOT NULL,
+    `sender_role` VARCHAR(20) NOT NULL,
+    `receiver_uid` VARCHAR(60) DEFAULT NULL,
+    `text` TEXT NULL,
+    `image_url` VARCHAR(512) DEFAULT NULL,
+    `voice_url` VARCHAR(512) DEFAULT NULL,
+    `voice_duration` DECIMAL(6,2) DEFAULT NULL,
+    `message_type` VARCHAR(20) NOT NULL DEFAULT 'text',
+    `sent_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uniq_chat_message` (`chat_id`, `message_id`),
+    KEY `idx_chat_time` (`chat_id`, `sent_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+SQL;
+    if (!$conn->query($messagesSql)) {
+        throw new RuntimeException('Unable to ensure chat_messages table: ' . $conn->error);
+    }
+}
+
+function yustam_chat_store_message(array $message): void
+{
+    $conn = yustam_chat_connection();
+    $sql = <<<SQL
+INSERT INTO `chat_messages`
+    (`chat_id`, `message_id`, `sender_uid`, `sender_role`, `receiver_uid`, `text`, `image_url`, `voice_url`, `voice_duration`, `message_type`, `sent_at`)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON DUPLICATE KEY UPDATE `text` = VALUES(`text`), `image_url` = VALUES(`image_url`), `voice_url` = VALUES(`voice_url`), `voice_duration` = VALUES(`voice_duration`)
+SQL;
+    $stmt = $conn->prepare($sql);
+    if (!$stmt) {
+        throw new RuntimeException('Unable to prepare chat message insert: ' . $conn->error);
+    }
+
+    $chatId = (string)($message['chat_id'] ?? '');
+    $messageId = (string)($message['message_id'] ?? '');
+    $senderUid = (string)($message['sender_uid'] ?? '');
+    $senderRole = strtolower((string)($message['sender_role'] ?? ''));
+    $receiverUid = (string)($message['receiver_uid'] ?? '');
+    $text = $message['text'] ?? null;
+    $imageUrl = $message['image_url'] ?? null;
+    $voiceUrl = $message['voice_url'] ?? null;
+    $voiceDuration = isset($message['voice_duration']) ? (float)$message['voice_duration'] : null;
+    $messageType = strtolower((string)($message['message_type'] ?? 'text'));
+    $sentAt = (string)($message['sent_at'] ?? gmdate('Y-m-d H:i:s'));
+
+    $stmt->bind_param(
+        'sssssssssss',
+        $chatId,
+        $messageId,
+        $senderUid,
+        $senderRole,
+        $receiverUid,
+        $text,
+        $imageUrl,
+        $voiceUrl,
+        $voiceDuration,
+        $messageType,
+        $sentAt
+    );
+
+    $stmt->execute();
+    $stmt->close();
+}
+
+function yustam_chat_upsert_summary(array $summary, ?string $senderRole = null): void
+{
+    $conn = yustam_chat_connection();
+
+    $chatId = (string)($summary['chat_id'] ?? '');
+    $buyerUid = (string)($summary['buyer_uid'] ?? '');
+    $buyerName = $summary['buyer_name'] ?? null;
+    $vendorUid = (string)($summary['vendor_uid'] ?? '');
+    $vendorName = $summary['vendor_name'] ?? null;
+    $listingId = $summary['listing_id'] ?? null;
+    $listingTitle = $summary['listing_title'] ?? null;
+    $listingImage = $summary['listing_image'] ?? null;
+    $lastMessage = $summary['last_message'] ?? null;
+    $lastType = strtolower((string)($summary['last_type'] ?? 'text'));
+    $lastSenderUid = $summary['last_sender_uid'] ?? null;
+    $role = strtolower($senderRole ?? (string)($summary['last_sender_role'] ?? ''));
+    $lastSenderRole = $role ?: null;
+    $lastSentAt = (string)($summary['last_sent_at'] ?? gmdate('Y-m-d H:i:s'));
+
+    $initialUnreadBuyer = $role === 'vendor' ? 1 : 0;
+    $initialUnreadVendor = $role === 'buyer' ? 1 : 0;
+
+    $sql = <<<SQL
+INSERT INTO `chat_summaries`
+    (`chat_id`, `buyer_uid`, `buyer_name`, `vendor_uid`, `vendor_name`, `listing_id`, `listing_title`, `listing_image`, `last_message`, `last_type`, `last_sender_uid`, `last_sender_role`, `unread_for_buyer`, `unread_for_vendor`, `last_sent_at`)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON DUPLICATE KEY UPDATE
+    `buyer_uid` = VALUES(`buyer_uid`),
+    `buyer_name` = VALUES(`buyer_name`),
+    `vendor_uid` = VALUES(`vendor_uid`),
+    `vendor_name` = VALUES(`vendor_name`),
+    `listing_id` = VALUES(`listing_id`),
+    `listing_title` = VALUES(`listing_title`),
+    `listing_image` = VALUES(`listing_image`),
+    `last_message` = VALUES(`last_message`),
+    `last_type` = VALUES(`last_type`),
+    `last_sender_uid` = VALUES(`last_sender_uid`),
+    `last_sender_role` = VALUES(`last_sender_role`),
+    `last_sent_at` = VALUES(`last_sent_at`),
+    `unread_for_buyer` = CASE
+        WHEN VALUES(`last_sender_role`) = 'buyer' THEN 0
+        WHEN VALUES(`last_sender_role`) = 'vendor' THEN `unread_for_buyer` + 1
+        ELSE `unread_for_buyer`
+    END,
+    `unread_for_vendor` = CASE
+        WHEN VALUES(`last_sender_role`) = 'vendor' THEN 0
+        WHEN VALUES(`last_sender_role`) = 'buyer' THEN `unread_for_vendor` + 1
+        ELSE `unread_for_vendor`
+    END
+SQL;
+
+    $stmt = $conn->prepare($sql);
+    if (!$stmt) {
+        throw new RuntimeException('Unable to prepare chat summary upsert: ' . $conn->error);
+    }
+    $stmt->bind_param(
+        'ssssssssssssiis',
+        $chatId,
+        $buyerUid,
+        $buyerName,
+        $vendorUid,
+        $vendorName,
+        $listingId,
+        $listingTitle,
+        $listingImage,
+        $lastMessage,
+        $lastType,
+        $lastSenderUid,
+        $lastSenderRole,
+        $initialUnreadBuyer,
+        $initialUnreadVendor,
+        $lastSentAt
+    );
+    $stmt->execute();
+    $stmt->close();
+}
+
+function yustam_chat_fetch_messages(string $chatId, int $limit = 500): array
+{
+    $conn = yustam_chat_connection();
+    $limit = max(1, min($limit, 1000));
+    $sql = 'SELECT `message_id`, `sender_uid`, `sender_role`, `receiver_uid`, `text`, `image_url`, `voice_url`, `voice_duration`, `message_type`, `sent_at` FROM `chat_messages` WHERE `chat_id` = ? ORDER BY `sent_at` ASC LIMIT ?';
+    $stmt = $conn->prepare($sql);
+    if (!$stmt) {
+        throw new RuntimeException('Unable to prepare chat message fetch: ' . $conn->error);
+    }
+    $stmt->bind_param('si', $chatId, $limit);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $messages = [];
+    if ($result instanceof mysqli_result) {
+        while ($row = $result->fetch_assoc()) {
+            $messages[] = $row;
+        }
+        $result->free();
+    }
+    $stmt->close();
+    return $messages;
+}
+
+function yustam_chat_fetch_chats(string $uid, string $role, int $limit = 50): array
+{
+    $conn = yustam_chat_connection();
+    $limit = max(1, min($limit, 200));
+    $column = strtolower($role) === 'vendor' ? 'vendor_uid' : 'buyer_uid';
+    $sql = sprintf(
+        'SELECT `chat_id`, `buyer_uid`, `buyer_name`, `vendor_uid`, `vendor_name`, `listing_id`, `listing_title`, `listing_image`, `last_message`, `last_type`, `last_sender_uid`, `last_sender_role`, `unread_for_buyer`, `unread_for_vendor`, `last_sent_at`
+         FROM `chat_summaries` WHERE `%s` = ? ORDER BY `last_sent_at` DESC LIMIT ?',
+        $column
+    );
+    $stmt = $conn->prepare($sql);
+    if (!$stmt) {
+        throw new RuntimeException('Unable to prepare chat summaries query: ' . $conn->error);
+    }
+    $stmt->bind_param('si', $uid, $limit);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $chats = [];
+    if ($result instanceof mysqli_result) {
+        while ($row = $result->fetch_assoc()) {
+            $chats[] = $row;
+        }
+        $result->free();
+    }
+    $stmt->close();
+    return $chats;
+}
+
+function yustam_chat_fetch_summary(string $chatId): ?array
+{
+    $conn = yustam_chat_connection();
+    $sql = 'SELECT `chat_id`, `buyer_uid`, `buyer_name`, `vendor_uid`, `vendor_name`, `listing_id`, `listing_title`, `listing_image`, `last_message`, `last_type`, `last_sender_uid`, `last_sender_role`, `unread_for_buyer`, `unread_for_vendor`, `last_sent_at` FROM `chat_summaries` WHERE `chat_id` = ? LIMIT 1';
+    $stmt = $conn->prepare($sql);
+    if (!$stmt) {
+        throw new RuntimeException('Unable to prepare chat summary query: ' . $conn->error);
+    }
+    $stmt->bind_param('s', $chatId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $summary = null;
+    if ($result instanceof mysqli_result) {
+        $summary = $result->fetch_assoc() ?: null;
+        $result->free();
+    }
+    $stmt->close();
+    return $summary;
+}
+
+function yustam_chat_reset_unread(string $chatId, string $role): void
+{
+    $conn = yustam_chat_connection();
+    $role = strtolower($role);
+    if ($role === 'buyer') {
+        $sql = 'UPDATE `chat_summaries` SET `unread_for_buyer` = 0 WHERE `chat_id` = ?';
+    } elseif ($role === 'vendor') {
+        $sql = 'UPDATE `chat_summaries` SET `unread_for_vendor` = 0 WHERE `chat_id` = ?';
+    } else {
+        return;
+    }
+    $stmt = $conn->prepare($sql);
+    if (!$stmt) {
+        throw new RuntimeException('Unable to prepare unread reset statement: ' . $conn->error);
+    }
+    $stmt->bind_param('s', $chatId);
+    $stmt->execute();
+    $stmt->close();
+}

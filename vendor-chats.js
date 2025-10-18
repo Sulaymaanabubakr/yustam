@@ -14,6 +14,22 @@ if (bootstrap.role !== 'vendor' || !bootstrap.vendor?.uid) {
 initFirebase();
 
 const vendor = bootstrap.vendor;
+const persistUid = (uid) => {
+  const value = typeof uid === 'string' ? uid.trim() : '';
+  if (!value || typeof window === 'undefined') return;
+  try {
+    window.sessionStorage?.setItem('yustam_uid', value);
+  } catch (error) {
+    console.warn('Unable to persist vendor session uid', error);
+  }
+  try {
+    window.localStorage?.setItem('yustam_uid', value);
+  } catch (error) {
+    console.warn('Unable to persist vendor uid', error);
+  }
+};
+
+persistUid(vendor.uid);
 const chatListEl = document.getElementById('chatList');
 const emptyStateEl = document.getElementById('emptyState');
 const newChatBtn = document.getElementById('newChatBtn');

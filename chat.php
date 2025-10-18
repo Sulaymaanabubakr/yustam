@@ -17,6 +17,8 @@ if (!in_array($role, ['buyer', 'vendor'], true)) {
 $listingId = isset($_GET['listing']) ? trim((string)$_GET['listing']) : '';
 $listingTitle = isset($_GET['listing_title']) ? trim((string)$_GET['listing_title']) : '';
 $listingImage = isset($_GET['listing_image']) ? trim((string)$_GET['listing_image']) : '';
+$buyerUidParam = isset($_GET['buyer_uid']) ? trim((string)$_GET['buyer_uid']) : trim((string)($_GET['buyerUid'] ?? ''));
+$vendorUidParam = isset($_GET['vendor_uid']) ? trim((string)$_GET['vendor_uid']) : trim((string)($_GET['vendorUid'] ?? ''));
 $counterpartyAvatar = '';
 
 if ($role === 'buyer') {
@@ -45,7 +47,7 @@ if ($role === 'buyer') {
         'avatar' => trim((string)($buyer['avatar'] ?? $buyer['profile_photo'] ?? '')),
     ];
     $counterpartyRole = 'vendor';
-    $counterpartyUid = isset($_GET['vendor_uid']) ? trim((string)$_GET['vendor_uid']) : '';
+    $counterpartyUid = $vendorUidParam;
     $counterpartyName = isset($_GET['vendor_name']) ? trim((string)$_GET['vendor_name']) : '';
     $counterpartyAvatar = isset($_GET['vendor_avatar']) ? trim((string)$_GET['vendor_avatar']) : '';
 } else {
@@ -91,9 +93,49 @@ if ($role === 'buyer') {
         'avatar' => $avatar,
     ];
     $counterpartyRole = 'buyer';
-    $counterpartyUid = isset($_GET['buyer_uid']) ? trim((string)$_GET['buyer_uid']) : '';
+    $counterpartyUid = $buyerUidParam;
     $counterpartyName = isset($_GET['buyer_name']) ? trim((string)$_GET['buyer_name']) : '';
     $counterpartyAvatar = isset($_GET['buyer_avatar']) ? trim((string)$_GET['buyer_avatar']) : '';
+}
+
+// Ensure we have canonical chat identifiers
+$chatBuyerUid = null;
+$chatVendorUid = null;
+$chatParts = $chatId !== '' ? explode('_', $chatId) : [];
+if (count($chatParts) === 2) {
+    [$chatBuyerUid, $chatVendorUid] = $chatParts;
+}
+if ($buyerUidParam !== '') {
+    $chatBuyerUid = $buyerUidParam;
+}
+if ($vendorUidParam !== '') {
+    $chatVendorUid = $vendorUidParam;
+}
+if ($role === 'buyer') {
+    $chatBuyerUid = $viewer['uid'];
+    if ($counterpartyUid === '' && $chatVendorUid !== null) {
+        $counterpartyUid = $chatVendorUid;
+    }
+    if ($counterpartyUid === '' && $vendorUidParam !== '') {
+        $counterpartyUid = $vendorUidParam;
+    }
+    if ($counterpartyUid !== '') {
+        $chatVendorUid = $counterpartyUid;
+    }
+} else {
+    $chatVendorUid = $viewer['uid'];
+    if ($counterpartyUid === '' && $chatBuyerUid !== null) {
+        $counterpartyUid = $chatBuyerUid;
+    }
+    if ($counterpartyUid === '' && $buyerUidParam !== '') {
+        $counterpartyUid = $buyerUidParam;
+    }
+    if ($counterpartyUid !== '') {
+        $chatBuyerUid = $counterpartyUid;
+    }
+}
+if ($chatBuyerUid !== null && $chatVendorUid !== null) {
+    $chatId = $chatBuyerUid . '_' . $chatVendorUid;
 }
 
 if ($chatId === '') {

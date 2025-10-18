@@ -215,6 +215,25 @@ async function fetchMessagesViaApi(chatId) {
   return { messages, chat };
 }
 
+async function fetchChatsViaApi(role, uid) {
+  if (!isBrowser || typeof fetch !== 'function') {
+    throw new Error('Unable to load chats without fetch support.');
+  }
+  const params = new URLSearchParams();
+  if (role) params.set('role', role);
+  if (uid) params.set('uid', uid);
+  const response = await fetch(`./api/chat/list-chats.php?${params.toString()}`, {
+    method: 'GET',
+    credentials: 'include',
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data?.success) {
+    throw new Error(data?.message || 'Unable to load chats.');
+  }
+  const chats = Array.isArray(data.chats) ? data.chats : [];
+  return orderChatsByLastTs(chats).slice(0, 100);
+}
+
 async function flushOfflineQueue() {
   if (!isBrowser || typeof navigator === 'undefined' || !navigator.onLine || !offlineQueue.length) return;
   const queueCopy = [...offlineQueue];
@@ -248,14 +267,10 @@ export function initFirebase() {
   return app;
 }
 
-export function buildChatId(vendorUid, buyerUid, listingId) {
-  const vendor = getSafeUid(vendorUid);
+export function buildChatId(buyerUid, vendorUid) {
   const buyer = getSafeUid(buyerUid);
-  const listing = normaliseString(listingId);
-  if (!listing) {
-    throw new Error('Missing listing identifier.');
-  }
-  return `${vendor}__${buyer}__${listing}`;
+  const vendor = getSafeUid(vendorUid);
+  return `${buyer}_${vendor}`;
 }
 
 function chatDoc(chatId) {
@@ -363,6 +378,13 @@ export function subscribeChatsForBuyer(buyerUid, callback) {
     (error) => {
       console.error('[chat] subscribeChatsForBuyer', error);
       showToast('Unable to load chats.');
+      fetchChatsViaApi('buyer', uid)
+        .then((fallbackChats) => {
+          callback(fallbackChats);
+        })
+        .catch((fallbackError) => {
+          console.error('[chat] buyer chats fallback failed', fallbackError);
+        });
     }
   );
 }
@@ -379,6 +401,13 @@ export function subscribeChatsForVendor(vendorUid, callback) {
     (error) => {
       console.error('[chat] subscribeChatsForVendor', error);
       showToast('Unable to load chats.');
+      fetchChatsViaApi('vendor', uid)
+        .then((fallbackChats) => {
+          callback(fallbackChats);
+        })
+        .catch((fallbackError) => {
+          console.error('[chat] vendor chats fallback failed', fallbackError);
+        });
     }
   );
 }
@@ -479,13 +508,25 @@ function normaliseMessagePayload(input) {
   const imageUrl = normaliseString(input?.image_url || input?.imageUrl);
   const voiceUrl = normaliseString(input?.voice_url || input?.voiceUrl);
   const duration = Number(input?.duration || input?.voice_duration || 0);
-  const buyerUid = normaliseString(input?.buyer_uid || input?.buyerUid || '');
-  const vendorUid = normaliseString(input?.vendor_uid || input?.vendorUid || '');
+  let buyerUid = normaliseString(input?.buyer_uid || input?.buyerUid || '');
+  let vendorUid = normaliseString(input?.vendor_uid || input?.vendorUid || '');
   const buyerName = normaliseString(input?.buyer_name || input?.buyerName || '');
   const vendorName = normaliseString(input?.vendor_name || input?.vendorName || '');
   const listingId = normaliseString(input?.listing_id || input?.listingId || '');
   const listingTitle = normaliseString(input?.listing_title || input?.listingTitle || '');
   const listingImage = normaliseString(input?.listing_image || input?.listingImage || '');
+
+  if (!buyerUid || !vendorUid) {
+    const parts = chatId.split('_');
+    if (parts.length >= 2) {
+      if (!buyerUid) {
+        [buyerUid] = parts;
+      }
+      if (!vendorUid) {
+        vendorUid = parts[1];
+      }
+    }
+  }
 
   if (!text && !imageUrl && !voiceUrl) {
     throw new Error('Please write a message or attach media.');
@@ -704,6 +745,21 @@ export async function markRead(chatId, role, viewerUid) {
     await updateDoc(chatRef, { [unreadField]: 0 });
   } catch (error) {
     console.error('[chat] markRead', error);
+  } finally {
+    if (isBrowser && typeof fetch === 'function') {
+      try {
+        fetch('./api/chat/mark-read.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ chat_id: chatId, role }),
+        }).catch((fallbackError) => {
+          console.warn('[chat] markRead fallback failed', fallbackError);
+        });
+      } catch (networkError) {
+        console.warn('[chat] markRead sync error', networkError);
+      }
+    }
   }
 }
 
