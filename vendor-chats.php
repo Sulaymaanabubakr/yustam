@@ -132,7 +132,7 @@ $uidJson = json_encode($vendorUid, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASH
     </script>
     <iframe
         class="chat-frame"
-        src="/chats"
+        src="/chats/index.html"
         title="YUSTAM Vendor Chats"
         loading="lazy"
         allow="microphone; camera"
