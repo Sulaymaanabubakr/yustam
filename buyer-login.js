@@ -3,6 +3,21 @@ import { auth, provider, signInWithPopup } from './firebase.js';
 const googleBtn = document.getElementById('googleBtn');
 const toast = document.getElementById('authToast');
 
+const syncYustamUid = (uid) => {
+  const value = typeof uid === 'string' ? uid.trim() : '';
+  if (!value) return;
+  try {
+    sessionStorage.setItem('yustam_uid', value);
+  } catch (error) {
+    console.warn('Unable to persist session uid', error);
+  }
+  try {
+    localStorage.setItem('yustam_uid', value);
+  } catch (error) {
+    console.warn('Unable to persist uid', error);
+  }
+};
+
 const showToast = (message, timeout = 2800) => {
   if (!toast) return;
   toast.textContent = message;
@@ -22,7 +37,7 @@ const setGoogleLoading = (loading) => {
   googleBtn.classList.toggle('loading', loading);
   const label = googleBtn.querySelector('.google-label');
   if (label) {
-    label.textContent = loading ? 'Connecting…' : 'Sign in with Google';
+    label.textContent = loading ? 'Connecting.' : 'Sign in with Google';
   }
 };
 
@@ -49,7 +64,11 @@ googleBtn?.addEventListener('click', async () => {
       throw new Error(data?.message || 'Unable to sign in with Google.');
     }
 
-    showToast(data.message || 'Signed in successfully. Redirecting…');
+    if (data && data.uid) {
+      syncYustamUid(data.uid);
+    }
+
+    showToast(data.message || 'Signed in successfully. Redirecting.');
     window.location.href = data.redirect || 'buyer-dashboard.php';
   } catch (error) {
     console.error('Buyer Google sign-in error:', error);

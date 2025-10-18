@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../../session-path.php';
 session_start();
 
+require_once __DIR__ . '/../../db.php';
 require_once __DIR__ . '/firebase.php';
 
 header('Content-Type: application/json');
@@ -28,11 +29,52 @@ $listingId = trim((string)($input['listing_id'] ?? $input['listingId'] ?? ''));
 $listingTitle = trim((string)($input['listing_title'] ?? $input['listingTitle'] ?? ''));
 $listingImage = trim((string)($input['listing_image'] ?? $input['listingImage'] ?? ''));
 
-if ($chatId === '' || $buyerUid === '' || $vendorUid === '' || $listingId === '') {
+if ($buyerUid === '' || $vendorUid === '') {
     http_response_code(400);
-    echo json_encode(['success' => false, 'message' => 'chat_id, buyer_uid, vendor_uid and listing_id are required']);
+    echo json_encode(['success' => false, 'message' => 'buyer_uid and vendor_uid are required']);
     exit;
 }
+
+$canonicalChatId = $buyerUid . '_' . $vendorUid;
+if ($chatId === '' || $chatId !== $canonicalChatId) {
+    $chatId = $canonicalChatId;
+}
+
+$timestamp = gmdate('Y-m-d H:i:s');
+$existingSummary = null;
+try {
+    $existingSummary = yustam_chat_fetch_summary($chatId);
+} catch (Throwable $summaryError) {
+    error_log('chat-open summary lookup failed: ' . $summaryError->getMessage());
+}
+
+if ($existingSummary === null) {
+    try {
+        yustam_chat_upsert_summary(
+            [
+                'chat_id' => $chatId,
+                'buyer_uid' => $buyerUid,
+                'buyer_name' => $buyerName,
+                'vendor_uid' => $vendorUid,
+                'vendor_name' => $vendorName,
+                'listing_id' => $listingId,
+                'listing_title' => $listingTitle,
+                'listing_image' => $listingImage,
+                'last_message' => 'Chat started',
+                'last_type' => 'system',
+                'last_sender_uid' => null,
+                'last_sender_role' => null,
+                'last_sent_at' => $timestamp,
+            ],
+            null
+        );
+    } catch (Throwable $upsertError) {
+        error_log('chat-open summary upsert failed: ' . $upsertError->getMessage());
+    }
+}
+
+$firestoreSynced = true;
+$documentData = [];
 
 try {
     $chatPath = 'chats/' . $chatId;
@@ -73,22 +115,48 @@ try {
         $document = yustam_firestore_get_document($chatPath);
     }
 
-    $response = [
-        'success' => true,
-        'chat_id' => $chatId,
-        'data' => [],
-    ];
     if (isset($document['fields'])) {
         foreach ($document['fields'] as $key => $value) {
-            $response['data'][$key] = yustam_firestore_decode($value);
+            $documentData[$key] = yustam_firestore_decode($value);
         }
     }
-    echo json_encode($response);
 } catch (Throwable $exception) {
-    http_response_code(500);
-    echo json_encode([
-        'success' => false,
-        'message' => 'Unable to open chat',
-        'error' => $exception->getMessage(),
-    ]);
+    $firestoreSynced = false;
+    error_log('chat-open Firestore error: ' . $exception->getMessage());
 }
+
+$summaryData = $documentData;
+if (!$summaryData) {
+    try {
+        $mysqlSummary = yustam_chat_fetch_summary($chatId);
+        if ($mysqlSummary) {
+            $summaryData = [
+                'chat_id' => $mysqlSummary['chat_id'],
+                'buyer_uid' => $mysqlSummary['buyer_uid'],
+                'buyer_name' => $mysqlSummary['buyer_name'],
+                'vendor_uid' => $mysqlSummary['vendor_uid'],
+                'vendor_name' => $mysqlSummary['vendor_name'],
+                'listing_id' => $mysqlSummary['listing_id'],
+                'listing_title' => $mysqlSummary['listing_title'],
+                'listing_image' => $mysqlSummary['listing_image'],
+                'last_text' => $mysqlSummary['last_message'],
+                'last_type' => $mysqlSummary['last_type'],
+                'last_sender_uid' => $mysqlSummary['last_sender_uid'],
+                'last_sender_role' => $mysqlSummary['last_sender_role'],
+                'unread_for_buyer' => (int)($mysqlSummary['unread_for_buyer'] ?? 0),
+                'unread_for_vendor' => (int)($mysqlSummary['unread_for_vendor'] ?? 0),
+                'last_ts' => $mysqlSummary['last_sent_at'],
+            ];
+        }
+    } catch (Throwable $summaryError) {
+        error_log('chat-open summary hydrate failed: ' . $summaryError->getMessage());
+    }
+}
+
+echo json_encode([
+    'success' => true,
+    'chat_id' => $chatId,
+    'data' => $summaryData ?: [],
+    'firestore_synced' => $firestoreSynced,
+    'source' => $firestoreSynced ? 'firestore' : 'mysql',
+]);

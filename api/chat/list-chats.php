@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../../session-path.php';
 session_start();
 
+require_once __DIR__ . '/../../db.php';
 require_once __DIR__ . '/firebase.php';
 
 header('Content-Type: application/json');
@@ -55,6 +56,9 @@ if ($uid === '') {
 
 $fieldPath = $role === 'vendor' ? 'vendor_uid' : 'buyer_uid';
 
+$source = 'firestore';
+$chats = [];
+
 try {
     $query = [
         'from' => [
@@ -71,7 +75,6 @@ try {
     ];
 
     $results = yustam_firestore_run_query($query);
-    $chats = [];
     foreach ($results as $result) {
         if (!isset($result['document']['fields'])) {
             continue;
@@ -89,18 +92,45 @@ try {
         $bTs = $timestampNormalizer($b['last_ts'] ?? null);
         return $bTs <=> $aTs;
     });
-
-    echo json_encode([
-        'success' => true,
-        'role' => $role,
-        'uid' => $uid,
-        'chats' => $chats,
-    ]);
-} catch (Throwable $exception) {
-    http_response_code(500);
-    echo json_encode([
-        'success' => false,
-        'message' => 'Unable to list chats',
-        'error' => $exception->getMessage(),
-    ]);
+} catch (Throwable $firestoreError) {
+    $source = 'mysql';
+    error_log('list-chats Firestore error: ' . $firestoreError->getMessage());
+    try {
+        $rows = yustam_chat_fetch_chats($uid, $role, 50);
+        foreach ($rows as $row) {
+            $chats[] = [
+                'chat_id' => $row['chat_id'],
+                'buyer_uid' => $row['buyer_uid'],
+                'buyer_name' => $row['buyer_name'],
+                'vendor_uid' => $row['vendor_uid'],
+                'vendor_name' => $row['vendor_name'],
+                'listing_id' => $row['listing_id'],
+                'listing_title' => $row['listing_title'],
+                'listing_image' => $row['listing_image'],
+                'last_text' => $row['last_message'],
+                'last_type' => $row['last_type'],
+                'last_sender_uid' => $row['last_sender_uid'],
+                'last_sender_role' => $row['last_sender_role'],
+                'unread_for_buyer' => (int)($row['unread_for_buyer'] ?? 0),
+                'unread_for_vendor' => (int)($row['unread_for_vendor'] ?? 0),
+                'last_ts' => $row['last_sent_at'],
+            ];
+        }
+    } catch (Throwable $mysqlError) {
+        http_response_code(500);
+        echo json_encode([
+            'success' => false,
+            'message' => 'Unable to list chats',
+            'error' => $mysqlError->getMessage(),
+        ]);
+        return;
+    }
 }
+
+echo json_encode([
+    'success' => true,
+    'role' => $role,
+    'uid' => $uid,
+    'source' => $source,
+    'chats' => $chats,
+]);

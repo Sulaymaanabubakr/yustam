@@ -46,7 +46,9 @@ try {
         echo json_encode([
             'success' => true,
             'redirect' => 'vendor-dashboard.php',
-            'message' => 'Welcome back, ' . htmlspecialchars($user['full_name'] ?? $name)
+            'message' => 'Welcome back, ' . htmlspecialchars($user['full_name'] ?? $name),
+            'uid' => $vendorUid,
+            'role' => 'vendor'
         ]);
         exit;
     }
@@ -155,7 +157,9 @@ try {
     echo json_encode([
         'success' => true,
         'redirect' => 'vendor-dashboard.php',
-        'message' => 'Welcome, ' . htmlspecialchars($fallbackName) . '! Your account has been created.'
+        'message' => 'Welcome, ' . htmlspecialchars($fallbackName) . '! Your account has been created.',
+        'uid' => $vendorUid,
+        'role' => 'vendor'
     ]);
 } catch (Throwable $e) {
     error_log('Google login error: ' . $e->getMessage());

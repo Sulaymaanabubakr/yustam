@@ -34,6 +34,8 @@ try {
             'success' => true,
             'redirect' => 'buyer-dashboard.php',
             'message' => 'Welcome back, ' . htmlspecialchars($existing['name'] ?? ($name ?: 'Buyer')),
+            'uid' => $existing['buyer_uid'] ?? null,
+            'role' => 'buyer'
         ]);
         exit;
     }
@@ -76,6 +78,8 @@ try {
         'success' => true,
         'redirect' => 'buyer-dashboard.php',
         'message' => 'Welcome, ' . htmlspecialchars($buyer['name']) . '! Your account has been created.',
+        'uid' => $buyer['buyer_uid'] ?? null,
+        'role' => 'buyer'
     ]);
 } catch (Throwable $e) {
     error_log('Buyer Google login error: ' . $e->getMessage());

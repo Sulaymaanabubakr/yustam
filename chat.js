@@ -26,10 +26,32 @@ const viewer = thread.viewer;
 const counterparty = thread.counterparty || {};
 const listing = thread.listing || {};
 
-const [vendorUid, buyerUid, listingIdFromId] = (thread.chatId || '').split('__');
-const buyerIdentifier = buyerUid || (role === 'buyer' ? viewer.uid : counterparty.uid);
-const vendorIdentifier = vendorUid || (role === 'vendor' ? viewer.uid : counterparty.uid);
-const listingId = listing.id || listingIdFromId || '';
+function persistUid(uid) {
+  const value = typeof uid === 'string' ? uid.trim() : '';
+  if (!value) return;
+  if (typeof window === 'undefined') return;
+  try {
+    window.sessionStorage?.setItem('yustam_uid', value);
+  } catch (error) {
+    console.warn('Unable to persist session uid', error);
+  }
+  try {
+    window.localStorage?.setItem('yustam_uid', value);
+  } catch (error) {
+    console.warn('Unable to persist uid', error);
+  }
+}
+
+persistUid(viewer?.uid);
+
+const chatParts = (thread.chatId || '').split('_');
+const buyerIdFromChat = chatParts[0] || '';
+const vendorIdFromChat = chatParts[1] || '';
+const buyerIdentifier =
+  (role === 'buyer' ? viewer.uid : counterparty.uid) || buyerIdFromChat || '';
+const vendorIdentifier =
+  (role === 'vendor' ? viewer.uid : counterparty.uid) || vendorIdFromChat || '';
+const listingId = listing.id || '';
 
 const messageListEl = document.getElementById('messageList');
 const typingBannerEl = document.getElementById('typingBanner');
@@ -305,6 +327,9 @@ async function loadChatSummary() {
 
 async function ensureThread() {
   try {
+    if (!listingId) {
+      return;
+    }
     await ensureChat({
       chatId: thread.chatId,
       buyer_uid: buyerIdentifier,

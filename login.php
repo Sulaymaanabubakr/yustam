@@ -71,7 +71,9 @@ try {
     echo json_encode([
         'success' => true,
         'message' => 'Login successful. Redirecting...',
-        'redirect' => 'vendor-dashboard.php'
+        'redirect' => 'vendor-dashboard.php',
+        'uid' => $vendorUid,
+        'role' => 'vendor'
     ]);
 
 } catch (Throwable $e) {

@@ -10,6 +10,21 @@ const formSelectors = {
 
 const getElement = (id) => document.getElementById(id);
 
+const syncYustamUid = (uid) => {
+  const value = typeof uid === 'string' ? uid.trim() : '';
+  if (!value) return;
+  try {
+    sessionStorage.setItem('yustam_uid', value);
+  } catch (error) {
+    console.warn('Unable to persist session uid', error);
+  }
+  try {
+    localStorage.setItem('yustam_uid', value);
+  } catch (error) {
+    console.warn('Unable to persist uid', error);
+  }
+};
+
 const setMessage = (message, type = 'error') => {
   const messageBox = getElement(formSelectors.message);
   if (!messageBox) return;
@@ -68,6 +83,10 @@ const handleEmailLogin = async (event) => {
       const errorMessage = data && data.message ? data.message : 'Unable to sign in. Please try again.';
       setMessage(errorMessage);
       return;
+    }
+
+    if (data && data.uid) {
+      syncYustamUid(data.uid);
     }
 
     setMessage('Signed in successfully. Redirecting.', 'success');
@@ -156,6 +175,10 @@ const handleGoogleLogin = async () => {
     if (!response.ok || !data.success) {
       setMessage((data && data.message) || 'Unable to sign in with Google.');
       return;
+    }
+
+    if (data && data.uid) {
+      syncYustamUid(data.uid);
     }
 
     setMessage('Welcome back, redirecting.', 'success');
