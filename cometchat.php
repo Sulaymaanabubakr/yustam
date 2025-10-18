@@ -18,10 +18,7 @@ if (!defined('YUSTAM_COMETCHAT_AUTH_KEY')) {
 }
 
 if (!defined('YUSTAM_COMETCHAT_REST_API_KEY')) {
-    /**
-     * NOTE: Replace the placeholder below with the REST API Key from the CometChat dashboard.
-     */
-    define('YUSTAM_COMETCHAT_REST_API_KEY', 'REPLACE_WITH_REST_API_KEY');
+    define('YUSTAM_COMETCHAT_REST_API_KEY', 'ed4a12d81f966aac59523a6912d6fb4dcf9a45de');
 }
 
 /**
@@ -293,4 +290,3 @@ function yustam_cometchat_execute_rest_request(string $method, string $url, arra
         'response' => $decoded ?? $responseBody,
     ];
 }
-
