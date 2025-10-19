@@ -56,7 +56,9 @@ const typingBannerEl = document.getElementById('typingBanner');
 const scrollToBottomBtn = document.getElementById('scrollToBottom');
 const messageInput = document.getElementById('messageInput');
 const prefillNotice = document.getElementById('prefillNotice');
+const prefillNoticeText = prefillNotice ? prefillNotice.querySelector('span') : null;
 const hasPrefill = typeof thread.prefill === 'string' && thread.prefill.trim().length > 0;
+const quickSent = Boolean(thread.quickSent);
 if (messageInput && hasPrefill) {
   messageInput.value = thread.prefill.trim();
 }
@@ -295,7 +297,7 @@ messageInput?.addEventListener('input', () => {
   autoResizeTextarea();
   toggleSendMode();
   startTyping();
-  if (hasPrefill && prefillNotice) {
+  if ((hasPrefill || quickSent) && prefillNotice) {
     prefillNotice.setAttribute('hidden', 'hidden');
   }
 });
@@ -323,15 +325,25 @@ function toggleSendMode() {
 
 toggleSendMode();
 
-if (messageInput && hasPrefill) {
-  if (prefillNotice) {
+if (messageInput) {
+  if (hasPrefill) {
+    if (prefillNotice) {
+      if (prefillNoticeText) {
+        prefillNoticeText.textContent = 'We added your message from the product page. Tap send when you're ready.';
+      }
+      prefillNotice.removeAttribute('hidden');
+    }
+    window.requestAnimationFrame(() => {
+      const length = messageInput.value.length;
+      messageInput.focus();
+      messageInput.setSelectionRange(length, length);
+    });
+  } else if (quickSent && prefillNotice) {
+    if (prefillNoticeText) {
+      prefillNoticeText.textContent = 'We sent your quick message to the vendor. You can continue here.';
+    }
     prefillNotice.removeAttribute('hidden');
   }
-  window.requestAnimationFrame(() => {
-    const length = messageInput.value.length;
-    messageInput.focus();
-    messageInput.setSelectionRange(length, length);
-  });
 }
 
 async function loadChatSummary() {

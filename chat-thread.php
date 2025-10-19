@@ -175,6 +175,7 @@ $bootstrap = [
     ],
     'listing' => $listing,
     'prefill' => trim((string)($_GET['prefill'] ?? '')),
+    'quickSent' => isset($_GET['quick_sent']) && $_GET['quick_sent'] !== '' && $_GET['quick_sent'] !== '0',
 ];
 ?>
 <!DOCTYPE html>
@@ -532,7 +533,7 @@ $bootstrap = [
             </div>
             <p id="prefillNotice" class="prefill-notice" hidden>
                 <i class="ri-edit-2-line" aria-hidden="true"></i>
-                <span>We added your message from the product page. Tap send when you&rsquo;re ready.</span>
+                <span>We added your message from the product page so you can keep chatting here.</span>
             </p>
         </footer>
     </div>

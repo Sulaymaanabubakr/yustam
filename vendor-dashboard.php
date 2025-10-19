@@ -63,11 +63,20 @@ $createdAt = yustam_vendor_table_has_column('created_at') ? ($vendorData['create
 $createdDisplay = $createdAt ? date('j M Y', strtotime($createdAt)) : '-';
 $profilePhoto = '';
 if (yustam_vendor_table_has_column('profile_photo')) {
-    $profilePhoto = $vendorData['profile_photo'] ?? '';
+    $profilePhoto = (string)($vendorData['profile_photo'] ?? '');
 } elseif (yustam_vendor_table_has_column('avatar_url')) {
-    $profilePhoto = $vendorData['avatar_url'] ?? '';
+    $profilePhoto = (string)($vendorData['avatar_url'] ?? '');
 }
-$avatarFallback = 'https://res.cloudinary.com/demo/image/upload/v123456789/default_user.png';
+$avatarFallback = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz1cImh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnXCIg'
+    . 'dmlld0JveD1cIjAgMCAxMjggMTI4XCI+PHJlY3QgZmlsbD1cIiNF'
+    . 'OEY1RjJcIiB3aWR0aD1cIjEyOFwiIGhlaWdodD1cIjEyOFwiLz48Y2ly'
+    . 'Y2xlIGN4PVw2NFwgY3k9XDQ4XCByPVwyOFwgZmlsbD1cIiMwRjZBNTNc'
+    . 'Ii8+PHBhdGggZmlsbD1cIiMwRjZBNTNcIiBkPVwiTTIwIDExOGMwLTI0'
+    . 'IDIwLTQ0IDQ0LTQ0czQ0IDIwIDQ0IDQ0XCIvPjwvc3ZnPg==';
+$profilePhotoUrl = $profilePhoto !== '' ? $profilePhoto : $avatarFallback;
+if ($profilePhotoUrl !== '' && stripos($profilePhotoUrl, 'http') !== 0 && strpos($profilePhotoUrl, 'data:') !== 0) {
+    $profilePhotoUrl = '/' . ltrim($profilePhotoUrl, '/');
+}
 
 $listings = [];
 $stats = [
@@ -798,7 +807,7 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
     <header id="dashboardHeader" class="dashboard-header" style="display:none;">
         <div class="header-brand logo-area" role="banner" tabindex="0">
             <a href="vendor-profile.php" class="avatar-link" aria-label="View profile">
-                <img src="<?php echo htmlspecialchars($profilePhoto ?: $avatarFallback); ?>" alt="Vendor profile photo" class="header-avatar">
+                <img src="<?php echo htmlspecialchars($profilePhotoUrl, ENT_QUOTES, 'UTF-8'); ?>" alt="Vendor profile photo" class="header-avatar">
             </a>
             <div class="brand-text">
                 <span class="brand-title">Vendor</span>

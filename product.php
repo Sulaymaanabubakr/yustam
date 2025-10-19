@@ -1025,7 +1025,7 @@ $placeholderImage = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABA
             data-product-image="<?= htmlspecialchars($placeholderImage, ENT_QUOTES, 'UTF-8'); ?>"
         >
             <h3>Chat with <?= htmlspecialchars($vendorName, ENT_QUOTES, 'UTF-8'); ?></h3>
-            <p>Send a quick message and we will open a secure YUSTAM chat so you can continue the conversation instantly.</p>
+            <p>Send a quick message and we'll notify the vendor instantly, then open a secure YUSTAM chat so you can keep the conversation going.</p>
             <form id="quickChatForm" class="quick-form">
                 <div class="quick-input">
                     <input
@@ -1046,7 +1046,7 @@ $placeholderImage = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABA
                 <button type="button" class="suggestion-chip" data-quick-message="What condition is it in?">What condition is it in?</button>
                 <button type="button" class="suggestion-chip" data-quick-message="Can you deliver to my location?">Can you deliver to my location?</button>
             </div>
-            <small class="quick-note">We will prefill the chat with your message and notify the vendor immediately.</small>
+            <small class="quick-note">We send your message right away so it's waiting in the chat when you arrive.</small>
         </section>
         <section class="vendor-card" aria-labelledby="vendorTitle">
             <header class="vendor-card__header">
