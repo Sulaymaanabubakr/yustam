@@ -213,17 +213,15 @@ $bootstrap = [
             min-height: 100vh;
             font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
             background: var(--background);
-            display: flex;
-            flex-direction: column;
+            overflow-x: hidden;
         }
 
         .chat-shell {
-            flex: 1 1 auto;
-            display: grid;
-            grid-template-rows: auto auto 1fr auto;
-            max-width: 960px;
+            min-height: 100vh;
+            width: min(960px, 100%);
             margin: 0 auto;
-            width: 100%;
+            display: flex;
+            flex-direction: column;
         }
 
         .thread-header {
@@ -310,7 +308,10 @@ $bootstrap = [
 
         .thread-main {
             position: relative;
+            flex: 1 1 auto;
+            min-height: 0;
             padding: clamp(16px, 4vw, 28px);
+            padding-bottom: clamp(48px, 10vw, 64px);
             overflow-y: auto;
             display: grid;
             gap: 18px;
@@ -344,6 +345,7 @@ $bootstrap = [
             box-shadow: 0 8px 18px rgba(15, 106, 83, 0.05);
             font-size: 0.96rem;
             line-height: 1.45;
+            word-break: break-word;
         }
 
         .message.sent {
@@ -384,7 +386,7 @@ $bootstrap = [
 
         .scroll-bottom {
             position: sticky;
-            bottom: 24px;
+            bottom: clamp(72px, 14vw, 96px);
             margin-left: auto;
             background: var(--emerald);
             color: #fff;
@@ -406,15 +408,21 @@ $bootstrap = [
             background: var(--surface);
             border-top: 1px solid var(--border);
             padding: clamp(12px, 3vw, 18px);
+            padding-bottom: calc(clamp(12px, 3vw, 18px) + env(safe-area-inset-bottom));
             display: flex;
             flex-direction: column;
             gap: 10px;
+            position: sticky;
+            bottom: 0;
+            z-index: 10;
+            box-shadow: 0 -8px 16px rgba(15, 106, 83, 0.08);
         }
 
         .composer-toolbar {
             display: flex;
             align-items: flex-end;
             gap: 12px;
+            width: 100%;
         }
 
         .icon-btn {
@@ -572,6 +580,27 @@ $bootstrap = [
             }
             .thread-header button {
                 padding: 10px;
+            }
+            .thread-main {
+                padding: 16px 16px clamp(52px, 18vw, 80px);
+            }
+            .composer {
+                padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+                gap: 8px;
+            }
+            .composer-toolbar {
+                gap: 10px;
+            }
+            #messageInput {
+                min-height: 44px;
+                font-size: 0.96rem;
+            }
+            .icon-btn,
+            .send-btn {
+                width: 42px;
+                height: 42px;
+                border-radius: 14px;
+                font-size: 1rem;
             }
         }
     </style>
