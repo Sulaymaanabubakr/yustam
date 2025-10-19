@@ -1,11 +1,9 @@
 import { app, db } from './firebase.js';
 import {
-  addDoc,
   collection,
   doc,
   getDoc,
   getDocs,
-  increment,
   limit,
   onSnapshot,
   orderBy,
@@ -18,50 +16,55 @@ import {
 } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
 import { uploadToCloudinary } from './cloudinary.js';
 
-const CHATS_COLLECTION = 'chats';
-const TYPING_COLLECTION = 'typing';
-const MESSAGE_SUBCOLLECTION = 'messages';
+const COLLECTIONS = {
+  CHATS: 'chats',
+  TYPING: 'typing',
+  MESSAGES: 'messages',
+};
+
 const MAX_MESSAGES_TO_MARK = 200;
-const OFFLINE_STORAGE_KEY = 'yustam-offline-messages';
-const isBrowser = typeof window !== 'undefined' && typeof document !== 'undefined';
+const MESSAGE_FETCH_LIMIT = 500;
+const CHAT_FETCH_LIMIT = 100;
+
+const isBrowser =
+  typeof window !== 'undefined' && typeof document !== 'undefined' && typeof navigator !== 'undefined';
 
 let firebaseInitialised = false;
-let toastQueue = [];
-let toastActive = false;
-const offlineQueue = [];
+
+const toastQueue = [];
+let toastRendering = false;
+let toastRoot = null;
+
 const fallbackChatCache = new Map();
+
 const FNV_OFFSET = 0xcbf29ce484222325n;
 const FNV_PRIME = 0x100000001b3n;
 const FNV_MOD = 0xffffffffffffffffn;
 
 function ensureToastRoot() {
-  if (!isBrowser) return null;
-  let root = document.querySelector('.yustam-toast-root');
-  if (!root) {
-    root = document.createElement('div');
-    root.className = 'yustam-toast-root';
-    root.setAttribute('role', 'status');
-    root.setAttribute('aria-live', 'polite');
-    document.body.appendChild(root);
+  if (!isBrowser) {
+    return null;
   }
-  return root;
+  if (toastRoot && document.body.contains(toastRoot)) {
+    return toastRoot;
+  }
+  toastRoot = document.createElement('div');
+  toastRoot.className = 'yustam-toast-root';
+  toastRoot.setAttribute('role', 'status');
+  toastRoot.setAttribute('aria-live', 'polite');
+  document.body.appendChild(toastRoot);
+  return toastRoot;
 }
 
-function dequeueToast() {
-  if (!toastQueue.length) {
-    toastActive = false;
-    return;
-  }
-  toastActive = true;
-  const message = toastQueue.shift();
+function renderNextToast() {
+  if (toastRendering) return;
+  if (!toastQueue.length) return;
   const root = ensureToastRoot();
-  if (!root) {
-    toastActive = false;
-    console.warn('[chat] Toast skipped:', message);
-    return;
-  }
+  if (!root) return;
+  const { message, variant } = toastQueue.shift();
+  toastRendering = true;
   const toast = document.createElement('div');
-  toast.className = 'yustam-toast';
+  toast.className = `yustam-toast yustam-toast--${variant}`;
   toast.textContent = message;
   root.appendChild(toast);
   requestAnimationFrame(() => toast.classList.add('is-visible'));
@@ -69,235 +72,54 @@ function dequeueToast() {
     toast.classList.remove('is-visible');
     window.setTimeout(() => {
       toast.remove();
-      dequeueToast();
+      toastRendering = false;
+      renderNextToast();
     }, 220);
-  }, 4600);
+  }, 4200);
 }
 
-function showToast(message) {
+export function showToast(message, variant = 'default') {
   if (!message) return;
   if (!isBrowser) {
     console.warn('[chat]', message);
     return;
   }
-  toastQueue.push(String(message));
-  if (!toastActive) {
-    dequeueToast();
-  }
+  toastQueue.push({ message: String(message), variant });
+  requestAnimationFrame(renderNextToast);
 }
 
 function normaliseString(value) {
-  return String(value || '').trim();
+  return typeof value === 'string' ? value.trim() : '';
 }
 
-function getSafeUid(value) {
+function requireUid(value, field) {
   const uid = normaliseString(value);
   if (!uid) {
-    throw new Error('Missing participant UID.');
+    throw new Error(`${field} is required`);
   }
   return uid;
 }
 
-function restoreOfflineQueue() {
-  if (!isBrowser || typeof localStorage === 'undefined') return;
-  try {
-    const raw = localStorage.getItem(OFFLINE_STORAGE_KEY);
-    if (!raw) return;
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return;
-    parsed.forEach((item) => {
-      if (item && item.chatId && item.payload) {
-        offlineQueue.push(item);
-      }
-    });
-  } catch (error) {
-    console.warn('[chat] Unable to restore offline queue', error);
-  }
-}
-
-function persistOfflineQueue() {
-  if (!isBrowser || typeof localStorage === 'undefined') return;
-  try {
-    if (!offlineQueue.length) {
-      localStorage.removeItem(OFFLINE_STORAGE_KEY);
-      return;
-    }
-    localStorage.setItem(OFFLINE_STORAGE_KEY, JSON.stringify(offlineQueue));
-  } catch (error) {
-    console.warn('[chat] Unable to persist offline queue', error);
-  }
-}
-
 function resolveTimestamp(value) {
-  if (!value) return 0;
-  if (typeof value.toMillis === 'function') {
-    return value.toMillis();
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  if (value.seconds && value.nanoseconds) {
+    return new Date(value.seconds * 1000 + value.nanoseconds / 1000000);
   }
-  if (typeof value.seconds === 'number') {
-    const seconds = value.seconds;
-    const nanos = typeof value.nanoseconds === 'number' ? value.nanoseconds : 0;
-    return seconds * 1000 + Math.floor(nanos / 1_000_000);
-  }
-  const date = new Date(value);
-  const ms = date.getTime();
-  return Number.isNaN(ms) ? 0 : ms;
-}
-
-function orderChatsByLastTs(chats) {
-  return [...chats].sort((a, b) => resolveTimestamp(b.last_ts) - resolveTimestamp(a.last_ts));
-}
-
-async function ensureChatViaApi(payload) {
-  if (!isBrowser || typeof fetch !== 'function') {
-    throw new Error('Unable to reach chat service.');
-  }
-  const body = {
-    chat_id: payload.chat_id,
-    buyer_uid: payload.buyer_uid,
-    buyer_name: payload.buyer_name,
-    buyer_avatar: payload.buyer_avatar,
-    vendor_uid: payload.vendor_uid,
-    vendor_name: payload.vendor_name,
-    vendor_avatar: payload.vendor_avatar,
-    listing_id: payload.listing_id,
-    listing_title: payload.listing_title,
-    listing_image: payload.listing_image,
-  };
-  const response = await fetch('./api/chat/chat-open.php', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-    credentials: 'include',
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok || !data?.success) {
-    throw new Error(data?.message || 'Unable to prepare chat.');
-  }
-  const chatData = data?.data && typeof data.data === 'object' ? data.data : {};
-  const result = { chatId: payload.chat_id, ...(chatData || {}) };
-  const fieldsToCopy = [
-    'chat_id',
-    'buyer_uid',
-    'buyer_name',
-    'buyer_avatar',
-    'vendor_uid',
-    'vendor_name',
-    'vendor_avatar',
-    'listing_id',
-    'listing_title',
-    'listing_image',
-  ];
-  fieldsToCopy.forEach((field) => {
-    if (result[field] === undefined && payload[field] !== undefined) {
-      result[field] = payload[field];
-    }
-  });
-  fallbackChatCache.set(payload.chat_id, result);
-  return result;
-}
-
-export async function deleteConversation(chatId) {
-  const id = getSafeUid(chatId);
-  if (!isBrowser || typeof fetch !== 'function') {
-    throw new Error('Unable to reach chat service.');
-  }
-
-  const response = await fetch('./api/chat/chat-open.php', {
-    method: 'DELETE',
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-    },
-    credentials: 'include',
-    body: JSON.stringify({ chat_id: id }),
-  });
-
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok || !payload?.success) {
-    throw new Error(payload?.message || 'Unable to delete this conversation.');
-  }
-
-  fallbackChatCache.delete(id);
-  return payload;
-}
-
-async function fetchMessagesViaApi(chatId) {
-  if (!isBrowser || typeof fetch !== 'function') {
-    throw new Error('Unable to load messages without fetch support.');
-  }
-  const response = await fetch(`./api/chat/list-messages.php?chat_id=${encodeURIComponent(chatId)}`, {
-    method: 'GET',
-    credentials: 'include',
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok || !data?.success) {
-    throw new Error(data?.message || 'Unable to load messages.');
-  }
-  const messages = Array.isArray(data.messages) ? data.messages : [];
-  const chat = data.chat && typeof data.chat === 'object' ? { chatId, ...data.chat } : null;
-  if (chat) {
-    fallbackChatCache.set(chatId, chat);
-  } else {
-    fallbackChatCache.delete(chatId);
-  }
-  return { messages, chat };
-}
-
-async function fetchChatsViaApi(role, uid) {
-  if (!isBrowser || typeof fetch !== 'function') {
-    throw new Error('Unable to load chats without fetch support.');
-  }
-  const params = new URLSearchParams();
-  if (role) params.set('role', role);
-  if (uid) params.set('uid', uid);
-  const response = await fetch(`./api/chat/list-chats.php?${params.toString()}`, {
-    method: 'GET',
-    credentials: 'include',
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok || !data?.success) {
-    throw new Error(data?.message || 'Unable to load chats.');
-  }
-  const chats = Array.isArray(data.chats) ? data.chats : [];
-  return orderChatsByLastTs(chats).slice(0, 100);
-}
-
-async function flushOfflineQueue() {
-  if (!isBrowser || typeof navigator === 'undefined' || !navigator.onLine || !offlineQueue.length) return;
-  const queueCopy = [...offlineQueue];
-  offlineQueue.length = 0;
-  persistOfflineQueue();
-  for (const item of queueCopy) {
+  if (typeof value.toDate === 'function') {
     try {
-      await sendMessage(item.payload);
+      return value.toDate();
     } catch (error) {
-      console.error('[chat] Failed to flush offline message', error);
-      offlineQueue.push(item);
-      persistOfflineQueue();
-      break;
+      return null;
     }
   }
-}
-
-if (isBrowser) {
-  window.addEventListener('online', () => {
-    showToast('Back online — sending queued messages.');
-    flushOfflineQueue();
-  });
-}
-
-export function initFirebase() {
-  if (!firebaseInitialised) {
-    firebaseInitialised = true;
-    restoreOfflineQueue();
-    flushOfflineQueue();
-  }
-  return app;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
 export function buildChatId(buyerUid, vendorUid) {
-  const buyer = getSafeUid(buyerUid);
-  const vendor = getSafeUid(vendorUid);
+  const buyer = requireUid(buyerUid, 'buyer_uid');
+  const vendor = requireUid(vendorUid, 'vendor_uid');
   const input = `${buyer}|${vendor}`;
   let hash = FNV_OFFSET;
   for (let index = 0; index < input.length; index += 1) {
@@ -308,51 +130,223 @@ export function buildChatId(buyerUid, vendorUid) {
 }
 
 function chatDoc(chatId) {
-  return doc(collection(db, CHATS_COLLECTION), chatId);
-}
-
-function messagesCollection(chatId) {
-  return collection(db, CHATS_COLLECTION, chatId, MESSAGE_SUBCOLLECTION);
+  return doc(collection(db, COLLECTIONS.CHATS), chatId);
 }
 
 function typingDoc(chatId) {
-  return doc(collection(db, TYPING_COLLECTION), chatId);
+  return doc(collection(db, COLLECTIONS.TYPING), chatId);
+}
+
+function messagesCollection(chatId) {
+  return collection(db, COLLECTIONS.CHATS, chatId, COLLECTIONS.MESSAGES);
+}
+
+export function initFirebase() {
+  if (!firebaseInitialised) {
+    firebaseInitialised = true;
+  }
+  return app;
+}
+
+function orderChatsByLastTs(chats) {
+  return [...chats].sort((a, b) => {
+    const aDate = resolveTimestamp(a.last_ts || a.last_sent_at) || new Date(0);
+    const bDate = resolveTimestamp(b.last_ts || b.last_sent_at) || new Date(0);
+    return bDate.getTime() - aDate.getTime();
+  });
+}
+
+function inferMessageType(data) {
+  if (data.voice_url || data.voiceUrl) return 'voice';
+  if (data.image_url || data.imageUrl) return 'image';
+  if (normaliseString(data.text)) return 'text';
+  return 'system';
+}
+
+function mapMessageSnapshot(docSnap) {
+  const data = docSnap.data() || {};
+  return {
+    id: docSnap.id,
+    chat_id: data.chat_id || data.chatId || '',
+    sender_uid: data.sender_uid || data.senderUid || '',
+    sender_role: data.sender_role || data.senderRole || '',
+    text: normaliseString(data.text),
+    image_url: normaliseString(data.image_url || data.imageUrl),
+    voice_url: normaliseString(data.voice_url || data.voiceUrl),
+    duration: data.duration ?? data.voice_duration ?? null,
+    type: (data.type || data.message_type || '').toLowerCase() || inferMessageType(data),
+    ts: data.ts || data.sent_at || data.sentAt || null,
+    read_by: data.read_by || data.readBy || {},
+  };
+}
+
+function mapMessageRecord(record) {
+  return {
+    id: record.id || record.message_id || '',
+    chat_id: record.chat_id || record.chatId || '',
+    sender_uid: record.sender_uid || record.senderUid || '',
+    sender_role: record.sender_role || record.senderRole || '',
+    text: normaliseString(record.text),
+    image_url: normaliseString(record.image_url || record.imageUrl),
+    voice_url: normaliseString(record.voice_url || record.voiceUrl),
+    duration: record.duration ?? record.voice_duration ?? null,
+    type: (record.type || record.message_type || '').toLowerCase() || inferMessageType(record),
+    ts: record.ts || record.sent_at || record.sentAt || null,
+    read_by: record.read_by || record.readBy || {},
+  };
+}
+
+function mapChatSnapshot(docSnap) {
+  const data = docSnap.data() || {};
+  return {
+    id: docSnap.id,
+    chat_id: data.chat_id || docSnap.id,
+    buyer_uid: data.buyer_uid || data.buyerUid || '',
+    buyer_name: data.buyer_name || data.buyerName || '',
+    buyer_avatar: data.buyer_avatar || data.buyerAvatar || '',
+    vendor_uid: data.vendor_uid || data.vendorUid || '',
+    vendor_name: data.vendor_name || data.vendorName || '',
+    vendor_avatar: data.vendor_avatar || data.vendorAvatar || '',
+    listing_id: data.listing_id || data.listingId || '',
+    listing_title: data.listing_title || data.listingTitle || '',
+    listing_image: data.listing_image || data.listingImage || '',
+    last_text: data.last_text || data.lastMessage || '',
+    last_type: data.last_type || data.lastType || '',
+    last_sender_uid: data.last_sender_uid || data.lastSenderUid || '',
+    last_sender_role: data.last_sender_role || data.lastSenderRole || '',
+    last_ts: data.last_ts || data.lastSentAt || data.updated_at || null,
+    unread_for_buyer: Number(data.unread_for_buyer || 0),
+    unread_for_vendor: Number(data.unread_for_vendor || 0),
+  };
+}
+
+function mapChatRecord(record) {
+  return {
+    id: record.id || record.chat_id || '',
+    chat_id: record.chat_id || record.chatId || '',
+    buyer_uid: record.buyer_uid || record.buyerUid || '',
+    buyer_name: record.buyer_name || record.buyerName || '',
+    buyer_avatar: record.buyer_avatar || record.buyerAvatar || '',
+    vendor_uid: record.vendor_uid || record.vendorUid || '',
+    vendor_name: record.vendor_name || record.vendorName || '',
+    vendor_avatar: record.vendor_avatar || record.vendorAvatar || '',
+    listing_id: record.listing_id || record.listingId || '',
+    listing_title: record.listing_title || record.listingTitle || '',
+    listing_image: record.listing_image || record.listingImage || '',
+    last_text: record.last_text || record.lastMessage || '',
+    last_type: record.last_type || record.lastType || '',
+    last_sender_uid: record.last_sender_uid || record.lastSenderUid || '',
+    last_sender_role: record.last_sender_role || record.lastSenderRole || '',
+    last_ts: record.last_ts || record.lastSentAt || record.updated_at || null,
+    unread_for_buyer: Number(record.unread_for_buyer || 0),
+    unread_for_vendor: Number(record.unread_for_vendor || 0),
+  };
+}
+
+async function callChatApi(path, { method = 'GET', data } = {}) {
+  if (!isBrowser || typeof fetch !== 'function') {
+    throw new Error('Network request not available.');
+  }
+  const options = {
+    method,
+    credentials: 'include',
+    headers: { Accept: 'application/json' },
+  };
+  if (data !== undefined) {
+    options.headers['Content-Type'] = 'application/json';
+    options.body = JSON.stringify(data);
+  }
+  const response = await fetch(path, options);
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || (payload && payload.success === false)) {
+    const message = payload?.message || `Request failed with status ${response.status}`;
+    throw new Error(message);
+  }
+  return payload || {};
+}
+
+async function fetchMessagesViaApi(chatId) {
+  const payload = await callChatApi(
+    `./api/chat/list-messages.php?chat_id=${encodeURIComponent(chatId)}`,
+    { method: 'GET' }
+  );
+  const messages = Array.isArray(payload.messages) ? payload.messages.map(mapMessageRecord) : [];
+  if (payload.chat) {
+    const chatRecord = mapChatRecord(payload.chat);
+    fallbackChatCache.set(chatId, chatRecord);
+  }
+  return { messages };
+}
+
+async function fetchChatsViaApi(role, uid) {
+  const payload = await callChatApi(
+    `./api/chat/list-chats.php?role=${encodeURIComponent(role)}&uid=${encodeURIComponent(uid)}`,
+    { method: 'GET' }
+  );
+  const chats = Array.isArray(payload.chats) ? payload.chats.map(mapChatRecord) : [];
+  chats.forEach((chat) => fallbackChatCache.set(chat.chat_id, chat));
+  return orderChatsByLastTs(chats);
+}
+
+async function ensureChatViaApi(payload) {
+  const response = await callChatApi('./api/chat/chat-open.php', {
+    method: 'POST',
+    data: {
+      buyer_uid: payload.buyer_uid,
+      buyer_name: payload.buyer_name,
+      vendor_uid: payload.vendor_uid,
+      vendor_name: payload.vendor_name,
+      listing_id: payload.listing_id,
+      listing_title: payload.listing_title,
+      listing_image: payload.listing_image,
+    },
+  });
+  const data = response.data ? mapChatRecord({ chat_id: response.chat_id, ...response.data }) : payload;
+  fallbackChatCache.set(payload.chat_id, data);
+  return { chatId: payload.chat_id, ...data };
 }
 
 export async function ensureChat(meta) {
-  const buyerUid = getSafeUid(meta?.buyer_uid || meta?.buyerUid);
-  const vendorUid = getSafeUid(meta?.vendor_uid || meta?.vendorUid);
+  const buyerUid = requireUid(meta?.buyer_uid || meta?.buyerUid, 'buyer_uid');
+  const vendorUid = requireUid(meta?.vendor_uid || meta?.vendorUid, 'vendor_uid');
   const providedChatId = normaliseString(meta?.chatId || meta?.chat_id);
-  const chatId = providedChatId ? getSafeUid(providedChatId) : buildChatId(buyerUid, vendorUid);
-  const listingId = normaliseString(meta?.listing_id || meta?.listingId);
-  if (!listingId) {
-    throw new Error('Missing listing identifier.');
-  }
+  const chatId = providedChatId || buildChatId(buyerUid, vendorUid);
   const payload = {
     chat_id: chatId,
     buyer_uid: buyerUid,
-    buyer_name: normaliseString(meta?.buyer_name || meta?.buyerName),
-    buyer_avatar: normaliseString(meta?.buyer_avatar || meta?.buyerAvatar),
+    buyer_name: normaliseString(meta?.buyer_name || meta?.buyerName || 'Buyer'),
+    buyer_avatar: normaliseString(meta?.buyer_avatar || meta?.buyerAvatar || ''),
     vendor_uid: vendorUid,
-    vendor_name: normaliseString(meta?.vendor_name || meta?.vendorName),
-    vendor_avatar: normaliseString(meta?.vendor_avatar || meta?.vendorAvatar),
-    listing_id: listingId,
-    listing_title: normaliseString(meta?.listing_title || meta?.listingTitle),
-    listing_image: normaliseString(meta?.listing_image || meta?.listingImage),
-    last_ts: serverTimestamp(),
-    last_text: normaliseString(meta?.last_text || ''),
-    last_type: normaliseString(meta?.last_type || 'system') || 'system',
-    unread_for_buyer: Number(meta?.unread_for_buyer || 0),
-    unread_for_vendor: Number(meta?.unread_for_vendor || 0),
+    vendor_name: normaliseString(meta?.vendor_name || meta?.vendorName || 'Vendor'),
+    vendor_avatar: normaliseString(meta?.vendor_avatar || meta?.vendorAvatar || ''),
+    listing_id: normaliseString(meta?.listing_id || meta?.listingId || ''),
+    listing_title: normaliseString(meta?.listing_title || meta?.listingTitle || ''),
+    listing_image: normaliseString(meta?.listing_image || meta?.listingImage || ''),
   };
 
   try {
-    const chatRef = chatDoc(chatId);
-    const snapshot = await getDoc(chatRef);
+    const docRef = chatDoc(chatId);
+    const snapshot = await getDoc(docRef);
     if (!snapshot.exists()) {
-      await setDoc(chatRef, payload);
+      await setDoc(docRef, {
+        chat_id: chatId,
+        buyer_uid: payload.buyer_uid,
+        buyer_name: payload.buyer_name,
+        buyer_avatar: payload.buyer_avatar,
+        vendor_uid: payload.vendor_uid,
+        vendor_name: payload.vendor_name,
+        vendor_avatar: payload.vendor_avatar,
+        listing_id: payload.listing_id,
+        listing_title: payload.listing_title,
+        listing_image: payload.listing_image,
+        last_text: 'Chat started',
+        last_type: 'system',
+        unread_for_buyer: 0,
+        unread_for_vendor: 0,
+        last_ts: serverTimestamp(),
+      });
     } else {
-      await updateDoc(chatRef, {
+      await updateDoc(docRef, {
         buyer_uid: payload.buyer_uid,
         buyer_name: payload.buyer_name,
         buyer_avatar: payload.buyer_avatar,
@@ -364,431 +358,67 @@ export async function ensureChat(meta) {
         listing_image: payload.listing_image,
       });
     }
-    return { chatId, ...payload };
+    const refreshed = await getDoc(docRef);
+    const mapped = refreshed.exists() ? mapChatSnapshot(refreshed) : { chat_id: chatId, ...payload };
+    fallbackChatCache.set(chatId, mapped);
+    return { chatId, ...mapped };
   } catch (error) {
-    if (isPermissionDenied(error)) {
-      return ensureChatViaApi(payload);
-    }
-    throw error;
+    console.warn('[chat] ensureChat via Firestore failed', error);
+    return ensureChatViaApi(payload);
   }
-}
-
-export async function fetchChatSummary(chatId) {
-  const id = getSafeUid(chatId);
-  try {
-    const snapshot = await getDoc(chatDoc(id));
-    if (snapshot.exists()) {
-      return { id: snapshot.id, ...snapshot.data() };
-    }
-  } catch (error) {
-    if (isPermissionDenied(error)) {
-      const cached = fallbackChatCache.get(id);
-      if (cached) {
-        return cached;
-      }
-      try {
-        const data = await fetchMessagesViaApi(id);
-        if (data.chat) {
-          return data.chat;
-        }
-      } catch (fallbackError) {
-        console.error('[chat] fetchChatSummary fallback failed', fallbackError);
-      }
-    } else {
-      console.error('[chat] fetchChatSummary failed', error);
-    }
-  }
-  return null;
-}
-
-export function subscribeChatsForBuyer(buyerUid, callback) {
-  const uid = getSafeUid(buyerUid);
-  const q = query(collection(db, CHATS_COLLECTION), where('buyer_uid', '==', uid), limit(100));
-  return onSnapshot(
-    q,
-    (snapshot) => {
-      const chats = orderChatsByLastTs(snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() })));
-      callback(chats.slice(0, 100));
-    },
-    (error) => {
-      console.error('[chat] subscribeChatsForBuyer', error);
-      showToast('Unable to load chats.');
-      fetchChatsViaApi('buyer', uid)
-        .then((fallbackChats) => {
-          callback(fallbackChats);
-        })
-        .catch((fallbackError) => {
-          console.error('[chat] buyer chats fallback failed', fallbackError);
-        });
-    }
-  );
-}
-
-export function subscribeChatsForVendor(vendorUid, callback) {
-  const uid = getSafeUid(vendorUid);
-  const q = query(collection(db, CHATS_COLLECTION), where('vendor_uid', '==', uid), limit(100));
-  return onSnapshot(
-    q,
-    (snapshot) => {
-      const chats = orderChatsByLastTs(snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() })));
-      callback(chats.slice(0, 100));
-    },
-    (error) => {
-      console.error('[chat] subscribeChatsForVendor', error);
-      showToast('Unable to load chats.');
-      fetchChatsViaApi('vendor', uid)
-        .then((fallbackChats) => {
-          callback(fallbackChats);
-        })
-        .catch((fallbackError) => {
-          console.error('[chat] vendor chats fallback failed', fallbackError);
-        });
-    }
-  );
 }
 
 export function subscribeMessages(chatId, callback) {
-  const id = getSafeUid(chatId);
-  const q = query(messagesCollection(id), orderBy('ts', 'asc'), limit(500));
-  let unsubscribeFirestore = null;
-  let pollingTimer = null;
-  let lastSignature = '';
+  const id = requireUid(chatId, 'chatId');
+  const q = query(messagesCollection(id), orderBy('ts', 'asc'), limit(MESSAGE_FETCH_LIMIT));
   let active = true;
+  let fallbackTimer = null;
 
-  const stopPolling = () => {
-    if (pollingTimer) {
-      clearInterval(pollingTimer);
-      pollingTimer = null;
+  const unsubscribe = onSnapshot(
+    q,
+    (snapshot) => {
+      if (!active) return;
+      const messages = snapshot.docs.map(mapMessageSnapshot);
+      callback(messages);
+    },
+    (error) => {
+      console.error('[chat] subscribeMessages', error);
+      startFallback();
     }
-  };
+  );
 
-  const cleanup = () => {
-    active = false;
-    if (unsubscribeFirestore) {
-      try {
-        unsubscribeFirestore();
-      } catch (unsubscribeError) {
-        console.warn('[chat] unsubscribe snapshot failed', unsubscribeError);
-      }
-      unsubscribeFirestore = null;
-    }
-    stopPolling();
-  };
-
-  const emitMessages = (messages) => {
-    if (!active) return;
-    const signature = Array.isArray(messages)
-      ? messages.map((msg) => `${msg.id || ''}:${resolveTimestamp(msg.ts)}`).join('|')
-      : '';
-    if (signature === lastSignature) return;
-    lastSignature = signature;
-    callback(messages);
-  };
-
-  const startPolling = () => {
-    if (pollingTimer) return;
+  const startFallback = () => {
+    if (fallbackTimer) return;
     const fetchAndEmit = async () => {
       try {
         const data = await fetchMessagesViaApi(id);
-        emitMessages(data.messages || []);
-      } catch (pollError) {
-        console.error('[chat] messages fallback poll failed', pollError);
+        if (active) {
+          callback(data.messages);
+        }
+      } catch (fallbackError) {
+        console.error('[chat] messages fallback failed', fallbackError);
       }
     };
     fetchAndEmit();
-    pollingTimer = setInterval(fetchAndEmit, 8000);
+    fallbackTimer = setInterval(fetchAndEmit, 8000);
   };
-
-  const handleSnapshot = (snapshot) => {
-    const messages = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
-    emitMessages(messages);
-  };
-
-  const handleError = (error) => {
-    console.error('[chat] subscribeMessages', error);
-    if (isPermissionDenied(error)) {
-      if (unsubscribeFirestore) {
-        try {
-          unsubscribeFirestore();
-        } catch (unsubscribeError) {
-          console.warn('[chat] unsubscribe after permission denied failed', unsubscribeError);
-        }
-        unsubscribeFirestore = null;
-      }
-      if (!pollingTimer) {
-        showToast('Switching to server updates for this chat.');
-        startPolling();
-      }
-    } else {
-      showToast('Unable to load messages.');
-    }
-  };
-
-  try {
-    unsubscribeFirestore = onSnapshot(q, handleSnapshot, handleError);
-  } catch (error) {
-    handleError(error);
-  }
 
   return () => {
-    cleanup();
+    active = false;
+    try {
+      unsubscribe();
+    } catch (unsubscribeError) {
+      console.warn('[chat] unsubscribe messages', unsubscribeError);
+    }
+    if (fallbackTimer) {
+      clearInterval(fallbackTimer);
+      fallbackTimer = null;
+    }
   };
-}
-
-function normaliseMessagePayload(input) {
-  const senderRole = normaliseString(input?.as || input?.sender_role);
-  const senderUid = getSafeUid(input?.sender_uid || input?.senderUid || input?.viewerUid);
-  const text = normaliseString(input?.text || input?.message);
-  const imageUrl = normaliseString(input?.image_url || input?.imageUrl);
-  const voiceUrl = normaliseString(input?.voice_url || input?.voiceUrl);
-  const duration = Number(input?.duration || input?.voice_duration || 0);
-  const buyerUid = getSafeUid(input?.buyer_uid || input?.buyerUid);
-  const vendorUid = getSafeUid(input?.vendor_uid || input?.vendorUid);
-  const buyerName = normaliseString(input?.buyer_name || input?.buyerName || '');
-  const vendorName = normaliseString(input?.vendor_name || input?.vendorName || '');
-  const listingId = normaliseString(input?.listing_id || input?.listingId || '');
-  const listingTitle = normaliseString(input?.listing_title || input?.listingTitle || '');
-  const listingImage = normaliseString(input?.listing_image || input?.listingImage || '');
-  const providedChatId = normaliseString(input?.chatId || input?.chat_id);
-  const chatId = providedChatId ? getSafeUid(providedChatId) : buildChatId(buyerUid, vendorUid);
-
-  if (!text && !imageUrl && !voiceUrl) {
-    throw new Error('Please write a message or attach media.');
-  }
-
-  let type = 'text';
-  if (imageUrl) type = 'image';
-  if (voiceUrl) type = 'voice';
-
-  return {
-    chatId,
-    senderRole: senderRole === 'vendor' ? 'vendor' : 'buyer',
-    senderUid,
-    text,
-    imageUrl,
-    voiceUrl,
-    duration,
-    buyerUid,
-    vendorUid,
-    type,
-    buyerName,
-    vendorName,
-    listingId,
-    listingTitle,
-    listingImage,
-    __normalised: true,
-  };
-}
-
-async function writeMessage(payload) {
-  const {
-    chatId,
-    senderRole,
-    senderUid,
-    text,
-    imageUrl,
-    voiceUrl,
-    duration,
-    buyerUid,
-    vendorUid,
-    type,
-    listingId,
-    listingTitle,
-    listingImage,
-    buyerName,
-    vendorName,
-  } = payload;
-  const messageData = {
-    ts: serverTimestamp(),
-    sender_uid: senderUid,
-    sender_role: senderRole,
-    text: text || null,
-    image_url: imageUrl || null,
-    voice_url: voiceUrl || null,
-    duration: duration || null,
-    type,
-    read_by: { [senderUid]: true },
-  };
-  const messageRef = await addDoc(messagesCollection(chatId), messageData);
-
-  const chatRef = chatDoc(chatId);
-  const chatUpdates = {
-    last_ts: serverTimestamp(),
-    last_text:
-      type === 'text'
-        ? text
-        : type === 'image'
-        ? '🖼️ Photo'
-        : type === 'voice'
-        ? '🎤 Voice note'
-        : type,
-    last_type: type,
-    last_sender_uid: senderUid,
-    last_sender_role: senderRole,
-  };
-
-  if (senderRole === 'buyer') {
-    chatUpdates.unread_for_vendor = increment(1);
-    chatUpdates.unread_for_buyer = 0;
-  } else {
-    chatUpdates.unread_for_buyer = increment(1);
-    chatUpdates.unread_for_vendor = 0;
-  }
-
-  if (buyerUid) {
-    chatUpdates.buyer_uid = buyerUid;
-  }
-  if (vendorUid) {
-    chatUpdates.vendor_uid = vendorUid;
-  }
-  if (listingId) {
-    chatUpdates.listing_id = listingId;
-  }
-  if (listingTitle) {
-    chatUpdates.listing_title = listingTitle;
-  }
-  if (listingImage) {
-    chatUpdates.listing_image = listingImage;
-  }
-  if (buyerName) {
-    chatUpdates.buyer_name = buyerName;
-  }
-  if (vendorName) {
-    chatUpdates.vendor_name = vendorName;
-  }
-
-  await setDoc(chatRef, chatUpdates, { merge: true });
-
-  return { id: messageRef.id, ...messageData };
-}
-
-function isPermissionDenied(error) {
-  const code = error?.code || error?.status;
-  if (code && String(code).toLowerCase() === 'permission-denied') return true;
-  const message = String(error?.message || '').toLowerCase();
-  return message.includes('missing or insufficient permissions') || message.includes('permission denied');
-}
-
-async function sendMessageViaApi(payload) {
-  if (!isBrowser || typeof fetch !== 'function') {
-    throw new Error('Unable to send message without browser fetch support.');
-  }
-  try {
-    const response = await fetch('./api/chat/send-message.php', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: payload.chatId,
-        as: payload.senderRole,
-        sender_uid: payload.senderUid,
-        text: payload.text,
-        image_url: payload.imageUrl,
-        voice_url: payload.voiceUrl,
-        duration: payload.duration,
-        buyer_uid: payload.buyerUid,
-        vendor_uid: payload.vendorUid,
-        buyer_name: payload.buyerName,
-        vendor_name: payload.vendorName,
-        listing_id: payload.listingId,
-        listing_title: payload.listingTitle,
-        listing_image: payload.listingImage,
-      }),
-      credentials: 'include',
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok || !data?.success) {
-      throw new Error(data?.message || 'Unable to send message via server.');
-    }
-    return { sent: true, viaApi: true, result: { id: data.message_id || null, type: data.type || payload.type } };
-  } catch (apiError) {
-    console.error('[chat] sendMessage fallback error', apiError);
-    throw apiError;
-  }
-}
-
-export async function sendMessage(input) {
-  const payload = input?.__normalised ? input : normaliseMessagePayload(input);
-  try {
-    const isOffline = !isBrowser || typeof navigator === 'undefined' ? false : navigator.onLine === false;
-    if (isOffline) {
-      offlineQueue.push({ chatId: payload.chatId, payload });
-      persistOfflineQueue();
-      showToast('Message saved offline - will send when online.');
-      return { queued: true };
-    }
-    const result = await writeMessage(payload);
-    return { sent: true, result };
-  } catch (error) {
-    console.error('[chat] sendMessage error', error);
-    if (isPermissionDenied(error)) {
-      try {
-        const apiResult = await sendMessageViaApi(payload);
-        showToast('Message sent.');
-        return apiResult;
-      } catch (apiError) {
-        showToast(apiError?.message || 'Unable to send message.');
-        throw apiError;
-      }
-    }
-    showToast(error?.message || 'Unable to send message.');
-    throw error;
-  }
-}
-
-export async function setTyping(chatId, role, isTyping) {
-  try {
-    const id = getSafeUid(chatId);
-    const docRef = typingDoc(id);
-    const update = { updatedAt: serverTimestamp() };
-    if (role === 'buyer') {
-      update.buyer = Boolean(isTyping);
-    } else if (role === 'vendor') {
-      update.vendor = Boolean(isTyping);
-    }
-    await setDoc(docRef, update, { merge: true });
-  } catch (error) {
-    console.error('[chat] setTyping', error);
-  }
-}
-
-export async function markRead(chatId, role, viewerUid) {
-  try {
-    const id = getSafeUid(chatId);
-    const uid = getSafeUid(viewerUid);
-    const messagesRef = messagesCollection(id);
-    const q = query(messagesRef, orderBy('ts', 'desc'), limit(MAX_MESSAGES_TO_MARK));
-    const snapshot = await getDocs(q);
-    const batch = writeBatch(db);
-    snapshot.docs.forEach((docSnap) => {
-      batch.update(docSnap.ref, { [`read_by.${uid}`]: true });
-    });
-    await batch.commit();
-
-    const chatRef = chatDoc(id);
-    const unreadField = role === 'buyer' ? 'unread_for_buyer' : 'unread_for_vendor';
-    await updateDoc(chatRef, { [unreadField]: 0 });
-  } catch (error) {
-    console.error('[chat] markRead', error);
-  } finally {
-    if (isBrowser && typeof fetch === 'function') {
-      try {
-        fetch('./api/chat/mark-read.php', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ chat_id: chatId, role }),
-        }).catch((fallbackError) => {
-          console.warn('[chat] markRead fallback failed', fallbackError);
-        });
-      } catch (networkError) {
-        console.warn('[chat] markRead sync error', networkError);
-      }
-    }
-  }
 }
 
 export function subscribeTyping(chatId, callback) {
-  const id = getSafeUid(chatId);
+  const id = requireUid(chatId, 'chatId');
   return onSnapshot(
     typingDoc(id),
     (snapshot) => {
@@ -796,48 +426,119 @@ export function subscribeTyping(chatId, callback) {
     },
     (error) => {
       console.error('[chat] subscribeTyping', error);
+      callback({});
     }
   );
+}
+
+export async function setTyping(chatId, role, isTyping) {
+  try {
+    const id = requireUid(chatId, 'chatId');
+    const update = { updatedAt: serverTimestamp() };
+    if (role === 'buyer') {
+      update.buyer = Boolean(isTyping);
+    } else if (role === 'vendor') {
+      update.vendor = Boolean(isTyping);
+    }
+    await setDoc(typingDoc(id), update, { merge: true });
+  } catch (error) {
+    console.warn('[chat] setTyping failed', error);
+  }
+}
+
+export async function markRead(chatId, role, viewerUid) {
+  try {
+    const id = requireUid(chatId, 'chatId');
+    const uid = requireUid(viewerUid, 'viewer_uid');
+    const q = query(messagesCollection(id), orderBy('ts', 'desc'), limit(MAX_MESSAGES_TO_MARK));
+    const snapshot = await getDocs(q);
+    const batch = writeBatch(db);
+    snapshot.docs.forEach((docSnap) => {
+      batch.update(docSnap.ref, { [`read_by.${uid}`]: true });
+    });
+    await batch.commit();
+    const chatRef = chatDoc(id);
+    const field = role === 'buyer' ? 'unread_for_buyer' : 'unread_for_vendor';
+    await updateDoc(chatRef, { [field]: 0 });
+    await callChatApi('./api/chat/mark-read.php', {
+      method: 'POST',
+      data: { chat_id: id, role },
+    });
+  } catch (error) {
+    console.warn('[chat] markRead failed', error);
+  }
+}
+
+export async function sendMessage(payload) {
+  const body = {
+    role: payload.role,
+    text: normaliseString(payload.text),
+    image_url: normaliseString(payload.image_url),
+    voice_url: normaliseString(payload.voice_url),
+    duration: payload.duration,
+    buyer_uid: payload.buyer_uid,
+    buyer_name: payload.buyer_name,
+    vendor_uid: payload.vendor_uid,
+    vendor_name: payload.vendor_name,
+    listing_id: payload.listing_id,
+    listing_title: payload.listing_title,
+    listing_image: payload.listing_image,
+  };
+  return callChatApi('./api/chat/send-message.php', { method: 'POST', data: body });
 }
 
 export async function recordVoice(options = {}) {
   if (!isBrowser || !navigator.mediaDevices?.getUserMedia) {
     throw new Error('Voice recording is not supported on this device.');
   }
-  const constraints = { audio: true };
-  const stream = await navigator.mediaDevices.getUserMedia(constraints);
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
   const recorder = new MediaRecorder(stream, options);
   const chunks = [];
+  const handleData = (event) => {
+    if (event.data && event.data.size > 0) {
+      chunks.push(event.data);
+    }
+  };
   return {
-    stream,
-    recorder,
-    start: () => {
+    start() {
       chunks.length = 0;
-      recorder.addEventListener('dataavailable', (event) => {
-        if (event.data && event.data.size > 0) {
-          chunks.push(event.data);
-        }
-      });
+      recorder.addEventListener('dataavailable', handleData);
       recorder.start();
     },
-    stop: () =>
-      new Promise((resolve, reject) => {
+    stop() {
+      return new Promise((resolve, reject) => {
         const cleanup = () => {
+          recorder.removeEventListener('dataavailable', handleData);
           stream.getTracks().forEach((track) => track.stop());
         };
-        recorder.addEventListener('error', (event) => {
-          cleanup();
-          reject(event.error || new Error('Recording failed.'));
-        });
-        recorder.addEventListener('stop', () => {
+        const handleStop = () => {
+          recorder.removeEventListener('error', handleError);
           const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
           cleanup();
           resolve(blob);
-        });
+        };
+        const handleError = (event) => {
+          recorder.removeEventListener('stop', handleStop);
+          cleanup();
+          reject(event.error || new Error('Recording failed.'));
+        };
+        recorder.addEventListener('stop', handleStop, { once: true });
+        recorder.addEventListener('error', handleError, { once: true });
+        try {
+          recorder.stop();
+        } catch (error) {
+          cleanup();
+          reject(error);
+        }
+      });
+    },
+    cancel() {
+      try {
         recorder.stop();
-      }),
-    cancel: () => {
-      recorder.stop();
+      } catch (error) {
+        // ignore
+      }
+      recorder.removeEventListener('dataavailable', handleData);
       stream.getTracks().forEach((track) => track.stop());
     },
   };
@@ -857,6 +558,93 @@ export async function uploadVoiceToCloudinary(blob, metadata = {}) {
   return response.url;
 }
 
-export { showToast };
+export async function fetchChatSummary(chatId) {
+  const id = requireUid(chatId, 'chatId');
+  try {
+    const snapshot = await getDoc(chatDoc(id));
+    if (snapshot.exists()) {
+      const chat = mapChatSnapshot(snapshot);
+      fallbackChatCache.set(id, chat);
+      return chat;
+    }
+  } catch (error) {
+    console.warn('[chat] fetchChatSummary firestore failed', error);
+  }
 
+  if (fallbackChatCache.has(id)) {
+    return fallbackChatCache.get(id);
+  }
+
+  try {
+    const payload = await callChatApi(
+      `./api/chat/list-messages.php?chat_id=${encodeURIComponent(id)}`,
+      { method: 'GET' }
+    );
+    if (payload.chat) {
+      const chat = mapChatRecord(payload.chat);
+      fallbackChatCache.set(id, chat);
+      return chat;
+    }
+  } catch (error) {
+    console.warn('[chat] fetchChatSummary fallback failed', error);
+  }
+
+  return null;
+}
+
+export async function deleteConversation(chatId) {
+  const id = requireUid(chatId, 'chatId');
+  const payload = await callChatApi('./api/chat/chat-open.php', {
+    method: 'DELETE',
+    data: { chat_id: id },
+  });
+  fallbackChatCache.delete(id);
+  return payload;
+}
+
+function createChatsSubscription(queryRef, role, uid, callback) {
+  let active = true;
+  const unsubscribe = onSnapshot(
+    queryRef,
+    (snapshot) => {
+      if (!active) return;
+      const chats = orderChatsByLastTs(snapshot.docs.map(mapChatSnapshot));
+      callback(chats);
+      chats.forEach((chat) => fallbackChatCache.set(chat.chat_id, chat));
+    },
+    async (error) => {
+      console.error('[chat] subscribeChats', error);
+      try {
+        const chats = await fetchChatsViaApi(role, uid);
+        if (active) {
+          callback(chats);
+        }
+      } catch (fallbackError) {
+        console.error('[chat] chats fallback failed', fallbackError);
+        showToast('Unable to load chats.');
+      }
+    }
+  );
+
+  return () => {
+    active = false;
+    try {
+      unsubscribe();
+    } catch (unsubscribeError) {
+      console.warn('[chat] unsubscribe chats', unsubscribeError);
+    }
+  };
+}
+
+export function subscribeChatsForBuyer(buyerUid, callback) {
+  const uid = requireUid(buyerUid, 'buyer_uid');
+  const q = query(collection(db, COLLECTIONS.CHATS), where('buyer_uid', '==', uid), limit(CHAT_FETCH_LIMIT));
+  return createChatsSubscription(q, 'buyer', uid, callback);
+}
+
+export function subscribeChatsForVendor(vendorUid, callback) {
+  const uid = requireUid(vendorUid, 'vendor_uid');
+  const q = query(collection(db, COLLECTIONS.CHATS), where('vendor_uid', '==', uid), limit(CHAT_FETCH_LIMIT));
+  return createChatsSubscription(q, 'vendor', uid, callback);
+}
 

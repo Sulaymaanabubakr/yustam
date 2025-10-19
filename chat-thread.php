@@ -382,6 +382,22 @@ $bootstrap = [
             color: var(--muted);
         }
 
+        .message-image img {
+            max-width: 100%;
+            border-radius: 12px;
+            display: block;
+        }
+
+        .voice-player {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .voice-player audio {
+            width: 100%;
+        }
+
         .scroll-bottom {
             position: sticky;
             bottom: 24px;
@@ -405,23 +421,102 @@ $bootstrap = [
         .composer {
             background: var(--surface);
             border-top: 1px solid var(--border);
-            padding: 12px clamp(14px, 4vw, 20px);
+            padding: clamp(12px, 3vw, 18px);
             display: flex;
             flex-direction: column;
-            gap: 8px;
+            gap: 10px;
         }
 
-        .composer--disabled textarea,
-        .composer--disabled button {
+        .composer-toolbar {
+            display: flex;
+            align-items: flex-end;
+            gap: 12px;
+        }
+
+        .icon-btn {
+            border: none;
+            background: var(--emerald-soft);
+            color: var(--emerald);
+            width: 46px;
+            height: 46px;
+            border-radius: 16px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.2s ease, background 0.2s ease, color 0.2s ease;
+        }
+
+        .icon-btn:hover {
+            transform: translateY(-1px);
+        }
+
+        .icon-btn:disabled {
             opacity: 0.55;
-            pointer-events: none;
+            cursor: default;
+            transform: none;
+        }
+
+        #voiceButton.recording {
+            background: rgba(220, 65, 47, 0.16);
+            color: #dc412f;
+        }
+
+        .send-btn {
+            border: none;
+            background: var(--emerald);
+            color: #fff;
+            width: 56px;
+            height: 46px;
+            border-radius: 16px;
+            font-size: 1.15rem;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s ease, transform 0.2s ease;
+        }
+
+        .send-btn:hover {
+            transform: translateY(-1px);
+        }
+
+        .send-btn:disabled {
+            background: rgba(15, 106, 83, 0.18);
+            color: rgba(15, 106, 83, 0.7);
+            cursor: default;
+            transform: none;
+        }
+
+        #messageInput {
+            flex: 1;
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 12px 16px;
+            font-size: 1rem;
+            resize: none;
+            line-height: 1.45;
+            min-height: 48px;
+            max-height: 140px;
+            background: #fff;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        #messageInput:focus {
+            outline: none;
+            border-color: rgba(15, 106, 83, 0.4);
+            box-shadow: 0 0 0 3px rgba(15, 106, 83, 0.12);
         }
 
         #attachmentPreview {
             display: none;
             background: rgba(15, 106, 83, 0.05);
-            border-radius: 14px;
-            padding: 8px 12px;
+            border-radius: 16px;
+            padding: 10px 14px;
+            display: flex;
+            align-items: center;
+            gap: 14px;
         }
 
         #attachmentPreview[hidden] {
@@ -434,78 +529,51 @@ $bootstrap = [
         }
 
         #attachmentPreview img {
-            max-width: 144px;
-            border-radius: 12px;
+            max-width: 160px;
+            border-radius: 14px;
+            box-shadow: 0 10px 18px rgba(15, 106, 83, 0.12);
         }
 
         #attachmentPreview button {
             position: absolute;
-            top: 6px;
-            right: 6px;
+            top: 8px;
+            right: 8px;
             border: none;
-            background: rgba(0, 0, 0, 0.6);
+            background: rgba(0, 0, 0, 0.68);
             color: #fff;
             border-radius: 50%;
-            width: 28px;
-            height: 28px;
+            width: 30px;
+            height: 30px;
             cursor: pointer;
         }
 
-        .composer-controls {
-            display: grid;
-            grid-template-columns: auto 1fr auto auto;
+        .recording-indicator {
+            display: none;
             align-items: center;
             gap: 10px;
+            font-size: 0.9rem;
+            color: rgba(220, 65, 47, 0.9);
+            font-weight: 600;
         }
 
-        #messageInput {
-            width: 100%;
-            border: 1px solid var(--border);
-            border-radius: 14px;
-            padding: 12px 14px;
-            font-size: 0.98rem;
-            resize: none;
-            line-height: 1.4;
-            background: #fff;
-            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        .recording-indicator::before {
+            content: '';
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #dc412f;
+            box-shadow: 0 0 0 6px rgba(220, 65, 47, 0.2);
         }
 
-        #messageInput:focus {
-            outline: none;
-            border-color: rgba(15, 106, 83, 0.4);
-            box-shadow: 0 0 0 3px rgba(15, 106, 83, 0.12);
-        }
-
-        #emojiButton,
-        #attachButton,
-        #sendButton {
-            border: none;
-            background: var(--emerald-soft);
-            color: var(--emerald);
-            width: 44px;
-            height: 44px;
-            border-radius: 14px;
-            font-size: 1.05rem;
-            cursor: pointer;
+        .recording-indicator.is-visible {
             display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            transition: transform 0.2s ease, background 0.2s ease, color 0.2s ease;
         }
 
-        #emojiButton:hover,
-        #attachButton:hover,
-        #sendButton:hover {
-            transform: translateY(-1px);
-        }
-
-        #sendButton.is-text-mode {
-            background: var(--emerald);
-            color: #fff;
-        }
-
-        #sendButton.is-text-mode:hover {
-            background: #0d5b45;
+        .composer--disabled textarea,
+        .composer--disabled .icon-btn,
+        .composer--disabled .send-btn {
+            opacity: 0.55;
+            pointer-events: none;
         }
 
         @media (max-width: 640px) {
@@ -560,13 +628,15 @@ $bootstrap = [
         </main>
         <footer class="composer">
             <div id="attachmentPreview" hidden></div>
-            <div class="composer-controls">
-                <button type="button" id="emojiButton" aria-label="Insert emoji"><i class="ri-emotion-line"></i></button>
+            <div class="recording-indicator" id="recordingIndicator" hidden>Recording&hellip; tap stop to send</div>
+            <div class="composer-toolbar">
+                <button type="button" id="emojiButton" class="icon-btn" aria-label="Insert emoji"><i class="ri-emotion-line"></i></button>
+                <button type="button" id="attachButton" class="icon-btn" aria-label="Attach image"><i class="ri-attachment-2"></i></button>
                 <textarea id="messageInput" rows="1" placeholder="Write a message..." aria-label="Message"></textarea>
-                <input type="file" accept="image/*" id="imageInput" hidden>
-                <button type="button" id="attachButton" aria-label="Attach image"><i class="ri-attachment-2"></i></button>
-                <button type="button" id="sendButton" data-mode="voice" aria-label="Record voice note"><i class="ri-mic-line"></i></button>
+                <button type="button" id="voiceButton" class="icon-btn" aria-label="Record voice note"><i class="ri-mic-line"></i></button>
+                <button type="button" id="sendButton" class="send-btn" aria-label="Send message" disabled><i class="ri-send-plane-2-line"></i></button>
             </div>
+            <input type="file" accept="image/*" id="imageInput" hidden>
         </footer>
     </div>
     <script>

@@ -15,654 +15,693 @@ import {
 import { uploadToCloudinary } from './cloudinary.js';
 
 const thread = window.__CHAT_THREAD__ || {};
-const contextWarnings = [];
-if (!thread.chatId) {
-  contextWarnings.push('Missing chat identifier.');
-}
-if (!thread.role) {
-  contextWarnings.push('Missing chat role.');
-}
-const contextIncomplete = Boolean(thread.contextIncomplete);
-const canSendMessages = Boolean(thread.canSend);
 
-initFirebase();
-
-if (contextWarnings.length) {
-  console.warn('[chat] bootstrap warnings:', contextWarnings.join(' '));
-}
-if (!thread.chatId || !thread.role) {
-  showToast('We could not load this conversation.');
+if (!thread.chatId || !thread.role || !thread.viewer?.uid) {
+  showToast('We could not load this conversation.', 'error');
   throw new Error('Chat bootstrap missing');
 }
 
+initFirebase();
 
-const role = thread.role;
-const viewer = thread.viewer;
-const counterparty = thread.counterparty || {};
-const listing = thread.listing || {};
-
-function persistUid(uid) {
-  const value = typeof uid === 'string' ? uid.trim() : '';
-  if (!value) return;
-  if (typeof window === 'undefined') return;
-  try {
-    window.sessionStorage?.setItem('yustam_uid', value);
-    window.sessionStorage?.setItem('firebase_uid', value);
-  } catch (error) {
-    console.warn('Unable to persist session uid', error);
-  }
-  try {
-    window.localStorage?.setItem('yustam_uid', value);
-    window.localStorage?.setItem('firebase_uid', value);
-  } catch (error) {
-    console.warn('Unable to persist uid', error);
-  }
-}
-
-persistUid(viewer?.uid);
-
-const buyerIdentifier = thread.buyer?.uid || (role === 'buyer' ? viewer.uid : counterparty.uid) || '';
-const vendorIdentifier = thread.vendor?.uid || (role === 'vendor' ? viewer.uid : counterparty.uid) || '';
-const listingId = listing.id || '';
-
-const messageListEl = document.getElementById('messageList');
-const typingBannerEl = document.getElementById('typingBanner');
-const scrollToBottomBtn = document.getElementById('scrollToBottom');
-const messageInput = document.getElementById('messageInput');
-const hasPrefill = typeof thread.prefill === 'string' && thread.prefill.trim().length > 0;
-const quickSent = Boolean(thread.quickSent);
-if (messageInput && hasPrefill) {
-  messageInput.value = thread.prefill.trim();
-}
-const sendButton = document.getElementById('sendButton');
-const emojiButton = document.getElementById('emojiButton');
-const imageInput = document.getElementById('imageInput');
-const attachButton = document.getElementById('attachButton');
-const attachmentPreview = document.getElementById('attachmentPreview');
-const offlineBanner = document.getElementById('offlineBanner');
-const headerAvatar = document.getElementById('headerAvatar');
-const chatTitleEl = document.getElementById('chatTitle');
-const chatSubtitleEl = document.getElementById('chatSubtitle');
-const backButton = document.getElementById('backButton');
-const infoButton = document.getElementById('infoButton');
-const deleteButton = document.getElementById('deleteChatBtn');
-const composer = document.querySelector('.composer');
-
-if (composer && !canSendMessages) {
-  composer.classList.add('composer--disabled');
-  messageInput?.setAttribute('disabled', 'disabled');
-  sendButton?.setAttribute('disabled', 'disabled');
-  attachButton?.setAttribute('disabled', 'disabled');
-  emojiButton?.setAttribute('disabled', 'disabled');
-}
-
-if (quickSent && canSendMessages) {
-  showToast('We already sent your quick message to the vendor.');
-} else if (hasPrefill && canSendMessages) {
-  showToast('Edit your message and tap send when you're ready.');
-}
-
-let messagesState = [];
-let unsubscribeMessages = null;
-let unsubscribeTyping = null;
-let typingTimeout = null;
-let isRecording = false;
-let recorderController = null;
-let recordStartTime = null;
-let pointerStartX = 0;
-let pendingImageFile = null;
-
-if (sendButton && !sendButton.dataset.mode) {
-  sendButton.dataset.mode = 'voice';
-}
-
-const counterpartyLabel = counterparty.name || (role === 'buyer' ? 'Vendor' : 'Buyer');
-if (chatTitleEl) {
-  chatTitleEl.textContent = counterpartyLabel;
-}
-if (chatSubtitleEl) {
-  chatSubtitleEl.textContent = listing.title || 'Listing';
-}
-
-function updateHeaderMedia() {
-  if (!headerAvatar) return;
-  const imgEl = headerAvatar.querySelector('img');
-  if (!imgEl) return;
-  if (listing.image) {
-    imgEl.src = listing.image;
-  } else if (counterparty.avatar) {
-    imgEl.src = counterparty.avatar;
-  }
-}
-
-updateHeaderMedia();
-
-if (deleteButton) {
-  deleteButton.addEventListener('click', async () => {
-    const confirmed = window.confirm('Delete this conversation? This action cannot be undone.');
-    if (!confirmed) {
-      return;
-    }
-
-    deleteButton.disabled = true;
-    deleteButton.setAttribute('aria-busy', 'true');
-    try {
-      await deleteConversation(thread.chatId);
-      showToast('Conversation removed.', 'success');
-      setTimeout(() => {
-        window.location.href = role === 'vendor' ? 'vendor-chats.php' : 'buyer-chats.php';
-      }, 600);
-    } catch (error) {
-      showToast(error?.message || 'Unable to delete conversation.', 'error');
-    } finally {
-      deleteButton.disabled = false;
-      deleteButton.removeAttribute('aria-busy');
-    }
-  });
-}
-
-function updateOfflineBanner() {
-  if (!offlineBanner) return;
-  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-    offlineBanner.classList.add('is-visible');
-  } else {
-    offlineBanner.classList.remove('is-visible');
-  }
-}
-
-updateOfflineBanner();
-window.addEventListener('online', updateOfflineBanner);
-window.addEventListener('offline', updateOfflineBanner);
+const timeFormatter =
+  typeof Intl !== 'undefined' && typeof Intl.DateTimeFormat === 'function'
+    ? new Intl.DateTimeFormat('en', { hour: 'numeric', minute: 'numeric' })
+    : null;
 
 function toDate(value) {
   if (!value) return null;
   if (value instanceof Date) return value;
-  if (typeof value.toDate === 'function') return value.toDate();
+  if (value.seconds && value.nanoseconds) {
+    return new Date(value.seconds * 1000 + value.nanoseconds / 1000000);
+  }
+  if (typeof value.toDate === 'function') {
+    try {
+      return value.toDate();
+    } catch (error) {
+      return null;
+    }
+  }
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-function formatTime(date) {
+function formatTimestamp(value) {
+  const date = toDate(value);
   if (!date) return '';
-  return new Intl.DateTimeFormat('en', { hour: 'numeric', minute: 'numeric' }).format(date);
+  if (!timeFormatter) {
+    return date.toLocaleTimeString('en', { hour: 'numeric', minute: 'numeric' });
+  }
+  return timeFormatter.format(date);
 }
 
-function renderMessage(message) {
-  const isOwn = message.sender_uid === viewer.uid;
-  const article = document.createElement('article');
-  article.className = `message ${isOwn ? 'sent' : 'received'}`;
-  article.dataset.id = message.id;
-  if (message.type === 'image' && message.image_url) {
-    const figure = document.createElement('figure');
-    figure.className = 'message-image';
-    const img = document.createElement('img');
-    img.src = message.image_url;
-    img.alt = 'Image attachment';
-    img.addEventListener('click', () => {
-      window.open(message.image_url, '_blank');
-    });
-    figure.appendChild(img);
-    article.appendChild(figure);
+class ChatController {
+  constructor(context) {
+    this.context = context;
+    this.role = context.role;
+    this.viewer = context.viewer || {};
+    this.counterparty = context.counterparty || {};
+    this.listing = context.listing || {};
+    this.buyer = context.buyer || {};
+    this.vendor = context.vendor || {};
+    this.canSend = Boolean(context.canSend);
+    this.messages = [];
+    this.pendingImageFile = null;
+    this.typingActive = false;
+    this.typingTimer = null;
+    this.voiceState = {
+      recording: false,
+      controller: null,
+      startedAt: 0,
+    };
+
+    this.messageList = document.getElementById('messageList');
+    this.typingBanner = document.getElementById('typingBanner');
+    this.offlineBanner = document.getElementById('offlineBanner');
+    this.scrollButton = document.getElementById('scrollToBottom');
+
+    this.messageInput = document.getElementById('messageInput');
+    this.emojiButton = document.getElementById('emojiButton');
+    this.attachButton = document.getElementById('attachButton');
+    this.imageInput = document.getElementById('imageInput');
+    this.sendButton = document.getElementById('sendButton');
+    this.voiceButton = document.getElementById('voiceButton');
+    this.attachmentPreview = document.getElementById('attachmentPreview');
+    this.recordingIndicator = document.getElementById('recordingIndicator');
+    this.composer = document.querySelector('.composer');
+
+    this.headerAvatar = document.getElementById('headerAvatar');
+    this.chatTitle = document.getElementById('chatTitle');
+    this.chatSubtitle = document.getElementById('chatSubtitle');
+    this.backButton = document.getElementById('backButton');
+    this.infoButton = document.getElementById('infoButton');
+    this.deleteButton = document.getElementById('deleteChatBtn');
+
+    this.unsubscribeMessages = null;
+    this.unsubscribeTyping = null;
   }
 
-  if (message.type === 'voice' && message.voice_url) {
-    const player = document.createElement('div');
-    player.className = 'voice-player';
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.innerHTML = '<i class="ri-play-fill"></i>';
-    const audio = new Audio(message.voice_url);
-    const wave = document.createElement('div');
-    wave.className = 'voice-wave';
-    const progress = document.createElement('span');
-    wave.appendChild(progress);
-    const duration = document.createElement('span');
-    duration.textContent = message.duration ? `${Math.round(message.duration)}s` : '';
-    player.append(button, wave, duration);
-    article.appendChild(player);
-    button.addEventListener('click', () => {
-      if (audio.paused) {
-        audio.play();
-        button.innerHTML = '<i class="ri-pause-line"></i>';
-      } else {
-        audio.pause();
-        button.innerHTML = '<i class="ri-play-fill"></i>';
-      }
-    });
-    audio.addEventListener('ended', () => {
-      button.innerHTML = '<i class="ri-play-fill"></i>';
-      progress.style.width = '0%';
-    });
-    audio.addEventListener('timeupdate', () => {
-      if (audio.duration) {
-        progress.style.width = `${(audio.currentTime / audio.duration) * 100}%`;
-      }
-    });
+  async init() {
+    this.persistViewerUid();
+    this.applyComposerPermissions();
+    this.updateSendAvailability();
+    this.bindEvents();
+    this.updateHeader();
+    this.updateOfflineState();
+
+    await this.ensureChatContext();
+    this.loadPrefill();
+    this.startSubscriptions();
+    this.loadChatSummary();
   }
 
-  if (message.text) {
-    const text = document.createElement('p');
-    text.textContent = message.text;
-    article.appendChild(text);
-  }
-
-  const meta = document.createElement('div');
-  meta.className = 'meta';
-  meta.textContent = formatTime(toDate(message.ts));
-  if (isOwn) {
-    const readIndicator = document.createElement('i');
-    readIndicator.className = hasCounterpartyRead(message) ? 'ri-check-double-line' : 'ri-check-line';
-    meta.appendChild(readIndicator);
-  }
-  article.appendChild(meta);
-  return article;
-}
-
-function hasCounterpartyRead(message) {
-  const readBy = message.read_by || {};
-  const counterUid = role === 'buyer' ? counterparty.uid || vendorIdentifier : counterparty.uid || buyerIdentifier;
-  return Boolean(readBy[counterUid]);
-}
-
-function shouldStickToBottom() {
-  if (!messageListEl) return true;
-  return messageListEl.scrollHeight - (messageListEl.scrollTop + messageListEl.clientHeight) < 160;
-}
-
-function scrollToBottom(force = false) {
-  if (!messageListEl) return;
-  if (force || shouldStickToBottom()) {
-    messageListEl.scrollTop = messageListEl.scrollHeight;
-    scrollToBottomBtn?.classList.remove('is-visible');
-  }
-}
-
-function renderMessages(messages) {
-  if (!messageListEl) return;
-  const stickToBottom = shouldStickToBottom();
-  messageListEl.innerHTML = '';
-  const fragment = document.createDocumentFragment();
-  messages.forEach((message) => {
-    fragment.appendChild(renderMessage(message));
-  });
-  messageListEl.appendChild(fragment);
-  if (stickToBottom) {
-    scrollToBottom(true);
-  } else if (messages.length) {
-    scrollToBottomBtn?.classList.add('is-visible');
-  }
-}
-
-scrollToBottomBtn?.addEventListener('click', () => scrollToBottom(true));
-messageListEl?.addEventListener('scroll', () => {
-  if (shouldStickToBottom()) {
-    scrollToBottomBtn.classList.remove('is-visible');
-  }
-});
-
-function handleMessages(snapshot) {
-  messagesState = snapshot;
-  renderMessages(messagesState);
-  if (thread.chatId && viewer?.uid) {
-    markRead(thread.chatId, role, viewer.uid);
-  }
-}
-
-function handleTyping(snapshot) {
-  const isTyping = role === 'buyer' ? Boolean(snapshot?.vendor) : Boolean(snapshot?.buyer);
-  if (isTyping) {
-    typingBannerEl?.removeAttribute('hidden');
-  } else {
-    typingBannerEl?.setAttribute('hidden', 'hidden');
-  }
-}
-
-function startTyping() {
-  if (!canSendMessages) return;
-  if (typingTimeout) {
-    window.clearTimeout(typingTimeout);
-  }
-  setTyping(thread.chatId, role, true);
-  typingTimeout = window.setTimeout(() => {
-    setTyping(thread.chatId, role, false);
-  }, 1500);
-}
-
-messageInput?.addEventListener('input', () => {
-  autoResizeTextarea();
-  toggleSendMode();
-  if (canSendMessages) {
-    startTyping();
-  }
-});
-
-function autoResizeTextarea() {
-  if (!messageInput) return;
-  messageInput.style.height = 'auto';
-  const maxHeight = 120;
-  messageInput.style.height = `${Math.min(messageInput.scrollHeight, maxHeight)}px`;
-}
-
-autoResizeTextarea();
-
-function toggleSendMode() {
-  if (!messageInput || !sendButton) return;
-  if (!canSendMessages) {
-    sendButton.innerHTML = '<i class="ri-mic-line"></i>';
-    sendButton.dataset.mode = 'voice';
-    sendButton.classList.remove('is-text-mode');
-    sendButton.setAttribute('aria-label', 'Record voice note');
-    return;
-  }
-  const value = messageInput.value.trim();
-  if (value || pendingImageFile) {
-    sendButton.innerHTML = '<i class="ri-send-plane-2-line"></i>';
-    sendButton.dataset.mode = 'text';
-    sendButton.classList.add('is-text-mode');
-    sendButton.setAttribute('aria-label', 'Send message');
-  } else {
-    sendButton.innerHTML = '<i class="ri-mic-line"></i>';
-    sendButton.dataset.mode = 'voice';
-    sendButton.classList.remove('is-text-mode');
-    sendButton.setAttribute('aria-label', 'Record voice note');
-  }
-}
-
-toggleSendMode();
-
-if (messageInput && hasPrefill && canSendMessages) {
-  window.requestAnimationFrame(() => {
-    const length = messageInput.value.length;
-    messageInput.focus();
-    messageInput.setSelectionRange(length, length);
-  });
-}
-
-async function loadChatSummary() {
-  try {
-    const summary = await fetchChatSummary(thread.chatId);
-    if (!summary) return;
-    if (summary.listing_title) {
-      listing.title = summary.listing_title;
+  destroy() {
+    if (this.unsubscribeMessages) {
+      this.unsubscribeMessages();
+      this.unsubscribeMessages = null;
     }
-    if (summary.listing_image) {
-      listing.image = summary.listing_image;
+    if (this.unsubscribeTyping) {
+      this.unsubscribeTyping();
+      this.unsubscribeTyping = null;
     }
-    if (role === 'buyer') {
-      if (summary.vendor_name) {
-        counterparty.name = summary.vendor_name;
-      }
-      if (summary.vendor_avatar) {
-        counterparty.avatar = summary.vendor_avatar;
-      }
-    } else {
-      if (summary.buyer_name) {
-        counterparty.name = summary.buyer_name;
-      }
-      if (summary.buyer_avatar) {
-        counterparty.avatar = summary.buyer_avatar;
-      }
-    }
-    chatTitleEl.textContent = counterparty.name || counterpartyLabel;
-    chatSubtitleEl.textContent = listing.title || 'Listing';
-    updateHeaderMedia();
-  } catch (error) {
-    console.error('Unable to load chat summary', error);
+    this.stopTyping();
+    this.cancelVoiceRecording();
   }
-}
 
-async function ensureThread() {
-  try {
-    if (!listingId) {
-      return;
-    }
-    await ensureChat({
-      chatId: thread.chatId,
-      buyer_uid: buyerIdentifier,
-      buyer_name: role === 'buyer' ? viewer.name : counterparty.name,
-      vendor_uid: vendorIdentifier,
-      vendor_name: role === 'vendor' ? viewer.name : counterparty.name,
-      listing_id: listingId,
-      listing_title: listing.title,
-      listing_image: listing.image,
-    });
-    loadChatSummary();
-  } catch (error) {
-    console.error('[chat] ensureChat failed', error);
+  getBuyerUid() {
+    return (
+      this.buyer?.uid ||
+      (this.role === 'buyer' ? this.viewer.uid : this.counterparty.uid) ||
+      ''
+    );
   }
-}
 
-ensureThread();
-loadChatSummary();
+  getVendorUid() {
+    return (
+      this.vendor?.uid ||
+      (this.role === 'vendor' ? this.viewer.uid : this.counterparty.uid) ||
+      ''
+    );
+  }
 
-async function sendCurrentMessage() {
-  if (!canSendMessages || !messageInput) return;
-  const text = messageInput.value.trim();
-  let imageUrl = '';
-  if (pendingImageFile) {
-    const uploadingToast = 'Uploading image…';
-    showToast(uploadingToast);
+  getBuyerName() {
+    if (this.role === 'buyer') {
+      return this.viewer.name || 'Buyer';
+    }
+    return this.counterparty.name || 'Buyer';
+  }
+
+  getVendorName() {
+    if (this.role === 'vendor') {
+      return this.viewer.name || 'Vendor';
+    }
+    return this.counterparty.name || 'Vendor';
+  }
+
+  persistViewerUid() {
+    const uid = typeof this.viewer.uid === 'string' ? this.viewer.uid.trim() : '';
+    if (!uid || typeof window === 'undefined') return;
     try {
-      const upload = await uploadToCloudinary(pendingImageFile, {
-        folder: 'yustam/chats/images',
-        tags: ['chat', 'image'],
-      });
-      imageUrl = upload.url;
+      window.sessionStorage?.setItem('yustam_uid', uid);
+      window.sessionStorage?.setItem('firebase_uid', uid);
     } catch (error) {
-      console.error('Image upload failed', error);
-      showToast('Image upload failed.');
+      console.warn('Unable to persist session uid', error);
+    }
+    try {
+      window.localStorage?.setItem('yustam_uid', uid);
+      window.localStorage?.setItem('firebase_uid', uid);
+    } catch (error) {
+      console.warn('Unable to persist uid', error);
+    }
+  }
+
+  applyComposerPermissions() {
+    if (!this.composer) return;
+    if (!this.canSend) {
+      this.composer.classList.add('composer--disabled');
+      this.messageInput?.setAttribute('disabled', 'disabled');
+      this.sendButton?.setAttribute('disabled', 'disabled');
+      this.attachButton?.setAttribute('disabled', 'disabled');
+      this.emojiButton?.setAttribute('disabled', 'disabled');
+      this.voiceButton?.setAttribute('disabled', 'disabled');
+    }
+  }
+
+  bindEvents() {
+    this.messageInput?.addEventListener('input', () => this.handleInput());
+    this.messageInput?.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        this.handleSend();
+      }
+    });
+
+    this.emojiButton?.addEventListener('click', () => {
+      if (!this.messageInput || !this.canSend) return;
+      const emoji = '🙂';
+      const start = this.messageInput.selectionStart ?? this.messageInput.value.length;
+      const end = this.messageInput.selectionEnd ?? start;
+      const current = this.messageInput.value;
+      this.messageInput.value = `${current.slice(0, start)}${emoji}${current.slice(end)}`;
+      this.messageInput.selectionStart = this.messageInput.selectionEnd = start + emoji.length;
+      this.updateSendAvailability();
+      this.autoResize();
+      this.scheduleTyping();
+    });
+
+    this.attachButton?.addEventListener('click', () => {
+      if (!this.canSend) return;
+      this.imageInput?.click();
+    });
+
+    this.imageInput?.addEventListener('change', (event) => this.handleImageSelection(event));
+    this.sendButton?.addEventListener('click', () => this.handleSend());
+
+    this.voiceButton?.addEventListener('click', async () => {
+      if (!this.canSend) {
+        showToast('Messaging is not available for this chat.');
+        return;
+      }
+      if (this.voiceState.recording) {
+        await this.stopVoiceRecording();
+      } else {
+        await this.startVoiceRecording();
+      }
+    });
+
+    this.scrollButton?.addEventListener('click', () => this.scrollToBottom(true));
+    this.messageList?.addEventListener('scroll', () => this.handleListScroll());
+
+    this.backButton?.addEventListener('click', () => this.navigateBack());
+    this.infoButton?.addEventListener('click', () => this.openListing());
+    this.deleteButton?.addEventListener('click', () => this.handleDelete());
+
+    window.addEventListener('online', () => this.updateOfflineState());
+    window.addEventListener('offline', () => this.updateOfflineState());
+    window.addEventListener('beforeunload', () => this.destroy());
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && this.voiceState.recording) {
+        this.cancelVoiceRecording();
+      }
+    });
+  }
+
+  async ensureChatContext() {
+    if (!this.context.chatId) return;
+    try {
+      await ensureChat({
+        chatId: this.context.chatId,
+        buyer_uid: this.getBuyerUid(),
+        buyer_name: this.getBuyerName(),
+        vendor_uid: this.getVendorUid(),
+        vendor_name: this.getVendorName(),
+        listing_id: this.listing.id || '',
+        listing_title: this.listing.title || '',
+        listing_image: this.listing.image || '',
+      });
+    } catch (error) {
+      console.warn('[chat] ensureChat failed', error);
+    }
+  }
+
+  startSubscriptions() {
+    if (!this.context.chatId) return;
+    this.unsubscribeMessages = subscribeMessages(this.context.chatId, (messages) =>
+      this.handleMessages(Array.isArray(messages) ? messages : [])
+    );
+    this.unsubscribeTyping = subscribeTyping(this.context.chatId, (snapshot) =>
+      this.handleTyping(snapshot || {})
+    );
+  }
+
+  async loadChatSummary() {
+    if (!this.context.chatId) return;
+    try {
+      const summary = await fetchChatSummary(this.context.chatId);
+      if (!summary) return;
+      if (!this.counterparty.name) {
+        if (this.role === 'buyer' && summary.vendor_name) {
+          this.counterparty.name = summary.vendor_name;
+        } else if (this.role === 'vendor' && summary.buyer_name) {
+          this.counterparty.name = summary.buyer_name;
+        }
+      }
+      if (!this.counterparty.avatar) {
+        if (this.role === 'buyer' && summary.vendor_avatar) {
+          this.counterparty.avatar = summary.vendor_avatar;
+        } else if (this.role === 'vendor' && summary.buyer_avatar) {
+          this.counterparty.avatar = summary.buyer_avatar;
+        }
+      }
+      if (!this.listing.title && summary.listing_title) {
+        this.listing.title = summary.listing_title;
+      }
+      if (!this.listing.image && summary.listing_image) {
+        this.listing.image = summary.listing_image;
+      }
+      this.updateHeader();
+    } catch (error) {
+      console.warn('[chat] load summary failed', error);
+    }
+  }
+
+  loadPrefill() {
+    if (!this.messageInput) return;
+    if (this.context.quickSent && this.canSend) {
+      showToast('We already sent your quick message to the vendor.', 'success');
+    }
+    if (typeof this.context.prefill === 'string' && this.context.prefill.trim()) {
+      this.messageInput.value = this.context.prefill.trim();
+      this.updateSendAvailability();
+      this.autoResize();
+      this.messageInput.focus();
+      this.messageInput.selectionStart = this.messageInput.selectionEnd = this.messageInput.value.length;
+    }
+  }
+
+  handleMessages(messages) {
+    this.messages = messages;
+    this.renderMessages();
+    if (this.viewer.uid) {
+      markRead(this.context.chatId, this.role, this.viewer.uid);
+    }
+  }
+
+  handleTyping(snapshot) {
+    const isTyping = this.role === 'buyer' ? Boolean(snapshot.vendor) : Boolean(snapshot.buyer);
+    if (!this.typingBanner) return;
+    if (isTyping) {
+      this.typingBanner.classList.add('is-visible');
+    } else {
+      this.typingBanner.classList.remove('is-visible');
+    }
+  }
+
+  handleInput() {
+    this.updateSendAvailability();
+    this.autoResize();
+    if (this.messageInput && this.messageInput.value.trim() === '') {
+      this.stopTyping();
+    } else {
+      this.scheduleTyping();
+    }
+  }
+
+  scheduleTyping() {
+    if (!this.canSend || !this.context.chatId) return;
+    if (!this.typingActive) {
+      setTyping(this.context.chatId, this.role, true);
+      this.typingActive = true;
+    }
+    if (this.typingTimer) {
+      window.clearTimeout(this.typingTimer);
+    }
+    this.typingTimer = window.setTimeout(() => this.stopTyping(), 1200);
+  }
+
+  stopTyping() {
+    if (!this.typingActive || !this.context.chatId) return;
+    setTyping(this.context.chatId, this.role, false);
+    this.typingActive = false;
+    if (this.typingTimer) {
+      window.clearTimeout(this.typingTimer);
+      this.typingTimer = null;
+    }
+  }
+
+  updateSendAvailability() {
+    if (!this.sendButton || !this.messageInput) return;
+    if (!this.canSend) {
+      this.sendButton.setAttribute('disabled', 'disabled');
       return;
     }
-  }
-
-  if (!text && !imageUrl) {
-    toggleSendMode();
-    return;
-  }
-
-  try {
-    await sendMessage({
-      chatId: thread.chatId,
-      as: role,
-      sender_uid: viewer.uid,
-      text,
-      image_url: imageUrl,
-      buyer_uid: buyerIdentifier,
-      vendor_uid: vendorIdentifier,
-      buyer_name: role === 'buyer' ? viewer.name : counterparty.name,
-      vendor_name: role === 'vendor' ? viewer.name : counterparty.name,
-      listing_id: listingId,
-      listing_title: listing.title,
-      listing_image: listing.image,
-    });
-    messageInput.value = '';
-    pendingImageFile = null;
-    attachmentPreview?.setAttribute('hidden', 'hidden');
-    attachmentPreview.innerHTML = '';
-    if (imageInput) {
-      imageInput.value = '';
+    const hasText = this.messageInput.value.trim().length > 0;
+    const shouldEnable = hasText || Boolean(this.pendingImageFile);
+    if (shouldEnable) {
+      this.sendButton.removeAttribute('disabled');
+    } else {
+      this.sendButton.setAttribute('disabled', 'disabled');
     }
-    autoResizeTextarea();
-    toggleSendMode();
-    scrollToBottom(true);
-  } catch (error) {
-    console.error('Unable to send message', error);
   }
-}
 
-function handleVoicePointerDown(event) {
-  if (sendButton.dataset.mode !== 'voice') return;
-  event.preventDefault();
-  pointerStartX = event.clientX || (event.touches?.[0]?.clientX ?? 0);
-  startVoiceRecording();
-}
-
-function handleVoicePointerUp(event) {
-  if (!isRecording) return;
-  const currentX = event.clientX || (event.changedTouches?.[0]?.clientX ?? pointerStartX);
-  if (pointerStartX - currentX > 120) {
-    cancelVoiceRecording();
-    showToast('Voice note cancelled.');
-  } else {
-    stopVoiceRecording();
+  autoResize() {
+    if (!this.messageInput) return;
+    this.messageInput.style.height = 'auto';
+    const maxHeight = 140;
+    this.messageInput.style.height = `${Math.min(this.messageInput.scrollHeight, maxHeight)}px`;
   }
-}
 
-if (canSendMessages) {
-  sendButton?.addEventListener('click', async () => {
-    const mode = sendButton?.dataset.mode || 'text';
-    if (mode === 'text') {
-      await sendCurrentMessage();
+  async handleSend() {
+    if (!this.canSend || !this.messageInput) return;
+    const text = this.messageInput.value.trim();
+    const hasImage = Boolean(this.pendingImageFile);
+    if (!text && !hasImage) {
+      return;
     }
-  });
-
-  sendButton?.addEventListener('pointerdown', handleVoicePointerDown);
-  sendButton?.addEventListener('pointerup', handleVoicePointerUp);
-  sendButton?.addEventListener('pointercancel', cancelVoiceRecording);
-  sendButton?.addEventListener('pointerleave', (event) => {
-    if (!isRecording) return;
-    const currentX = event.clientX ?? pointerStartX;
-    if (pointerStartX - currentX > 120) {
-      cancelVoiceRecording();
-      showToast('Voice note cancelled.');
+    this.sendButton?.setAttribute('disabled', 'disabled');
+    try {
+      let imageUrl = '';
+      if (this.pendingImageFile) {
+        showToast('Uploading image...');
+        const upload = await uploadToCloudinary(this.pendingImageFile, {
+          folder: 'yustam/chats/images',
+          tags: ['chat', 'image'],
+        });
+        imageUrl = upload.url;
+      }
+      await sendMessage({
+        role: this.role,
+        text,
+        image_url: imageUrl,
+        voice_url: '',
+        duration: null,
+        buyer_uid: this.getBuyerUid(),
+        buyer_name: this.getBuyerName(),
+        vendor_uid: this.getVendorUid(),
+        vendor_name: this.getVendorName(),
+        listing_id: this.listing.id || '',
+        listing_title: this.listing.title || '',
+        listing_image: this.listing.image || '',
+      });
+      this.messageInput.value = '';
+      this.pendingImageFile = null;
+      this.clearAttachmentPreview();
+      this.autoResize();
+      this.stopTyping();
+      this.scrollToBottom(true);
+    } catch (error) {
+      console.error('Unable to send message', error);
+      showToast(error?.message || 'Unable to send message.', 'error');
+    } finally {
+      this.updateSendAvailability();
     }
-  });
-  sendButton?.addEventListener('touchstart', handleVoicePointerDown);
-  sendButton?.addEventListener('touchend', handleVoicePointerUp);
-  sendButton?.addEventListener('touchcancel', cancelVoiceRecording);
-} else if (sendButton) {
-  sendButton.addEventListener('click', () => {
-    showToast('Messaging is unavailable for this chat.');
-  });
-}
-
-async function startVoiceRecording() {
-  try {
-    recorderController = await recordVoice({ mimeType: 'audio/webm' });
-    recorderController.start();
-    isRecording = true;
-    recordStartTime = Date.now();
-    sendButton.innerHTML = '<i class="ri-stop-circle-line"></i>';
-    showToast('Recording… slide left to cancel');
-  } catch (error) {
-    console.error('Unable to start recording', error);
-    showToast(error.message || 'Recording not supported.');
   }
-}
 
-async function stopVoiceRecording() {
-  if (!recorderController || !isRecording) return;
-  try {
-    const blob = await recorderController.stop();
-    const duration = (Date.now() - recordStartTime) / 1000;
-    isRecording = false;
-    recorderController = null;
-    sendButton.innerHTML = '<i class="ri-mic-line"></i>';
-    const url = await uploadVoiceToCloudinary(blob, {
-      filename: `voice-${Date.now()}.webm`,
+  handleImageSelection(event) {
+    const files = event.target?.files;
+    if (!files || !files.length) return;
+    const [file] = files;
+    if (!file) return;
+    this.pendingImageFile = file;
+    if (!this.attachmentPreview) {
+      this.updateSendAvailability();
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      this.attachmentPreview.innerHTML = '';
+      const figure = document.createElement('figure');
+      const image = document.createElement('img');
+      image.src = reader.result;
+      image.alt = file.name || 'Image attachment';
+      const removeButton = document.createElement('button');
+      removeButton.type = 'button';
+      removeButton.innerHTML = '<i class="ri-close-line"></i>';
+      removeButton.addEventListener('click', () => this.clearAttachmentPreview());
+      figure.append(image, removeButton);
+      this.attachmentPreview.appendChild(figure);
+      this.attachmentPreview.removeAttribute('hidden');
+      this.updateSendAvailability();
+    };
+    reader.readAsDataURL(file);
+    event.target.value = '';
+  }
+
+  clearAttachmentPreview() {
+    if (this.attachmentPreview) {
+      this.attachmentPreview.innerHTML = '';
+      this.attachmentPreview.setAttribute('hidden', 'hidden');
+    }
+    this.pendingImageFile = null;
+    this.updateSendAvailability();
+  }
+
+  async startVoiceRecording() {
+    if (this.voiceState.recording) return;
+    try {
+      const controller = await recordVoice({ mimeType: 'audio/webm' });
+      controller.start();
+      this.voiceState = {
+        recording: true,
+        controller,
+        startedAt: Date.now(),
+      };
+      if (this.voiceButton) {
+        this.voiceButton.innerHTML = '<i class="ri-stop-circle-line"></i>';
+        this.voiceButton.classList.add('recording');
+      }
+      if (this.recordingIndicator) {
+        this.recordingIndicator.classList.add('is-visible');
+        this.recordingIndicator.removeAttribute('hidden');
+      }
+      showToast('Recording... tap stop to send.');
+    } catch (error) {
+      console.error('Unable to start recording', error);
+      showToast(error?.message || 'Recording is not supported on this device.', 'error');
+      this.resetVoiceState();
+    }
+  }
+
+  async stopVoiceRecording() {
+    if (!this.voiceState.recording || !this.voiceState.controller) return;
+    try {
+      const blob = await this.voiceState.controller.stop();
+      const duration = (Date.now() - this.voiceState.startedAt) / 1000;
+      const url = await uploadVoiceToCloudinary(blob, {
+        filename: `voice-${Date.now()}.webm`,
+      });
+      await sendMessage({
+        role: this.role,
+        text: '',
+        image_url: '',
+        voice_url: url,
+        duration,
+        buyer_uid: this.getBuyerUid(),
+        buyer_name: this.getBuyerName(),
+        vendor_uid: this.getVendorUid(),
+        vendor_name: this.getVendorName(),
+        listing_id: this.listing.id || '',
+        listing_title: this.listing.title || '',
+        listing_image: this.listing.image || '',
+      });
+      this.scrollToBottom(true);
+    } catch (error) {
+      console.error('Voice message failed', error);
+      showToast(error?.message || 'Voice message failed.', 'error');
+    } finally {
+      this.resetVoiceState();
+    }
+  }
+
+  cancelVoiceRecording() {
+    if (!this.voiceState.recording) return;
+    try {
+      this.voiceState.controller?.cancel();
+    } catch (error) {
+      console.warn('Voice cancel error', error);
+    }
+    this.resetVoiceState();
+    showToast('Voice recording cancelled.');
+  }
+
+  resetVoiceState() {
+    this.voiceState = {
+      recording: false,
+      controller: null,
+      startedAt: 0,
+    };
+    if (this.voiceButton) {
+      this.voiceButton.innerHTML = '<i class="ri-mic-line"></i>';
+      this.voiceButton.classList.remove('recording');
+    }
+    if (this.recordingIndicator) {
+      this.recordingIndicator.classList.remove('is-visible');
+      this.recordingIndicator.setAttribute('hidden', 'hidden');
+    }
+  }
+
+  renderMessages() {
+    if (!this.messageList) return;
+    const shouldStick = this.shouldStickToBottom();
+    this.messageList.innerHTML = '';
+    const fragment = document.createDocumentFragment();
+    this.messages.forEach((message) => {
+      fragment.appendChild(this.renderMessage(message));
     });
-    await sendMessage({
-      chatId: thread.chatId,
-      as: role,
-      sender_uid: viewer.uid,
-      voice_url: url,
-      duration,
-      buyer_uid: buyerIdentifier,
-      vendor_uid: vendorIdentifier,
-      buyer_name: role === 'buyer' ? viewer.name : counterparty.name,
-      vendor_name: role === 'vendor' ? viewer.name : counterparty.name,
-      listing_id: listingId,
-      listing_title: listing.title,
-      listing_image: listing.image,
-    });
-    scrollToBottom(true);
-  } catch (error) {
-    console.error('Voice message failed', error);
-    showToast('Voice message failed.');
-  } finally {
-    isRecording = false;
-    sendButton.innerHTML = '<i class="ri-mic-line"></i>';
+    this.messageList.appendChild(fragment);
+    if (shouldStick) {
+      this.scrollToBottom(true);
+    } else if (this.messages.length) {
+      this.scrollButton?.classList.add('is-visible');
+    }
+  }
+
+  renderMessage(message) {
+    const isOwn = message.sender_uid === this.viewer.uid;
+    const article = document.createElement('article');
+    article.className = `message ${isOwn ? 'sent' : 'received'}`;
+    article.dataset.id = message.id || '';
+
+    if (message.image_url) {
+      const figure = document.createElement('figure');
+      figure.className = 'message-image';
+      const img = document.createElement('img');
+      img.src = message.image_url;
+      img.alt = 'Image attachment';
+      img.addEventListener('click', () => {
+        window.open(message.image_url, '_blank');
+      });
+      figure.appendChild(img);
+      article.appendChild(figure);
+    }
+
+    if (message.voice_url) {
+      const player = document.createElement('div');
+      player.className = 'voice-player';
+      const audio = document.createElement('audio');
+      audio.controls = true;
+      audio.src = message.voice_url;
+      if (message.duration) {
+        audio.setAttribute('data-duration', String(Math.round(message.duration)));
+      }
+      player.appendChild(audio);
+      article.appendChild(player);
+    }
+
+    if (message.text) {
+      const paragraph = document.createElement('p');
+      paragraph.textContent = message.text;
+      article.appendChild(paragraph);
+    }
+
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    meta.textContent = formatTimestamp(message.ts);
+    article.appendChild(meta);
+
+    return article;
+  }
+
+  shouldStickToBottom() {
+    if (!this.messageList) return true;
+    const threshold = 120;
+    const distanceFromBottom =
+      this.messageList.scrollHeight - (this.messageList.scrollTop + this.messageList.clientHeight);
+    return distanceFromBottom <= threshold;
+  }
+
+  scrollToBottom(force = false) {
+    if (!this.messageList) return;
+    if (force || this.shouldStickToBottom()) {
+      this.messageList.scrollTop = this.messageList.scrollHeight;
+      this.scrollButton?.classList.remove('is-visible');
+    }
+  }
+
+  handleListScroll() {
+    if (this.shouldStickToBottom()) {
+      this.scrollButton?.classList.remove('is-visible');
+    }
+  }
+
+  updateHeader() {
+    if (this.chatTitle) {
+      this.chatTitle.textContent =
+        this.counterparty.name || (this.role === 'buyer' ? 'Vendor' : 'Buyer');
+    }
+    if (this.chatSubtitle) {
+      this.chatSubtitle.textContent = this.listing.title || 'Marketplace listing';
+    }
+    const avatarSrc =
+      this.counterparty.avatar ||
+      this.listing.image ||
+      'https://images.unsplash.com/photo-1618005198919-d3d4b5a92eee?auto=format&fit=crop&w=120&q=80';
+    const avatarImg = this.headerAvatar?.querySelector('img');
+    if (avatarImg && avatarSrc) {
+      avatarImg.src = avatarSrc;
+    }
+  }
+
+  updateOfflineState() {
+    const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+    if (!this.offlineBanner) return;
+    if (offline) {
+      this.offlineBanner.classList.add('is-visible');
+    } else {
+      this.offlineBanner.classList.remove('is-visible');
+    }
+  }
+
+  openListing() {
+    if (!this.listing.id) {
+      showToast('Listing details unavailable.');
+      return;
+    }
+    const url = `product.php?id=${encodeURIComponent(this.listing.id)}`;
+    window.open(url, '_blank');
+  }
+
+  navigateBack() {
+    if (this.role === 'buyer') {
+      window.location.href = 'buyer-chats.php';
+    } else {
+      window.location.href = 'vendor-chats.php';
+    }
+  }
+
+  async handleDelete() {
+    if (!this.context.chatId || !window.confirm('Delete this conversation?')) {
+      return;
+    }
+    try {
+      await deleteConversation(this.context.chatId);
+      showToast('Conversation removed.', 'success');
+      window.setTimeout(() => this.navigateBack(), 500);
+    } catch (error) {
+      console.error('Unable to delete conversation', error);
+      showToast(error?.message || 'Unable to delete conversation.', 'error');
+    }
   }
 }
 
-function cancelVoiceRecording() {
-  if (!recorderController) return;
-  recorderController.cancel?.();
-  recorderController = null;
-  isRecording = false;
-  sendButton.innerHTML = '<i class="ri-mic-line"></i>';
-}
-
-emojiButton?.addEventListener('click', () => {
-  if (!messageInput) return;
-  const emoji = '😊';
-  const start = messageInput.selectionStart || messageInput.value.length;
-  const end = messageInput.selectionEnd || start;
-  const value = messageInput.value;
-  messageInput.value = `${value.slice(0, start)}${emoji}${value.slice(end)}`;
-  messageInput.selectionStart = messageInput.selectionEnd = start + emoji.length;
-  messageInput.focus();
-  toggleSendMode();
-});
-
-imageInput?.addEventListener('change', (event) => {
-  const [file] = event.target.files || [];
-  if (!file) return;
-  pendingImageFile = file;
-  const reader = new FileReader();
-  reader.onload = () => {
-    attachmentPreview.innerHTML = '';
-    const figure = document.createElement('figure');
-    const img = document.createElement('img');
-    img.src = reader.result;
-    const removeButton = document.createElement('button');
-    removeButton.innerHTML = '<i class="ri-close-line"></i>';
-    removeButton.addEventListener('click', () => {
-      pendingImageFile = null;
-      attachmentPreview.innerHTML = '';
-      attachmentPreview.setAttribute('hidden', 'hidden');
-      imageInput.value = '';
-      toggleSendMode();
-    });
-    figure.append(img, removeButton);
-    attachmentPreview.appendChild(figure);
-    attachmentPreview.removeAttribute('hidden');
-    toggleSendMode();
-  };
-  reader.readAsDataURL(file);
-  imageInput.value = '';
-});
-
-attachButton?.addEventListener('click', () => {
-  imageInput?.click();
-});
-
-infoButton?.addEventListener('click', () => {
-  if (listingId) {
-    window.open(`product.php?id=${encodeURIComponent(listingId)}`, '_blank');
-  } else {
-    showToast('Listing details unavailable.');
-  }
-});
-
-backButton?.addEventListener('click', () => {
-  if (role === 'buyer') {
-    window.location.href = 'buyer-chats.php';
-  } else {
-    window.location.href = 'vendor-chats.php';
-  }
-});
-
-function subscribe() {
-  unsubscribeMessages = subscribeMessages(thread.chatId, handleMessages);
-  unsubscribeTyping = subscribeTyping(thread.chatId, handleTyping);
-}
-
-subscribe();
-
-window.addEventListener('beforeunload', () => {
-  if (unsubscribeMessages) unsubscribeMessages();
-  if (unsubscribeTyping) unsubscribeTyping();
-  setTyping(thread.chatId, role, false);
-});
-
+const controller = new ChatController(thread);
+controller.init();
