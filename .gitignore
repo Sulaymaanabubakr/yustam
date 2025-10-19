@@ -1,0 +1,11 @@
+firebase-service-account.json
+firebase-admin-key.json
+
+# Generic secrets
+*.pem
+*.key
+*.p12
+.env
+.env.*
+*.env.local
+
