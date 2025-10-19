@@ -390,6 +390,17 @@ export function subscribeMessages(chatId, callback) {
     }
   );
 
+  const seedWithApi = async () => {
+    try {
+      const data = await fetchMessagesViaApi(id);
+      if (active && Array.isArray(data.messages) && data.messages.length) {
+        callback(data.messages);
+      }
+    } catch (seedError) {
+      console.warn('[chat] seed messages via api failed', seedError);
+    }
+  };
+
   const startFallback = () => {
     if (fallbackTimer) return;
     const fetchAndEmit = async () => {
@@ -405,6 +416,8 @@ export function subscribeMessages(chatId, callback) {
     fetchAndEmit();
     fallbackTimer = setInterval(fetchAndEmit, 8000);
   };
+
+  seedWithApi();
 
   return () => {
     active = false;
@@ -607,6 +620,22 @@ export async function deleteConversation(chatId) {
 
 function createChatsSubscription(queryRef, role, uid, callback) {
   let active = true;
+  let seeded = false;
+  let seedTimer = null;
+
+  const seedWithApi = async () => {
+    if (seeded) return;
+    seeded = true;
+    try {
+      const chats = await fetchChatsViaApi(role, uid);
+      if (active && Array.isArray(chats) && chats.length) {
+        callback(chats);
+      }
+    } catch (seedError) {
+      console.warn('[chat] seed chats via api failed', seedError);
+    }
+  };
+
   const unsubscribe = onSnapshot(
     queryRef,
     (snapshot) => {
@@ -629,12 +658,18 @@ function createChatsSubscription(queryRef, role, uid, callback) {
     }
   );
 
+  seedTimer = setTimeout(seedWithApi, 0);
+
   return () => {
     active = false;
     try {
       unsubscribe();
     } catch (unsubscribeError) {
       console.warn('[chat] unsubscribe chats', unsubscribeError);
+    }
+    if (seedTimer) {
+      clearTimeout(seedTimer);
+      seedTimer = null;
     }
   };
 }
