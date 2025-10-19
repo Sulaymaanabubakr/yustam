@@ -142,6 +142,7 @@ try {
     );
 } catch (Throwable $mysqlError) {
     http_response_code(500);
+    error_log('chat-send mysql error: ' . $mysqlError->getMessage());
     echo json_encode([
         'success' => false,
         'message' => 'Unable to record message',
