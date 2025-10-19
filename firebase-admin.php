@@ -176,6 +176,47 @@ function yustam_firebase_create_user(string $email, string $password, ?string $d
 }
 
 /**
+ * Delete a Firebase Authentication user using the available credentials.
+ */
+function yustam_firebase_delete_user(string $firebaseUid, ?string $idToken = null): void
+{
+    $uid = trim($firebaseUid);
+    if ($uid === '') {
+        return;
+    }
+
+    if (yustam_firebase_service_account_available()) {
+        $projectId = yustam_firebase_project_id();
+        $response = yustam_firebase_identity_admin_request(
+            'POST',
+            sprintf('projects/%s/accounts:delete', $projectId),
+            ['localId' => $uid]
+        );
+
+        if ($response['status'] >= 200 && $response['status'] < 300) {
+            return;
+        }
+
+        $details = yustam_firebase_extract_error_details($response['body'] ?? null);
+        yustam_firebase_throw('Unable to delete Firebase account.', $details);
+    }
+
+    $token = trim((string)($idToken ?? ''));
+    if ($token === '') {
+        throw new RuntimeException('Firebase account deletion requires service credentials or an ID token.');
+    }
+
+    $response = yustam_firebase_identity_web_request('POST', 'accounts:delete', [
+        'idToken' => $token,
+    ]);
+
+    if ($response['status'] < 200 || $response['status'] >= 300) {
+        $details = yustam_firebase_extract_error_details($response['body'] ?? null);
+        yustam_firebase_throw('Unable to delete Firebase account.', $details);
+    }
+}
+
+/**
  * Sign in a Firebase user using email and password (Identity Toolkit REST API).
  *
  * @return array Decoded Firebase response containing idToken/localId when successful.

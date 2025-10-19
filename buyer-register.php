@@ -56,11 +56,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     $firebaseUid = '';
+    $firebaseIdToken = '';
 
     if (!$errors) {
         try {
             $firebaseUser = yustam_firebase_create_user($email, $password, $name);
             $firebaseUid = (string) ($firebaseUser['localId'] ?? '');
+            $firebaseIdToken = isset($firebaseUser['idToken']) ? (string) $firebaseUser['idToken'] : '';
             if ($firebaseUid === '') {
                 throw new RuntimeException('Authentication service did not return a UID.');
             }
@@ -86,19 +88,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $formError = 'We were unable to finish registration. Please try again.';
             error_log('Buyer registration storage error: ' . $storageError->getMessage());
 
-            if (yustam_firebase_service_account_available()) {
-                try {
-                    $existing = yustam_firebase_get_user_by_uid($firebaseUid);
-                    if ($existing) {
-                        yustam_firebase_identity_admin_request(
-                            'POST',
-                            sprintf('projects/%s/accounts:delete', yustam_firebase_project_id()),
-                            ['localId' => $firebaseUid]
-                        );
-                    }
-                } catch (Throwable $cleanupError) {
-                    error_log('Buyer registration cleanup failed: ' . $cleanupError->getMessage());
-                }
+            try {
+                yustam_firebase_delete_user($firebaseUid, $firebaseIdToken ?: null);
+            } catch (Throwable $cleanupError) {
+                error_log('Buyer registration cleanup failed: ' . $cleanupError->getMessage());
             }
         }
 

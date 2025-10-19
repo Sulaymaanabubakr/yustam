@@ -42,6 +42,7 @@ if ($password !== $confirm) {
 }
 
 $firebaseUid = '';
+$firebaseIdToken = '';
 
 try {
     $db = get_db_connection();
@@ -64,6 +65,7 @@ try {
     try {
         $firebaseUser = yustam_firebase_create_user($email, $password, $name);
         $firebaseUid = (string) ($firebaseUser['localId'] ?? '');
+        $firebaseIdToken = isset($firebaseUser['idToken']) ? (string) $firebaseUser['idToken'] : '';
         if ($firebaseUid === '') {
             throw new RuntimeException('Authentication service did not return a UID.');
         }
@@ -171,13 +173,9 @@ try {
 
     echo json_encode(['success' => true, 'message' => 'Account created! Please check your email to verify your account.']);
 } catch (Throwable $e) {
-    if ($firebaseUid !== '' && yustam_firebase_service_account_available()) {
+    if ($firebaseUid !== '') {
         try {
-            yustam_firebase_identity_admin_request(
-                'POST',
-                sprintf('projects/%s/accounts:delete', yustam_firebase_project_id()),
-                ['localId' => $firebaseUid]
-            );
+            yustam_firebase_delete_user($firebaseUid, $firebaseIdToken ?: null);
         } catch (Throwable $cleanupError) {
             error_log('Vendor signup cleanup failed: ' . $cleanupError->getMessage());
         }
