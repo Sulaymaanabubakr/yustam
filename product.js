@@ -504,7 +504,9 @@ async function sendQuickMessage(metadata, text) {
     throw new Error('Please sign in to chat with vendors.');
   }
   if (!response.ok || !data?.success) {
-    throw new Error(data?.message || 'Unable to send message.');
+    const serverError = data?.error;
+    const message = data?.message || 'Unable to send message.';
+    throw new Error(serverError ? `${message} (${serverError})` : message);
   }
 
   return data;
@@ -574,6 +576,10 @@ async function launchChatWithMessage(message) {
   });
   if (metadata.productTitle) params.set('listing_title', metadata.productTitle);
   if (metadata.productImage) params.set('listing_image', metadata.productImage);
+  if (metadata.buyerUid) params.set('buyer', metadata.buyerUid);
+  if (metadata.vendorUid) params.set('vendor', metadata.vendorUid);
+  if (metadata.vendorName) params.set('vendor_name', metadata.vendorName);
+  if (metadata.buyerName) params.set('buyer_name', metadata.buyerName);
   if (trimmedMessage) {
     if (messageSent) {
       params.set('quick_sent', '1');
