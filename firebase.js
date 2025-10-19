@@ -37,4 +37,4 @@ provider.setCustomParameters({ prompt: "select_account" });
 // -------------------------------
 // 🔹 Export everything for use
 // -------------------------------
-export { app, db, storage, auth, provider, signInWithPopup };
+export { app, db, storage, auth, provider, signInWithPopup, firebaseConfig };
