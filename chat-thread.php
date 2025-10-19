@@ -12,10 +12,15 @@ if (!isset($_SESSION['buyer_id']) && !isset($_SESSION['vendor_id']) && !isset($_
 }
 
 $db = get_db_connection();
+$roleParam = strtolower(trim((string)($_GET['role'] ?? '')));
 $role = isset($_SESSION['yustam_role']) ? strtolower((string)$_SESSION['yustam_role']) : null;
+if ($roleParam === 'buyer' || $roleParam === 'vendor') {
+    $role = $roleParam;
+}
 if ($role !== 'buyer' && $role !== 'vendor') {
     $role = isset($_SESSION['vendor_id']) ? 'vendor' : 'buyer';
 }
+$_SESSION['yustam_role'] = $role;
 
 $viewer = [
     'uid' => '',

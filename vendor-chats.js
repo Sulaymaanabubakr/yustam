@@ -210,6 +210,7 @@ function openChat(chat) {
   const vendorUid = chat.vendor_uid || chat.vendorUid || vendor.uid;
   if (buyerUid) params.set('buyer', buyerUid);
   if (vendorUid) params.set('vendor', vendorUid);
+  params.set('role', 'vendor');
   window.location.href = `chat-thread.php?${params.toString()}`;
 }
 
