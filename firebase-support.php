@@ -73,8 +73,13 @@ function yustam_firebase_service_account(): array
 function yustam_firebase_service_account_available(): bool
 {
     try {
-        yustam_firebase_service_account();
-        return true;
+        $account = yustam_firebase_service_account();
+        if (!is_array($account)) {
+            return false;
+        }
+        $email = isset($account['client_email']) ? trim((string)$account['client_email']) : '';
+        $key = isset($account['private_key']) ? trim((string)$account['private_key']) : '';
+        return $email !== '' && $key !== '';
     } catch (Throwable $exception) {
         return false;
     }
