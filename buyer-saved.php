@@ -31,6 +31,15 @@ if ($buyerUid === '' && !empty($buyer['buyer_uid'])) {
     $buyerUid = (string) $buyer['buyer_uid'];
     $_SESSION['buyer_uid'] = $buyerUid;
 }
+$buyerUid = trim((string)$buyerUid);
+if ($buyerUid !== '') {
+    if (empty($_SESSION['buyer_firebase_uid'])) {
+        $_SESSION['buyer_firebase_uid'] = $buyerUid;
+    }
+    if (empty($_SESSION['firebase_uid'])) {
+        $_SESSION['firebase_uid'] = $buyerUid;
+    }
+}
 $buyerIdentifier = $buyerUid !== '' ? $buyerUid : (string) $buyerId;
 
 $firstName = trim((string)$buyerName);

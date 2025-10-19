@@ -88,6 +88,21 @@ $listing['image'] = trim((string)($_GET['listing_image'] ?? ''));
 
 $buyerUid = $role === 'buyer' ? $viewer['uid'] : $buyerUidParam;
 $vendorUid = $role === 'vendor' ? $viewer['uid'] : $vendorUidParam;
+$contextIncomplete = false;
+
+if ($buyerUid === '' && $buyerUidParam !== '') {
+    $buyerUid = $buyerUidParam;
+}
+if ($vendorUid === '' && $vendorUidParam !== '') {
+    $vendorUid = $vendorUidParam;
+}
+
+if ($role === 'buyer' && $viewer['uid'] === '' && $buyerUid !== '') {
+    $viewer['uid'] = $buyerUid;
+}
+if ($role === 'vendor' && $viewer['uid'] === '' && $vendorUid !== '') {
+    $viewer['uid'] = $vendorUid;
+}
 $chatId = $chatIdParam;
 $chatSummary = null;
 
@@ -132,14 +147,15 @@ if ($chatId !== '') {
 }
 
 if ($buyerUid === '' || $vendorUid === '') {
-    http_response_code(400);
-    echo '<p style="font-family:Inter,system-ui,sans-serif;padding:24px;">Chat context missing.</p>';
-    exit;
+    $contextIncomplete = true;
 }
 
 if ($chatId === '') {
     $chatId = yustam_chat_build_id($buyerUid, $vendorUid);
 }
+
+$canSendMessages = !$contextIncomplete && trim((string)($viewer['uid'] ?? '')) !== '';
+
 
 if ($role === 'buyer') {
     $counterparty['uid'] = $vendorUid;
@@ -176,6 +192,8 @@ $bootstrap = [
     'listing' => $listing,
     'prefill' => trim((string)($_GET['prefill'] ?? '')),
     'quickSent' => isset($_GET['quick_sent']) && $_GET['quick_sent'] !== '' && $_GET['quick_sent'] !== '0',
+    'contextIncomplete' => $contextIncomplete,
+    'canSend' => $canSendMessages,
 ];
 ?>
 <!DOCTYPE html>
@@ -387,27 +405,27 @@ $bootstrap = [
         .composer {
             background: var(--surface);
             border-top: 1px solid var(--border);
-            padding: clamp(16px, 4vw, 24px);
-            display: grid;
-            gap: 12px;
+            padding: 12px clamp(14px, 4vw, 20px);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
         }
 
-        .prefill-notice {
-            font-size: 0.85rem;
-            color: var(--muted);
-            background: rgba(15, 106, 83, 0.08);
-            padding: 8px 12px;
-            border-radius: 12px;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
+        .composer--disabled textarea,
+        .composer--disabled button {
+            opacity: 0.55;
+            pointer-events: none;
         }
 
         #attachmentPreview {
             display: none;
-            background: rgba(15, 106, 83, 0.06);
-            border-radius: 16px;
-            padding: 10px;
+            background: rgba(15, 106, 83, 0.05);
+            border-radius: 14px;
+            padding: 8px 12px;
+        }
+
+        #attachmentPreview[hidden] {
+            display: none !important;
         }
 
         #attachmentPreview figure {
@@ -416,7 +434,7 @@ $bootstrap = [
         }
 
         #attachmentPreview img {
-            max-width: 160px;
+            max-width: 144px;
             border-radius: 12px;
         }
 
@@ -437,16 +455,25 @@ $bootstrap = [
             display: grid;
             grid-template-columns: auto 1fr auto auto;
             align-items: center;
-            gap: 12px;
+            gap: 10px;
         }
 
         #messageInput {
             width: 100%;
             border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 14px 16px;
-            font-size: 1rem;
+            border-radius: 14px;
+            padding: 12px 14px;
+            font-size: 0.98rem;
             resize: none;
+            line-height: 1.4;
+            background: #fff;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        #messageInput:focus {
+            outline: none;
+            border-color: rgba(15, 106, 83, 0.4);
+            box-shadow: 0 0 0 3px rgba(15, 106, 83, 0.12);
         }
 
         #emojiButton,
@@ -463,13 +490,22 @@ $bootstrap = [
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            transition: transform 0.2s ease;
+            transition: transform 0.2s ease, background 0.2s ease, color 0.2s ease;
         }
 
         #emojiButton:hover,
         #attachButton:hover,
         #sendButton:hover {
             transform: translateY(-1px);
+        }
+
+        #sendButton.is-text-mode {
+            background: var(--emerald);
+            color: #fff;
+        }
+
+        #sendButton.is-text-mode:hover {
+            background: #0d5b45;
         }
 
         @media (max-width: 640px) {
@@ -488,7 +524,7 @@ $bootstrap = [
         }
     </style>
 </head>
-<body>
+<body class="<?php echo $contextIncomplete ? 'chat-disabled' : ''; ?>" data-can-send="<?php echo $canSendMessages ? '1' : '0'; ?>">
     <div class="chat-shell">
         <header class="thread-header">
             <button type="button" id="backButton">
@@ -525,16 +561,12 @@ $bootstrap = [
         <footer class="composer">
             <div id="attachmentPreview" hidden></div>
             <div class="composer-controls">
-                <button type="button" id="emojiButton"><i class="ri-emotion-line"></i></button>
+                <button type="button" id="emojiButton" aria-label="Insert emoji"><i class="ri-emotion-line"></i></button>
                 <textarea id="messageInput" rows="1" placeholder="Write a message..." aria-label="Message"></textarea>
                 <input type="file" accept="image/*" id="imageInput" hidden>
-                <button type="button" id="attachButton"><i class="ri-attachment-2"></i></button>
-                <button type="button" id="sendButton" data-mode="voice"><i class="ri-mic-line"></i></button>
+                <button type="button" id="attachButton" aria-label="Attach image"><i class="ri-attachment-2"></i></button>
+                <button type="button" id="sendButton" data-mode="voice" aria-label="Record voice note"><i class="ri-mic-line"></i></button>
             </div>
-            <p id="prefillNotice" class="prefill-notice" hidden>
-                <i class="ri-edit-2-line" aria-hidden="true"></i>
-                <span>We added your message from the product page so you can keep chatting here.</span>
-            </p>
         </footer>
     </div>
     <script>
