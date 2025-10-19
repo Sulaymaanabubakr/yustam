@@ -56,6 +56,19 @@ if ($buyerUid === '' && $buyerId !== '' && $buyerId !== $buyerNumericId) {
     $buyerUid = $buyerId;
 }
 
+$buyerUid = trim((string) $buyerUid);
+if ($buyerUid !== '') {
+    if (empty($_SESSION['buyer_uid'])) {
+        $_SESSION['buyer_uid'] = $buyerUid;
+    }
+    if (empty($_SESSION['buyer_firebase_uid'])) {
+        $_SESSION['buyer_firebase_uid'] = $buyerUid;
+    }
+    if (empty($_SESSION['firebase_uid'])) {
+        $_SESSION['firebase_uid'] = $buyerUid;
+    }
+}
+
 $vendorNumericId = $vendorNumericIdSession;
 $buyerLabel = $buyerName !== '' ? $buyerName : 'Buyer';
 

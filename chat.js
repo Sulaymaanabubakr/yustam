@@ -15,12 +15,26 @@ import {
 import { uploadToCloudinary } from './cloudinary.js';
 
 const thread = window.__CHAT_THREAD__ || {};
-if (!thread.chatId || !thread.role || !thread.viewer?.uid) {
-  showToast('Missing chat context.');
+const contextWarnings = [];
+if (!thread.chatId) {
+  contextWarnings.push('Missing chat identifier.');
+}
+if (!thread.role) {
+  contextWarnings.push('Missing chat role.');
+}
+const contextIncomplete = Boolean(thread.contextIncomplete);
+const canSendMessages = Boolean(thread.canSend);
+
+initFirebase();
+
+if (contextWarnings.length) {
+  console.warn('[chat] bootstrap warnings:', contextWarnings.join(' '));
+}
+if (!thread.chatId || !thread.role) {
+  showToast('We could not load this conversation.');
   throw new Error('Chat bootstrap missing');
 }
 
-initFirebase();
 
 const role = thread.role;
 const viewer = thread.viewer;
@@ -55,8 +69,6 @@ const messageListEl = document.getElementById('messageList');
 const typingBannerEl = document.getElementById('typingBanner');
 const scrollToBottomBtn = document.getElementById('scrollToBottom');
 const messageInput = document.getElementById('messageInput');
-const prefillNotice = document.getElementById('prefillNotice');
-const prefillNoticeText = prefillNotice ? prefillNotice.querySelector('span') : null;
 const hasPrefill = typeof thread.prefill === 'string' && thread.prefill.trim().length > 0;
 const quickSent = Boolean(thread.quickSent);
 if (messageInput && hasPrefill) {
@@ -74,6 +86,21 @@ const chatSubtitleEl = document.getElementById('chatSubtitle');
 const backButton = document.getElementById('backButton');
 const infoButton = document.getElementById('infoButton');
 const deleteButton = document.getElementById('deleteChatBtn');
+const composer = document.querySelector('.composer');
+
+if (composer && !canSendMessages) {
+  composer.classList.add('composer--disabled');
+  messageInput?.setAttribute('disabled', 'disabled');
+  sendButton?.setAttribute('disabled', 'disabled');
+  attachButton?.setAttribute('disabled', 'disabled');
+  emojiButton?.setAttribute('disabled', 'disabled');
+}
+
+if (quickSent && canSendMessages) {
+  showToast('We already sent your quick message to the vendor.');
+} else if (hasPrefill && canSendMessages) {
+  showToast('Edit your message and tap send when you're ready.');
+}
 
 let messagesState = [];
 let unsubscribeMessages = null;
@@ -90,8 +117,12 @@ if (sendButton && !sendButton.dataset.mode) {
 }
 
 const counterpartyLabel = counterparty.name || (role === 'buyer' ? 'Vendor' : 'Buyer');
-chatTitleEl.textContent = counterpartyLabel;
-chatSubtitleEl.textContent = listing.title || 'Listing';
+if (chatTitleEl) {
+  chatTitleEl.textContent = counterpartyLabel;
+}
+if (chatSubtitleEl) {
+  chatSubtitleEl.textContent = listing.title || 'Listing';
+}
 
 function updateHeaderMedia() {
   if (!headerAvatar) return;
@@ -131,6 +162,7 @@ if (deleteButton) {
 }
 
 function updateOfflineBanner() {
+  if (!offlineBanner) return;
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {
     offlineBanner.classList.add('is-visible');
   } else {
@@ -241,7 +273,7 @@ function scrollToBottom(force = false) {
   if (!messageListEl) return;
   if (force || shouldStickToBottom()) {
     messageListEl.scrollTop = messageListEl.scrollHeight;
-    scrollToBottomBtn.classList.remove('is-visible');
+    scrollToBottomBtn?.classList.remove('is-visible');
   }
 }
 
@@ -257,7 +289,7 @@ function renderMessages(messages) {
   if (stickToBottom) {
     scrollToBottom(true);
   } else if (messages.length) {
-    scrollToBottomBtn.classList.add('is-visible');
+    scrollToBottomBtn?.classList.add('is-visible');
   }
 }
 
@@ -271,7 +303,9 @@ messageListEl?.addEventListener('scroll', () => {
 function handleMessages(snapshot) {
   messagesState = snapshot;
   renderMessages(messagesState);
-  markRead(thread.chatId, role, viewer.uid);
+  if (thread.chatId && viewer?.uid) {
+    markRead(thread.chatId, role, viewer.uid);
+  }
 }
 
 function handleTyping(snapshot) {
@@ -284,6 +318,7 @@ function handleTyping(snapshot) {
 }
 
 function startTyping() {
+  if (!canSendMessages) return;
   if (typingTimeout) {
     window.clearTimeout(typingTimeout);
   }
@@ -296,9 +331,8 @@ function startTyping() {
 messageInput?.addEventListener('input', () => {
   autoResizeTextarea();
   toggleSendMode();
-  startTyping();
-  if ((hasPrefill || quickSent) && prefillNotice) {
-    prefillNotice.setAttribute('hidden', 'hidden');
+  if (canSendMessages) {
+    startTyping();
   }
 });
 
@@ -313,37 +347,35 @@ autoResizeTextarea();
 
 function toggleSendMode() {
   if (!messageInput || !sendButton) return;
+  if (!canSendMessages) {
+    sendButton.innerHTML = '<i class="ri-mic-line"></i>';
+    sendButton.dataset.mode = 'voice';
+    sendButton.classList.remove('is-text-mode');
+    sendButton.setAttribute('aria-label', 'Record voice note');
+    return;
+  }
   const value = messageInput.value.trim();
   if (value || pendingImageFile) {
     sendButton.innerHTML = '<i class="ri-send-plane-2-line"></i>';
     sendButton.dataset.mode = 'text';
+    sendButton.classList.add('is-text-mode');
+    sendButton.setAttribute('aria-label', 'Send message');
   } else {
     sendButton.innerHTML = '<i class="ri-mic-line"></i>';
     sendButton.dataset.mode = 'voice';
+    sendButton.classList.remove('is-text-mode');
+    sendButton.setAttribute('aria-label', 'Record voice note');
   }
 }
 
 toggleSendMode();
 
-if (messageInput) {
-  if (hasPrefill) {
-    if (prefillNotice) {
-      if (prefillNoticeText) {
-        prefillNoticeText.textContent = 'We added your message from the product page. Tap send when you're ready.';
-      }
-      prefillNotice.removeAttribute('hidden');
-    }
-    window.requestAnimationFrame(() => {
-      const length = messageInput.value.length;
-      messageInput.focus();
-      messageInput.setSelectionRange(length, length);
-    });
-  } else if (quickSent && prefillNotice) {
-    if (prefillNoticeText) {
-      prefillNoticeText.textContent = 'We sent your quick message to the vendor. You can continue here.';
-    }
-    prefillNotice.removeAttribute('hidden');
-  }
+if (messageInput && hasPrefill && canSendMessages) {
+  window.requestAnimationFrame(() => {
+    const length = messageInput.value.length;
+    messageInput.focus();
+    messageInput.setSelectionRange(length, length);
+  });
 }
 
 async function loadChatSummary() {
@@ -404,7 +436,7 @@ ensureThread();
 loadChatSummary();
 
 async function sendCurrentMessage() {
-  if (!messageInput) return;
+  if (!canSendMessages || !messageInput) return;
   const text = messageInput.value.trim();
   let imageUrl = '';
   if (pendingImageFile) {
@@ -444,9 +476,6 @@ async function sendCurrentMessage() {
       listing_image: listing.image,
     });
     messageInput.value = '';
-    if (prefillNotice) {
-      prefillNotice.setAttribute('hidden', 'hidden');
-    }
     pendingImageFile = null;
     attachmentPreview?.setAttribute('hidden', 'hidden');
     attachmentPreview.innerHTML = '';
@@ -460,13 +489,6 @@ async function sendCurrentMessage() {
     console.error('Unable to send message', error);
   }
 }
-
-sendButton?.addEventListener('click', async () => {
-  const mode = sendButton?.dataset.mode || 'text';
-  if (mode === 'text') {
-    await sendCurrentMessage();
-  }
-});
 
 function handleVoicePointerDown(event) {
   if (sendButton.dataset.mode !== 'voice') return;
@@ -486,20 +508,33 @@ function handleVoicePointerUp(event) {
   }
 }
 
-sendButton?.addEventListener('pointerdown', handleVoicePointerDown);
-sendButton?.addEventListener('pointerup', handleVoicePointerUp);
-sendButton?.addEventListener('pointercancel', cancelVoiceRecording);
-sendButton?.addEventListener('pointerleave', (event) => {
-  if (!isRecording) return;
-  const currentX = event.clientX ?? pointerStartX;
-  if (pointerStartX - currentX > 120) {
-    cancelVoiceRecording();
-    showToast('Voice note cancelled.');
-  }
-});
-sendButton?.addEventListener('touchstart', handleVoicePointerDown);
-sendButton?.addEventListener('touchend', handleVoicePointerUp);
-sendButton?.addEventListener('touchcancel', cancelVoiceRecording);
+if (canSendMessages) {
+  sendButton?.addEventListener('click', async () => {
+    const mode = sendButton?.dataset.mode || 'text';
+    if (mode === 'text') {
+      await sendCurrentMessage();
+    }
+  });
+
+  sendButton?.addEventListener('pointerdown', handleVoicePointerDown);
+  sendButton?.addEventListener('pointerup', handleVoicePointerUp);
+  sendButton?.addEventListener('pointercancel', cancelVoiceRecording);
+  sendButton?.addEventListener('pointerleave', (event) => {
+    if (!isRecording) return;
+    const currentX = event.clientX ?? pointerStartX;
+    if (pointerStartX - currentX > 120) {
+      cancelVoiceRecording();
+      showToast('Voice note cancelled.');
+    }
+  });
+  sendButton?.addEventListener('touchstart', handleVoicePointerDown);
+  sendButton?.addEventListener('touchend', handleVoicePointerUp);
+  sendButton?.addEventListener('touchcancel', cancelVoiceRecording);
+} else if (sendButton) {
+  sendButton.addEventListener('click', () => {
+    showToast('Messaging is unavailable for this chat.');
+  });
+}
 
 async function startVoiceRecording() {
   try {
