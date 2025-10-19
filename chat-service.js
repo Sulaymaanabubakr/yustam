@@ -259,7 +259,10 @@ async function callChatApi(path, { method = 'GET', data } = {}) {
   const response = await fetch(path, options);
   const payload = await response.json().catch(() => ({}));
   if (!response.ok || (payload && payload.success === false)) {
-    const message = payload?.message || `Request failed with status ${response.status}`;
+    let message = payload?.message || `Request failed with status ${response.status}`;
+    if (payload?.error) {
+      message = `${message} (${payload.error})`;
+    }
     throw new Error(message);
   }
   return payload || {};
@@ -647,4 +650,3 @@ export function subscribeChatsForVendor(vendorUid, callback) {
   const q = query(collection(db, COLLECTIONS.CHATS), where('vendor_uid', '==', uid), limit(CHAT_FETCH_LIMIT));
   return createChatsSubscription(q, 'vendor', uid, callback);
 }
-
