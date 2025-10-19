@@ -139,19 +139,28 @@ function yustam_firebase_identity_web_request(string $method, string $path, arra
  */
 function yustam_firebase_create_user(string $email, string $password, ?string $displayName = null): array
 {
-    $projectId = yustam_firebase_project_id();
     $payload = [
         'email' => strtolower(trim($email)),
         'password' => $password,
         'displayName' => $displayName ?: null,
-        'disabled' => false,
     ];
 
-    $response = yustam_firebase_identity_admin_request(
-        'POST',
-        sprintf('projects/%s/accounts:signUp', $projectId),
-        $payload
-    );
+    if ($payload['displayName'] === null) {
+        unset($payload['displayName']);
+    }
+
+    if (yustam_firebase_service_account_available()) {
+        $projectId = yustam_firebase_project_id();
+        $adminPayload = $payload + ['disabled' => false];
+        $response = yustam_firebase_identity_admin_request(
+            'POST',
+            sprintf('projects/%s/accounts:signUp', $projectId),
+            $adminPayload
+        );
+    } else {
+        $webPayload = $payload + ['returnSecureToken' => true];
+        $response = yustam_firebase_identity_web_request('POST', 'accounts:signUp', $webPayload);
+    }
 
     if ($response['status'] < 200 || $response['status'] >= 300) {
         $details = yustam_firebase_extract_error_details($response['body'] ?? null);

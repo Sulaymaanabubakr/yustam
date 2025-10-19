@@ -443,7 +443,7 @@
     }));
   };
 
-  const applyPreference = (preference, { skipSave = false } = {}) => {
+  const applyPreference = (_preference = 'light', { skipSave = false } = {}) => {
     const sanitized = 'light';
     const resolved = 'light';
 
@@ -476,31 +476,16 @@
 
   const init = () => {
     injectBaseStyles();
-    applyPreference(storedPreference(), { skipSave: true });
-
-    const mediaQuery = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
-    if (mediaQuery) {
-      const handle = () => {
-        if (storedPreference() === 'system') {
-          applyPreference('system', { skipSave: true });
-        }
-      };
-
-      if (typeof mediaQuery.addEventListener === 'function') {
-        mediaQuery.addEventListener('change', handle);
-      } else if (typeof mediaQuery.addListener === 'function') {
-        mediaQuery.addListener(handle);
-      }
-    }
+    applyPreference('light');
   };
 
   init();
 
   window.YustamTheme = window.YustamTheme || {
-    setPreference: (value) => applyPreference(value),
-    getPreference: () => storedPreference(),
-    getResolvedTheme: () => resolveTheme(storedPreference()),
-    applyTheme: (value) => applyPreference(value, { skipSave: true }),
+    setPreference: () => applyPreference('light'),
+    getPreference: () => 'light',
+    getResolvedTheme: () => 'light',
+    applyTheme: () => applyPreference('light', { skipSave: true }),
     subscribe: (callback) => {
       if (typeof callback !== 'function') return () => {};
       const handler = (event) => callback(event.detail);

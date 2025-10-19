@@ -86,17 +86,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $formError = 'We were unable to finish registration. Please try again.';
             error_log('Buyer registration storage error: ' . $storageError->getMessage());
 
-            try {
-                $existing = yustam_firebase_get_user_by_uid($firebaseUid);
-                if ($existing) {
-                    yustam_firebase_identity_admin_request(
-                        'POST',
-                        sprintf('projects/%s/accounts:delete', yustam_firebase_project_id()),
-                        ['localId' => $firebaseUid]
-                    );
+            if (yustam_firebase_service_account_available()) {
+                try {
+                    $existing = yustam_firebase_get_user_by_uid($firebaseUid);
+                    if ($existing) {
+                        yustam_firebase_identity_admin_request(
+                            'POST',
+                            sprintf('projects/%s/accounts:delete', yustam_firebase_project_id()),
+                            ['localId' => $firebaseUid]
+                        );
+                    }
+                } catch (Throwable $cleanupError) {
+                    error_log('Buyer registration cleanup failed: ' . $cleanupError->getMessage());
                 }
-            } catch (Throwable $cleanupError) {
-                error_log('Buyer registration cleanup failed: ' . $cleanupError->getMessage());
             }
         }
 

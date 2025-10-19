@@ -28,13 +28,13 @@ $defaultSettings = [
     'notifUpdates' => true,
     'twoFactor' => false,
     'loginAlert' => true,
-    'theme' => 'light',
 ];
 
 $settings = $defaultSettings;
 if (is_file($settingsFile)) {
     $decoded = json_decode((string)file_get_contents($settingsFile), true);
     if (is_array($decoded)) {
+        unset($decoded['theme']);
         $settings = array_merge($defaultSettings, $decoded);
     }
 }
@@ -89,18 +89,6 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
       display: flex;
       flex-direction: column;
       transition: background 0.3s ease, color 0.3s ease;
-    }
-
-    body.theme-light {
-      color: var(--ink);
-    }
-
-    body.theme-dark {
-      background:
-        radial-gradient(circle at top right, rgba(12, 84, 65, 0.25), transparent 55%),
-        radial-gradient(circle at bottom left, rgba(0, 0, 0, 0.5), transparent 50%),
-        #0b1c18;
-      color: rgba(250, 250, 250, 0.9);
     }
 
     a {
@@ -213,10 +201,6 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
       line-height: 1.6;
     }
 
-    body.theme-dark .page-heading p {
-      color: rgba(240, 240, 240, 0.72);
-    }
-
     .glass-card {
       background: var(--glass);
       border-radius: var(--radius-card);
@@ -229,11 +213,6 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
       gap: 16px;
     }
 
-    body.theme-dark .glass-card {
-      background: rgba(14, 34, 28, 0.9);
-      border-color: rgba(255, 255, 255, 0.1);
-    }
-
     .glass-card h2 {
       margin: 0;
       font-family: 'Anton', sans-serif;
@@ -242,19 +221,11 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
       color: var(--emerald-dark);
     }
 
-    body.theme-dark .glass-card h2 {
-      color: rgba(240, 240, 240, 0.9);
-    }
-
     .glass-card p.description {
       margin: 0;
       color: var(--muted);
       font-size: 15px;
       line-height: 1.6;
-    }
-
-    body.theme-dark .glass-card p.description {
-      color: rgba(240, 240, 240, 0.7);
     }
 
     .toggle-row {
@@ -267,18 +238,10 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
       background: rgba(243, 235, 224, 0.6);
     }
 
-    body.theme-dark .toggle-row {
-      background: rgba(255, 255, 255, 0.06);
-    }
-
     .toggle-row span {
       font-weight: 600;
       font-size: 15px;
       color: var(--ink);
-    }
-
-    body.theme-dark .toggle-row span {
-      color: rgba(240, 240, 240, 0.88);
     }
 
     .switch {
@@ -350,36 +313,6 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
     .action-button:focus-visible {
       transform: translateY(-2px);
       box-shadow: 0 24px 40px rgba(243, 115, 30, 0.36);
-    }
-
-    .theme-info {
-      display: grid;
-      gap: 12px;
-      padding: 18px;
-      border-radius: 18px;
-      background: rgba(243, 235, 224, 0.65);
-      border: 1px solid rgba(15, 106, 83, 0.22);
-    }
-
-    .theme-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      padding: 10px 16px;
-      border-radius: 999px;
-      background: rgba(243, 115, 30, 0.14);
-      color: var(--orange);
-      font-weight: 600;
-      letter-spacing: 0.02em;
-      text-transform: uppercase;
-      font-size: 0.85rem;
-    }
-
-    .theme-note {
-      margin: 0;
-      color: rgba(22, 22, 22, 0.7);
-      font-size: 0.95rem;
-      line-height: 1.5;
     }
 
     .danger-card {
@@ -590,7 +523,7 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
     }
   </style>
 </head>
-<body class="theme-light">
+<body>
   <header class="app-header">
     <div class="header-left logo-area">
       <a class="header-logo" href="/index.html" aria-label="YUSTAM home">
@@ -677,15 +610,6 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
         </div>
       </section>
 
-      <section class="glass-card" aria-labelledby="themeHeading">
-        <h2 id="themeHeading">Theme</h2>
-        <p class="description">YUSTAM now ships with a consistent light experience to keep every storefront bright and on-brand.</p>
-        <div class="theme-info" role="status" aria-live="polite">
-          <span class="theme-pill"><i class="ri-sun-line" aria-hidden="true"></i>Light mode active</span>
-          <p class="theme-note">This setting is applied automatically across your dashboard and customer-facing pages.</p>
-        </div>
-      </section>
-
       <section class="glass-card danger-card" aria-labelledby="dangerHeading">
         <h2 id="dangerHeading">Danger Zone</h2>
         <p class="description">Handle with care – certain actions here cannot be reversed once confirmed.</p>
@@ -736,7 +660,6 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
     window.__VENDOR_SETTINGS_ENDPOINT__ = 'update-vendor-settings.php';
     window.__VENDOR_SETTINGS_REFRESH__ = 'vendor-settings.php?format=json';
   </script>
-  <script src="theme-manager.js" defer></script>
   <script src="vendor-settings.js" defer></script>
 </body>
 </html>

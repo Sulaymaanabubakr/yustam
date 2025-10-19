@@ -68,6 +68,19 @@ function yustam_firebase_service_account(): array
 }
 
 /**
+ * Determine whether Firebase service account credentials are available.
+ */
+function yustam_firebase_service_account_available(): bool
+{
+    try {
+        yustam_firebase_service_account();
+        return true;
+    } catch (Throwable $exception) {
+        return false;
+    }
+}
+
+/**
  * Determine the Firebase project ID.
  *
  * @throws RuntimeException When the project ID is unavailable.
