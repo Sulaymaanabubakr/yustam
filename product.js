@@ -1,5 +1,5 @@
 import { db } from './firebase.js';
-import { buildChatId as computeChatId } from './chat-service.js';
+import { buildChatId as computeChatId, ensureChat } from './chat-service.js';
 import { deleteDoc, doc, getDoc, setDoc } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
 
 const urlParams = new URLSearchParams(window.location.search);
@@ -68,6 +68,7 @@ const floatingCallBtn = document.getElementById('floatingCallBtn');
 const floatingWhatsappBtn = document.getElementById('floatingWhatsappBtn');
 const chatWithVendorBtn = document.getElementById('chatWithVendorBtn');
 const PLACEHOLDER_IMAGE = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
+const QUICK_MESSAGE_ENDPOINT = './api/chat/send-message.php';
 
 const safeTrim = (value) => (typeof value === 'string' ? value.trim() : '');
 
@@ -394,17 +395,43 @@ function resolveChatMetadata() {
   };
 }
 
-  const response = await fetch(COMETCHAT_QUICK_MESSAGE_ENDPOINT, {
+async function ensureQuickConversation(metadata) {
+  const result = await ensureChat({
+    chatId: metadata.chatId,
+    buyer_uid: metadata.buyerUid,
+    buyer_name: metadata.buyerName,
+    vendor_uid: metadata.vendorUid,
+    vendor_name: metadata.vendorName,
+    listing_id: metadata.productId,
+    listing_title: metadata.productTitle,
+    listing_image: metadata.productImage,
+  });
+  if (result && result.chatId) {
+    metadata.chatId = result.chatId;
+  }
+  return result;
+}
+
+async function sendQuickMessage(metadata, text) {
+  const trimmed = typeof text === 'string' ? text.trim() : '';
+  if (!trimmed) {
+    return null;
+  }
+
+  const response = await fetch(QUICK_MESSAGE_ENDPOINT, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      Accept: 'application/json',
     },
     credentials: 'same-origin',
     body: JSON.stringify({
-      receiver_uid: metadata.vendorUid,
-      receiver_name: metadata.vendorName,
-      receiver_role: 'vendor',
-      message: text,
+      role: 'buyer',
+      text: trimmed,
+      buyer_uid: metadata.buyerUid,
+      buyer_name: metadata.buyerName,
+      vendor_uid: metadata.vendorUid,
+      vendor_name: metadata.vendorName,
       listing_id: metadata.productId,
       listing_title: metadata.productTitle,
       listing_image: metadata.productImage,
@@ -412,13 +439,16 @@ function resolveChatMetadata() {
   });
 
   const data = await response.json().catch(() => ({}));
+  if (response.status === 401) {
+    throw new Error('Please sign in to chat with vendors.');
+  }
   if (!response.ok || !data?.success) {
-    const reason = data?.message || 'Unable to reach chat server.';
-    throw new Error(reason);
+    throw new Error(data?.message || 'Unable to send message.');
   }
 
   return data;
 }
+
 
 function persistChatFocus(metadata) {
   if (!metadata || !metadata.vendorUid) return;
@@ -447,6 +477,26 @@ async function launchChatWithMessage(message) {
     return null;
   }
 
+  try {
+    await ensureQuickConversation(metadata);
+  } catch (error) {
+    console.error('Unable to prepare chat', error);
+    const fallbackMessage = 'We could not prepare the chat. Please try again.';
+    const errorMessage = error && error.message ? error.message : fallbackMessage;
+    throw new Error(errorMessage);
+  }
+
+  if (message && message.trim()) {
+    try {
+      await sendQuickMessage(metadata, message);
+    } catch (error) {
+      console.error('Unable to send quick message', error);
+      const fallbackMessage = 'Unable to send message right now. Please try again.';
+      const errorMessage = error && error.message ? error.message : fallbackMessage;
+      throw new Error(errorMessage);
+    }
+  }
+
   persistChatFocus(metadata);
 
   const params = new URLSearchParams({
@@ -455,7 +505,7 @@ async function launchChatWithMessage(message) {
   });
   if (metadata.productTitle) params.set('listing_title', metadata.productTitle);
   if (metadata.productImage) params.set('listing_image', metadata.productImage);
-  if (message && message.trim()) params.set('prefill', message.trim());
+  if (message && message.trim()) params.set('quick_sent', '1');
 
   window.location.href = `chat-thread.php?${params.toString()}`;
   return metadata;

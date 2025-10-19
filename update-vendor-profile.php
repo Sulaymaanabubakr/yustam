@@ -25,6 +25,23 @@ if (!preg_match('/^[A-Za-z0-9_]+$/', $vendorTable)) {
     exit;
 }
 
+$lookupStmt = $conn->prepare(sprintf('SELECT * FROM `%s` WHERE id = ? LIMIT 1', $vendorTable));
+if (!$lookupStmt) {
+    echo json_encode(['success' => false, 'message' => 'Unable to prepare vendor lookup.']);
+    exit;
+}
+$lookupStmt->bind_param('i', $vendorId);
+$lookupStmt->execute();
+$existingResult = $lookupStmt->get_result();
+$existingVendor = $existingResult ? $existingResult->fetch_assoc() : null;
+$lookupStmt->close();
+
+if (!$existingVendor) {
+    http_response_code(404);
+    echo json_encode(['success' => false, 'message' => 'Vendor profile not found.']);
+    exit;
+}
+
 $fullName        = trim($_POST['name'] ?? '');
 $businessName    = trim($_POST['business_name'] ?? '');
 $phone           = trim($_POST['phone'] ?? '');
@@ -37,9 +54,13 @@ if ($fullName === '' || $businessName === '') {
     exit;
 }
 
-$avatarUrl = null;
+$profilePhotoValue = null;
+$profilePhotoUrlInput = trim((string)($_POST['profile_photo_url'] ?? ''));
+if ($profilePhotoUrlInput !== '') {
+    $profilePhotoValue = $profilePhotoUrlInput;
+}
 
-if (isset($_FILES['profile_photo']) && $_FILES['profile_photo']['error'] === UPLOAD_ERR_OK) {
+if ($profilePhotoValue === null && isset($_FILES['profile_photo']) && $_FILES['profile_photo']['error'] === UPLOAD_ERR_OK) {
     $originalName = $_FILES['profile_photo']['name'];
     $extension = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
     $allowed = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
@@ -63,7 +84,7 @@ if (isset($_FILES['profile_photo']) && $_FILES['profile_photo']['error'] === UPL
         exit;
     }
 
-    $avatarUrl = 'uploads/' . $fileName;
+    $profilePhotoValue = 'uploads/' . $fileName;
 }
 
 $columns = yustam_vendor_table_columns();
@@ -107,10 +128,16 @@ if ($category !== '' && in_array('category', $columns, true)) {
     $values[] = $category;
 }
 
-if ($avatarUrl !== null && in_array('avatar_url', $columns, true)) {
-    $updateParts[] = 'avatar_url = ?';
-    $types .= 's';
-    $values[] = $avatarUrl;
+if ($profilePhotoValue !== null) {
+    if (in_array('profile_photo', $columns, true)) {
+        $updateParts[] = 'profile_photo = ?';
+        $types .= 's';
+        $values[] = $profilePhotoValue;
+    } elseif (in_array('avatar_url', $columns, true)) {
+        $updateParts[] = 'avatar_url = ?';
+        $types .= 's';
+        $values[] = $profilePhotoValue;
+    }
 }
 
 if (in_array('updated_at', $columns, true)) {
@@ -140,7 +167,39 @@ if ($types !== '' && strpos($sql, '?') !== false) {
 try {
     $stmt->execute();
     $_SESSION['vendor_name'] = $fullName;
-    echo json_encode(['success' => true, 'message' => 'Profile updated successfully.']);
+
+    $updatedProfilePhoto = $profilePhotoValue;
+    if ($updatedProfilePhoto === null) {
+        $existingPhoto = '';
+        if (array_key_exists('profile_photo', $existingVendor)) {
+            $existingPhoto = (string)($existingVendor['profile_photo'] ?? '');
+        } elseif (array_key_exists('avatar_url', $existingVendor)) {
+            $existingPhoto = (string)($existingVendor['avatar_url'] ?? '');
+        }
+        $updatedProfilePhoto = $existingPhoto;
+    }
+    $normalisedPhoto = $updatedProfilePhoto !== null ? trim((string)$updatedProfilePhoto) : '';
+    if ($normalisedPhoto !== '' && stripos($normalisedPhoto, 'http') !== 0 && strpos($normalisedPhoto, 'data:') !== 0) {
+        $normalisedPhoto = '/' . ltrim($normalisedPhoto, '/');
+    }
+    if ($normalisedPhoto !== '') {
+        $_SESSION['vendor_profile_photo'] = $normalisedPhoto;
+    }
+
+    $profileResponse = [
+        'name' => $fullName,
+        'businessName' => $businessName,
+        'phone' => $phone,
+        'state' => $state,
+        'businessAddress' => $businessAddress,
+        'profilePhoto' => $normalisedPhoto,
+    ];
+
+    echo json_encode([
+        'success' => true,
+        'message' => 'Profile updated successfully.',
+        'profile' => $profileResponse,
+    ]);
 } catch (Throwable $e) {
     http_response_code(500);
     echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);

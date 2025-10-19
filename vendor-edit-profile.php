@@ -88,8 +88,17 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
     exit;
 }
 
-$avatarFallback = 'https://res.cloudinary.com/demo/image/upload/v123456789/default_user.png';
-$profilePhoto = $profile['profilePhoto'] ?: $avatarFallback;
+$avatarFallback = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz1cImh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnXCIg'
+    . 'dmlld0JveD1cIjAgMCAxMjggMTI4XCI+PHJlY3QgZmlsbD1cIiNF'
+    . 'OEY1RjJcIiB3aWR0aD1cIjEyOFwiIGhlaWdodD1cIjEyOFwiLz48Y2ly'
+    . 'Y2xlIGN4PVw2NFwgY3k9XDQ4XCByPVwyOFwgZmlsbD1cIiMwRjZBNTNc'
+    . 'Ii8+PHBhdGggZmlsbD1cIiMwRjZBNTNcIiBkPVwiTTIwIDExOGMwLTI0'
+    . 'IDIwLTQ0IDQ0LTQ0czQ0IDIwIDQ0IDQ0XCIvPjwvc3ZnPg==';
+$profilePhoto = (string)($profile['profilePhoto'] ?? '');
+$profilePhotoUrl = $profilePhoto !== '' ? $profilePhoto : $avatarFallback;
+if ($profilePhotoUrl !== '' && stripos($profilePhotoUrl, 'http') !== 0 && strpos($profilePhotoUrl, 'data:') !== 0) {
+    $profilePhotoUrl = '/' . ltrim($profilePhotoUrl, '/');
+}
 $profileJson = json_encode($profile, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 ?>
 <!DOCTYPE html>
@@ -531,7 +540,7 @@ $profileJson = json_encode($profile, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNI
       <h2 class="section-title">Profile Photo</h2>
       <div class="profile-photo-wrapper">
         <div class="photo-preview" id="photoPreview">
-          <img src="<?php echo htmlspecialchars($profilePhoto, ENT_QUOTES, 'UTF-8'); ?>" alt="Vendor profile photo" />
+          <img src="<?php echo htmlspecialchars($profilePhotoUrl, ENT_QUOTES, 'UTF-8'); ?>" alt="Vendor profile photo" />
         </div>
         <input type="file" id="photoInput" name="profile_photo" accept="image/*" hidden />
         <button class="save-button" id="changePhotoBtn" type="button" style="max-width: 220px;">
