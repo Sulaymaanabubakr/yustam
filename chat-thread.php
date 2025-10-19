@@ -108,41 +108,25 @@ $chatSummary = null;
 
 if ($chatId !== '') {
     try {
-        $chatSummary = yustam_chat_fetch_summary($chatId);
-    } catch (Throwable $error) {
-        error_log('chat-thread summary lookup failed: ' . $error->getMessage());
-    }
-    if ($chatSummary) {
-        $buyerUid = trim((string)$chatSummary['buyer_uid']);
-        $vendorUid = trim((string)$chatSummary['vendor_uid']);
-        $listing['id'] = $listing['id'] ?: trim((string)$chatSummary['listing_id']);
-        $listing['title'] = $listing['title'] ?: trim((string)$chatSummary['listing_title']);
-        $listing['image'] = $listing['image'] ?: trim((string)$chatSummary['listing_image']);
-        $counterparty['name'] = $role === 'buyer'
-            ? trim((string)$chatSummary['vendor_name'])
-            : trim((string)$chatSummary['buyer_name']);
-    } else {
-        try {
-            $document = yustam_firestore_get_document('chats/' . $chatId);
-            if ($document && isset($document['fields'])) {
-                $fields = [];
-                foreach ($document['fields'] as $key => $value) {
-                    $fields[$key] = yustam_firestore_decode($value);
-                }
-                $buyerUid = $buyerUid ?: trim((string)($fields['buyer_uid'] ?? ''));
-                $vendorUid = $vendorUid ?: trim((string)($fields['vendor_uid'] ?? ''));
-                $listing['id'] = $listing['id'] ?: trim((string)($fields['listing_id'] ?? ''));
-                $listing['title'] = $listing['title'] ?: trim((string)($fields['listing_title'] ?? ''));
-                $listing['image'] = $listing['image'] ?: trim((string)($fields['listing_image'] ?? ''));
-                if ($counterparty['name'] === '') {
-                    $counterparty['name'] = $role === 'buyer'
-                        ? trim((string)($fields['vendor_name'] ?? ''))
-                        : trim((string)($fields['buyer_name'] ?? ''));
-                }
+        $document = yustam_firestore_get_document('chats/' . $chatId);
+        if ($document && isset($document['fields'])) {
+            $fields = [];
+            foreach ($document['fields'] as $key => $value) {
+                $fields[$key] = yustam_firestore_decode($value);
             }
-        } catch (Throwable $fireError) {
-            error_log('chat-thread Firestore summary lookup failed: ' . $fireError->getMessage());
+            $buyerUid = $buyerUid ?: trim((string)($fields['buyer_uid'] ?? ''));
+            $vendorUid = $vendorUid ?: trim((string)($fields['vendor_uid'] ?? ''));
+            $listing['id'] = $listing['id'] ?: trim((string)($fields['listing_id'] ?? ''));
+            $listing['title'] = $listing['title'] ?: trim((string)($fields['listing_title'] ?? ''));
+            $listing['image'] = $listing['image'] ?: trim((string)($fields['listing_image'] ?? ''));
+            if ($counterparty['name'] === '') {
+                $counterparty['name'] = $role === 'buyer'
+                    ? trim((string)($fields['vendor_name'] ?? ''))
+                    : trim((string)($fields['buyer_name'] ?? ''));
+            }
         }
+    } catch (Throwable $fireError) {
+        error_log('chat-thread Firestore summary lookup failed: ' . $fireError->getMessage());
     }
 }
 

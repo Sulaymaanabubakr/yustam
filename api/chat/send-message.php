@@ -4,8 +4,8 @@ declare(strict_types=1);
 require_once __DIR__ . '/../../session-path.php';
 session_start();
 
-require_once __DIR__ . '/../../db.php';
 require_once __DIR__ . '/firebase.php';
+require_once __DIR__ . '/../../db.php';
 
 header('Content-Type: application/json');
 
@@ -106,50 +106,6 @@ $preview = $type === 'text' ? $text : ($type === 'image' ? 'Photo' : 'Voice note
 $receiverUid = $role === 'buyer' ? $vendorUid : $buyerUid;
 $messageId = 'msg_' . bin2hex(random_bytes(8));
 $sentAt = gmdate('Y-m-d H:i:s');
-
-try {
-    yustam_chat_store_message([
-        'chat_id' => $chatId,
-        'message_id' => $messageId,
-        'sender_uid' => $senderUid,
-        'sender_role' => $role,
-        'receiver_uid' => $receiverUid,
-        'text' => $text !== '' ? $text : null,
-        'image_url' => $imageUrl !== '' ? $imageUrl : null,
-        'voice_url' => $voiceUrl !== '' ? $voiceUrl : null,
-        'voice_duration' => $duration,
-        'message_type' => $type,
-        'sent_at' => $sentAt,
-    ]);
-
-    yustam_chat_upsert_summary(
-        [
-            'chat_id' => $chatId,
-            'buyer_uid' => $buyerUid,
-            'buyer_name' => $buyerName,
-            'vendor_uid' => $vendorUid,
-            'vendor_name' => $vendorName,
-            'listing_id' => $listingId,
-            'listing_title' => $listingTitle,
-            'listing_image' => $listingImage,
-            'last_message' => $preview,
-            'last_type' => $type,
-            'last_sender_uid' => $senderUid,
-            'last_sender_role' => $role,
-            'last_sent_at' => $sentAt,
-        ],
-        $role
-    );
-} catch (Throwable $mysqlError) {
-    http_response_code(500);
-    error_log('chat-send mysql error: ' . $mysqlError->getMessage());
-    echo json_encode([
-        'success' => false,
-        'message' => 'Unable to record message',
-        'error' => $mysqlError->getMessage(),
-    ]);
-    return;
-}
 
 $firestoreSynced = true;
 

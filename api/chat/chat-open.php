@@ -4,8 +4,8 @@ declare(strict_types=1);
 require_once __DIR__ . '/../../session-path.php';
 session_start();
 
-require_once __DIR__ . '/../../db.php';
 require_once __DIR__ . '/firebase.php';
+require_once __DIR__ . '/../../db.php';
 
 header('Content-Type: application/json');
 
@@ -42,30 +42,21 @@ if ($method === 'DELETE') {
         exit;
     }
 
-    $summary = null;
+    $buyerUid = trim((string)($input['buyer_uid'] ?? $input['buyerUid'] ?? ''));
+    $vendorUid = trim((string)($input['vendor_uid'] ?? $input['vendorUid'] ?? ''));
+
     try {
-        $summary = yustam_chat_fetch_summary($chatId);
-    } catch (Throwable $lookupError) {
-        error_log('chat-open delete summary lookup failed: ' . $lookupError->getMessage());
-    }
-
-    $buyerUid = trim((string)($summary['buyer_uid'] ?? ($input['buyer_uid'] ?? $input['buyerUid'] ?? '')));
-    $vendorUid = trim((string)($summary['vendor_uid'] ?? ($input['vendor_uid'] ?? $input['vendorUid'] ?? '')));
-
-    if ($summary === null) {
-        try {
-            $document = yustam_firestore_get_document('chats/' . $chatId);
-            if ($document && isset($document['fields'])) {
-                $fields = [];
-                foreach ($document['fields'] as $key => $value) {
-                    $fields[$key] = yustam_firestore_decode($value);
-                }
-                $buyerUid = $buyerUid ?: trim((string)($fields['buyer_uid'] ?? ''));
-                $vendorUid = $vendorUid ?: trim((string)($fields['vendor_uid'] ?? ''));
+        $document = yustam_firestore_get_document('chats/' . $chatId);
+        if ($document && isset($document['fields'])) {
+            $fields = [];
+            foreach ($document['fields'] as $key => $value) {
+                $fields[$key] = yustam_firestore_decode($value);
             }
-        } catch (Throwable $firestoreLookup) {
-            error_log('chat-open delete Firestore lookup failed: ' . $firestoreLookup->getMessage());
+            $buyerUid = $buyerUid ?: trim((string)($fields['buyer_uid'] ?? ''));
+            $vendorUid = $vendorUid ?: trim((string)($fields['vendor_uid'] ?? ''));
         }
+    } catch (Throwable $firestoreLookup) {
+        error_log('chat-open delete Firestore lookup failed: ' . $firestoreLookup->getMessage());
     }
 
     $sessionUidLower = strtolower($sessionUid);
@@ -77,15 +68,6 @@ if ($method === 'DELETE') {
     if (!$authorised) {
         http_response_code(403);
         echo json_encode(['success' => false, 'message' => 'You do not have permission to remove this chat.']);
-        exit;
-    }
-
-    try {
-        yustam_chat_delete_conversation($chatId);
-    } catch (Throwable $deleteError) {
-        error_log('chat-open delete mysql failed: ' . $deleteError->getMessage());
-        http_response_code(500);
-        echo json_encode(['success' => false, 'message' => 'Unable to delete this conversation right now.']);
         exit;
     }
 
@@ -135,39 +117,6 @@ if ($buyerUid === '' || $vendorUid === '') {
 }
 
 $chatId = yustam_chat_build_id($buyerUid, $vendorUid);
-
-$timestamp = gmdate('Y-m-d H:i:s');
-$existingSummary = null;
-try {
-    $existingSummary = yustam_chat_fetch_summary($chatId);
-} catch (Throwable $summaryError) {
-    error_log('chat-open summary lookup failed: ' . $summaryError->getMessage());
-}
-
-if ($existingSummary === null) {
-    try {
-        yustam_chat_upsert_summary(
-            [
-                'chat_id' => $chatId,
-                'buyer_uid' => $buyerUid,
-                'buyer_name' => $buyerName,
-                'vendor_uid' => $vendorUid,
-                'vendor_name' => $vendorName,
-                'listing_id' => $listingId,
-                'listing_title' => $listingTitle,
-                'listing_image' => $listingImage,
-                'last_message' => 'Chat started',
-                'last_type' => 'system',
-                'last_sender_uid' => null,
-                'last_sender_role' => null,
-                'last_sent_at' => $timestamp,
-            ],
-            null
-        );
-    } catch (Throwable $upsertError) {
-        error_log('chat-open summary upsert failed: ' . $upsertError->getMessage());
-    }
-}
 
 $firestoreSynced = true;
 $documentData = [];
@@ -221,38 +170,10 @@ try {
     error_log('chat-open Firestore error: ' . $exception->getMessage());
 }
 
-$summaryData = $documentData;
-if (!$summaryData) {
-    try {
-        $mysqlSummary = yustam_chat_fetch_summary($chatId);
-        if ($mysqlSummary) {
-            $summaryData = [
-                'chat_id' => $mysqlSummary['chat_id'],
-                'buyer_uid' => $mysqlSummary['buyer_uid'],
-                'buyer_name' => $mysqlSummary['buyer_name'],
-                'vendor_uid' => $mysqlSummary['vendor_uid'],
-                'vendor_name' => $mysqlSummary['vendor_name'],
-                'listing_id' => $mysqlSummary['listing_id'],
-                'listing_title' => $mysqlSummary['listing_title'],
-                'listing_image' => $mysqlSummary['listing_image'],
-                'last_text' => $mysqlSummary['last_message'],
-                'last_type' => $mysqlSummary['last_type'],
-                'last_sender_uid' => $mysqlSummary['last_sender_uid'],
-                'last_sender_role' => $mysqlSummary['last_sender_role'],
-                'unread_for_buyer' => (int)($mysqlSummary['unread_for_buyer'] ?? 0),
-                'unread_for_vendor' => (int)($mysqlSummary['unread_for_vendor'] ?? 0),
-                'last_ts' => $mysqlSummary['last_sent_at'],
-            ];
-        }
-    } catch (Throwable $summaryError) {
-        error_log('chat-open summary hydrate failed: ' . $summaryError->getMessage());
-    }
-}
-
 echo json_encode([
     'success' => true,
     'chat_id' => $chatId,
-    'data' => $summaryData ?: [],
+    'data' => $documentData,
     'firestore_synced' => $firestoreSynced,
-    'source' => $firestoreSynced ? 'firestore' : 'mysql',
+    'source' => 'firestore',
 ]);
