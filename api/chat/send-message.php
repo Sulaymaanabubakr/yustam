@@ -48,14 +48,30 @@ if (!in_array($role, ['buyer', 'vendor'], true)) {
 if ($role === 'buyer') {
     $senderUid = trim((string)($_SESSION['buyer_firebase_uid'] ?? ''));
     $senderName = trim((string)($_SESSION['buyer_name'] ?? $buyerName));
+    if ($senderUid === '') {
+        $senderUid = $buyerUid;
+    }
     if ($buyerUid === '') {
         $buyerUid = $senderUid;
+    }
+    if ($senderUid !== '') {
+        $_SESSION['buyer_firebase_uid'] = $senderUid;
+        $_SESSION['firebase_uid'] = $senderUid;
+        $_SESSION['buyer_uid'] = $_SESSION['buyer_uid'] ?? $senderUid;
     }
 } else {
     $senderUid = trim((string)($_SESSION['vendor_firebase_uid'] ?? ''));
     $senderName = trim((string)($_SESSION['vendor_name'] ?? $vendorName));
+    if ($senderUid === '') {
+        $senderUid = $vendorUid;
+    }
     if ($vendorUid === '') {
         $vendorUid = $senderUid;
+    }
+    if ($senderUid !== '') {
+        $_SESSION['vendor_firebase_uid'] = $senderUid;
+        $_SESSION['firebase_uid'] = $senderUid;
+        $_SESSION['vendor_uid'] = $_SESSION['vendor_uid'] ?? $senderUid;
     }
 }
 
