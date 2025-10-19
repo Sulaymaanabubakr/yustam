@@ -32,7 +32,6 @@ $defaults = [
     'notifUpdates' => true,
     'twoFactor' => false,
     'loginAlert' => true,
-    'theme' => 'light',
 ];
 
 $sanitized = $defaults;
@@ -44,8 +43,6 @@ foreach ($defaults as $key => $defaultValue) {
 
     if (is_bool($defaultValue)) {
         $sanitized[$key] = (bool)$payload[$key];
-    } elseif ($key === 'theme') {
-        $sanitized[$key] = 'light';
     }
 }
 

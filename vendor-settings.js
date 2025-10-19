@@ -2,7 +2,6 @@
 
 document.addEventListener('DOMContentLoaded', () => {
   const STORAGE_KEY = 'yustam.vendor.settings';
-  const themeManager = window.YustamTheme;
 
   const DEFAULT_SETTINGS = {
     notifApproved: true,
@@ -11,26 +10,33 @@ document.addEventListener('DOMContentLoaded', () => {
     notifUpdates: true,
     twoFactor: false,
     loginAlert: true,
-    theme: 'light',
   };
 
   const initialSettings = window.__INITIAL_VENDOR_SETTINGS__ || {};
+
+  const stripTheme = (state) => {
+    if (!state || typeof state !== 'object') {
+      return {};
+    }
+    const clone = { ...state };
+    delete clone.theme;
+    return clone;
+  };
   const settingsEndpoint = window.__VENDOR_SETTINGS_ENDPOINT__ || 'update-vendor-settings.php';
   const refreshEndpoint = window.__VENDOR_SETTINGS_REFRESH__ || 'vendor-settings.php?format=json';
 
-  let settings = { ...DEFAULT_SETTINGS, ...initialSettings };
+  let settings = { ...DEFAULT_SETTINGS, ...stripTheme(initialSettings) };
   try {
     const cached = localStorage.getItem(STORAGE_KEY);
     if (cached) {
       const parsed = JSON.parse(cached);
       if (parsed && typeof parsed === 'object') {
-        settings = { ...settings, ...parsed };
+        settings = { ...settings, ...stripTheme(parsed) };
       }
     }
   } catch (error) {
     console.warn('Unable to read cached settings:', error);
   }
-  let unsubscribeTheme = null;
 
   const toggleIds = {
     notifApproved: document.getElementById('notifApproved'),
@@ -41,8 +47,6 @@ document.addEventListener('DOMContentLoaded', () => {
     loginAlert: document.getElementById('loginAlertToggle'),
   };
 
-  const themeRadios = Array.from(document.querySelectorAll('input[name="theme"]'));
-  const themeOptions = Array.from(document.querySelectorAll('.theme-option'));
   const saveButton = document.getElementById('saveSettingsBtn');
   const toastContainer = document.getElementById('toastContainer');
 
@@ -91,33 +95,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 3000);
   };
 
-  const syncThemeOptions = (value) => {
-    if (!themeRadios.length && !themeOptions.length) {
-      return;
-    }
-    themeOptions.forEach((option) => option.classList.remove('active'));
-    themeRadios.forEach((radio) => {
-      const isMatch = radio.value === value;
-      radio.checked = isMatch;
-      const parent = radio.closest('.theme-option');
-      if (parent) parent.classList.toggle('active', isMatch);
-    });
-  };
-
-  const applyThemePreference = () => {
-    if (themeManager) {
-      themeManager.setPreference('light');
-    } else {
-      document.body.classList.remove('theme-dark');
-      document.body.classList.add('theme-light');
-    }
-    settings.theme = 'light';
-    syncThemeOptions('light');
-  };
-
   const persistLocalSnapshot = (state) => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(stripTheme(state)));
     } catch (error) {
       console.warn('Unable to write settings snapshot:', error);
     }
@@ -128,7 +108,6 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!input) return;
       input.checked = Boolean(state[key]);
     });
-    syncThemeOptions('light');
   };
 
   const setSavingState = (saving) => {
@@ -144,7 +123,6 @@ document.addEventListener('DOMContentLoaded', () => {
     notifUpdates: !!toggleIds.notifUpdates?.checked,
     twoFactor: !!toggleIds.twoFactor?.checked,
     loginAlert: !!toggleIds.loginAlert?.checked,
-    theme: 'light',
   });
 
   const saveSettings = async () => {
@@ -154,8 +132,6 @@ document.addEventListener('DOMContentLoaded', () => {
     setSavingState(true);
 
     try {
-      applyThemePreference();
-
       const response = await fetch(settingsEndpoint, {
         method: 'POST',
         credentials: 'same-origin',
@@ -171,7 +147,7 @@ document.addEventListener('DOMContentLoaded', () => {
         throw new Error(payload?.message || 'Unable to save settings. Please try again.');
       }
 
-      settings = { ...DEFAULT_SETTINGS, ...payload.settings };
+      settings = { ...DEFAULT_SETTINGS, ...stripTheme(payload.settings) };
       persistLocalSnapshot(settings);
       showToast('Settings saved successfully.', 'success');
     } catch (error) {
@@ -192,9 +168,8 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!response.ok) return;
       const payload = await response.json().catch(() => null);
       if (!payload?.success || !payload.settings) return;
-      settings = { ...DEFAULT_SETTINGS, ...payload.settings };
+      settings = { ...DEFAULT_SETTINGS, ...stripTheme(payload.settings) };
       applySettingsToUI(settings);
-      applyThemePreference();
       persistLocalSnapshot(settings);
     } catch (error) {
       console.warn('Unable to refresh settings:', error);
@@ -202,16 +177,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   applySettingsToUI(settings);
-  applyThemePreference();
   fetchLatestSettings();
-
-  if (themeManager?.subscribe) {
-    unsubscribeTheme = themeManager.subscribe(() => {
-      settings.theme = 'light';
-      syncThemeOptions('light');
-      persistLocalSnapshot(settings);
-    });
-  }
 
   saveButton?.addEventListener('click', saveSettings);
 
@@ -270,9 +236,4 @@ document.addEventListener('DOMContentLoaded', () => {
     toggleModal(deleteAccountModal, false);
   });
 
-  window.addEventListener('beforeunload', () => {
-    if (typeof unsubscribeTheme === 'function') {
-      unsubscribeTheme();
-    }
-  });
 });

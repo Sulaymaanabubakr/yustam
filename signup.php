@@ -171,7 +171,7 @@ try {
 
     echo json_encode(['success' => true, 'message' => 'Account created! Please check your email to verify your account.']);
 } catch (Throwable $e) {
-    if ($firebaseUid !== '') {
+    if ($firebaseUid !== '' && yustam_firebase_service_account_available()) {
         try {
             yustam_firebase_identity_admin_request(
                 'POST',
