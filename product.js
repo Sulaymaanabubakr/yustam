@@ -1,4 +1,4 @@
-import { db } from './firebase.js';
+import { db, firebaseConfig } from './firebase.js';
 import { buildChatId as computeChatId, ensureChat } from './chat-service.js';
 import { deleteDoc, doc, getDoc, setDoc } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
 
@@ -69,6 +69,67 @@ const floatingWhatsappBtn = document.getElementById('floatingWhatsappBtn');
 const chatWithVendorBtn = document.getElementById('chatWithVendorBtn');
 const PLACEHOLDER_IMAGE = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
 const QUICK_MESSAGE_ENDPOINT = './api/chat/send-message.php';
+const FIRESTORE_REST_BASE = firebaseConfig?.projectId
+  ? `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents`
+  : null;
+
+const buildFirestoreRestUrl = (collection, id) => {
+  if (!FIRESTORE_REST_BASE || !collection || !id) return null;
+  const safeId = encodeURIComponent(id);
+  const base = `${FIRESTORE_REST_BASE}/${collection}/${safeId}`;
+  const apiKey = firebaseConfig?.apiKey;
+  return apiKey ? `${base}?key=${encodeURIComponent(apiKey)}` : base;
+};
+
+const decodeFirestoreValue = (value) => {
+  if (!value || typeof value !== 'object') return value;
+  if ('stringValue' in value) return value.stringValue;
+  if ('integerValue' in value) return Number(value.integerValue);
+  if ('doubleValue' in value) return Number(value.doubleValue);
+  if ('booleanValue' in value) return Boolean(value.booleanValue);
+  if ('timestampValue' in value) return value.timestampValue;
+  if (Object.prototype.hasOwnProperty.call(value, 'nullValue')) return null;
+  if ('arrayValue' in value) {
+    const arr = value.arrayValue.values || [];
+    return arr.map(decodeFirestoreValue);
+  }
+  if ('mapValue' in value) {
+    const result = {};
+    const fields = value.mapValue.fields || {};
+    Object.entries(fields).forEach(([key, inner]) => {
+      result[key] = decodeFirestoreValue(inner);
+    });
+    return result;
+  }
+  return value;
+};
+
+const fetchFirestoreDocument = async (collection, id) => {
+  const url = buildFirestoreRestUrl(collection, id);
+  if (!url) return null;
+  try {
+    const response = await fetch(url, { headers: { Accept: 'application/json' } });
+    if (response.status === 404) {
+      return null;
+    }
+    if (!response.ok) {
+      throw new Error(`Firestore REST request failed with status ${response.status}`);
+    }
+    const payload = await response.json();
+    if (!payload?.fields) {
+      return null;
+    }
+    const decoded = {};
+    Object.entries(payload.fields).forEach(([key, value]) => {
+      decoded[key] = decodeFirestoreValue(value);
+    });
+    return decoded;
+  } catch (error) {
+    console.error('[product] Firestore REST fetch failed', error);
+    return null;
+  }
+};
+
 
 const safeTrim = (value) => (typeof value === 'string' ? value.trim() : '');
 
@@ -957,17 +1018,22 @@ const loadVendorProfile = async (vendorIdValue) => {
     return;
   }
 
+  let vendorData = null;
+
   try {
     const vendorSnap = await getDoc(doc(db, 'vendors', vendorIdValue));
     if (vendorSnap.exists()) {
-      applyVendorData(vendorSnap.data(), vendorIdValue);
-    } else {
-      applyVendorData(null, vendorIdValue);
+      vendorData = vendorSnap.data();
     }
   } catch (error) {
     console.error('[product] vendor load failed', error);
-    applyVendorData(null, vendorIdValue);
   }
+
+  if (!vendorData) {
+    vendorData = await fetchFirestoreDocument('vendors', vendorIdValue);
+  }
+
+  applyVendorData(vendorData, vendorIdValue);
 };
 
 const applyListingData = (listing = {}) => {
@@ -1022,31 +1088,36 @@ const loadListing = async () => {
     return;
   }
 
+  let listingData = null;
+
   try {
     const listingSnap = await getDoc(doc(db, 'listings', productId));
-    if (!listingSnap.exists()) {
-      updateStatusBadge('unavailable');
-      productPriceEl.textContent = 'Unavailable';
-      if (featureListEl) featureListEl.hidden = true;
-      if (specListEl) {
-        specListEl.innerHTML = '';
-        specListEl.hidden = true;
-      }
-      if (specFallbackEl) specFallbackEl.hidden = false;
-      updateWhatsappLinks();
-      return;
+    if (listingSnap.exists()) {
+      listingData = listingSnap.data();
     }
-
-    const listingData = listingSnap.data();
-    applyListingData(listingData);
-    await loadVendorProfile(listingData.vendorID || listingData.vendorId || listingData.vendor || currentVendorId);
   } catch (error) {
     console.error('[product] listing load failed', error);
+  }
+
+  if (!listingData) {
+    listingData = await fetchFirestoreDocument('listings', productId);
+  }
+
+  if (listingData) {
+    applyListingData(listingData);
+    await loadVendorProfile(listingData.vendorID || listingData.vendorId || listingData.vendor || currentVendorId);
+  } else {
     updateStatusBadge('unavailable');
     productPriceEl.textContent = 'Unavailable';
-  } finally {
-    updateWhatsappLinks();
+    if (featureListEl) featureListEl.hidden = true;
+    if (specListEl) {
+      specListEl.innerHTML = '';
+      specListEl.hidden = true;
+    }
+    if (specFallbackEl) specFallbackEl.hidden = false;
   }
+
+  updateWhatsappLinks();
 };
 
 updateQuickChatDataset();
