@@ -538,6 +538,9 @@ async function launchChatWithMessage(message) {
     return null;
   }
 
+  const trimmedMessage = typeof message === 'string' ? message.trim() : '';
+  let messageSent = false;
+
   try {
     await ensureQuickConversation(metadata);
   } catch (error) {
@@ -547,14 +550,19 @@ async function launchChatWithMessage(message) {
     throw new Error(errorMessage);
   }
 
-  if (message && message.trim()) {
+  if (trimmedMessage) {
     try {
-      await sendQuickMessage(metadata, message);
+      await sendQuickMessage(metadata, trimmedMessage);
+      messageSent = true;
     } catch (error) {
       console.error('Unable to send quick message', error);
-      const fallbackMessage = 'Unable to send message right now. Please try again.';
+      const fallbackMessage =
+        'We could not send your quick message automatically. We will open the chat so you can send it manually.';
       const errorMessage = error && error.message ? error.message : fallbackMessage;
-      throw new Error(errorMessage);
+      alert(fallbackMessage);
+      if (fallbackMessage !== errorMessage) {
+        console.warn('[product] quick message error:', errorMessage);
+      }
     }
   }
 
@@ -566,7 +574,13 @@ async function launchChatWithMessage(message) {
   });
   if (metadata.productTitle) params.set('listing_title', metadata.productTitle);
   if (metadata.productImage) params.set('listing_image', metadata.productImage);
-  if (message && message.trim()) params.set('quick_sent', '1');
+  if (trimmedMessage) {
+    if (messageSent) {
+      params.set('quick_sent', '1');
+    } else {
+      params.set('prefill', trimmedMessage);
+    }
+  }
 
   window.location.href = `chat-thread.php?${params.toString()}`;
   return metadata;
@@ -1037,7 +1051,16 @@ const loadVendorProfile = async (vendorIdValue) => {
 };
 
 const applyListingData = (listing = {}) => {
-  currentProductName = listing.title || listing.productName || currentProductName || 'Marketplace Listing';
+  const nameCandidate =
+    listing.title ||
+    listing.productTitle ||
+    listing.product_name ||
+    listing.name ||
+    listing.model ||
+    listing.heading ||
+    currentProductName ||
+    'Marketplace Listing';
+  currentProductName = nameCandidate;
   if (productNameEl) productNameEl.textContent = currentProductName;
   document.title = `${currentProductName} | YUSTAM Marketplace`;
 

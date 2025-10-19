@@ -219,7 +219,7 @@ $placeholderImage = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABA
             cursor: not-allowed;
         }
 
-        .product-nav {
+.product-nav {
             width: min(1180px, calc(100% - 32px));
             margin: 32px auto 0;
             padding: 16px 24px;
@@ -231,32 +231,82 @@ $placeholderImage = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABA
             align-items: center;
             justify-content: space-between;
             color: var(--emerald);
-            gap: 16px;
+            gap: 24px;
         }
 
-        .product-nav__brand {
-            font-family: 'Anton', sans-serif;
-            letter-spacing: 1px;
-            font-size: clamp(1.2rem, 2vw, 1.6rem);
-            text-transform: uppercase;
-        }
-
-        .nav-button {
+        .product-nav__actions {
             display: inline-flex;
             align-items: center;
-            gap: 8px;
-            padding: 10px 18px;
-            border-radius: 999px;
+            gap: 12px;
+        }
+
+        .nav-icon-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 46px;
+            height: 46px;
+            border-radius: 50%;
             color: var(--emerald);
             border: 1px solid rgba(0, 77, 64, 0.18);
             background: rgba(243, 115, 30, 0.14);
             transition: background 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease;
         }
 
-        .nav-button:hover {
+        .nav-icon-button:hover {
             background: rgba(243, 115, 30, 0.2);
             transform: translateY(-1px);
             box-shadow: 0 12px 22px rgba(243, 115, 30, 0.26);
+        }
+
+        .nav-icon-button i {
+            font-size: 1.3rem;
+        }
+
+        .product-nav__brand {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .product-nav__brand img {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            border: 1px solid rgba(0, 77, 64, 0.12);
+            object-fit: cover;
+        }
+
+        .product-nav__brand-text {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+        }
+
+        .product-nav__brand-name {
+            font-family: 'Anton', sans-serif;
+            letter-spacing: 1px;
+            font-size: clamp(1.2rem, 2vw, 1.6rem);
+        }
+
+        .product-nav__brand-tagline {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: rgba(0, 77, 64, 0.72);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
         }
 
         .product-shell {
@@ -949,17 +999,23 @@ $placeholderImage = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABA
     data-vendor-verified="<?= htmlspecialchars($vendorVerificationState, ENT_QUOTES, 'UTF-8'); ?>"
 >
     <header class="product-nav">
-        <button type="button" class="nav-button" onclick="window.location.href='shop.html'" aria-label="Back to listings">
-            <i class="ri-arrow-left-line" aria-hidden="true"></i>
-            <span>Shop</span>
-        </button>
-        <div class="product-nav__brand">
-            <span>Product Overview</span>
+        <div class="product-nav__actions">
+            <button type="button" class="nav-icon-button" onclick="window.location.href='shop.html'" aria-label="Back to listings">
+                <i class="ri-arrow-left-line" aria-hidden="true"></i>
+                <span class="sr-only">Back to listings</span>
+            </button>
+            <button type="button" class="nav-icon-button" onclick="window.location.href='index.html'" aria-label="Go to homepage">
+                <i class="ri-home-4-line" aria-hidden="true"></i>
+                <span class="sr-only">Go to homepage</span>
+            </button>
         </div>
-        <button type="button" class="nav-button" onclick="window.location.href='index.html'" aria-label="Go to homepage">
-            <i class="ri-home-4-line" aria-hidden="true"></i>
-            <span>Home</span>
-        </button>
+        <div class="product-nav__brand">
+            <img src="logo.jpeg" alt="YUSTAM Marketplace logo">
+            <div class="product-nav__brand-text">
+                <span class="product-nav__brand-name">YUSTAM Marketplace</span>
+                <span class="product-nav__brand-tagline">Product overview</span>
+            </div>
+        </div>
     </header>
     <main class="product-shell">
         <section class="product-hero">
