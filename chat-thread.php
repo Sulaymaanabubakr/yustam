@@ -6,13 +6,17 @@ require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/buyer-storage.php';
 require_once __DIR__ . '/api/chat/firebase.php';
 
-if (!isset($_SESSION['buyer_id']) && !isset($_SESSION['vendor_id'])) {
+if (!isset($_SESSION['buyer_id']) && !isset($_SESSION['vendor_id']) && !isset($_SESSION['yustam_role'])) {
     header('Location: buyer-login.php');
     exit;
 }
 
 $db = get_db_connection();
-$role = isset($_SESSION['buyer_id']) ? 'buyer' : 'vendor';
+$role = isset($_SESSION['yustam_role']) ? strtolower((string)$_SESSION['yustam_role']) : null;
+if ($role !== 'buyer' && $role !== 'vendor') {
+    $role = isset($_SESSION['vendor_id']) ? 'vendor' : 'buyer';
+}
+
 $viewer = [
     'uid' => '',
     'name' => '',
