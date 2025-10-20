@@ -708,9 +708,61 @@ $bootstrap = [
                 font-size: 1rem;
             }
         }
+
+        .loading-overlay {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 18px;
+            background: rgba(7, 14, 13, 0.78);
+            backdrop-filter: blur(18px);
+            z-index: 1200;
+            color: rgba(255, 255, 255, 0.88);
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+
+        .loading-overlay[hidden] {
+            display: none;
+        }
+
+        .loading-overlay .spinner {
+            width: 54px;
+            height: 54px;
+            border-radius: 50%;
+            border: 4px solid rgba(73, 160, 130, 0.24);
+            border-top-color: #49a082;
+            animation: chatOverlaySpin 1s linear infinite;
+        }
+
+        .loading-overlay p {
+            margin: 0;
+            font-size: 0.82rem;
+            opacity: 0.85;
+        }
+
+        @keyframes chatOverlaySpin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        body.is-loading .chat-shell {
+            filter: blur(6px);
+            pointer-events: none;
+            user-select: none;
+        }
     </style>
 </head>
-<body class="<?php echo $contextIncomplete ? 'chat-disabled' : ''; ?>" data-can-send="<?php echo $canSendMessages ? '1' : '0'; ?>">
+<body class="<?php echo $contextIncomplete ? 'chat-disabled is-loading' : 'is-loading'; ?>" data-can-send="<?php echo $canSendMessages ? '1' : '0'; ?>">
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="spinner" aria-hidden="true"></div>
+        <p>Loading conversation...</p>
+    </div>
     <div class="chat-shell">
         <header class="thread-header">
             <button type="button" id="backButton">

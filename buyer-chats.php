@@ -158,32 +158,34 @@ $bootstrap = [
 
         #chatList {
             display: grid;
-            gap: 14px;
+            gap: 12px;
         }
 
         .chat-card {
             display: grid;
-            grid-template-columns: 64px 1fr auto;
-            gap: 16px;
-            padding: 16px 20px;
-            border-radius: 18px;
+            grid-template-columns: 44px 1fr;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            border-radius: 14px;
             background: var(--white);
-            border: 1px solid rgba(0, 77, 64, 0.1);
-            box-shadow: 0 12px 24px rgba(15, 106, 83, 0.06);
+            border: 1px solid rgba(0, 77, 64, 0.12);
+            box-shadow: 0 10px 20px rgba(15, 106, 83, 0.08);
+            min-height: 68px;
             cursor: pointer;
             transition: transform 0.2s ease, box-shadow 0.2s ease, border 0.2s ease;
         }
 
         .chat-card:hover {
             transform: translateY(-2px);
-            box-shadow: 0 18px 30px rgba(15, 106, 83, 0.12);
-            border-color: rgba(0, 77, 64, 0.2);
+            box-shadow: 0 16px 26px rgba(15, 106, 83, 0.12);
+            border-color: rgba(0, 77, 64, 0.24);
         }
 
         .chat-avatar {
-            width: 64px;
-            height: 64px;
-            border-radius: 16px;
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
             background: var(--emerald-soft);
             display: grid;
             place-items: center;
@@ -197,49 +199,60 @@ $bootstrap = [
         }
 
         .chat-content {
-            display: grid;
-            gap: 6px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
         }
 
-        .chat-content strong {
-            font-size: 1rem;
+        .chat-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .chat-header strong {
+            flex: 1;
+            min-width: 0;
+            font-size: 0.98rem;
             color: var(--emerald);
         }
 
-        .chat-content small {
-            color: var(--muted);
-            display: block;
-            font-size: 0.9rem;
-            line-height: 1.4;
+        .chat-time {
+            margin-left: auto;
+            font-size: 0.78rem;
+            color: rgba(0, 77, 64, 0.55);
+            font-weight: 500;
         }
 
-        .chat-content small.chat-preview {
+        .chat-header .badge {
+            margin-left: 8px;
+        }
+
+        .chat-listing {
+            font-size: 0.82rem;
+            color: var(--muted);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .chat-preview {
+            font-size: 0.86rem;
+            color: var(--stone);
             display: inline-flex;
             align-items: center;
             gap: 6px;
         }
 
-        .chat-content small.chat-preview i {
+        .chat-preview i {
             font-size: 1rem;
-            color: var(--emerald);
+            color: var(--sunset);
         }
 
-        .chat-content small.typing-indicator {
+        .typing-indicator {
             color: var(--sunset);
             font-weight: 600;
         }
-
-        .chat-meta {
-            display: grid;
-            gap: 8px;
-            justify-items: end;
-        }
-
-        .chat-meta small {
-            color: var(--muted);
-            font-size: 0.8rem;
-        }
-
         .badge {
             min-width: 28px;
             padding: 4px 8px;
@@ -253,17 +266,65 @@ $bootstrap = [
 
         @media (max-width: 640px) {
             .chat-card {
-                grid-template-columns: 52px 1fr;
-                grid-template-rows: auto auto;
+                grid-template-columns: 44px 1fr;
             }
-            .chat-meta {
-                justify-items: start;
-                grid-column: 1 / -1;
+        }
+
+        .loading-overlay {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            background: rgba(245, 244, 242, 0.82);
+            backdrop-filter: blur(14px);
+            z-index: 1000;
+            color: var(--emerald);
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+
+        .loading-overlay[hidden] {
+            display: none;
+        }
+
+        .loading-overlay .spinner {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            border: 4px solid rgba(0, 77, 64, 0.15);
+            border-top-color: var(--emerald);
+            animation: spin 1s linear infinite;
+        }
+
+        .loading-overlay p {
+            margin: 0;
+            font-size: 0.82rem;
+            opacity: 0.75;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
             }
+        }
+
+        body.is-loading header,
+        body.is-loading .chat-main {
+            filter: blur(6px);
+            pointer-events: none;
+            user-select: none;
         }
     </style>
 </head>
-<body>
+<body class="is-loading">
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="spinner" aria-hidden="true"></div>
+        <p>Loading messages...</p>
+    </div>
     <header class="chat-header">
         <h1>Your Messages</h1>
         <button type="button" class="new-chat-btn" id="newChatBtn">
@@ -285,3 +346,4 @@ $bootstrap = [
     <script type="module" src="buyer-chats.js"></script>
 </body>
 </html>
+
