@@ -65,6 +65,7 @@ class ChatController {
     this.vendor = context.vendor || {};
     this.canSend = Boolean(context.canSend);
     this.messages = [];
+    this.optimisticMessages = [];
     this.pendingImageFile = null;
     this.typingActive = false;
     this.typingTimer = null;
@@ -72,10 +73,12 @@ class ChatController {
       recording: false,
       controller: null,
       startedAt: 0,
+      timerInterval: null,
     };
 
     this.messageList = document.getElementById('messageList');
     this.typingBanner = document.getElementById('typingBanner');
+    this.typingBannerText = document.getElementById('typingBannerText');
     this.offlineBanner = document.getElementById('offlineBanner');
     this.scrollButton = document.getElementById('scrollToBottom');
 
@@ -87,6 +90,8 @@ class ChatController {
     this.voiceButton = document.getElementById('voiceButton');
     this.attachmentPreview = document.getElementById('attachmentPreview');
     this.recordingIndicator = document.getElementById('recordingIndicator');
+    this.recordingStatusLabel = document.getElementById('recordingStatusLabel');
+    this.recordingTimer = document.getElementById('recordingTimer');
     this.composer = document.querySelector('.composer');
 
     this.headerAvatar = document.getElementById('headerAvatar');
@@ -125,6 +130,66 @@ class ChatController {
     }
     this.stopTyping();
     this.cancelVoiceRecording();
+    this.optimisticMessages.forEach((message) => {
+      if (message.optimisticLocalUrl) {
+        URL.revokeObjectURL(message.optimisticLocalUrl);
+      }
+    });
+    this.optimisticMessages = [];
+  }
+
+  createClientTag(prefix = 'msg') {
+    const safePrefix = prefix || 'msg';
+    return `${safePrefix}_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
+  }
+
+  addOptimisticMessage(message) {
+    if (!message) return;
+    const payload = {
+      ...message,
+      optimistic: true,
+      ts: message.ts || new Date(),
+    };
+    this.optimisticMessages.push(payload);
+    this.renderMessages();
+    this.scrollToBottom(true);
+  }
+
+  removeOptimisticMessage(clientTag) {
+    if (!clientTag) return;
+    let modified = false;
+    this.optimisticMessages = this.optimisticMessages.filter((message) => {
+      const shouldKeep = message.client_tag !== clientTag;
+      if (!shouldKeep) {
+        modified = true;
+        if (message.optimisticLocalUrl) {
+          URL.revokeObjectURL(message.optimisticLocalUrl);
+        }
+      }
+      return shouldKeep;
+    });
+    if (modified) {
+      this.renderMessages();
+    }
+  }
+
+  purgeDeliveredOptimistic(messages) {
+    if (!this.optimisticMessages.length) return;
+    const deliveredTags = new Set(
+      messages
+        .map((message) => message.client_tag)
+        .filter((tag) => typeof tag === 'string' && tag.trim().length)
+    );
+    if (!deliveredTags.size) return;
+    this.optimisticMessages = this.optimisticMessages.filter((message) => {
+      if (!message.client_tag || !deliveredTags.has(message.client_tag)) {
+        return true;
+      }
+      if (message.optimisticLocalUrl) {
+        URL.revokeObjectURL(message.optimisticLocalUrl);
+      }
+      return false;
+    });
   }
 
   getBuyerUid() {
@@ -319,6 +384,7 @@ class ChatController {
   }
 
   handleMessages(messages) {
+    this.purgeDeliveredOptimistic(messages);
     this.messages = messages;
     this.renderMessages();
     if (this.viewer.uid) {
@@ -330,9 +396,17 @@ class ChatController {
     const isTyping = this.role === 'buyer' ? Boolean(snapshot.vendor) : Boolean(snapshot.buyer);
     if (!this.typingBanner) return;
     if (isTyping) {
+      const fallbackName = this.role === 'buyer' ? 'Vendor' : 'Buyer';
+      const typingName = this.counterparty.name?.trim() || fallbackName;
+      if (this.typingBannerText) {
+        this.typingBannerText.textContent = `${typingName} is typing…`;
+      }
       this.typingBanner.classList.add('is-visible');
     } else {
       this.typingBanner.classList.remove('is-visible');
+      if (this.typingBannerText) {
+        this.typingBannerText.textContent = 'Typing…';
+      }
     }
   }
 
@@ -398,6 +472,27 @@ class ChatController {
       return;
     }
     this.sendButton?.setAttribute('disabled', 'disabled');
+    const originalText = this.messageInput.value;
+    const clientTag = this.createClientTag(hasImage ? 'image' : 'text');
+    let optimisticPreviewUrl = '';
+    if (hasImage && this.pendingImageFile) {
+      optimisticPreviewUrl = URL.createObjectURL(this.pendingImageFile);
+    }
+    if (text || optimisticPreviewUrl) {
+      this.addOptimisticMessage({
+        id: clientTag,
+        client_tag: clientTag,
+        sender_uid: this.viewer.uid,
+        sender_role: this.role,
+        text,
+        image_url: optimisticPreviewUrl,
+        ts: new Date(),
+        optimisticLocalUrl: optimisticPreviewUrl || undefined,
+      });
+    }
+    this.messageInput.value = '';
+    this.autoResize();
+    this.stopTyping();
     try {
       let imageUrl = '';
       if (this.pendingImageFile) {
@@ -421,16 +516,19 @@ class ChatController {
         listing_id: this.listing.id || '',
         listing_title: this.listing.title || '',
         listing_image: this.listing.image || '',
+        client_tag: clientTag,
       });
-      this.messageInput.value = '';
       this.pendingImageFile = null;
       this.clearAttachmentPreview();
-      this.autoResize();
-      this.stopTyping();
       this.scrollToBottom(true);
     } catch (error) {
       console.error('Unable to send message', error);
       showToast(error?.message || 'Unable to send message.', 'error');
+      this.removeOptimisticMessage(clientTag);
+      if (this.messageInput) {
+        this.messageInput.value = originalText;
+        this.autoResize();
+      }
     } finally {
       this.updateSendAvailability();
     }
@@ -484,6 +582,7 @@ class ChatController {
         recording: true,
         controller,
         startedAt: Date.now(),
+        timerInterval: null,
       };
       if (this.voiceButton) {
         this.voiceButton.innerHTML = '<i class="ri-stop-circle-line"></i>';
@@ -491,9 +590,19 @@ class ChatController {
       }
       if (this.recordingIndicator) {
         this.recordingIndicator.classList.add('is-visible');
-        this.recordingIndicator.removeAttribute('hidden');
+        this.recordingIndicator.hidden = false;
       }
-      showToast('Recording... tap stop to send.');
+      if (this.recordingStatusLabel) {
+        this.recordingStatusLabel.textContent = 'Recording… tap stop to send';
+      }
+      if (this.recordingTimer) {
+        this.recordingTimer.textContent = '00:00';
+      }
+      this.updateRecordingTimer();
+      this.voiceState.timerInterval = window.setInterval(
+        () => this.updateRecordingTimer(),
+        200
+      );
     } catch (error) {
       console.error('Unable to start recording', error);
       showToast(error?.message || 'Recording is not supported on this device.', 'error');
@@ -503,17 +612,35 @@ class ChatController {
 
   async stopVoiceRecording() {
     if (!this.voiceState.recording || !this.voiceState.controller) return;
+    const clientTag = this.createClientTag('voice');
+    let localUrl = null;
     try {
       const blob = await this.voiceState.controller.stop();
-      const duration = (Date.now() - this.voiceState.startedAt) / 1000;
-      const url = await uploadVoiceToCloudinary(blob, {
+      const duration = Math.max((Date.now() - this.voiceState.startedAt) / 1000, 0.5);
+      localUrl = URL.createObjectURL(blob);
+      this.voiceState.localUrl = localUrl;
+      this.voiceState.clientTag = clientTag;
+      this.addOptimisticMessage({
+        id: clientTag,
+        client_tag: clientTag,
+        sender_uid: this.viewer.uid,
+        sender_role: this.role,
+        voice_url: localUrl,
+        duration,
+        ts: new Date(),
+        optimisticLocalUrl: localUrl,
+      });
+      if (this.recordingStatusLabel) {
+        this.recordingStatusLabel.textContent = 'Sending voice note…';
+      }
+      const voiceUrl = await uploadVoiceToCloudinary(blob, {
         filename: `voice-${Date.now()}.webm`,
       });
       await sendMessage({
         role: this.role,
         text: '',
         image_url: '',
-        voice_url: url,
+        voice_url: voiceUrl,
         duration,
         buyer_uid: this.getBuyerUid(),
         buyer_name: this.getBuyerName(),
@@ -522,11 +649,15 @@ class ChatController {
         listing_id: this.listing.id || '',
         listing_title: this.listing.title || '',
         listing_image: this.listing.image || '',
+        client_tag: clientTag,
       });
       this.scrollToBottom(true);
     } catch (error) {
       console.error('Voice message failed', error);
       showToast(error?.message || 'Voice message failed.', 'error');
+      if (clientTag) {
+        this.removeOptimisticMessage(clientTag);
+      }
     } finally {
       this.resetVoiceState();
     }
@@ -544,10 +675,14 @@ class ChatController {
   }
 
   resetVoiceState() {
+    if (this.voiceState.timerInterval) {
+      window.clearInterval(this.voiceState.timerInterval);
+    }
     this.voiceState = {
       recording: false,
       controller: null,
       startedAt: 0,
+      timerInterval: null,
     };
     if (this.voiceButton) {
       this.voiceButton.innerHTML = '<i class="ri-mic-line"></i>';
@@ -555,8 +690,25 @@ class ChatController {
     }
     if (this.recordingIndicator) {
       this.recordingIndicator.classList.remove('is-visible');
-      this.recordingIndicator.setAttribute('hidden', 'hidden');
+      this.recordingIndicator.hidden = true;
     }
+    if (this.recordingStatusLabel) {
+      this.recordingStatusLabel.textContent = 'Recording…';
+    }
+    if (this.recordingTimer) {
+      this.recordingTimer.textContent = '00:00';
+    }
+  }
+
+  updateRecordingTimer() {
+    if (!this.voiceState.recording || !this.recordingTimer) return;
+    const elapsed = Math.max(Date.now() - this.voiceState.startedAt, 0);
+    const secondsTotal = Math.floor(elapsed / 1000);
+    const minutes = Math.floor(secondsTotal / 60)
+      .toString()
+      .padStart(2, '0');
+    const seconds = (secondsTotal % 60).toString().padStart(2, '0');
+    this.recordingTimer.textContent = `${minutes}:${seconds}`;
   }
 
   renderMessages() {
@@ -564,13 +716,30 @@ class ChatController {
     const shouldStick = this.shouldStickToBottom();
     this.messageList.innerHTML = '';
     const fragment = document.createDocumentFragment();
-    this.messages.forEach((message) => {
+    const combined = [...this.messages];
+    this.optimisticMessages.forEach((pending) => {
+      if (
+        pending.client_tag &&
+        combined.some((message) => message.client_tag && message.client_tag === pending.client_tag)
+      ) {
+        return;
+      }
+      combined.push(pending);
+    });
+    combined.sort((a, b) => {
+      const aDate = toDate(a.ts);
+      const bDate = toDate(b.ts);
+      const aTime = aDate ? aDate.getTime() : 0;
+      const bTime = bDate ? bDate.getTime() : 0;
+      return aTime - bTime;
+    });
+    combined.forEach((message) => {
       fragment.appendChild(this.renderMessage(message));
     });
     this.messageList.appendChild(fragment);
     if (shouldStick) {
       this.scrollToBottom(true);
-    } else if (this.messages.length) {
+    } else if (combined.length) {
       this.scrollButton?.classList.add('is-visible');
     }
   }
@@ -580,6 +749,9 @@ class ChatController {
     const article = document.createElement('article');
     article.className = `message ${isOwn ? 'sent' : 'received'}`;
     article.dataset.id = message.id || '';
+    if (message.optimistic) {
+      article.classList.add('message--pending');
+    }
 
     if (message.image_url) {
       const figure = document.createElement('figure');
@@ -615,7 +787,7 @@ class ChatController {
 
     const meta = document.createElement('div');
     meta.className = 'meta';
-    meta.textContent = formatTimestamp(message.ts);
+    meta.textContent = message.optimistic ? 'Sending…' : formatTimestamp(message.ts);
     article.appendChild(meta);
 
     return article;

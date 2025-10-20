@@ -170,6 +170,7 @@ function mapMessageSnapshot(docSnap) {
     chat_id: data.chat_id || data.chatId || '',
     sender_uid: data.sender_uid || data.senderUid || '',
     sender_role: data.sender_role || data.senderRole || '',
+    client_tag: normaliseString(data.client_tag || data.clientTag),
     text: normaliseString(data.text),
     image_url: normaliseString(data.image_url || data.imageUrl),
     voice_url: normaliseString(data.voice_url || data.voiceUrl),
@@ -186,6 +187,7 @@ function mapMessageRecord(record) {
     chat_id: record.chat_id || record.chatId || '',
     sender_uid: record.sender_uid || record.senderUid || '',
     sender_role: record.sender_role || record.senderRole || '',
+    client_tag: normaliseString(record.client_tag || record.clientTag),
     text: normaliseString(record.text),
     image_url: normaliseString(record.image_url || record.imageUrl),
     voice_url: normaliseString(record.voice_url || record.voiceUrl),
@@ -500,6 +502,12 @@ export async function sendMessage(payload) {
     listing_title: payload.listing_title,
     listing_image: payload.listing_image,
   };
+  if (payload.client_tag) {
+    const tag = normaliseString(payload.client_tag);
+    if (tag) {
+      body.client_tag = tag;
+    }
+  }
   return callChatApi('./api/chat/send-message.php', { method: 'POST', data: body });
 }
 

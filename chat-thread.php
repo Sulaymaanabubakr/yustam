@@ -364,6 +364,10 @@ $bootstrap = [
             border-color: transparent;
         }
 
+        .message.message--pending {
+            opacity: 0.8;
+        }
+
         .message .meta {
             display: flex;
             justify-content: flex-end;
@@ -375,6 +379,14 @@ $bootstrap = [
 
         .message.received .meta {
             color: var(--muted);
+        }
+
+        .message.message--pending .meta {
+            font-style: italic;
+        }
+
+        .message.received.message--pending .meta {
+            color: rgba(15, 106, 83, 0.55);
         }
 
         .message-image img {
@@ -551,23 +563,43 @@ $bootstrap = [
         .recording-indicator {
             display: none;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
             font-size: 0.9rem;
-            color: rgba(220, 65, 47, 0.9);
             font-weight: 600;
-        }
-
-        .recording-indicator::before {
-            content: '';
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            background: #dc412f;
-            box-shadow: 0 0 0 6px rgba(220, 65, 47, 0.2);
+            color: rgba(220, 65, 47, 0.9);
         }
 
         .recording-indicator.is-visible {
             display: inline-flex;
+        }
+
+        .recording-indicator__dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #dc412f;
+            box-shadow: 0 0 0 6px rgba(220, 65, 47, 0.18);
+            animation: recordingPulse 1.2s ease-in-out infinite;
+        }
+
+        .recording-indicator__timer {
+            font-variant-numeric: tabular-nums;
+            letter-spacing: 0.05em;
+        }
+
+        @keyframes recordingPulse {
+            0% {
+                transform: scale(1);
+                opacity: 1;
+            }
+            50% {
+                transform: scale(1.15);
+                opacity: 0.6;
+            }
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
         }
 
         .composer--disabled textarea,
@@ -640,7 +672,7 @@ $bootstrap = [
         <main class="thread-main">
             <div id="typingBanner">
                 <i class="ri-chat-3-line"></i>
-                <span>Typing...</span>
+                <span id="typingBannerText">Typing...</span>
             </div>
             <section id="messageList" class="message-list" aria-live="polite"></section>
             <button type="button" id="scrollToBottom" class="scroll-bottom">
@@ -650,7 +682,11 @@ $bootstrap = [
         </main>
         <footer class="composer">
             <div id="attachmentPreview" hidden></div>
-            <div class="recording-indicator" id="recordingIndicator" hidden>Recording&hellip; tap stop to send</div>
+            <div class="recording-indicator" id="recordingIndicator" aria-live="polite">
+                <span class="recording-indicator__dot" aria-hidden="true"></span>
+                <span class="recording-indicator__label" id="recordingStatusLabel">Recording&hellip;</span>
+                <span class="recording-indicator__timer" id="recordingTimer">00:00</span>
+            </div>
             <div class="composer-toolbar">
                 <button type="button" id="emojiButton" class="icon-btn" aria-label="Insert emoji"><i class="ri-emotion-line"></i></button>
                 <button type="button" id="attachButton" class="icon-btn" aria-label="Attach image"><i class="ri-attachment-2"></i></button>
