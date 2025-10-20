@@ -153,14 +153,20 @@ function renderChats(chats) {
     const avatar = document.createElement('div');
     avatar.className = 'chat-avatar';
     const avatarImg = document.createElement('img');
-    const listingAlt =
-      chat.listing_title && chat.listing_title.trim()
-        ? `${chat.listing_title.trim()} image`
-        : `${chat.buyer_name || 'Buyer'} avatar`;
-    avatarImg.alt = listingAlt;
+    const listingTitle =
+      typeof chat.listing_title === 'string' ? chat.listing_title.trim() : '';
+    const listingImage =
+      typeof chat.listing_image === 'string' ? chat.listing_image.trim() : '';
+    const buyerName =
+      typeof chat.buyer_name === 'string' && chat.buyer_name.trim()
+        ? chat.buyer_name.trim()
+        : 'Buyer';
+    const buyerAvatar =
+      typeof chat.buyer_avatar === 'string' ? chat.buyer_avatar.trim() : '';
+    avatarImg.alt = listingTitle ? `${listingTitle} image` : `${buyerName} avatar`;
     avatarImg.src =
-      chat.listing_image ||
-      chat.buyer_avatar ||
+      listingImage ||
+      buyerAvatar ||
       'https://images.unsplash.com/photo-1531891437562-4301cf35b7e4?auto=format&fit=crop&w=120&q=80';
     avatar.appendChild(avatarImg);
 
@@ -171,7 +177,7 @@ function renderChats(chats) {
     headerRow.className = 'chat-header';
 
     const title = document.createElement('strong');
-    title.textContent = chat.buyer_name || 'Buyer';
+    title.textContent = buyerName;
     headerRow.appendChild(title);
 
     const lastDate = toDate(chat.last_ts);
@@ -193,7 +199,7 @@ function renderChats(chats) {
 
     const subtitle = document.createElement('div');
     subtitle.className = 'chat-listing';
-    subtitle.textContent = chat.listing_title || 'Listing';
+    subtitle.textContent = listingTitle || 'Listing';
 
     const preview = document.createElement('div');
     preview.className = 'chat-preview';
