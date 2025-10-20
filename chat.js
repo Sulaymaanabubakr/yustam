@@ -208,6 +208,10 @@ class ChatController {
     );
   }
 
+  getCounterpartyUid() {
+    return this.role === 'buyer' ? this.getVendorUid() : this.getBuyerUid();
+  }
+
   getBuyerName() {
     if (this.role === 'buyer') {
       return this.viewer.name || 'Buyer';
@@ -410,6 +414,61 @@ class ChatController {
     }
   }
 
+  buildStatusIndicator(message) {
+    if (!message || message.sender_uid !== this.viewer.uid) {
+      return null;
+    }
+
+    let state = 'delivered';
+    if (message.optimistic) {
+      state = 'sending';
+    } else {
+      const readBy = message.read_by || {};
+      const counterpartUid = this.getCounterpartyUid();
+      if (
+        counterpartUid &&
+        readBy &&
+        Object.prototype.hasOwnProperty.call(readBy, counterpartUid) &&
+        Boolean(readBy[counterpartUid])
+      ) {
+        state = 'read';
+      }
+    }
+
+    const wrapper = document.createElement('span');
+    wrapper.className = `message-status message-status--${state}`;
+
+    let iconClass = 'ri-check-line';
+    let label = 'Delivered';
+    if (state === 'sending') {
+      iconClass = 'ri-time-line';
+      label = 'Sending';
+    } else if (state === 'read') {
+      iconClass = 'ri-check-double-line';
+      label = 'Read';
+    }
+
+    const icon = document.createElement('i');
+    icon.className = iconClass;
+    icon.setAttribute('aria-hidden', 'true');
+    wrapper.appendChild(icon);
+
+    const srText = document.createElement('span');
+    srText.className = 'sr-only';
+    srText.textContent = label;
+    wrapper.appendChild(srText);
+
+    if (state === 'sending') {
+      const labelEl = document.createElement('span');
+      labelEl.className = 'message-status__label';
+      labelEl.textContent = 'Sending…';
+      wrapper.appendChild(labelEl);
+    }
+
+    wrapper.setAttribute('title', label);
+    return wrapper;
+  }
+
   handleInput() {
     this.updateSendAvailability();
     this.autoResize();
@@ -583,6 +642,8 @@ class ChatController {
         controller,
         startedAt: Date.now(),
         timerInterval: null,
+        clientTag: null,
+        localUrl: null,
       };
       if (this.voiceButton) {
         this.voiceButton.innerHTML = '<i class="ri-stop-circle-line"></i>';
@@ -678,11 +739,20 @@ class ChatController {
     if (this.voiceState.timerInterval) {
       window.clearInterval(this.voiceState.timerInterval);
     }
+    if (this.voiceState.localUrl) {
+      try {
+        URL.revokeObjectURL(this.voiceState.localUrl);
+      } catch (revokeError) {
+        console.warn('Unable to revoke voice URL', revokeError);
+      }
+    }
     this.voiceState = {
       recording: false,
       controller: null,
       startedAt: 0,
       timerInterval: null,
+      clientTag: null,
+      localUrl: null,
     };
     if (this.voiceButton) {
       this.voiceButton.innerHTML = '<i class="ri-mic-line"></i>';
@@ -699,7 +769,6 @@ class ChatController {
       this.recordingTimer.textContent = '00:00';
     }
   }
-
   updateRecordingTimer() {
     if (!this.voiceState.recording || !this.recordingTimer) return;
     const elapsed = Math.max(Date.now() - this.voiceState.startedAt, 0);
@@ -787,7 +856,37 @@ class ChatController {
 
     const meta = document.createElement('div');
     meta.className = 'meta';
-    meta.textContent = message.optimistic ? 'Sending…' : formatTimestamp(message.ts);
+
+    if (isOwn) {
+      const statusIndicator = this.buildStatusIndicator(message);
+      if (statusIndicator) {
+        meta.appendChild(statusIndicator);
+      }
+    }
+
+    const timeEl = document.createElement('time');
+    timeEl.className = 'meta-time';
+    if (!message.optimistic) {
+      const date = toDate(message.ts);
+      if (date instanceof Date && !Number.isNaN(date.getTime())) {
+        try {
+          timeEl.dateTime = date.toISOString();
+        } catch (isoError) {
+          // Ignore invalid ISO conversion.
+        }
+      }
+      timeEl.textContent = formatTimestamp(message.ts);
+    } else if (!isOwn) {
+      timeEl.textContent = 'Sending…';
+    } else {
+      timeEl.setAttribute('aria-hidden', 'true');
+      timeEl.textContent = '';
+    }
+
+    if (timeEl.textContent) {
+      meta.appendChild(timeEl);
+    }
+
     article.appendChild(meta);
 
     return article;
