@@ -149,17 +149,53 @@ function yustam_firebase_create_user(string $email, string $password, ?string $d
         unset($payload['displayName']);
     }
 
+    $response = null;
+    $adminErrorDetails = null;
+
     if (yustam_firebase_service_account_available()) {
-        $projectId = yustam_firebase_project_id();
-        $adminPayload = $payload + ['disabled' => false];
-        $response = yustam_firebase_identity_admin_request(
-            'POST',
-            sprintf('projects/%s/accounts:signUp', $projectId),
-            $adminPayload
-        );
-    } else {
+        try {
+            $projectId = yustam_firebase_project_id();
+            $adminPayload = $payload + ['disabled' => false];
+            $adminResponse = yustam_firebase_identity_admin_request(
+                'POST',
+                sprintf('projects/%s/accounts:signUp', $projectId),
+                $adminPayload
+            );
+
+            if (($adminResponse['status'] ?? 0) >= 200 && ($adminResponse['status'] ?? 0) < 300) {
+                $response = $adminResponse;
+            } else {
+                $adminErrorDetails = yustam_firebase_extract_error_details($adminResponse['body'] ?? null);
+                $fallbackCodes = [
+                    'PERMISSION_DENIED',
+                    'UNAUTHENTICATED',
+                    'SERVICE_DISABLED',
+                    'PROJECT_NOT_FOUND',
+                    'INVALID_ARGUMENT',
+                ];
+
+                if (!in_array(strtoupper($adminErrorDetails['code'] ?? ''), $fallbackCodes, true)) {
+                    yustam_firebase_throw('We could not create your account. Please try again.', $adminErrorDetails);
+                }
+            }
+        } catch (Throwable $adminError) {
+            $adminErrorDetails = [
+                'code' => '',
+                'message' => $adminError->getMessage(),
+                'raw' => '',
+            ];
+            error_log('YUSTAM auth admin sign-up fallback: ' . $adminError->getMessage());
+        }
+    }
+
+    if ($response === null) {
         $webPayload = $payload + ['returnSecureToken' => true];
         $response = yustam_firebase_identity_web_request('POST', 'accounts:signUp', $webPayload);
+
+        if (($response['status'] ?? 0) >= 400 && $adminErrorDetails !== null) {
+            // Preserve the most helpful admin error message when the fallback also fails.
+            yustam_firebase_throw('We could not create your account. Please try again.', $adminErrorDetails);
+        }
     }
 
     if ($response['status'] < 200 || $response['status'] >= 300) {

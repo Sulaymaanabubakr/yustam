@@ -73,46 +73,26 @@ if (!$vendor) {
     $phone = '';
     $randomPassword = password_hash(bin2hex(random_bytes(16)), PASSWORD_DEFAULT);
 
-    $insertSql = sprintf(
-        'INSERT INTO `%s` (vendor_uid, firebase_uid, full_name, email, phone, password, business_name, category, provider, verification_token, verified, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, NOW(), NOW())',
-        $vendorTable
-    );
-    $stmt = $db->prepare($insertSql);
-    if (!$stmt) {
-        throw new RuntimeException('Unable to prepare vendor insert statement.');
-    }
-
-    $vendorUid = '';
-    $stmt->bind_param('sssssssssi', $vendorUid, $firebaseUid, $displayName, $email, $phone, $randomPassword, $businessName, $category, $provider, $verified);
-
-    $maxAttempts = 5;
-    $created = false;
-
-    for ($attempt = 0; $attempt < $maxAttempts; $attempt++) {
-        $vendorUid = yustam_generate_vendor_uid($db);
-        try {
-            $stmt->execute();
-            $created = true;
-            break;
-        } catch (mysqli_sql_exception $exception) {
-            if ((int) $exception->getCode() === 1062 && stripos($exception->getMessage(), 'vendor_uid') !== false) {
-                $stmt->reset();
-                continue;
-            }
-            $stmt->close();
-            throw $exception;
+    try {
+        $vendor = yustam_vendor_create($db, [
+            'firebase_uid' => $firebaseUid,
+            'name' => $displayName,
+            'email' => $email,
+            'phone' => $phone,
+            'password_hash' => $randomPassword,
+            'business_name' => $businessName,
+            'category' => $category,
+            'provider' => $provider,
+            'verified' => $verified,
+        ]);
+    } catch (RuntimeException $creationError) {
+        $message = $creationError->getMessage();
+        if (stripos($message, 'already') !== false || stripos($message, 'linked') !== false) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'message' => $message]);
+            exit;
         }
-    }
-
-    $stmt->close();
-
-    if (!$created) {
-        throw new RuntimeException('Unable to generate a unique vendor UID. Please try again.');
-    }
-
-    $vendor = yustam_vendor_find_by_firebase_uid($firebaseUid, $db);
-    if (!$vendor) {
-        throw new RuntimeException('Vendor record could not be created.');
+        throw $creationError;
     }
 
     $createdNewVendor = true;
