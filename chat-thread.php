@@ -211,6 +211,18 @@ $bootstrap = [
             --muted: rgba(29, 42, 40, 0.6);
         }
 
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+
         *,
         *::before,
         *::after {
@@ -387,6 +399,47 @@ $bootstrap = [
 
         .message.received.message--pending .meta {
             color: rgba(15, 106, 83, 0.55);
+        }
+
+        .message .meta time {
+            font-size: inherit;
+        }
+
+        .message-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: inherit;
+            line-height: 1;
+        }
+
+        .message-status i {
+            font-size: 0.95rem;
+        }
+
+        .message-status__label {
+            font-size: inherit;
+            text-transform: none;
+        }
+
+        .message-status--sending {
+            color: rgba(243, 115, 30, 0.9);
+        }
+
+        .message.sent .message-status--sending {
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .message.sent .message-status--delivered {
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .message.sent .message-status--read {
+            color: #9ef6d5;
+        }
+
+        .message.received .message-status {
+            color: var(--muted);
         }
 
         .message-image img {
