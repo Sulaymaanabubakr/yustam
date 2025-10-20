@@ -782,7 +782,6 @@ class ChatController {
 
   renderMessages() {
     if (!this.messageList) return;
-    const shouldStick = this.shouldStickToBottom();
     this.messageList.innerHTML = '';
     const fragment = document.createDocumentFragment();
     const combined = [...this.messages];
@@ -806,11 +805,8 @@ class ChatController {
       fragment.appendChild(this.renderMessage(message));
     });
     this.messageList.appendChild(fragment);
-    if (shouldStick) {
-      this.scrollToBottom(true);
-    } else if (combined.length) {
-      this.scrollButton?.classList.add('is-visible');
-    }
+    this.scrollToBottom(true);
+    this.scrollButton?.classList.remove('is-visible');
   }
 
   renderMessage(message) {

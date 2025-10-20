@@ -341,15 +341,26 @@ $bootstrap = [
 
         #typingBanner {
             display: none;
-            justify-content: flex-start;
-            gap: 8px;
             align-items: center;
+            gap: 8px;
             color: var(--muted);
             font-size: 0.85rem;
+            padding: 4px 6px;
+            margin-bottom: 6px;
+        }
+
+        #typingBanner i {
+            font-size: 1rem;
         }
 
         #typingBanner.is-visible {
             display: flex;
+        }
+
+        .composer #typingBanner {
+            order: 0;
+            align-self: stretch;
+            justify-content: flex-start;
         }
 
         .message-list {
@@ -723,10 +734,6 @@ $bootstrap = [
         </header>
         <div id="offlineBanner">You are offline. Messages will send when you're back online.</div>
         <main class="thread-main">
-            <div id="typingBanner">
-                <i class="ri-chat-3-line"></i>
-                <span id="typingBannerText">Typing...</span>
-            </div>
             <section id="messageList" class="message-list" aria-live="polite"></section>
             <button type="button" id="scrollToBottom" class="scroll-bottom">
                 <i class="ri-arrow-down-line"></i>
@@ -734,6 +741,10 @@ $bootstrap = [
             </button>
         </main>
         <footer class="composer">
+            <div id="typingBanner">
+                <i class="ri-chat-3-line"></i>
+                <span id="typingBannerText">Typing…</span>
+            </div>
             <div id="attachmentPreview" hidden></div>
             <div class="recording-indicator" id="recordingIndicator" aria-live="polite">
                 <span class="recording-indicator__dot" aria-hidden="true"></span>
@@ -757,3 +768,4 @@ $bootstrap = [
     <script type="module" src="chat.js"></script>
 </body>
 </html>
+
