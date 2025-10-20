@@ -81,6 +81,8 @@ class ChatController {
     this.typingBannerText = document.getElementById('typingBannerText');
     this.offlineBanner = document.getElementById('offlineBanner');
     this.scrollButton = document.getElementById('scrollToBottom');
+    this.threadMain = document.querySelector('.thread-main');
+    this.scrollContainer = this.threadMain || this.messageList;
 
     this.messageInput = document.getElementById('messageInput');
     this.emojiButton = document.getElementById('emojiButton');
@@ -258,7 +260,7 @@ class ChatController {
   bindEvents() {
     this.messageInput?.addEventListener('input', () => this.handleInput());
     this.messageInput?.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter' && !event.shiftKey) {
+      if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
         event.preventDefault();
         this.handleSend();
       }
@@ -298,7 +300,7 @@ class ChatController {
     });
 
     this.scrollButton?.addEventListener('click', () => this.scrollToBottom(true));
-    this.messageList?.addEventListener('scroll', () => this.handleListScroll());
+    this.scrollContainer?.addEventListener('scroll', () => this.handleListScroll());
 
     this.backButton?.addEventListener('click', () => this.navigateBack());
     this.infoButton?.addEventListener('click', () => this.openListing());
@@ -888,25 +890,23 @@ class ChatController {
     return article;
   }
 
-  shouldStickToBottom() {
-    if (!this.messageList) return true;
-    const threshold = 120;
-    const distanceFromBottom =
-      this.messageList.scrollHeight - (this.messageList.scrollTop + this.messageList.clientHeight);
-    return distanceFromBottom <= threshold;
-  }
-
   scrollToBottom(force = false) {
-    if (!this.messageList) return;
-    if (force || this.shouldStickToBottom()) {
-      this.messageList.scrollTop = this.messageList.scrollHeight;
-      this.scrollButton?.classList.remove('is-visible');
-    }
+    const container = this.scrollContainer;
+    if (!container) return;
+    container.scrollTop = container.scrollHeight;
+    this.scrollButton?.classList.remove('is-visible');
   }
 
   handleListScroll() {
-    if (this.shouldStickToBottom()) {
+    const container = this.scrollContainer;
+    if (!container) return;
+    const threshold = 120;
+    const distanceFromBottom =
+      container.scrollHeight - (container.scrollTop + container.clientHeight);
+    if (distanceFromBottom <= threshold) {
       this.scrollButton?.classList.remove('is-visible');
+    } else {
+      this.scrollButton?.classList.add('is-visible');
     }
   }
 
