@@ -155,6 +155,173 @@ function yustam_generate_vendor_uid(mysqli $conn): string
     return yustam_vendor_format_uid(yustam_vendor_next_sequence($conn));
 }
 
+/**
+ * Create a vendor record while adapting to the current table schema.
+ *
+ * @return array Created vendor record.
+ */
+function yustam_vendor_create(mysqli $conn, array $fields): array
+{
+    yustam_vendor_ensure_uid_column($conn);
+
+    $columns = yustam_vendor_table_columns();
+    $table = YUSTAM_VENDORS_TABLE;
+
+    $bindColumns = [];
+    $bindValues = [];
+    $bindTypes = '';
+
+    $addColumn = function (string $column, string $type, &$value) use (&$bindColumns, &$bindValues, &$bindTypes, $columns): bool {
+        if (!in_array($column, $columns, true)) {
+            return false;
+        }
+        $bindColumns[] = $column;
+        $bindValues[] = &$value;
+        $bindTypes .= $type;
+        return true;
+    };
+
+    $vendorUidColumnExists = in_array('vendor_uid', $columns, true);
+    $vendorUidValue = '';
+    if ($vendorUidColumnExists) {
+        $addColumn('vendor_uid', 's', $vendorUidValue);
+    }
+
+    $firebaseUidValue = isset($fields['firebase_uid']) ? (string) $fields['firebase_uid'] : '';
+    if ($firebaseUidValue !== '' && in_array('firebase_uid', $columns, true)) {
+        $addColumn('firebase_uid', 's', $firebaseUidValue);
+    }
+
+    $emailValue = strtolower(trim((string) ($fields['email'] ?? '')));
+    if ($emailValue === '') {
+        throw new InvalidArgumentException('Vendor email is required.');
+    }
+
+    if (!in_array('email', $columns, true)) {
+        throw new RuntimeException('Vendors table is missing the email column.');
+    }
+    $addColumn('email', 's', $emailValue);
+
+    $nameValue = trim((string) ($fields['name'] ?? ''));
+    $nameColumn = yustam_vendor_name_column();
+    if ($nameValue !== '' && in_array($nameColumn, $columns, true)) {
+        $addColumn($nameColumn, 's', $nameValue);
+    }
+
+    $phoneValue = trim((string) ($fields['phone'] ?? ''));
+    if (in_array('phone', $columns, true)) {
+        $addColumn('phone', 's', $phoneValue);
+    }
+
+    $passwordHashValue = (string) ($fields['password_hash'] ?? '');
+    if ($passwordHashValue !== '' && in_array('password', $columns, true)) {
+        $addColumn('password', 's', $passwordHashValue);
+    }
+
+    $businessNameValue = trim((string) ($fields['business_name'] ?? ''));
+    if (in_array('business_name', $columns, true)) {
+        $addColumn('business_name', 's', $businessNameValue);
+    }
+
+    $categoryValue = trim((string) ($fields['category'] ?? ''));
+    if (in_array('category', $columns, true)) {
+        $addColumn('category', 's', $categoryValue);
+    }
+
+    $providerValue = trim((string) ($fields['provider'] ?? ''));
+    if (in_array('provider', $columns, true)) {
+        if ($providerValue === '') {
+            $providerValue = 'email';
+        }
+        $addColumn('provider', 's', $providerValue);
+    }
+
+    if (array_key_exists('verification_token', $fields) && in_array('verification_token', $columns, true)) {
+        $verificationTokenValue = $fields['verification_token'];
+        if ($verificationTokenValue === null) {
+            $verificationTokenValue = '';
+        }
+        $addColumn('verification_token', 's', $verificationTokenValue);
+    }
+
+    if (array_key_exists('verified', $fields) && in_array('verified', $columns, true)) {
+        $verifiedValue = (int) $fields['verified'];
+        $addColumn('verified', 'i', $verifiedValue);
+    }
+
+    if (in_array('created_at', $columns, true)) {
+        $createdAtValue = $fields['created_at'] ?? date('Y-m-d H:i:s');
+        $addColumn('created_at', 's', $createdAtValue);
+    }
+
+    if (in_array('updated_at', $columns, true)) {
+        $updatedAtValue = $fields['updated_at'] ?? date('Y-m-d H:i:s');
+        $addColumn('updated_at', 's', $updatedAtValue);
+    }
+
+    if (!$bindColumns) {
+        throw new RuntimeException('Unable to build vendor insert statement for the current schema.');
+    }
+
+    $columnSql = implode(', ', array_map(static fn(string $column): string => "`{$column}`", $bindColumns));
+    $placeholders = implode(', ', array_fill(0, count($bindColumns), '?'));
+    $sql = sprintf('INSERT INTO `%s` (%s) VALUES (%s)', $table, $columnSql, $placeholders);
+
+    $stmt = $conn->prepare($sql);
+    if (!$stmt) {
+        throw new RuntimeException('Unable to prepare vendor insert statement: ' . $conn->error);
+    }
+
+    $stmt->bind_param($bindTypes, ...$bindValues);
+
+    $maxAttempts = 5;
+    for ($attempt = 0; $attempt < $maxAttempts; $attempt++) {
+        if ($vendorUidColumnExists) {
+            $vendorUidValue = yustam_generate_vendor_uid($conn);
+        }
+
+        try {
+            $stmt->execute();
+            break;
+        } catch (mysqli_sql_exception $exception) {
+            if ($vendorUidColumnExists && (int) $exception->getCode() === 1062 && stripos($exception->getMessage(), 'vendor_uid') !== false) {
+                $stmt->reset();
+                continue;
+            }
+
+            $stmt->close();
+
+            if ((int) $exception->getCode() === 1062) {
+                $message = $exception->getMessage();
+                if (stripos($message, 'email') !== false) {
+                    throw new RuntimeException('This email is already registered.');
+                }
+                if (stripos($message, 'firebase_uid') !== false) {
+                    throw new RuntimeException('This account is already linked to another sign-in method.');
+                }
+            }
+
+            throw $exception;
+        }
+    }
+
+    $stmt->close();
+
+    if ($firebaseUidValue !== '' && in_array('firebase_uid', $columns, true)) {
+        $vendor = yustam_vendor_find_by_firebase_uid($firebaseUidValue, $conn);
+        if ($vendor) {
+            return $vendor;
+        }
+    }
+
+    $vendor = yustam_vendor_find_by_email($emailValue, $conn);
+    if (!empty($vendor)) {
+        return $vendor;
+    }
+
+    throw new RuntimeException('Vendor record could not be created.');
+}
+
 function yustam_vendor_assign_uid_if_missing(mysqli $conn, array &$vendor): string
 {
     if (!empty($vendor['vendor_uid'])) {
