@@ -34,7 +34,18 @@ const persistUid = (uid) => {
 persistUid(buyer.uid);
 const chatListEl = document.getElementById('chatList');
 const emptyStateEl = document.getElementById('emptyState');
+const loadingOverlay = document.getElementById('loadingOverlay');
 const newChatBtn = document.getElementById('newChatBtn');
+
+let overlayHidden = false;
+document.body?.classList.add('is-loading');
+
+function hideLoadingOverlay() {
+  if (overlayHidden) return;
+  overlayHidden = true;
+  loadingOverlay?.setAttribute('hidden', 'hidden');
+  document.body?.classList.remove('is-loading');
+}
 
 const typingSubscriptions = new Map();
 const typingState = new Map();
@@ -123,9 +134,11 @@ function renderChats(chats) {
   chatListEl.innerHTML = '';
   if (!Array.isArray(chats) || chats.length === 0) {
     emptyStateEl?.removeAttribute('hidden');
+    hideLoadingOverlay();
     return;
   }
   emptyStateEl?.setAttribute('hidden', 'hidden');
+  hideLoadingOverlay();
 
   const fragment = document.createDocumentFragment();
   chats.forEach((chat) => {
@@ -143,27 +156,56 @@ function renderChats(chats) {
     const avatar = document.createElement('div');
     avatar.className = 'chat-avatar';
     const avatarImg = document.createElement('img');
-    avatarImg.alt = `${chat.vendor_name || 'Vendor'} avatar`;
-    avatarImg.src = chat.vendor_avatar || chat.listing_image || 'https://images.unsplash.com/photo-1618005198919-d3d4b5a92eee?auto=format&fit=crop&w=120&q=80';
+    const listingAlt =
+      chat.listing_title && chat.listing_title.trim()
+        ? `${chat.listing_title.trim()} image`
+        : `${chat.vendor_name || 'Vendor'} avatar`;
+    avatarImg.alt = listingAlt;
+    avatarImg.src =
+      chat.listing_image ||
+      chat.vendor_avatar ||
+      'https://images.unsplash.com/photo-1618005198919-d3d4b5a92eee?auto=format&fit=crop&w=120&q=80';
     avatar.appendChild(avatarImg);
 
     const content = document.createElement('div');
     content.className = 'chat-content';
 
+    const headerRow = document.createElement('div');
+    headerRow.className = 'chat-header';
+
     const title = document.createElement('strong');
     title.textContent = chat.vendor_name || 'Vendor';
+    headerRow.appendChild(title);
 
-    const subtitle = document.createElement('small');
+    const lastDate = toDate(chat.last_ts);
+    const timeText = lastDate ? relativeTimeFrom(lastDate) : '';
+    if (timeText) {
+      const timeLabel = document.createElement('span');
+      timeLabel.className = 'chat-time';
+      timeLabel.textContent = timeText;
+      headerRow.appendChild(timeLabel);
+    }
+
+    const unread = chat.unread_for_buyer || 0;
+    if (unread > 0) {
+      const badge = document.createElement('span');
+      badge.className = 'badge';
+      badge.textContent = unread > 9 ? '9+' : String(unread);
+      headerRow.appendChild(badge);
+    }
+
+    const subtitle = document.createElement('div');
+    subtitle.className = 'chat-listing';
     subtitle.textContent = chat.listing_title || 'Listing';
 
-    const preview = document.createElement('small');
+    const preview = document.createElement('div');
+    preview.className = 'chat-preview';
     if (isVendorTyping) {
-      preview.textContent = 'Typing…';
+      preview.textContent = 'Typing...';
       preview.classList.add('typing-indicator');
     } else {
       const previewData = messagePreview(chat);
       if (previewData.icon) {
-        preview.classList.add('chat-preview');
         const iconEl = document.createElement('i');
         iconEl.className = previewData.icon;
         iconEl.setAttribute('aria-hidden', 'true');
@@ -175,31 +217,16 @@ function renderChats(chats) {
       }
     }
 
-    content.append(title, subtitle, preview);
+    content.append(headerRow, subtitle, preview);
 
-    const meta = document.createElement('div');
-    meta.className = 'chat-meta';
-
-    const timeLabel = document.createElement('small');
-    const lastDate = toDate(chat.last_ts);
-    timeLabel.textContent = lastDate ? relativeTimeFrom(lastDate) : '';
-    meta.appendChild(timeLabel);
-
-    const unread = chat.unread_for_buyer || 0;
-    if (unread > 0) {
-      const badge = document.createElement('span');
-      badge.className = 'badge';
-      badge.textContent = unread > 9 ? '9+' : String(unread);
-      meta.appendChild(badge);
-    }
-
-    card.append(avatar, content, meta);
+    card.append(avatar, content);
     card.addEventListener('click', () => openChat(chat));
     fragment.appendChild(card);
   });
 
   chatListEl.appendChild(fragment);
 }
+
 
 function openChat(chat) {
   const chatId = chat.chat_id || chat.id;

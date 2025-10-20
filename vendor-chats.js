@@ -32,7 +32,17 @@ const persistUid = (uid) => {
 persistUid(vendor.uid);
 const chatListEl = document.getElementById('chatList');
 const emptyStateEl = document.getElementById('emptyState');
-const newChatBtn = document.getElementById('newChatBtn');
+const loadingOverlay = document.getElementById('loadingOverlay');
+
+let overlayHidden = false;
+document.body?.classList.add('is-loading');
+
+function hideLoadingOverlay() {
+  if (overlayHidden) return;
+  overlayHidden = true;
+  loadingOverlay?.setAttribute('hidden', 'hidden');
+  document.body?.classList.remove('is-loading');
+}
 
 const typingSubscriptions = new Map();
 const typingState = new Map();
@@ -121,9 +131,11 @@ function renderChats(chats) {
   chatListEl.innerHTML = '';
   if (!Array.isArray(chats) || chats.length === 0) {
     emptyStateEl?.removeAttribute('hidden');
+    hideLoadingOverlay();
     return;
   }
   emptyStateEl?.setAttribute('hidden', 'hidden');
+  hideLoadingOverlay();
 
   const fragment = document.createDocumentFragment();
   chats.forEach((chat) => {
@@ -141,27 +153,56 @@ function renderChats(chats) {
     const avatar = document.createElement('div');
     avatar.className = 'chat-avatar';
     const avatarImg = document.createElement('img');
-    avatarImg.alt = `${chat.buyer_name || 'Buyer'} avatar`;
-    avatarImg.src = chat.buyer_avatar || 'https://images.unsplash.com/photo-1531891437562-4301cf35b7e4?auto=format&fit=crop&w=120&q=80';
+    const listingAlt =
+      chat.listing_title && chat.listing_title.trim()
+        ? `${chat.listing_title.trim()} image`
+        : `${chat.buyer_name || 'Buyer'} avatar`;
+    avatarImg.alt = listingAlt;
+    avatarImg.src =
+      chat.listing_image ||
+      chat.buyer_avatar ||
+      'https://images.unsplash.com/photo-1531891437562-4301cf35b7e4?auto=format&fit=crop&w=120&q=80';
     avatar.appendChild(avatarImg);
 
     const content = document.createElement('div');
     content.className = 'chat-content';
 
+    const headerRow = document.createElement('div');
+    headerRow.className = 'chat-header';
+
     const title = document.createElement('strong');
     title.textContent = chat.buyer_name || 'Buyer';
+    headerRow.appendChild(title);
 
-    const subtitle = document.createElement('small');
+    const lastDate = toDate(chat.last_ts);
+    const timeText = lastDate ? relativeTimeFrom(lastDate) : '';
+    if (timeText) {
+      const timeLabel = document.createElement('span');
+      timeLabel.className = 'chat-time';
+      timeLabel.textContent = timeText;
+      headerRow.appendChild(timeLabel);
+    }
+
+    const unread = chat.unread_for_vendor || 0;
+    if (unread > 0) {
+      const badge = document.createElement('span');
+      badge.className = 'badge';
+      badge.textContent = unread > 9 ? '9+' : String(unread);
+      headerRow.appendChild(badge);
+    }
+
+    const subtitle = document.createElement('div');
+    subtitle.className = 'chat-listing';
     subtitle.textContent = chat.listing_title || 'Listing';
 
-    const preview = document.createElement('small');
+    const preview = document.createElement('div');
+    preview.className = 'chat-preview';
     if (isBuyerTyping) {
-      preview.textContent = 'Typing…';
+      preview.textContent = 'Typing...';
       preview.classList.add('typing-indicator');
     } else {
       const previewData = messagePreview(chat);
       if (previewData.icon) {
-        preview.classList.add('chat-preview');
         const iconEl = document.createElement('i');
         iconEl.className = previewData.icon;
         iconEl.setAttribute('aria-hidden', 'true');
@@ -173,25 +214,9 @@ function renderChats(chats) {
       }
     }
 
-    content.append(title, subtitle, preview);
+    content.append(headerRow, subtitle, preview);
 
-    const meta = document.createElement('div');
-    meta.className = 'chat-meta';
-
-    const timeLabel = document.createElement('small');
-    const lastDate = toDate(chat.last_ts);
-    timeLabel.textContent = lastDate ? relativeTimeFrom(lastDate) : '';
-    meta.appendChild(timeLabel);
-
-    const unread = chat.unread_for_vendor || 0;
-    if (unread > 0) {
-      const badge = document.createElement('span');
-      badge.className = 'badge';
-      badge.textContent = unread > 9 ? '9+' : String(unread);
-      meta.appendChild(badge);
-    }
-
-    card.append(avatar, content, meta);
+    card.append(avatar, content);
     card.addEventListener('click', () => openChat(chat));
     fragment.appendChild(card);
   });
@@ -230,16 +255,9 @@ function subscribeToChats() {
   });
 }
 
-if (newChatBtn) {
-  newChatBtn.addEventListener('click', () => {
-    window.location.href = 'vendor-dashboard.php';
-  });
-}
-
 subscribeToChats();
 
 window.addEventListener('beforeunload', () => {
   if (unsubscribeChats) unsubscribeChats();
   typingSubscriptions.forEach((unsubscribe) => unsubscribe());
 });
-

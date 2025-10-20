@@ -103,6 +103,10 @@ class ChatController {
     this.infoButton = document.getElementById('infoButton');
     this.deleteButton = document.getElementById('deleteChatBtn');
 
+    this.loadingOverlay = document.getElementById('loadingOverlay');
+    this.overlayHidden = false;
+    document.body?.classList.add('is-loading');
+
     this.unsubscribeMessages = null;
     this.unsubscribeTyping = null;
   }
@@ -116,6 +120,9 @@ class ChatController {
     this.updateOfflineState();
 
     await this.ensureChatContext();
+    if (this.context.contextIncomplete) {
+      this.hideLoadingOverlay();
+    }
     this.loadPrefill();
     this.startSubscriptions();
     this.loadChatSummary();
@@ -138,6 +145,17 @@ class ChatController {
       }
     });
     this.optimisticMessages = [];
+  }
+
+  hideLoadingOverlay() {
+    if (this.overlayHidden) {
+      return;
+    }
+    this.overlayHidden = true;
+    if (this.loadingOverlay) {
+      this.loadingOverlay.setAttribute('hidden', 'hidden');
+    }
+    document.body?.classList.remove('is-loading');
   }
 
   createClientTag(prefix = 'msg') {
@@ -335,7 +353,10 @@ class ChatController {
   }
 
   startSubscriptions() {
-    if (!this.context.chatId) return;
+    if (!this.context.chatId) {
+      this.hideLoadingOverlay();
+      return;
+    }
     this.unsubscribeMessages = subscribeMessages(this.context.chatId, (messages) =>
       this.handleMessages(Array.isArray(messages) ? messages : [])
     );
@@ -393,6 +414,7 @@ class ChatController {
     this.purgeDeliveredOptimistic(messages);
     this.messages = messages;
     this.renderMessages();
+    this.hideLoadingOverlay();
     if (this.viewer.uid) {
       markRead(this.context.chatId, this.role, this.viewer.uid);
     }
