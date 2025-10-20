@@ -32,6 +32,7 @@ $vendorName = trim((string)($input['vendor_name'] ?? $input['vendorName'] ?? ($_
 $listingId = trim((string)($input['listing_id'] ?? $input['listingId'] ?? ''));
 $listingTitle = trim((string)($input['listing_title'] ?? $input['listingTitle'] ?? ''));
 $listingImage = trim((string)($input['listing_image'] ?? $input['listingImage'] ?? ''));
+$clientTag = trim((string)($input['client_tag'] ?? $input['clientTag'] ?? ''));
 
 if (!in_array($role, ['buyer', 'vendor'], true)) {
     if (isset($_SESSION['buyer_firebase_uid'])) {
@@ -131,6 +132,9 @@ try {
     if ($duration !== null) {
         $messageFields['duration'] = yustam_firestore_double($duration);
     }
+    if ($clientTag !== '') {
+        $messageFields['client_tag'] = yustam_firestore_string($clientTag);
+    }
 
     $writes = [];
     $writes[] = [
@@ -204,4 +208,5 @@ echo json_encode([
     'type' => $type,
     'firestore_synced' => $firestoreSynced,
     'preview' => $preview,
+    'client_tag' => $clientTag,
 ]);
