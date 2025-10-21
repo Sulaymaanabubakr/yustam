@@ -659,6 +659,7 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
     window.__INITIAL_VENDOR_SETTINGS__ = <?php echo json_encode($settings, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
     window.__VENDOR_SETTINGS_ENDPOINT__ = 'update-vendor-settings.php';
     window.__VENDOR_SETTINGS_REFRESH__ = 'vendor-settings.php?format=json';
+    window.__VENDOR_DELETE_ENDPOINT__ = 'vendor-delete-account.php';
   </script>
   <script src="vendor-settings.js" defer></script>
 </body>

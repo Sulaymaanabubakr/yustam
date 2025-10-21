@@ -24,6 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
   const settingsEndpoint = window.__VENDOR_SETTINGS_ENDPOINT__ || 'update-vendor-settings.php';
   const refreshEndpoint = window.__VENDOR_SETTINGS_REFRESH__ || 'vendor-settings.php?format=json';
+  const deleteEndpoint = window.__VENDOR_DELETE_ENDPOINT__ || 'vendor-delete-account.php';
 
   let settings = { ...DEFAULT_SETTINGS, ...stripTheme(initialSettings) };
   try {
@@ -230,10 +231,65 @@ document.addEventListener('DOMContentLoaded', () => {
   deleteAccountModal?.addEventListener('click', (event) => {
     if (event.target === deleteAccountModal) toggleModal(deleteAccountModal, false);
   });
-  confirmDeleteBtn?.addEventListener('click', () => {
-    console.log('Account deletion requested');
-    showToast('Your account has been scheduled for deletion.', 'error');
-    toggleModal(deleteAccountModal, false);
+  let deleteInProgress = false;
+  const deleteBtnLabel = confirmDeleteBtn?.textContent || 'Delete Account';
+  confirmDeleteBtn?.addEventListener('click', async () => {
+    if (!confirmDeleteBtn || deleteInProgress) {
+      return;
+    }
+
+    deleteInProgress = true;
+    confirmDeleteBtn.disabled = true;
+    confirmDeleteBtn.textContent = 'Deleting...';
+
+    try {
+      const response = await fetch(deleteEndpoint, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          Accept: 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+      });
+
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.success) {
+        throw new Error(payload?.message || 'Unable to delete your account right now.');
+      }
+
+      toggleModal(deleteAccountModal, false);
+      showToast(payload.message || 'Your account has been deleted.', 'success');
+
+      try {
+        const keysToClear = [
+          'firebase_uid',
+          'vendor_uid',
+          'vendor_id',
+          'vendor_email',
+          'vendor_name',
+          'yustam_uid',
+        ];
+        keysToClear.forEach((key) => {
+          localStorage.removeItem(key);
+          sessionStorage.removeItem(key);
+        });
+      } catch (storageError) {
+        console.warn('Unable to clear local session data after deletion:', storageError);
+      }
+
+      setTimeout(() => {
+        window.location.href = payload.redirect || 'vendor-login.html';
+      }, 1500);
+    } catch (error) {
+      console.error('Vendor account deletion failed:', error);
+      showToast(error.message || 'Unable to delete your account.', 'error');
+    } finally {
+      deleteInProgress = false;
+      if (confirmDeleteBtn) {
+        confirmDeleteBtn.disabled = false;
+        confirmDeleteBtn.textContent = deleteBtnLabel;
+      }
+    }
   });
 
 });

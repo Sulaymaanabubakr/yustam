@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/firebase-admin.php';
 $isAjax = (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest')
     || (isset($_SERVER['HTTP_ACCEPT']) && stripos($_SERVER['HTTP_ACCEPT'], 'application/json') !== false);
 
@@ -45,7 +46,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         } else {
             $stmt = $db->prepare("
-                SELECT pr.id, pr.user_id, pr.token, pr.expires_at, pr.used, v.email
+                SELECT pr.id, pr.user_id, pr.token, pr.expires_at, pr.used, v.email, v.firebase_uid, v.provider
                 FROM password_resets pr
                 INNER JOIN `{$vendorTable}` v ON pr.user_id = v.id
                 WHERE pr.token = ?
@@ -74,10 +75,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     respond_json(false, $message);
                 }
             } else {
+                $vendorId = (int) $reset['user_id'];
+                $firebaseUid = trim((string) ($reset['firebase_uid'] ?? ''));
+                $firebaseEmail = trim((string) ($reset['email'] ?? ''));
+
+                try {
+                    if ($firebaseUid === '' && $firebaseEmail !== '') {
+                        $firebaseUser = yustam_firebase_get_user_by_email($firebaseEmail);
+                        if (is_array($firebaseUser) && !empty($firebaseUser['localId'])) {
+                            $firebaseUid = (string) $firebaseUser['localId'];
+                            if ($firebaseUid !== '') {
+                                try {
+                                    yustam_vendor_set_firebase_uid($vendorId, $firebaseUid, $db);
+                                } catch (Throwable $syncUidError) {
+                                    error_log('Password reset: unable to store Firebase UID for vendor ' . $vendorId . ': ' . $syncUidError->getMessage());
+                                }
+                            }
+                        }
+                    }
+
+                    if ($firebaseUid !== '') {
+                        yustam_firebase_update_user_password($firebaseUid, $password);
+                    }
+                } catch (Throwable $firebaseError) {
+                    error_log('Password reset: unable to sync Firebase password for ' . ($firebaseEmail ?: ('vendor ' . $vendorId)) . ': ' . $firebaseError->getMessage());
+                }
+
                 // Update user password
                 $hashed = password_hash($password, PASSWORD_DEFAULT);
-                $update = $db->prepare("UPDATE `{$vendorTable}` SET password = ?, updated_at = NOW() WHERE id = ?");
-                $update->bind_param('si', $hashed, $reset['user_id']);
+                $providerColumn = yustam_vendor_table_has_column('provider');
+                $updateSql = $providerColumn
+                    ? "UPDATE `{$vendorTable}` SET password = ?, provider = 'email', updated_at = NOW() WHERE id = ?"
+                    : "UPDATE `{$vendorTable}` SET password = ?, updated_at = NOW() WHERE id = ?";
+                $update = $db->prepare($updateSql);
+                $update->bind_param('si', $hashed, $vendorId);
                 $update->execute();
                 $update->close();
 

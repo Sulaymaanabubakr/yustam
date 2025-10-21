@@ -338,6 +338,74 @@ function yustam_firebase_get_user_by_uid(string $firebaseUid): ?array
 }
 
 /**
+ * Lookup a Firebase user by email using admin credentials.
+ *
+ * @return array|null
+ */
+function yustam_firebase_get_user_by_email(string $email): ?array
+{
+    $trimmed = strtolower(trim($email));
+    if ($trimmed === '') {
+        return null;
+    }
+
+    $projectId = yustam_firebase_project_id();
+    $payload = ['email' => [$trimmed]];
+
+    $response = yustam_firebase_identity_admin_request(
+        'POST',
+        sprintf('projects/%s/accounts:lookup', $projectId),
+        $payload
+    );
+
+    if ($response['status'] < 200 || $response['status'] >= 300) {
+        $details = yustam_firebase_extract_error_details($response['body'] ?? null);
+        yustam_firebase_throw('Unable to load account information.', $details);
+    }
+
+    $data = json_decode($response['body'], true);
+    if (!is_array($data) || empty($data['users']) || !is_array($data['users'])) {
+        return null;
+    }
+
+    return $data['users'][0];
+}
+
+/**
+ * Update a Firebase user's password using admin credentials.
+ */
+function yustam_firebase_update_user_password(string $firebaseUid, string $newPassword): void
+{
+    $trimmedUid = trim($firebaseUid);
+    if ($trimmedUid === '') {
+        throw new InvalidArgumentException('Firebase UID is required to update the password.');
+    }
+
+    $password = (string) $newPassword;
+    if ($password === '') {
+        throw new InvalidArgumentException('Password cannot be empty.');
+    }
+
+    $projectId = yustam_firebase_project_id();
+    $payload = [
+        'localId' => $trimmedUid,
+        'password' => $password,
+        'returnSecureToken' => false,
+    ];
+
+    $response = yustam_firebase_identity_admin_request(
+        'POST',
+        sprintf('projects/%s/accounts:update', $projectId),
+        $payload
+    );
+
+    if ($response['status'] < 200 || $response['status'] >= 300) {
+        $details = yustam_firebase_extract_error_details($response['body'] ?? null);
+        yustam_firebase_throw('Unable to update your password right now.', $details);
+    }
+}
+
+/**
  * Generate a password reset link using the Firebase Admin REST API.
  */
 function yustam_firebase_generate_password_reset_link(string $email, string $continueUrl): string
