@@ -5,6 +5,7 @@ session_start();
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/buyer-storage.php';
 require_once __DIR__ . '/api/chat/firebase.php';
+require_once __DIR__ . '/verification-badge.php';
 
 if (!isset($_SESSION['buyer_id']) && !isset($_SESSION['vendor_id']) && !isset($_SESSION['yustam_role'])) {
     header('Location: buyer-login.php');
@@ -39,6 +40,38 @@ $listing = [
     'title' => '',
     'image' => '',
 ];
+
+function yustam_vendor_plan_meta(array $vendor): array
+{
+    $planValue = '';
+    foreach (['plan', 'subscription_plan', 'current_plan', 'plan_name', 'package'] as $planColumn) {
+        if (isset($vendor[$planColumn]) && trim((string) $vendor[$planColumn]) !== '') {
+            $planValue = (string) $vendor[$planColumn];
+            break;
+        }
+    }
+
+    $planSlug = yustam_verification_plan_slug($planValue);
+    $planLabel = yustam_verification_plan_label($planValue);
+    $verificationValue = null;
+    foreach (['verification_status', 'verification_state', 'kyc_status', 'verification_stage', 'verified'] as $statusColumn) {
+        if (array_key_exists($statusColumn, $vendor)) {
+            $verificationValue = $vendor[$statusColumn];
+            break;
+        }
+    }
+    $verificationState = yustam_verification_state_from_value($verificationValue ?? null);
+    $isVerified = $verificationState === 'verified';
+
+    return [
+        'value' => $planValue,
+        'slug' => $planSlug,
+        'label' => $planLabel,
+        'state' => $verificationState,
+        'verified' => $isVerified,
+        'badge' => yustam_render_verification_badge($planValue, $isVerified, ['role_label' => $planLabel]),
+    ];
+}
 
 if ($role === 'buyer') {
     $buyerId = (int)($_SESSION['buyer_id'] ?? 0);
@@ -86,6 +119,13 @@ if ($role === 'buyer') {
     } elseif (yustam_vendor_table_has_column('avatar_url')) {
         $viewer['avatar'] = trim((string)($vendor['avatar_url'] ?? ''));
     }
+    $viewerMeta = yustam_vendor_plan_meta($vendor);
+    $viewer['plan'] = $viewerMeta['value'];
+    $viewer['plan_slug'] = $viewerMeta['slug'];
+    $viewer['plan_label'] = $viewerMeta['label'];
+    $viewer['verified'] = $viewerMeta['verified'];
+    $viewer['verification_state'] = $viewerMeta['state'];
+    $viewer['verification_badge'] = $viewerMeta['badge'];
 }
 
 $chatIdParam = trim((string)($_GET['chat'] ?? ''));
@@ -149,6 +189,27 @@ if ($chatId === '') {
 
 $canSendMessages = !$contextIncomplete && trim((string)($viewer['uid'] ?? '')) !== '';
 
+$vendorRecord = null;
+if ($vendorUid !== '') {
+    try {
+        $vendorRecord = yustam_vendor_find_by_uid($vendorUid, $db);
+    } catch (Throwable $vendorLookupError) {
+        error_log('chat-thread: unable to lookup vendor by uid: ' . $vendorLookupError->getMessage());
+    }
+}
+$counterpartyMeta = null;
+if ($vendorRecord) {
+    $counterpartyMeta = yustam_vendor_plan_meta($vendorRecord);
+    if ($role === 'buyer') {
+        $counterparty['plan'] = $counterpartyMeta['value'];
+        $counterparty['plan_slug'] = $counterpartyMeta['slug'];
+        $counterparty['plan_label'] = $counterpartyMeta['label'];
+        $counterparty['verified'] = $counterpartyMeta['verified'];
+        $counterparty['verification_state'] = $counterpartyMeta['state'];
+        $counterparty['verification_badge'] = $counterpartyMeta['badge'];
+    }
+}
+
 
 if ($role === 'buyer') {
     $counterparty['uid'] = $vendorUid;
@@ -171,6 +232,17 @@ if ($role === 'buyer') {
     $_SESSION['vendor_firebase_uid'] = $viewer['uid'];
 }
 
+$vendorPlanValue = $counterpartyMeta['value'] ?? ($viewer['plan'] ?? '');
+$vendorPlanSlug = $counterpartyMeta['slug'] ?? ($viewer['plan_slug'] ?? yustam_verification_plan_slug($vendorPlanValue));
+$vendorPlanLabel = $counterpartyMeta['label'] ?? ($viewer['plan_label'] ?? yustam_verification_plan_label($vendorPlanValue));
+$vendorVerificationState = $counterpartyMeta['state'] ?? ($viewer['verification_state'] ?? 'unverified');
+$vendorVerifiedFlag = $counterpartyMeta['verified'] ?? ($viewer['verified'] ?? false);
+$vendorBadgeHtml = $counterpartyMeta['badge'] ?? ($viewer['verification_badge'] ?? yustam_render_verification_badge(
+    $vendorPlanValue,
+    $vendorVerifiedFlag,
+    ['role_label' => $vendorPlanLabel]
+));
+
 $bootstrap = [
     'chatId' => $chatId,
     'role' => $role,
@@ -181,6 +253,12 @@ $bootstrap = [
     ],
     'vendor' => [
         'uid' => $vendorUid,
+        'plan' => $vendorPlanValue,
+        'plan_slug' => $vendorPlanSlug,
+        'plan_label' => $vendorPlanLabel,
+        'verified' => $vendorVerifiedFlag,
+        'verification_state' => $vendorVerificationState,
+        'verification_badge' => $vendorBadgeHtml,
     ],
     'listing' => $listing,
     'prefill' => trim((string)($_GET['prefill'] ?? '')),
@@ -199,6 +277,7 @@ $bootstrap = [
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css">
+    <link rel="stylesheet" href="verification-badges.css">
     <style>
         :root {
             color-scheme: light;
@@ -758,7 +837,7 @@ $bootstrap = [
         }
     </style>
 </head>
-<body class="<?php echo $contextIncomplete ? 'chat-disabled is-loading' : 'is-loading'; ?>" data-can-send="<?php echo $canSendMessages ? '1' : '0'; ?>">
+<body class="<?php echo $contextIncomplete ? 'chat-disabled is-loading' : 'is-loading'; ?>" data-can-send="<?php echo $canSendMessages ? '1' : '0'; ?>" data-vendor-plan="<?= htmlspecialchars($vendorPlanValue, ENT_QUOTES, 'UTF-8'); ?>" data-vendor-plan-slug="<?= htmlspecialchars($vendorPlanSlug, ENT_QUOTES, 'UTF-8'); ?>" data-vendor-verified="<?= htmlspecialchars($vendorVerificationState, ENT_QUOTES, 'UTF-8'); ?>">
     <div class="loading-overlay" id="loadingOverlay">
         <div class="spinner" aria-hidden="true"></div>
         <p>Loading conversation...</p>
@@ -772,7 +851,7 @@ $bootstrap = [
                 <img src="<?= htmlspecialchars($counterparty['avatar'] ?: $listing['image'] ?: 'https://images.unsplash.com/photo-1618005198919-d3d4b5a92eee?auto=format&fit=crop&w=120&q=80', ENT_QUOTES) ?>" alt="Profile photo">
             </div>
             <div class="header-details">
-                <h1 id="chatTitle"><?= htmlspecialchars($counterparty['name'] ?: ($role === 'buyer' ? 'Vendor' : 'Buyer')) ?></h1>
+                <h1 id="chatTitle"><?= htmlspecialchars($counterparty['name'] ?: ($role === 'buyer' ? 'Vendor' : 'Buyer')) ?><?php if ($role === 'buyer') { echo $vendorBadgeHtml; } ?></h1>
                 <p id="chatSubtitle"><?= htmlspecialchars($listing['title'] ?: 'Marketplace listing') ?></p>
             </div>
             <div class="header-actions">

@@ -1,6 +1,7 @@
 import { db, firebaseConfig } from './firebase.js';
 import { buildChatId as computeChatId, ensureChat } from './chat-service.js';
 import { deleteDoc, doc, getDoc, setDoc } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
+import { appendVerificationBadge, normalisePlanSlug, verificationPlanLabel } from './verification-badge.js';
 
 const urlParams = new URLSearchParams(window.location.search);
 
@@ -67,6 +68,21 @@ const vendorAvatarEl = document.getElementById('vendorAvatar');
 const floatingCallBtn = document.getElementById('floatingCallBtn');
 const floatingWhatsappBtn = document.getElementById('floatingWhatsappBtn');
 const chatWithVendorBtn = document.getElementById('chatWithVendorBtn');
+
+const clearBadges = (host) => {
+  if (!host) return;
+  host.querySelectorAll('.verification-badge').forEach((badge) => badge.remove());
+};
+
+const renderVerificationBadge = (host, planValue, isVerified, roleLabel) => {
+  if (!host) return;
+  clearBadges(host);
+  if (!isVerified) return;
+  appendVerificationBadge(host, planValue, {
+    verified: true,
+    roleLabel: roleLabel || verificationPlanLabel(planValue),
+  });
+};
 const PLACEHOLDER_IMAGE = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
 const QUICK_MESSAGE_ENDPOINT = './api/chat/send-message.php';
 const FIRESTORE_REST_BASE = firebaseConfig?.projectId
@@ -179,14 +195,7 @@ function setSaveState(isSaved) {
   }
 }
 
-const slugifyPlan = (plan) => {
-  if (!plan) return 'free';
-  return String(plan)
-    .toLowerCase()
-    .replace(/plan/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-+|-+$)/g, '') || 'plan';
-};
+const slugifyPlan = (plan) => normalisePlanSlug(plan);
 
 const formatPlanLabel = (plan) => {
   if (!plan) return 'Free Plan';
@@ -228,6 +237,7 @@ const applyVendorBadges = (planOverride, verificationOverride) => {
   currentVendorPlan = planValue;
 
   const planLabel = formatPlanLabel(planValue);
+  const planRoleLabel = verificationPlanLabel(planValue);
   const planSlug = slugifyPlan(planValue);
   vendorPlanBadge.innerHTML = `<i class="ri-vip-crown-fill" aria-hidden="true"></i>${planLabel}`;
   vendorPlanBadge.className = `vendor-badge vendor-plan vendor-plan-${planSlug}`;
@@ -253,7 +263,18 @@ const applyVendorBadges = (planOverride, verificationOverride) => {
 
   if (document.body) {
     document.body.dataset.vendorPlan = planValue || '';
+    document.body.dataset.vendorPlanLabel = planRoleLabel || '';
+    document.body.dataset.vendorPlanSlug = planSlug;
     document.body.dataset.vendorVerified = verificationState;
+  }
+
+  renderVerificationBadge(vendorNameEl, planValue, verificationState === 'verified', planRoleLabel);
+  if (vendorBusinessEl && !vendorBusinessEl.hidden) {
+    renderVerificationBadge(vendorBusinessEl, planValue, verificationState === 'verified', planRoleLabel);
+  }
+  const quickHeadingEl = document.getElementById('quickChatCard')?.querySelector('h3');
+  if (quickHeadingEl) {
+    renderVerificationBadge(quickHeadingEl, planValue, verificationState === 'verified', planRoleLabel);
   }
 
   if (vendorBadgesContainer) {
@@ -444,6 +465,10 @@ function resolveChatMetadata() {
   if (!vendorChatUid || !buyerChatUid || !listingId) {
     return null;
   }
+  const planValue = currentVendorPlan || document.body?.dataset?.vendorPlan || '';
+  const planLabel = document.body?.dataset?.vendorPlanLabel || verificationPlanLabel(planValue);
+  const verificationState = currentVendorVerification || document.body?.dataset?.vendorVerified || '';
+
   return {
     chatId: computeChatId(buyerChatUid, vendorChatUid),
     buyerUid: buyerChatUid,
@@ -452,6 +477,10 @@ function resolveChatMetadata() {
     productTitle: currentProductName || productNameEl?.textContent?.trim?.() || 'Marketplace Listing',
     productImage: currentProductImage || productImageEl?.src || PLACEHOLDER_IMAGE,
     vendorName: currentVendorName || document.body?.dataset?.vendorName || 'Vendor',
+    vendorPlan: planValue,
+    vendorPlanLabel: planLabel,
+    vendorPlanSlug: normalisePlanSlug(planValue),
+    vendorVerification: verificationState,
     buyerName: buyerName || 'Buyer',
   };
 }
@@ -463,6 +492,10 @@ async function ensureQuickConversation(metadata) {
     buyer_name: metadata.buyerName,
     vendor_uid: metadata.vendorUid,
     vendor_name: metadata.vendorName,
+    vendor_plan: metadata.vendorPlan,
+    vendor_plan_label: metadata.vendorPlanLabel,
+    vendor_plan_slug: metadata.vendorPlanSlug,
+    vendor_verified: metadata.vendorVerification,
     listing_id: metadata.productId,
     listing_title: metadata.productTitle,
     listing_image: metadata.productImage,
@@ -493,6 +526,10 @@ async function sendQuickMessage(metadata, text) {
       buyer_name: metadata.buyerName,
       vendor_uid: metadata.vendorUid,
       vendor_name: metadata.vendorName,
+      vendor_plan: metadata.vendorPlan,
+      vendor_plan_label: metadata.vendorPlanLabel,
+      vendor_plan_slug: metadata.vendorPlanSlug,
+      vendor_verified: metadata.vendorVerification,
       listing_id: metadata.productId,
       listing_title: metadata.productTitle,
       listing_image: metadata.productImage,
@@ -663,6 +700,19 @@ const updateQuickChatDataset = () => {
   quickChatCard.dataset.vendorUid = metadata?.vendorUid || currentVendorUid || currentVendorId || '';
   quickChatCard.dataset.vendorId = currentVendorId || '';
   quickChatCard.dataset.vendorName = metadata?.vendorName || currentVendorName || 'Vendor';
+  const datasetPlan = metadata?.vendorPlan || currentVendorPlan || document.body?.dataset?.vendorPlan || '';
+  const datasetPlanLabel =
+    metadata?.vendorPlanLabel ||
+    document.body?.dataset?.vendorPlanLabel ||
+    verificationPlanLabel(datasetPlan);
+  const datasetPlanSlug = normalisePlanSlug(datasetPlan);
+  const datasetVerification =
+    metadata?.vendorVerification || currentVendorVerification || document.body?.dataset?.vendorVerified || '';
+
+  quickChatCard.dataset.vendorPlan = datasetPlan;
+  quickChatCard.dataset.vendorPlanLabel = datasetPlanLabel;
+  quickChatCard.dataset.vendorPlanSlug = datasetPlanSlug;
+  quickChatCard.dataset.vendorVerified = datasetVerification;
   quickChatCard.dataset.buyerUid = metadata?.buyerUid || buyerUid || '';
   quickChatCard.dataset.buyerId = buyerNumericId || '';
   quickChatCard.dataset.productId = metadata?.productId || productId || '';
@@ -673,6 +723,12 @@ const updateQuickChatDataset = () => {
   }
   if (quickChatHeading) {
     quickChatHeading.textContent = `Chat with ${currentVendorName || 'Vendor'}`;
+    renderVerificationBadge(
+      quickChatHeading,
+      datasetPlan,
+      datasetVerification === 'verified',
+      datasetPlanLabel
+    );
   }
 };
 

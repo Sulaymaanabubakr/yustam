@@ -3,6 +3,7 @@ require_once __DIR__ . '/session-path.php';
 session_start();
 
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/verification-badge.php';
 
 if (!isset($_SESSION['vendor_id'])) {
     header('Location: vendor-login.html');
@@ -39,6 +40,32 @@ if ($vendorName === '') {
     $vendorName = 'Vendor';
 }
 
+$planValue = '';
+foreach (['plan', 'subscription_plan', 'current_plan', 'plan_name', 'package'] as $planColumn) {
+    if (isset($vendor[$planColumn]) && trim((string)$vendor[$planColumn]) !== '') {
+        $planValue = (string) $vendor[$planColumn];
+        break;
+    }
+}
+$planSlug = yustam_verification_plan_slug($planValue);
+$planLabel = yustam_verification_plan_label($planValue);
+
+$verificationValue = null;
+foreach (['verification_status', 'verification_state', 'kyc_status', 'verification_stage', 'verified'] as $statusColumn) {
+    if (array_key_exists($statusColumn, $vendor)) {
+        $verificationValue = $vendor[$statusColumn];
+        break;
+    }
+}
+$isVerifiedVendor = yustam_is_verified_state($verificationValue ?? $vendor['verified'] ?? null);
+$verificationBadge = yustam_render_verification_badge(
+    $planValue,
+    $isVerifiedVendor,
+    [
+        'role_label' => $planLabel,
+    ]
+);
+
 $vendorEmail = trim((string)($vendor['email'] ?? ($_SESSION['vendor_email'] ?? '')));
 $vendorAvatar = '';
 if (yustam_vendor_table_has_column('profile_photo')) {
@@ -62,6 +89,11 @@ $bootstrap = [
         'name' => $vendorName,
         'email' => $vendorEmail,
         'avatar' => $vendorAvatar,
+        'plan' => $planValue,
+        'plan_slug' => $planSlug,
+        'plan_label' => $planLabel,
+        'verified' => $isVerifiedVendor,
+        'verification_state' => yustam_verification_state_from_value($verificationValue ?? null),
     ],
 ];
 ?>
@@ -74,6 +106,7 @@ $bootstrap = [
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="verification-badges.css">
     <style>
         :root {
             color-scheme: light;
@@ -112,12 +145,40 @@ $bootstrap = [
             gap: 16px;
         }
 
+        .header-title {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
         header h1 {
             margin: 0;
             font-size: clamp(1.7rem, 4vw, 2.3rem);
             font-weight: 700;
             color: #fff;
             letter-spacing: 0.02em;
+        }
+
+        .vendor-identity {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.95rem;
+            color: rgba(255, 255, 255, 0.78);
+        }
+
+        .vendor-identity .verification-badge {
+            margin-left: 6px;
+        }
+
+        .vendor-plan-label {
+            padding: 4px 10px;
+            border-radius: 999px;
+            background: rgba(246, 183, 60, 0.16);
+            color: #f6d48f;
+            font-size: 0.78rem;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
         }
 
         main.chat-main {
@@ -314,13 +375,20 @@ $bootstrap = [
         }
     </style>
 </head>
-<body class="is-loading">
+<body class="is-loading" data-vendor-name="<?= htmlspecialchars($vendorName, ENT_QUOTES, 'UTF-8'); ?>" data-vendor-plan="<?= htmlspecialchars($planValue, ENT_QUOTES, 'UTF-8'); ?>" data-vendor-plan-label="<?= htmlspecialchars($planLabel, ENT_QUOTES, 'UTF-8'); ?>" data-vendor-plan-slug="<?= htmlspecialchars($planSlug, ENT_QUOTES, 'UTF-8'); ?>" data-vendor-verified="<?= $isVerifiedVendor ? 'verified' : 'unverified'; ?>">
     <div class="loading-overlay" id="loadingOverlay">
         <div class="spinner" aria-hidden="true"></div>
-        <p>Loading messages…</p>
+        <p>Loading messages.</p>
     </div>
     <header class="chat-header">
-        <h1>Messages</h1>
+        <div class="header-title">
+            <h1>Messages</h1>
+            <p class="vendor-identity">
+                <span id="currentVendorName"><?= htmlspecialchars($vendorName, ENT_QUOTES, 'UTF-8'); ?></span>
+                <?= $verificationBadge; ?>
+                <span class="vendor-plan-label"><?= htmlspecialchars($planLabel, ENT_QUOTES, 'UTF-8'); ?></span>
+            </p>
+        </div>
     </header>
     <main class="chat-main">
         <section id="emptyState" hidden>

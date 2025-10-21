@@ -436,6 +436,30 @@ function yustam_vendor_find_by_email(string $email, ?mysqli $conn = null): ?arra
     return $vendor ?: null;
 }
 
+function yustam_vendor_find_by_uid(string $vendorUid, ?mysqli $conn = null): ?array
+{
+    $trimmed = trim($vendorUid);
+    if ($trimmed === '') {
+        return null;
+    }
+
+    $conn = $conn ?: get_db_connection();
+    yustam_vendor_ensure_uid_column($conn);
+
+    $sql = sprintf('SELECT * FROM `%s` WHERE `vendor_uid` = ? OR `firebase_uid` = ? LIMIT 1', YUSTAM_VENDORS_TABLE);
+    $stmt = $conn->prepare($sql);
+    if (!$stmt) {
+        throw new RuntimeException('Unable to prepare vendor uid lookup statement: ' . $conn->error);
+    }
+    $stmt->bind_param('ss', $trimmed, $trimmed);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $vendor = $result ? $result->fetch_assoc() : null;
+    $stmt->close();
+
+    return $vendor ?: null;
+}
+
 /**
  * Admin table helpers
  */

@@ -4,6 +4,7 @@ import {
   subscribeTyping,
   showToast,
 } from './chat-service.js';
+import { appendVerificationBadge, verificationPlanLabel } from './verification-badge.js';
 
 const bootstrap = window.__CHAT_BOOTSTRAP__ || {};
 if (bootstrap.role !== 'buyer' || !bootstrap.buyer?.uid) {
@@ -176,6 +177,15 @@ function renderChats(chats) {
     const title = document.createElement('strong');
     title.textContent = chat.vendor_name || 'Vendor';
     headerRow.appendChild(title);
+    const vendorPlanValue = chat.vendor_plan || '';
+    const vendorVerificationState = String(chat.vendor_verified || chat.vendor_verification || '').toLowerCase();
+    if (vendorVerificationState === 'verified') {
+      const planLabel = chat.vendor_plan_label || verificationPlanLabel(vendorPlanValue);
+      appendVerificationBadge(title, vendorPlanValue, {
+        verified: true,
+        roleLabel: planLabel,
+      });
+    }
 
     const lastDate = toDate(chat.last_ts);
     const timeText = lastDate ? relativeTimeFrom(lastDate) : '';
@@ -239,6 +249,10 @@ function openChat(chat) {
   const vendorUid = chat.vendor_uid || chat.vendorUid || chat.vendor_id || chat.vendorId || '';
   if (buyerUid) params.set('buyer', buyerUid);
   if (vendorUid) params.set('vendor', vendorUid);
+  if (chat.vendor_plan) params.set('plan', chat.vendor_plan);
+  if (chat.vendor_verified || chat.vendor_verification) {
+    params.set('verified', chat.vendor_verified || chat.vendor_verification);
+  }
   params.set('role', 'buyer');
   window.location.href = `chat-thread.php?${params.toString()}`;
 }
@@ -271,4 +285,5 @@ window.addEventListener('beforeunload', () => {
   if (unsubscribeChats) unsubscribeChats();
   typingSubscriptions.forEach((unsubscribe) => unsubscribe());
 });
+
 

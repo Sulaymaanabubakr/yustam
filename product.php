@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/session-path.php';
 session_start();
+require_once __DIR__ . '/verification-badge.php';
 
 $productId = isset($_GET['id']) ? trim((string) $_GET['id']) : '';
 if ($productId === '') {
@@ -160,6 +161,14 @@ if (!is_string($vendorVerifiedInput)) {
 $vendorVerificationState = yustam_normalise_verification($vendorVerifiedInput);
 $vendorVerificationLabel = yustam_verification_label($vendorVerificationState);
 $vendorVerificationIcon = yustam_verification_icon($vendorVerificationState);
+$vendorIsVerified = $vendorVerificationState === 'verified';
+$vendorVerificationBadge = yustam_render_verification_badge(
+    $vendorPlan,
+    $vendorIsVerified,
+    [
+        'role_label' => yustam_verification_plan_label($vendorPlan),
+    ]
+);
 
 $chatId = $vendorId && $buyerId ? $vendorId . '_' . $buyerId . '_' . $productId : '';
 $vendorProfileUrl = 'vendor-storefront.php';
@@ -179,6 +188,7 @@ $placeholderImage = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABA
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css">
+    <link rel="stylesheet" href="verification-badges.css">
     <style>
         :root {
             --emerald: #004D40;
@@ -1009,6 +1019,8 @@ $placeholderImage = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABA
     data-vendor-uid="<?= htmlspecialchars($vendorUid, ENT_QUOTES, 'UTF-8'); ?>"
     data-vendor-name="<?= htmlspecialchars($vendorName, ENT_QUOTES, 'UTF-8'); ?>"
     data-vendor-plan="<?= htmlspecialchars($vendorPlan, ENT_QUOTES, 'UTF-8'); ?>"
+    data-vendor-plan-label="<?= htmlspecialchars($vendorPlanLabel, ENT_QUOTES, 'UTF-8'); ?>"
+    data-vendor-plan-slug="<?= htmlspecialchars($vendorPlanSlug, ENT_QUOTES, 'UTF-8'); ?>"
     data-vendor-verified="<?= htmlspecialchars($vendorVerificationState, ENT_QUOTES, 'UTF-8'); ?>"
 >
     <header class="product-nav">
@@ -1093,7 +1105,7 @@ $placeholderImage = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABA
             data-product-title="<?= htmlspecialchars($productTitle, ENT_QUOTES, 'UTF-8'); ?>"
             data-product-image="<?= htmlspecialchars($placeholderImage, ENT_QUOTES, 'UTF-8'); ?>"
         >
-            <h3>Chat with <?= htmlspecialchars($vendorName, ENT_QUOTES, 'UTF-8'); ?></h3>
+            <h3>Chat with <?= htmlspecialchars($vendorName, ENT_QUOTES, 'UTF-8'); ?><?= $vendorVerificationBadge; ?></h3>
             <p>Send a quick message and we'll notify the vendor instantly, then open a secure YUSTAM chat so you can keep the conversation going.</p>
             <form id="quickChatForm" class="quick-form">
                 <div class="quick-input">
@@ -1121,7 +1133,7 @@ $placeholderImage = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABA
             <header class="vendor-card__header">
                 <img id="vendorAvatar" src="logo.jpeg" alt="Vendor profile photo" class="vendor-avatar">
                 <div>
-                    <h2 id="vendorTitle"><?= htmlspecialchars($vendorName, ENT_QUOTES, 'UTF-8'); ?></h2>
+                    <h2 id="vendorTitle"><?= htmlspecialchars($vendorName, ENT_QUOTES, 'UTF-8'); ?><?= $vendorVerificationBadge; ?></h2>
                     <p id="vendorBusiness" class="vendor-business" hidden></p>
                     <div class="vendor-badges" id="vendorBadges">
                         <span

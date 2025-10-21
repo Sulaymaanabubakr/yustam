@@ -1,0 +1,132 @@
+.verification-badge {
+  --badge-size: 1.15em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--badge-size);
+  height: var(--badge-size);
+  margin-left: 0.35em;
+  border-radius: 38%;
+  background: var(--verification-badge-gradient, linear-gradient(135deg, #2f80ed, #56ccf2));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.22),
+    0 2px 5px rgba(0, 0, 0, 0.25);
+  position: relative;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+.verification-badge::before {
+  content: '';
+  position: absolute;
+  inset: 16%;
+  border-radius: 42%;
+  background: rgba(255, 255, 255, 0.18);
+  filter: blur(1px);
+  opacity: 0.85;
+}
+
+.verification-badge::after {
+  content: '';
+  position: absolute;
+  width: 0.48em;
+  height: 0.28em;
+  border: 0.18em solid transparent;
+  border-right-color: rgba(255, 255, 255, 1);
+  border-bottom-color: rgba(255, 255, 255, 1);
+  border-radius: 0.1em;
+  transform: translate(5%, -2%) rotate(45deg);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+}
+
+.verification-badge[data-tooltip] {
+  cursor: default;
+}
+
+.verification-badge[data-tooltip]::after {
+  border-right-color: rgba(255, 255, 255, 0.95);
+  border-bottom-color: rgba(255, 255, 255, 0.95);
+}
+
+.verification-badge[data-tooltip]:hover::after,
+.verification-badge[data-tooltip]:focus-visible::after {
+  border-right-color: rgba(255, 255, 255, 1);
+  border-bottom-color: rgba(255, 255, 255, 1);
+}
+
+.verification-badge[data-tooltip]:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.42);
+  outline-offset: 2px;
+}
+
+.verification-badge[data-tooltip]::selection {
+  background: transparent;
+}
+
+.verification-badge[data-tooltip]::before {
+  opacity: 0.78;
+}
+
+.verification-badge::selection {
+  background: transparent;
+}
+
+.verification-badge-tooltip {
+  position: absolute;
+  inset: auto auto calc(100% + 8px) 50%;
+  transform: translateX(-50%);
+  background: rgba(21, 31, 29, 0.95);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 500;
+  padding: 4px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.16s ease, transform 0.16s ease;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+  z-index: 20;
+}
+
+.verification-badge[data-tooltip]:hover .verification-badge-tooltip,
+.verification-badge[data-tooltip]:focus-visible .verification-badge-tooltip {
+  opacity: 1;
+  transform: translate(-50%, -2px);
+}
+
+.verification-badge[data-tooltip] .verification-badge-tooltip::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -4px;
+  transform: translateX(-50%) rotate(45deg);
+  width: 8px;
+  height: 8px;
+  background: inherit;
+}
+
+.verification-badge--free {
+  --verification-badge-gradient: linear-gradient(135deg, #2f80ed, #56ccf2);
+}
+
+.verification-badge--starter {
+  --verification-badge-gradient: linear-gradient(135deg, #8a4c21, #c58547);
+}
+
+.verification-badge--pro {
+  --verification-badge-gradient: linear-gradient(135deg, #838a93, #d0d3d9);
+}
+
+.verification-badge--elite {
+  --verification-badge-gradient: linear-gradient(135deg, #b07a1a, #f4d56a);
+}
+
+.verification-badge--power {
+  --verification-badge-gradient: linear-gradient(135deg, #7578a9, #d8d9fb);
+}
+
+.verification-badge--unknown {
+  --verification-badge-gradient: linear-gradient(135deg, #667780, #93a7b2);
+}
