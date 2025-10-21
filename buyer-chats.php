@@ -58,7 +58,7 @@ $bootstrap = [
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Your Messages | YUSTAM Marketplace</title>
+    <title>Buyer Messages | YUSTAM Marketplace</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -326,7 +326,7 @@ $bootstrap = [
         <p>Loading messages...</p>
     </div>
     <header class="chat-header">
-        <h1>Your Messages</h1>
+        <h1>Messages</h1>
         <button type="button" class="new-chat-btn" id="newChatBtn">
             <span aria-hidden="true">✧</span>
             Start New Chat
