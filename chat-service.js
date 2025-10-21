@@ -15,6 +15,7 @@ import {
   writeBatch,
 } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
 import { uploadToCloudinary } from './cloudinary.js';
+import { normalisePlanSlug, verificationPlanLabel } from './verification-badge.js';
 
 const COLLECTIONS = {
   CHATS: 'chats',
@@ -200,6 +201,9 @@ function mapMessageRecord(record) {
 
 function mapChatSnapshot(docSnap) {
   const data = docSnap.data() || {};
+  const vendorPlan = data.vendor_plan || data.vendorPlan || '';
+  const vendorPlanLabel =
+    data.vendor_plan_label || data.vendorPlanLabel || (vendorPlan ? verificationPlanLabel(vendorPlan) : '');
   return {
     id: docSnap.id,
     chat_id: data.chat_id || docSnap.id,
@@ -209,6 +213,11 @@ function mapChatSnapshot(docSnap) {
     vendor_uid: data.vendor_uid || data.vendorUid || '',
     vendor_name: data.vendor_name || data.vendorName || '',
     vendor_avatar: data.vendor_avatar || data.vendorAvatar || '',
+    vendor_plan: vendorPlan,
+    vendor_plan_label: vendorPlanLabel,
+    vendor_plan_slug: data.vendor_plan_slug || data.vendorPlanSlug || normalisePlanSlug(vendorPlan),
+    vendor_verified: data.vendor_verified || data.vendorVerified || data.vendor_verification || '',
+    vendor_verification: data.vendor_verification || data.vendorVerified || '',
     listing_id: data.listing_id || data.listingId || '',
     listing_title: data.listing_title || data.listingTitle || '',
     listing_image: data.listing_image || data.listingImage || '',
@@ -223,6 +232,9 @@ function mapChatSnapshot(docSnap) {
 }
 
 function mapChatRecord(record) {
+  const vendorPlan = record.vendor_plan || record.vendorPlan || '';
+  const vendorPlanLabel =
+    record.vendor_plan_label || record.vendorPlanLabel || (vendorPlan ? verificationPlanLabel(vendorPlan) : '');
   return {
     id: record.id || record.chat_id || '',
     chat_id: record.chat_id || record.chatId || '',
@@ -232,6 +244,11 @@ function mapChatRecord(record) {
     vendor_uid: record.vendor_uid || record.vendorUid || '',
     vendor_name: record.vendor_name || record.vendorName || '',
     vendor_avatar: record.vendor_avatar || record.vendorAvatar || '',
+    vendor_plan: vendorPlan,
+    vendor_plan_label: vendorPlanLabel,
+    vendor_plan_slug: record.vendor_plan_slug || record.vendorPlanSlug || normalisePlanSlug(vendorPlan),
+    vendor_verified: record.vendor_verified || record.vendorVerified || record.vendor_verification || '',
+    vendor_verification: record.vendor_verification || record.vendorVerified || '',
     listing_id: record.listing_id || record.listingId || '',
     listing_title: record.listing_title || record.listingTitle || '',
     listing_image: record.listing_image || record.listingImage || '',
@@ -301,6 +318,10 @@ async function ensureChatViaApi(payload) {
       buyer_name: payload.buyer_name,
       vendor_uid: payload.vendor_uid,
       vendor_name: payload.vendor_name,
+      vendor_plan: payload.vendor_plan,
+      vendor_plan_label: payload.vendor_plan_label,
+      vendor_plan_slug: payload.vendor_plan_slug,
+      vendor_verified: payload.vendor_verified,
       listing_id: payload.listing_id,
       listing_title: payload.listing_title,
       listing_image: payload.listing_image,
@@ -316,6 +337,9 @@ export async function ensureChat(meta) {
   const vendorUid = requireUid(meta?.vendor_uid || meta?.vendorUid, 'vendor_uid');
   const providedChatId = normaliseString(meta?.chatId || meta?.chat_id);
   const chatId = providedChatId || buildChatId(buyerUid, vendorUid);
+  const vendorPlanValue = normaliseString(meta?.vendor_plan || meta?.vendorPlan || '');
+  const vendorPlanLabelValue = normaliseString(meta?.vendor_plan_label || meta?.vendorPlanLabel || '');
+
   const payload = {
     chat_id: chatId,
     buyer_uid: buyerUid,
@@ -324,6 +348,10 @@ export async function ensureChat(meta) {
     vendor_uid: vendorUid,
     vendor_name: normaliseString(meta?.vendor_name || meta?.vendorName || 'Vendor'),
     vendor_avatar: normaliseString(meta?.vendor_avatar || meta?.vendorAvatar || ''),
+    vendor_plan: vendorPlanValue,
+    vendor_plan_label: vendorPlanLabelValue || verificationPlanLabel(vendorPlanValue),
+    vendor_plan_slug: normalisePlanSlug(vendorPlanValue),
+    vendor_verified: normaliseString(meta?.vendor_verified || meta?.vendorVerified || meta?.vendor_verification || ''),
     listing_id: normaliseString(meta?.listing_id || meta?.listingId || ''),
     listing_title: normaliseString(meta?.listing_title || meta?.listingTitle || ''),
     listing_image: normaliseString(meta?.listing_image || meta?.listingImage || ''),
@@ -341,6 +369,10 @@ export async function ensureChat(meta) {
         vendor_uid: payload.vendor_uid,
         vendor_name: payload.vendor_name,
         vendor_avatar: payload.vendor_avatar,
+        vendor_plan: payload.vendor_plan,
+        vendor_plan_label: payload.vendor_plan_label,
+        vendor_plan_slug: payload.vendor_plan_slug,
+        vendor_verified: payload.vendor_verified,
         listing_id: payload.listing_id,
         listing_title: payload.listing_title,
         listing_image: payload.listing_image,
@@ -358,6 +390,10 @@ export async function ensureChat(meta) {
         vendor_uid: payload.vendor_uid,
         vendor_name: payload.vendor_name,
         vendor_avatar: payload.vendor_avatar,
+        vendor_plan: payload.vendor_plan,
+        vendor_plan_label: payload.vendor_plan_label,
+        vendor_plan_slug: payload.vendor_plan_slug,
+        vendor_verified: payload.vendor_verified,
         listing_id: payload.listing_id,
         listing_title: payload.listing_title,
         listing_image: payload.listing_image,

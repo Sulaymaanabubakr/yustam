@@ -1,5 +1,6 @@
 import { db } from './firebase.js';
 import { collection, onSnapshot, deleteDoc, doc, orderBy, query } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
+import { createVerificationBadge as createVerificationTick, normalisePlanSlug, verificationPlanLabel } from './verification-badge.js';
 
 const buyerUid = document.body?.dataset?.buyerUid || '';
 const buyerNumericId = document.body?.dataset?.buyerId || '';
@@ -14,14 +15,7 @@ const escapeHtml = (value) => String(value ?? '')
   .replace(/"/g, '&quot;')
   .replace(/'/g, '&#39;');
 
-const slugifyPlan = (plan) => {
-  if (!plan) return 'free';
-  return String(plan)
-    .toLowerCase()
-    .replace(/plan/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-+|-+$)/g, '') || 'free';
-};
+const slugifyPlan = (plan) => normalisePlanSlug(plan);
 
 const formatPlanLabel = (plan) => {
   if (!plan) return 'Free Plan';
@@ -47,7 +41,7 @@ const createPlanBadge = (plan) => {
   return `<span class="vendor-badge vendor-plan vendor-plan-${slug}"><i class="ri-vip-crown-fill" aria-hidden="true"></i>${escapeHtml(label)}</span>`;
 };
 
-const createVerificationBadge = (state) => {
+const createVerificationStatusBadge = (state) => {
   const verificationState = normaliseVerificationState(state);
   if (verificationState === 'verified') {
     return '<span class="vendor-badge vendor-verified verified"><i class="ri-shield-check-line" aria-hidden="true"></i>Verified Vendor</span>';
@@ -58,7 +52,7 @@ const createVerificationBadge = (state) => {
   return '<span class="vendor-badge vendor-verified unverified"><i class="ri-alert-line" aria-hidden="true"></i>Not Verified</span>';
 };
 
-const buildBadgesMarkup = (plan, verificationState) => `<div class="vendor-badges">${createPlanBadge(plan)}${createVerificationBadge(verificationState)}</div>`;
+const buildBadgesMarkup = (plan, verificationState) => `<div class="vendor-badges">${createPlanBadge(plan)}${createVerificationStatusBadge(verificationState)}</div>`;
 
 const buildProductUrl = (id, vendorPlan, verificationState, vendorId) => {
   const params = new URLSearchParams();
@@ -104,7 +98,7 @@ if (buyerId && grid) {
         <p class="price">${escapeHtml(priceLabel)}</p>
         <div class="vendor-meta">
           <i class="ri-store-2-line" aria-hidden="true"></i>
-          <span>${escapeHtml(vendorName)}</span>
+          <span class="vendor-name">${escapeHtml(vendorName)}</span>
         </div>
         ${buildBadgesMarkup(vendorPlan, verificationState)}
         <div class="actions">
@@ -112,6 +106,19 @@ if (buyerId && grid) {
           <button class="remove-btn" data-id="${escapeHtml(productKey)}"><i class="ri-delete-bin-line"></i> Remove</button>
         </div>
       `;
+      const vendorMetaEl = card.querySelector('.vendor-meta');
+      if (vendorMetaEl) {
+        vendorMetaEl.querySelectorAll('.verification-badge').forEach((badge) => badge.remove());
+        if (verificationState === 'verified') {
+          const badge = createVerificationTick(vendorPlan, {
+            verified: true,
+            roleLabel: verificationPlanLabel(vendorPlan),
+          });
+          if (badge) {
+            vendorMetaEl.appendChild(badge);
+          }
+        }
+      }
       grid.appendChild(card);
     });
 
@@ -130,3 +137,6 @@ if (buyerId && grid) {
 } else if (empty) {
   renderEmptyState();
 }
+
+
+

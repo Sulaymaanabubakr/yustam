@@ -6,6 +6,7 @@ session_start();
 
 require_once __DIR__ . '/firebase.php';
 require_once __DIR__ . '/../../db.php';
+require_once __DIR__ . '/../../verification-badge.php';
 
 header('Content-Type: application/json');
 
@@ -106,6 +107,41 @@ $buyerUid = trim((string)($input['buyer_uid'] ?? $input['buyerUid'] ?? ($_SESSIO
 $buyerName = trim((string)($input['buyer_name'] ?? $input['buyerName'] ?? ($_SESSION['buyer_name'] ?? 'Buyer')));
 $vendorUid = trim((string)($input['vendor_uid'] ?? $input['vendorUid'] ?? ($_SESSION['vendor_firebase_uid'] ?? ($_SESSION['firebase_uid'] ?? ''))));
 $vendorName = trim((string)($input['vendor_name'] ?? $input['vendorName'] ?? ($_SESSION['vendor_name'] ?? 'Vendor')));
+$vendorPlanValue = 'Free';
+$vendorPlanSlug = yustam_verification_plan_slug($vendorPlanValue);
+$vendorPlanLabel = yustam_verification_plan_label($vendorPlanValue);
+$vendorVerificationState = 'unverified';
+if ($vendorUid !== '') {
+    try {
+        $vendorRecord = yustam_vendor_find_by_uid($vendorUid);
+        if (is_array($vendorRecord)) {
+            foreach (['plan', 'subscription_plan', 'current_plan', 'plan_name', 'package'] as $planColumn) {
+                if (isset($vendorRecord[$planColumn]) && trim((string)$vendorRecord[$planColumn]) !== '') {
+                    $vendorPlanValue = (string)$vendorRecord[$planColumn];
+                    break;
+                }
+            }
+            $vendorPlanSlug = yustam_verification_plan_slug($vendorPlanValue);
+            $vendorPlanLabel = yustam_verification_plan_label($vendorPlanValue);
+            foreach (['verification_status', 'verification_state', 'kyc_status', 'verification_stage', 'verified'] as $statusColumn) {
+                if (array_key_exists($statusColumn, $vendorRecord)) {
+                    $vendorVerificationState = yustam_verification_state_from_value($vendorRecord[$statusColumn]);
+                    break;
+                }
+            }
+        }
+    } catch (Throwable $planLookupError) {
+        error_log('chat-open: unable to inspect vendor plan: ' . $planLookupError->getMessage());
+    }
+}
+if (trim($vendorPlanValue) === '') {
+    $vendorPlanValue = 'Free';
+    $vendorPlanSlug = yustam_verification_plan_slug($vendorPlanValue);
+    $vendorPlanLabel = yustam_verification_plan_label($vendorPlanValue);
+}
+if (trim($vendorVerificationState) === '') {
+    $vendorVerificationState = 'unverified';
+}
 $listingId = trim((string)($input['listing_id'] ?? $input['listingId'] ?? ''));
 $listingTitle = trim((string)($input['listing_title'] ?? $input['listingTitle'] ?? ''));
 $listingImage = trim((string)($input['listing_image'] ?? $input['listingImage'] ?? ''));
@@ -133,6 +169,10 @@ try {
             'buyer_name' => yustam_firestore_string($buyerName),
             'vendor_uid' => yustam_firestore_string($vendorUid),
             'vendor_name' => yustam_firestore_string($vendorName),
+            'vendor_plan' => yustam_firestore_string($vendorPlanValue),
+            'vendor_plan_label' => yustam_firestore_string($vendorPlanLabel),
+            'vendor_plan_slug' => yustam_firestore_string($vendorPlanSlug),
+            'vendor_verified' => yustam_firestore_string($vendorVerificationState),
             'listing_id' => yustam_firestore_string($listingId),
             'listing_title' => yustam_firestore_string($listingTitle),
             'listing_image' => yustam_firestore_string($listingImage),
@@ -158,12 +198,42 @@ try {
         ];
         yustam_firestore_commit($writes);
         $document = yustam_firestore_get_document($chatPath);
+    } else {
+        $chatName = yustam_firestore_document_path('chats', $chatId);
+        $updateFields = [
+            'buyer_uid' => yustam_firestore_string($buyerUid),
+            'buyer_name' => yustam_firestore_string($buyerName),
+            'vendor_uid' => yustam_firestore_string($vendorUid),
+            'vendor_name' => yustam_firestore_string($vendorName),
+            'vendor_plan' => yustam_firestore_string($vendorPlanValue),
+            'vendor_plan_label' => yustam_firestore_string($vendorPlanLabel),
+            'vendor_plan_slug' => yustam_firestore_string($vendorPlanSlug),
+            'vendor_verified' => yustam_firestore_string($vendorVerificationState),
+            'listing_id' => yustam_firestore_string($listingId),
+            'listing_title' => yustam_firestore_string($listingTitle),
+            'listing_image' => yustam_firestore_string($listingImage),
+        ];
+        $fieldPaths = array_keys($updateFields);
+        $writes = [[
+            'update' => [
+                'name' => $chatName,
+                'fields' => $updateFields,
+            ],
+            'currentDocument' => ['exists' => true],
+            'updateMask' => ['fieldPaths' => $fieldPaths],
+        ]];
+        yustam_firestore_commit($writes);
+        $document = yustam_firestore_get_document($chatPath);
     }
 
     if (isset($document['fields'])) {
         foreach ($document['fields'] as $key => $value) {
             $documentData[$key] = yustam_firestore_decode($value);
         }
+        $documentData['vendor_plan'] = $vendorPlanValue;
+        $documentData['vendor_plan_label'] = $vendorPlanLabel;
+        $documentData['vendor_plan_slug'] = $vendorPlanSlug;
+        $documentData['vendor_verified'] = $vendorVerificationState;
     }
 } catch (Throwable $exception) {
     $firestoreSynced = false;

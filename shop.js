@@ -5,6 +5,7 @@ import {
   orderBy,
   query,
 } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
+import { appendVerificationBadge, verificationPlanLabel } from './verification-badge.js';
 
 const productGrid = document.getElementById('productGrid');
 const emptyState = document.getElementById('emptyState');
@@ -211,6 +212,17 @@ const updateVendorShowcase = () => {
 
   if (vendorShowcaseName) {
     vendorShowcaseName.textContent = selectedVendorName;
+    clearBadges(vendorShowcaseName);
+    const showcasePlan = vendorInfo.plan || vendorData?.plan || '';
+    const showcaseVerification = normaliseVerificationState(
+      vendorInfo.verification || vendorData?.verification || vendorData?.verification_status || vendorData?.verified,
+    );
+    if (showcaseVerification === 'verified') {
+      appendVerificationBadge(vendorShowcaseName, showcasePlan, {
+        verified: true,
+        roleLabel: verificationPlanLabel(showcasePlan),
+      });
+    }
   }
 
   if (vendorShowcaseBusiness) {
@@ -374,6 +386,7 @@ const getVendorInfo = (vendorId, listingData = {}) => {
     listingData.vendorName ||
     'Marketplace Vendor';
   const plan = vendor.plan || listingData.vendorPlan || '';
+  const planLabel = verificationPlanLabel(plan);
   const verification =
     vendor.verificationStatus ||
     vendor.verification_state ||
@@ -382,7 +395,7 @@ const getVendorInfo = (vendorId, listingData = {}) => {
     listingData.vendorVerified ||
     vendor.status ||
     '';
-  return { name, plan, verification };
+  return { name, plan, planLabel, verification };
 };
 
 const transformListing = (docSnap) => {
@@ -411,6 +424,7 @@ const transformListing = (docSnap) => {
     locationFilterValue,
     vendor: vendorInfo.name,
     vendorPlan: vendorInfo.plan,
+    vendorPlanLabel: vendorInfo.planLabel,
     vendorVerified: vendorInfo.verification,
     vendorId,
     image: pickListingImage(data),
@@ -477,6 +491,7 @@ const renderProducts = () => {
     card.dataset.location = item.locationFilterValue || '';
     card.dataset.plan = item.vendorPlan || '';
     card.dataset.verified = verificationState;
+    card.dataset.planLabel = item.vendorPlanLabel || verificationPlanLabel(item.vendorPlan || '');
 
     card.innerHTML = `
       <img src="${escapeHtml(item.image)}" alt="${escapeHtml(item.title)}" loading="lazy" />
@@ -492,8 +507,8 @@ const renderProducts = () => {
           <i class="ri-user-3-line" style="color: var(--emerald);"></i>
           ${
             item.vendorId
-              ? `<a class="vendor-link" href="vendor-storefront.php?vendorId=${encodeURIComponent(item.vendorId)}">${escapeHtml(item.vendor)}</a>`
-              : `<span>${escapeHtml(item.vendor)}</span>`
+              ? `<a class="vendor-link vendor-name-text" href="vendor-storefront.php?vendorId=${encodeURIComponent(item.vendorId)}">${escapeHtml(item.vendor)}</a>`
+              : `<span class="vendor-name-text">${escapeHtml(item.vendor)}</span>`
           }
         </div>
         <div class="product-actions">
@@ -502,6 +517,17 @@ const renderProducts = () => {
         </div>
       </div>
     `;
+    const vendorNameEl = card.querySelector('.vendor-name-text');
+    if (vendorNameEl) {
+      clearBadges(vendorNameEl);
+      if (verificationState === 'verified') {
+        const planLabel = item.vendorPlanLabel || verificationPlanLabel(item.vendorPlan || '');
+        appendVerificationBadge(vendorNameEl, item.vendorPlan || '', {
+          verified: true,
+          roleLabel: planLabel,
+        });
+      }
+    }
 
     productGrid.appendChild(card);
   });
@@ -731,3 +757,7 @@ const initialise = () => {
 document.addEventListener('DOMContentLoaded', initialise);
 window.addEventListener('beforeunload', cleanupListeners);
 window.addEventListener('pagehide', cleanupListeners);
+const clearBadges = (host) => {
+  if (!host) return;
+  host.querySelectorAll('.verification-badge').forEach((badge) => badge.remove());
+};

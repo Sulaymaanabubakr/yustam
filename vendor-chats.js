@@ -4,6 +4,7 @@ import {
   subscribeTyping,
   showToast,
 } from './chat-service.js';
+import { appendVerificationBadge, verificationPlanLabel, normalisePlanSlug } from './verification-badge.js';
 
 const bootstrap = window.__CHAT_BOOTSTRAP__ || {};
 if (bootstrap.role !== 'vendor' || !bootstrap.vendor?.uid) {
@@ -33,6 +34,41 @@ persistUid(vendor.uid);
 const chatListEl = document.getElementById('chatList');
 const emptyStateEl = document.getElementById('emptyState');
 const loadingOverlay = document.getElementById('loadingOverlay');
+const headerVendorNameEl = document.getElementById('currentVendorName');
+const planLabelEl = document.querySelector('.vendor-plan-label');
+const bodyDataset = document.body?.dataset || {};
+
+let currentVendorPlan = bootstrap.vendor?.plan || bodyDataset.vendorPlan || '';
+let currentVendorPlanSlug = bootstrap.vendor?.plan_slug || bodyDataset.vendorPlanSlug || normalisePlanSlug(currentVendorPlan);
+let currentVendorVerifiedState =
+  (bootstrap.vendor?.verification_state || bodyDataset.vendorVerified || '').toLowerCase();
+
+document.body.dataset.vendorPlan = currentVendorPlan;
+document.body.dataset.vendorPlanSlug = currentVendorPlanSlug;
+document.body.dataset.vendorVerified = currentVendorVerifiedState;
+
+if (planLabelEl) {
+  const label = bootstrap.vendor?.plan_label || verificationPlanLabel(currentVendorPlan);
+  planLabelEl.textContent = label;
+  document.body.dataset.vendorPlanLabel = label;
+} else {
+  document.body.dataset.vendorPlanLabel =
+    bootstrap.vendor?.plan_label || verificationPlanLabel(currentVendorPlan);
+}
+
+const applyHeaderBadge = () => {
+  if (!headerVendorNameEl) return;
+  headerVendorNameEl.querySelectorAll('.verification-badge').forEach((badge) => badge.remove());
+  if (currentVendorVerifiedState === 'verified') {
+    const label = document.body.dataset.vendorPlanLabel || verificationPlanLabel(currentVendorPlan);
+    appendVerificationBadge(headerVendorNameEl, currentVendorPlan, {
+      verified: true,
+      roleLabel: label,
+    });
+  }
+};
+
+applyHeaderBadge();
 
 let overlayHidden = false;
 document.body?.classList.add('is-loading');
@@ -267,3 +303,4 @@ window.addEventListener('beforeunload', () => {
   if (unsubscribeChats) unsubscribeChats();
   typingSubscriptions.forEach((unsubscribe) => unsubscribe());
 });
+

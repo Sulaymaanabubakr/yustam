@@ -8,6 +8,7 @@ import {
   query,
   where,
 } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
+import { appendVerificationBadge, normalisePlanSlug, verificationPlanLabel } from './verification-badge.js';
 
 const vendorId = document.body?.dataset?.vendorId?.trim() || '';
 
@@ -29,6 +30,11 @@ const listingsGrid = document.getElementById('listingsGrid');
 const listingsCountEl = document.getElementById('listingsCount');
 const listingsEmptyEl = document.getElementById('listingsEmpty');
 
+const clearBadges = (host) => {
+  if (!host) return;
+  host.querySelectorAll('.verification-badge').forEach((badge) => badge.remove());
+};
+
 const formatCurrency = (value) =>
   new Intl.NumberFormat('en-NG', {
     style: 'currency',
@@ -36,14 +42,7 @@ const formatCurrency = (value) =>
     maximumFractionDigits: 0,
   }).format(Number.isFinite(Number(value)) ? Number(value) : 0);
 
-const slugifyPlan = (plan) => {
-  if (!plan) return 'free';
-  return String(plan)
-    .toLowerCase()
-    .replace(/plan/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '') || 'free';
-};
+const slugifyPlan = (plan) => normalisePlanSlug(plan);
 
 const formatPlanLabel = (plan) => {
   if (!plan) return 'Free Plan';
@@ -128,7 +127,13 @@ const applyVendorProfile = (vendor) => {
       vendor.verificationStage ||
       vendor.verification,
   );
+  const isVerified = verificationState === 'verified';
   const verificationText = verificationLabel(verificationState);
+
+  document.body.dataset.vendorPlan = vendor.plan || vendor.planLabel || 'Free';
+  document.body.dataset.vendorPlanLabel = planLabel;
+  document.body.dataset.vendorPlanSlug = planSlug;
+  document.body.dataset.vendorVerified = verificationState;
   const locationParts = [
     vendor.city,
     vendor.state,
@@ -170,6 +175,25 @@ const applyVendorProfile = (vendor) => {
   if (verificationBadge) {
     verificationBadge.textContent = verificationText;
     verificationBadge.className = `badge verification-${verificationState}`;
+  }
+
+  if (nameEl) {
+    clearBadges(nameEl);
+    if (isVerified) {
+      appendVerificationBadge(nameEl, vendor.plan || vendor.planLabel || 'Free', {
+        verified: true,
+        roleLabel: verificationPlanLabel(vendor.plan || vendor.planLabel),
+      });
+    }
+  }
+  if (businessEl && businessName) {
+    clearBadges(businessEl);
+    if (isVerified) {
+      appendVerificationBadge(businessEl, vendor.plan || vendor.planLabel || 'Free', {
+        verified: true,
+        roleLabel: verificationPlanLabel(vendor.plan || vendor.planLabel),
+      });
+    }
   }
 
   if (locationEl) {

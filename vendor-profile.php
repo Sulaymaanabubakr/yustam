@@ -3,6 +3,7 @@ require_once __DIR__ . '/session-path.php';
 session_start();
 
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/verification-badge.php';
 
 if (!isset($_SESSION['vendor_id'])) {
     if (isset($_GET['format']) && $_GET['format'] === 'json') {
@@ -88,6 +89,21 @@ $verificationFeedback = $verificationFeedbackColumn ? ($vendorData[$verification
 
 $planValue = array_key_exists('plan', $vendorData) ? ($vendorData['plan'] ?? 'Free') : 'Free';
 $planNormalised = strtolower(trim((string)$planValue));
+$verificationValue = $rawVerificationStatus;
+if (($verificationValue === '' || $verificationValue === null) && array_key_exists('verified', $vendorData)) {
+    $verificationValue = $vendorData['verified'];
+}
+$verificationState = yustam_verification_state_from_value($verificationValue);
+$isVerified = $verificationState === 'verified';
+$planSlug = yustam_verification_plan_slug($planValue);
+$planLabel = yustam_verification_plan_label($planValue);
+$verificationBadgeHtml = yustam_render_verification_badge(
+    $planValue,
+    $isVerified,
+    [
+        'role_label' => $planLabel,
+    ]
+);
 
 $profile = [
     'name' => $vendorData[$nameColumn] ?? '',
@@ -97,16 +113,21 @@ $profile = [
     'address' => array_key_exists('business_address', $vendorData) ? ($vendorData['business_address'] ?? '') : '',
     'state' => array_key_exists('state', $vendorData) ? ($vendorData['state'] ?? '') : '',
     'plan' => $planValue,
+    'planLabel' => $planLabel,
+    'planSlug' => $planSlug,
     'joined' => $joinedDisplay,
     'profilePhoto' => array_key_exists('profile_photo', $vendorData)
         ? ($vendorData['profile_photo'] ?? '')
         : (array_key_exists('avatar_url', $vendorData) ? ($vendorData['avatar_url'] ?? '') : ''),
     'planIsPaid' => !($planNormalised === '' || strpos($planNormalised, 'free') === 0),
+    'verified' => $isVerified,
     'verification' => [
         'status' => $normalisedVerificationStatus,
         'statusDisplay' => is_string($rawVerificationStatus) ? trim($rawVerificationStatus) : '',
+        'state' => $verificationState,
         'submittedAt' => $verificationSubmittedAt,
         'feedback' => is_string($verificationFeedback) ? trim((string)$verificationFeedback) : '',
+        'badge' => $isVerified ? $verificationBadgeHtml : '',
     ],
 ];
 
@@ -115,6 +136,22 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
     echo json_encode(['success' => true, 'profile' => $profile], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     exit;
 }
+
+$vendorNameDisplay = trim((string)($profile['name'] ?? ''));
+if ($vendorNameDisplay === '') {
+    $vendorNameDisplay = 'Vendor';
+}
+$businessNameDisplay = trim((string)($profile['businessName'] ?? ''));
+$planChipLabel = trim((string)($profile['plan'] ?? 'Free'));
+if ($planChipLabel !== '' && stripos($planChipLabel, 'plan') === false) {
+    $planChipLabel .= ' Plan';
+}
+$vendorNameHtml = htmlspecialchars($vendorNameDisplay, ENT_QUOTES, 'UTF-8');
+$businessNameHtml = $businessNameDisplay !== ''
+    ? htmlspecialchars($businessNameDisplay, ENT_QUOTES, 'UTF-8')
+    : '&mdash;';
+$planChipText = htmlspecialchars($planChipLabel, ENT_QUOTES, 'UTF-8');
+$planDataValue = htmlspecialchars((string)($profile['plan'] ?? ''), ENT_QUOTES, 'UTF-8');
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -126,6 +163,7 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet" />
+  <link rel="stylesheet" href="verification-badges.css" />
   <style>
     :root {
       --emerald: #0f6a53;
@@ -611,7 +649,12 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
     }
   </style>
 </head>
-<body>
+<body
+  data-vendor-plan="<?= htmlspecialchars((string)($profile['plan'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
+  data-vendor-plan-label="<?= htmlspecialchars($planLabel, ENT_QUOTES, 'UTF-8'); ?>"
+  data-vendor-plan-slug="<?= htmlspecialchars($planSlug, ENT_QUOTES, 'UTF-8'); ?>"
+  data-vendor-verified="<?= htmlspecialchars($verificationState, ENT_QUOTES, 'UTF-8'); ?>"
+>
   <div class="loading-state" id="profileLoader" role="status" aria-live="polite">
     <div class="loading-pill">
       Loading profile
@@ -626,7 +669,10 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
       <a class="header-logo" href="/index.html" aria-label="Vendor home">
         <img id="headerProfileImage" src="logo.jpeg" data-fallback="logo.jpeg" alt="Vendor profile image" />
       </a>
-      <span class="header-title" role="link" tabindex="0">Vendor</span>
+      <span class="header-title" role="link" tabindex="0">
+        <span id="headerVendorName"><?= htmlspecialchars($vendorNameDisplay, ENT_QUOTES, 'UTF-8'); ?></span>
+        <?= $verificationBadgeHtml; ?>
+      </span>
     </div>
     <nav class="header-actions" aria-label="Vendor shortcuts">
       <a class="header-icon notif-icon" href="vendor-notifications.php" aria-label="Notifications" title="Notifications">
@@ -653,9 +699,9 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
             <div class="initials-badge" id="vendorInitials">YN</div>
           </div>
           <div class="identity-meta">
-            <h1 class="vendor-name" id="profileTitle">Vendor Name</h1>
-            <p class="business-name" id="businessName">Business Name</p>
-            <span class="plan-chip" id="planBadge" data-plan="Free">Free Plan</span>
+            <h1 class="vendor-name" id="profileTitle"><?= $vendorNameHtml; ?><?= $verificationBadgeHtml; ?></h1>
+            <p class="business-name" id="businessName"><?= $businessNameHtml; ?><?= $businessNameDisplay !== '' ? $verificationBadgeHtml : ''; ?></p>
+            <span class="plan-chip" id="planBadge" data-plan="<?= $planDataValue; ?>"><?= $planChipText; ?></span>
           </div>
         </div>
         <div class="upgrade-banner" id="upgradeBanner" role="status">
@@ -665,11 +711,11 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
         <div class="details-grid" aria-live="polite">
           <div class="detail-item">
             <span class="detail-label">Vendor Name</span>
-            <p class="detail-value" id="vendorName">—</p>
+            <p class="detail-value" id="vendorName"><?= $vendorNameHtml; ?><?= $verificationBadgeHtml; ?></p>
           </div>
           <div class="detail-item">
             <span class="detail-label">Business Name</span>
-            <p class="detail-value" id="vendorBusiness">—</p>
+            <p class="detail-value" id="vendorBusiness"><?= $businessNameHtml; ?><?= $businessNameDisplay !== '' ? $verificationBadgeHtml : ''; ?></p>
           </div>
           <div class="detail-item">
             <span class="detail-label">Email</span>
@@ -727,7 +773,7 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
 
   <footer class="footer">© 2025 YUSTAM Marketplace · Support</footer>
   <script src="theme-manager.js" defer></script>
-<script src="vendor-profile.js" defer></script>
+  <script type="module" src="vendor-profile.js"></script>
 </body>
 </html>
 
