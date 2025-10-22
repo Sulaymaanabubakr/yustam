@@ -107,56 +107,6 @@ function yustam_is_verified_state($value): bool
 if (!function_exists('yustam_render_verification_badge')) {
 function yustam_render_verification_badge(?string $plan, bool $isVerified = true, array $options = []): string
 {
-    if (!$isVerified) {
-        return '';
-    }
-
-    $slug = yustam_verification_plan_slug($plan);
-    $labels = [
-        'free' => 'verification-badge--free',
-        'starter' => 'verification-badge--starter',
-        'plus' => 'verification-badge--starter',
-        'basic' => 'verification-badge--starter',
-        'pro' => 'verification-badge--pro',
-        'elite' => 'verification-badge--elite',
-        'premium' => 'verification-badge--elite',
-        'power' => 'verification-badge--power',
-        'platinum' => 'verification-badge--power',
-    ];
-
-    $classSuffix = $labels[$slug] ?? 'verification-badge--unknown';
-    $roleLabel = isset($options['role_label']) ? trim((string) $options['role_label']) : '';
-    $planLabel = yustam_verification_plan_label($plan);
-    $tooltipText = trim((string) ($options['title'] ?? ''));
-
-    if ($tooltipText === '') {
-        $tooltipText = 'Verified ' . ($roleLabel !== '' ? $roleLabel : $planLabel);
-    }
-
-    $classes = ['verification-badge', $classSuffix];
-    if (!empty($options['class'])) {
-        $classes[] = trim((string) $options['class']);
-    }
-
-    $attributes = [
-        'class' => implode(' ', $classes),
-        'data-plan' => $slug,
-        'data-tooltip' => 'true',
-        'role' => 'img',
-        'aria-label' => $tooltipText,
-        'title' => $tooltipText,
-    ];
-
-    $attributeString = '';
-    foreach ($attributes as $key => $value) {
-        $attributeString .= sprintf(' %s="%s"', $key, htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8'));
-    }
-
-    $tooltipMarkup = sprintf(
-        '<span class="verification-badge-tooltip" role="tooltip">%s</span>',
-        htmlspecialchars($tooltipText, ENT_QUOTES, 'UTF-8')
-    );
-
-    return sprintf('<span%s>%s</span>', $attributeString, $tooltipMarkup);
+    return '';
 }
 }

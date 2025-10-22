@@ -1,7 +1,3 @@
-import { appendVerificationBadge, verificationPlanLabel, normalisePlanSlug } from './verification-badge.js';
-
-const EMPTY_MARK = '\u2014';
-
 const loader = document.getElementById('profileLoader');
 const initialsBadge = document.getElementById('vendorInitials');
 const avatarImg = document.getElementById('vendorAvatar');
@@ -24,27 +20,11 @@ const headerFallbackImage =
   headerProfileImage?.dataset?.fallback || headerProfileImage?.getAttribute('src') || 'logo.jpeg';
 const verificationBtn = document.getElementById('verificationBtn');
 const verificationNote = document.getElementById('verificationNote');
-const headerVendorName = document.getElementById('headerVendorName');
-
-const clearBadges = (host) => {
-  if (!host) return;
-  host.querySelectorAll('.verification-badge').forEach((badge) => badge.remove());
-};
-
-const applyBadge = (host, planValue, isVerified, roleLabel) => {
-  if (!host) return;
-  clearBadges(host);
-  if (!isVerified) return;
-  appendVerificationBadge(host, planValue, {
-    verified: true,
-    roleLabel: roleLabel || verificationPlanLabel(planValue),
-  });
-};
 
 const safeText = (value) => {
-  if (!value) return EMPTY_MARK;
+  if (!value) return '—';
   const trimmed = typeof value === 'string' ? value.trim() : value;
-  return trimmed && String(trimmed).length > 0 ? String(trimmed) : EMPTY_MARK;
+  return trimmed && String(trimmed).length > 0 ? String(trimmed) : '—';
 };
 
 const toggleLoader = (show) => {
@@ -131,91 +111,33 @@ const applyProfile = (profile) => {
     location = '',
     region = '',
     category = '',
-    planLabel: planLabelValue = '',
-    planSlug: planSlugValue = '',
-    verified: verifiedFlag = false,
-    verification: verificationPayload = {},
   } = profile || {};
 
-  const resolvedName = typeof name === 'string' && name.trim() ? name.trim() : 'Vendor';
-  const hasBusiness = typeof businessName === 'string' && businessName.trim().length > 0;
-  const resolvedBusiness = hasBusiness ? businessName.trim() : '';
-  const initials = computeInitials(resolvedName, resolvedBusiness);
-
+  const initials = computeInitials(name, businessName);
   if (initialsBadge) initialsBadge.textContent = initials;
+  if (profileTitle) profileTitle.textContent = safeText(name);
+  if (businessNameHeading) businessNameHeading.textContent = safeText(businessName);
 
-  const rawPlan =
-    (typeof plan === 'string' && plan.trim()) ||
-    (typeof planLabelValue === 'string' && planLabelValue.trim()) ||
-    'Free';
-  const planSlug = planSlugValue && typeof planSlugValue === 'string' && planSlugValue.trim()
-    ? planSlugValue.trim()
-    : normalisePlanSlug(rawPlan);
-  const normalisedPlan = rawPlan.replace(/\s+/g, ' ').trim();
-  const planChipDisplay = normalisedPlan
-    ? (/plan$/i.test(normalisedPlan) ? normalisedPlan : `${normalisedPlan} Plan`)
-    : 'Free Plan';
-  const planRoleLabel = verificationPlanLabel(rawPlan);
+  const planLabel = safeText(plan);
+  let planDisplay = planLabel;
+  if (planDisplay !== '-') {
+    const normalised = planDisplay.replace(/\s+/g, ' ').trim().toLowerCase();
+    if (!normalised.endsWith('plan')) {
+      planDisplay = `${planDisplay} Plan`.trim();
+    }
+  }
+  if (planBadge) {
+    planBadge.textContent = planDisplay;
+    planBadge.dataset.plan = planLabel;
+  }
 
-  const verificationData = verificationPayload || {};
-  const statusValue = normaliseStatus(
-    verificationData.state ||
-      verificationData.status ||
-      verificationData.statusDisplay ||
-      (verifiedFlag ? 'verified' : ''),
-  );
-  const isVerified = Boolean(verifiedFlag) || APPROVED_STATUSES.has(statusValue);
-  const verificationState = statusValue || (isVerified ? 'verified' : 'unverified');
-
+  if (vendorNameField) vendorNameField.textContent = safeText(name);
+  if (businessField) businessField.textContent = safeText(businessName);
+  if (emailField) emailField.textContent = safeText(email);
+  if (phoneField) phoneField.textContent = safeText(phone);
   const resolvedAddress = address || businessAddress || location;
   const resolvedState = state || region || location || category;
 
-  if (profileTitle) {
-    profileTitle.textContent = resolvedName;
-    applyBadge(profileTitle, rawPlan, isVerified, planRoleLabel);
-  }
-
-  if (headerVendorName) {
-    headerVendorName.textContent = resolvedName;
-    applyBadge(headerVendorName, rawPlan, isVerified, planRoleLabel);
-  }
-
-  if (businessNameHeading) {
-    if (hasBusiness) {
-      businessNameHeading.hidden = false;
-      businessNameHeading.textContent = resolvedBusiness;
-      applyBadge(businessNameHeading, rawPlan, isVerified, planRoleLabel);
-    } else {
-      businessNameHeading.textContent = EMPTY_MARK;
-      businessNameHeading.hidden = true;
-      clearBadges(businessNameHeading);
-    }
-  }
-
-  if (planBadge) {
-    planBadge.textContent = planChipDisplay;
-    planBadge.dataset.plan = rawPlan || 'Free';
-    planBadge.dataset.planSlug = planSlug;
-    planBadge.dataset.planLabel = planRoleLabel;
-  }
-
-  if (vendorNameField) {
-    vendorNameField.textContent = resolvedName;
-    applyBadge(vendorNameField, rawPlan, isVerified, planRoleLabel);
-  }
-
-  if (businessField) {
-    if (hasBusiness) {
-      businessField.textContent = resolvedBusiness;
-      applyBadge(businessField, rawPlan, isVerified, planRoleLabel);
-    } else {
-      businessField.textContent = EMPTY_MARK;
-      clearBadges(businessField);
-    }
-  }
-
-  if (emailField) emailField.textContent = safeText(email);
-  if (phoneField) phoneField.textContent = safeText(phone);
   if (addressField) addressField.textContent = safeText(resolvedAddress);
   if (stateField) stateField.textContent = safeText(resolvedState);
   if (joinedField) joinedField.textContent = safeText(joined);
@@ -237,29 +159,14 @@ const applyProfile = (profile) => {
   }
 
   if (upgradeBanner) {
-    if (normalisedPlan.toLowerCase().startsWith('free')) {
+    if (planLabel.toLowerCase() === 'free') {
       upgradeBanner.style.display = 'flex';
     } else {
-      upgradeBanner.style.display = 'none';
+    upgradeBanner.style.display = 'none';
     }
   }
 
-  if (document.body) {
-    document.body.dataset.vendorPlan = rawPlan || 'Free';
-    document.body.dataset.vendorPlanLabel = planRoleLabel;
-    document.body.dataset.vendorPlanSlug = planSlug;
-    document.body.dataset.vendorVerified = verificationState || (isVerified ? 'verified' : 'unverified');
-  }
-
-  updateVerificationCTA({
-    ...profile,
-    plan: rawPlan || 'Free',
-    verified: isVerified,
-    verification: {
-      ...verificationData,
-      state: verificationState,
-    },
-  });
+  updateVerificationCTA(profile);
 };
 
 const fetchProfile = async () => {
