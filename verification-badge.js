@@ -49,40 +49,9 @@ export function verificationPlanLabel(plan) {
 }
 
 export function createVerificationBadge(plan, options = {}) {
-  const verified = options.verified !== undefined ? Boolean(options.verified) : true;
-  if (!verified) return null;
-
-  const slug = normalisePlanSlug(plan);
-  const root = document.createElement('span');
-  root.className = `verification-badge ${PLAN_CLASS_MAP[slug] || 'verification-badge--unknown'}`;
-  root.dataset.plan = slug;
-  root.dataset.tooltip = 'true';
-
-  const roleLabel = typeof options.roleLabel === 'string' && options.roleLabel.trim()
-    ? options.roleLabel.trim()
-    : verificationPlanLabel(plan);
-
-  const tooltip = options.tooltip && options.tooltip.trim()
-    ? options.tooltip.trim()
-    : `Verified ${roleLabel}`;
-
-  root.setAttribute('role', 'img');
-  root.setAttribute('aria-label', tooltip);
-  root.setAttribute('title', tooltip);
-
-  const tooltipEl = document.createElement('span');
-  tooltipEl.className = 'verification-badge-tooltip';
-  tooltipEl.setAttribute('role', 'tooltip');
-  tooltipEl.textContent = tooltip;
-  root.appendChild(tooltipEl);
-
-  return root;
+  return null;
 }
 
 export function appendVerificationBadge(target, plan, options = {}) {
-  if (!target) return null;
-  const badge = createVerificationBadge(plan, options);
-  if (!badge) return null;
-  target.appendChild(badge);
-  return badge;
+  return null;
 }
