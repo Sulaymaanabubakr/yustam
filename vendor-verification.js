@@ -1,4 +1,6 @@
+// =========================================
 // YUSTAM | Vendor Verification Page Interactions
+// =========================================
 
 document.addEventListener('DOMContentLoaded', () => {
   const statusBadge = document.getElementById('verificationStatus');
@@ -104,19 +106,24 @@ document.addEventListener('DOMContentLoaded', () => {
     const rawStatus = payload.statusDisplay || payload.status || '';
     const status = normaliseStatus(rawStatus);
     const feedback = typeof payload.feedback === 'string' ? payload.feedback.trim() : '';
-    const planIsPaid = typeof payload.planIsPaid === 'boolean' ? payload.planIsPaid : true;
+    const planLevel = (payload.planLevel || 'free').toLowerCase();
+
+    // Badge colour map by plan level
+    const BADGE_COLOR_MAP = {
+      free: '#1DA1F2',         // Blue
+      starter: '#2ECC71',      // Green
+      elite: '#CD7F32',        // Bronze
+      pro_seller: '#C0C0C0',   // Silver
+      power_vendor: '#FFD700', // Gold
+    };
 
     let displayStatus = rawStatus || 'Pending';
     let message = 'Your documents are under review.';
     let badgeClass = STATUS_CLASS_MAP[status] || 'badge-pending';
     let canSubmit = true;
 
-    if (!planIsPaid) {
-      displayStatus = 'Unavailable';
-      badgeClass = 'badge-pending';
-      message = 'Upgrade your plan to request verification.';
-      canSubmit = false;
-    } else if (APPROVED_STATUSES.has(status)) {
+    // ✅ Everyone (including free plans) can submit for verification
+    if (APPROVED_STATUSES.has(status)) {
       displayStatus = 'Verified';
       badgeClass = 'badge-verified';
       message = 'Your storefront is verified across YUSTAM.';
@@ -129,7 +136,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } else if (REJECTED_STATUSES.has(status)) {
       displayStatus = 'Changes required';
       badgeClass = 'badge-rejected';
-      message = feedback || 'We found issues with your submission. Please review the feedback and re-submit.';
+      message = feedback || 'We found issues with your submission. Please review and re-submit.';
       canSubmit = true;
     } else {
       displayStatus = 'Not submitted';
@@ -141,7 +148,14 @@ document.addEventListener('DOMContentLoaded', () => {
     if (statusBadge) {
       STATUS_CLASS_LIST.forEach((cls) => statusBadge.classList.remove(cls));
       statusBadge.classList.add(badgeClass);
-      statusBadge.innerHTML = `<i class="ri-shield-check-line"></i> ${displayStatus}`;
+
+      // Add colour-coded badge icon if verified
+      const badgeColor = BADGE_COLOR_MAP[planLevel] || '#999';
+      const badgeIcon = APPROVED_STATUSES.has(status)
+        ? `<i class="ri-shield-check-line" style="color:${badgeColor};"></i>`
+        : `<i class="ri-shield-check-line"></i>`;
+
+      statusBadge.innerHTML = `${badgeIcon} ${displayStatus}`;
     }
 
     if (statusMessage) {
@@ -235,8 +249,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   if (statusMessage) {
-    statusMessage.textContent = \"Loading verification status...\";
+    statusMessage.textContent = "Loading verification status...";
   }
   fetchStatus();
 });
-
