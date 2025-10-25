@@ -1,3 +1,7 @@
+// =========================================
+// YUSTAM | Vendor Profile Page Script
+// =========================================
+
 const loader = document.getElementById('profileLoader');
 const initialsBadge = document.getElementById('vendorInitials');
 const avatarImg = document.getElementById('vendorAvatar');
@@ -58,7 +62,9 @@ const updateVerificationCTA = (profile = {}) => {
 
   const planLabel = typeof profile.plan === 'string' ? profile.plan : '';
   const planName = planLabel.trim().toLowerCase();
-  const planIsPaid = typeof profile.planIsPaid === 'boolean' ? profile.planIsPaid : !(planName === '' || planName.startsWith('free'));
+
+  // ✅ Make verification available to all plans, including free
+  const planIsPaid = true;
 
   const verification = profile.verification || {};
   const status = normaliseStatus(verification.status || verification.statusDisplay);
@@ -162,7 +168,7 @@ const applyProfile = (profile) => {
     if (planLabel.toLowerCase() === 'free') {
       upgradeBanner.style.display = 'flex';
     } else {
-    upgradeBanner.style.display = 'none';
+      upgradeBanner.style.display = 'none';
     }
   }
 
