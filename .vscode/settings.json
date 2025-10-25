@@ -1,0 +1,12 @@
+{
+  "fiveServer.config.port": 5500,
+  "fiveServer.config.php": "C:\\php\\php.exe",
+  "fiveServer.config.root": "./",
+  "fiveServer.config.browser": "brave",
+  "fiveServer.config.ignore": [
+    "**/node_modules/**",
+    "**/.git/**",
+    "**/.vscode/**"
+  ],
+  "fiveServer.config.open": "index.html"
+}
