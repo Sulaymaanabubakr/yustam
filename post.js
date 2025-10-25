@@ -1661,19 +1661,16 @@ const createListingDocument = (formValues, imageUrls) => {
     }
   });
 
-    const vendorUid = getStoredYustamUid();
-
-    return {
-      ...filteredValues,
-      category: categorySelect.value,
-      subcategory: subcategorySelect.value,
-      vendorID: currentUser.uid,
-      ...(vendorUid ? { vendorUid } : {}),
-      status: 'pending',
-      imageUrls,
-      createdAt: serverTimestamp(),
-    };
+  return {
+    ...filteredValues,
+    category: categorySelect.value,
+    subcategory: subcategorySelect.value,
+    vendorUid: auth.currentUser?.uid || currentUser?.uid || '', // ✅ ensure vendorUid is always saved
+    status: 'pending',
+    imageUrls,
+    createdAt: serverTimestamp(),
   };
+};
 
 const handleSubmit = async () => {
   if (!currentUser) {
