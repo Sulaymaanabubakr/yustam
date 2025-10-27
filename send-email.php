@@ -30,9 +30,10 @@ function sendEmail($to, $subject, $message)
         $mail->Body    = $message;
 
         $mail->send();
+        error_log("Email sent successfully to: {$to} with subject: {$subject}");
         return true;
     } catch (Exception $e) {
-        error_log('Mail Error: ' . $mail->ErrorInfo);
+        error_log("Failed to send email to {$to}. Error: " . $mail->ErrorInfo);
         return false;
     }
 }

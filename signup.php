@@ -150,7 +150,11 @@ try {
       </div>
     </div>";
 
-    sendEmail($email, 'Welcome to YUSTAM Marketplace - Verify Your Account', $emailBody);
+    $emailSent = sendEmail($email, 'Welcome to YUSTAM Marketplace - Verify Your Account', $emailBody);
+    
+    if (!$emailSent) {
+        error_log("Vendor registration: Email failed to send to {$email}");
+    }
 
     echo json_encode(['success' => true, 'message' => 'Account created! Please check your email to verify your account.']);
 } catch (Throwable $e) {
