@@ -101,11 +101,13 @@ try {
         $isActive = in_array($statusValue, ['active', 'published', 'approved', 'live', 'available'], true);
         $listings[] = [
             'title' => $row['title'] ?? 'Untitled',
-            'price' => $row['price'] ?? 0,
+            'price' => isset($row['price']) ? (float)$row['price'] : 0.0,
             'status' => $row['status'] ?? 'Draft',
             'added_on' => isset($row['created_at']) ? date('j M Y', strtotime($row['created_at'])) : '—',
             'link' => 'product.php?id=' . ($row['id'] ?? ''),
             'views' => (int)($row['views'] ?? 0),
+            'image' => '',
+            'image_alt' => isset($row['title']) && trim((string)$row['title']) !== '' ? trim((string)$row['title']) : 'Listing image',
         ];
         $stats['total_listings']++;
         if ($isActive) {
@@ -144,6 +146,7 @@ if ($firestoreVendorKey !== '') {
         $fireResults = yustam_firestore_run_query($fireQuery);
         $activeStatuses = ['active', 'published', 'approved', 'live', 'available'];
 
+        $modelOtherLabels = ['other / custom model', 'custom model', 'other'];
         foreach ($fireResults as $result) {
             if (!isset($result['document']['fields'])) {
                 continue;
@@ -171,13 +174,145 @@ if ($firestoreVendorKey !== '') {
 
             $docName = $result['document']['name'] ?? '';
             $docId = $fields['id'] ?? ($docName !== '' ? basename($docName) : '');
-            $title = $fields['title'] ?? ($fields['productName'] ?? 'Untitled');
+
+            $titleCandidates = [];
+            $pushCandidate = static function (?string $value) use (&$titleCandidates): void {
+                $trimmed = trim((string)($value ?? ''));
+                if ($trimmed !== '') {
+                    $titleCandidates[] = preg_replace('/\s+/', ' ', $trimmed);
+                }
+            };
+
+            $pushCandidate($fields['title'] ?? null);
+            $pushCandidate($fields['name'] ?? null);
+            $pushCandidate($fields['productName'] ?? null);
+            $pushCandidate($fields['serviceName'] ?? null);
+            $pushCandidate($fields['itemType'] ?? null);
+            $pushCandidate($fields['propertyType'] ?? null);
+            $pushCandidate($fields['listingTitle'] ?? null);
+            $pushCandidate($fields['listingName'] ?? null);
+
+            $brand = trim((string)($fields['brand'] ?? ''));
+            $model = trim((string)($fields['model'] ?? ''));
+            $modelLower = strtolower($model);
+            if ($brand !== '' && $model !== '' && !in_array($modelLower, $modelOtherLabels, true)) {
+                $pushCandidate($brand . ' ' . $model);
+            }
+            if ($brand !== '') {
+                $pushCandidate($brand);
+            }
+            if ($model !== '' && !in_array($modelLower, $modelOtherLabels, true)) {
+                $pushCandidate($model);
+            }
+
+            $title = '';
+            foreach ($titleCandidates as $candidate) {
+                $title = $candidate;
+                break;
+            }
+
+            $categoryLabel = trim((string)($fields['subcategory'] ?? $fields['category'] ?? ''));
+            if ($title === '' && $categoryLabel !== '') {
+                $title = $categoryLabel;
+            }
+
+            if ($title === '' && $brand !== '') {
+                $title = $brand;
+            }
+
+            if ($title === '' && $categoryLabel !== '') {
+                $title = $categoryLabel . ' listing';
+            }
+
+            if ($title === '') {
+                $fallbackCandidates = [];
+                foreach ($fields as $fieldKey => $fieldValue) {
+                    if (!is_string($fieldValue)) {
+                        continue;
+                    }
+                    $normalizedKey = strtolower((string)$fieldKey);
+                    if (preg_match('/image|photo|vendor|uid|status|description|location|created|updated|price|amount|views|plan|category|subcategory|link|url|http/', $normalizedKey)) {
+                        continue;
+                    }
+                    $cleanValue = trim(preg_replace('/\s+/', ' ', $fieldValue));
+                    if ($cleanValue === '') {
+                        continue;
+                    }
+                    $fallbackCandidates[] = $cleanValue;
+                }
+                if ($fallbackCandidates) {
+                    $title = $fallbackCandidates[0];
+                }
+            }
+
+            if ($title === '') {
+                $title = 'Untitled';
+            }
 
             $priceCandidate = $fields['price'] ?? ($fields['amount'] ?? 0);
             if (is_string($priceCandidate)) {
                 $priceCandidate = preg_replace('/[^0-9.]/', '', $priceCandidate);
             }
             $price = is_numeric($priceCandidate) ? (float)$priceCandidate : 0.0;
+
+            $imageUrl = '';
+            if (isset($fields['imageUrls']) && is_array($fields['imageUrls'])) {
+                foreach ($fields['imageUrls'] as $candidateImage) {
+                    if (is_string($candidateImage) && trim($candidateImage) !== '') {
+                        $imageUrl = trim($candidateImage);
+                        break;
+                    }
+                    if (is_array($candidateImage)) {
+                        $nestedUrl = $candidateImage['url'] ?? ($candidateImage['secure_url'] ?? '');
+                        if (is_string($nestedUrl) && trim($nestedUrl) !== '') {
+                            $imageUrl = trim($nestedUrl);
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if ($imageUrl === '' && isset($fields['primaryImage'])) {
+                $fallbackImage = $fields['primaryImage'];
+                if (is_string($fallbackImage) && trim($fallbackImage) !== '') {
+                    $imageUrl = trim($fallbackImage);
+                } elseif (is_array($fallbackImage)) {
+                    $nestedUrl = $fallbackImage['url'] ?? ($fallbackImage['secure_url'] ?? '');
+                    if (is_string($nestedUrl) && trim($nestedUrl) !== '') {
+                        $imageUrl = trim($nestedUrl);
+                    }
+                }
+            }
+
+            if ($imageUrl === '') {
+                $imageCandidates = [];
+                foreach (['images', 'photos', 'photoUrls', 'gallery', 'thumbnails'] as $imageField) {
+                    if (isset($fields[$imageField])) {
+                        $imageCandidates[] = $fields[$imageField];
+                    }
+                }
+                foreach ($imageCandidates as $candidateSet) {
+                    if (is_string($candidateSet) && trim($candidateSet) !== '') {
+                        $imageUrl = trim($candidateSet);
+                        break;
+                    }
+                    if (is_array($candidateSet)) {
+                        foreach ($candidateSet as $candidateImage) {
+                            if (is_string($candidateImage) && trim($candidateImage) !== '') {
+                                $imageUrl = trim($candidateImage);
+                                break 2;
+                            }
+                            if (is_array($candidateImage)) {
+                                $nestedUrl = $candidateImage['url'] ?? ($candidateImage['secure_url'] ?? '');
+                                if (is_string($nestedUrl) && trim($nestedUrl) !== '') {
+                                    $imageUrl = trim($nestedUrl);
+                                    break 2;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
 
             $createdRaw = $fields['createdAt'] ?? ($fields['created_at'] ?? '');
             if (is_array($createdRaw) && isset($createdRaw['seconds'])) {
@@ -200,6 +335,8 @@ if ($firestoreVendorKey !== '') {
                 'added_on' => $addedOn,
                 'link' => $docId !== '' ? 'product.php?id=' . urlencode($docId) : '#',
                 'views' => $viewsCount,
+                'image' => $imageUrl,
+                'image_alt' => $title !== 'Untitled' ? $title : 'Listing image',
                 'sort_ts' => $addedTimestamp,
             ];
         }
@@ -550,6 +687,18 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
             font-size: 2rem;
             color: rgba(255, 255, 255, 0.92);
             box-shadow: 0 12px 24px rgba(243, 115, 30, 0.18);
+        }
+
+        .listing-thumb-image {
+            background: rgba(255, 255, 255, 0.08);
+            box-shadow: 0 10px 22px rgba(17, 17, 17, 0.18);
+            overflow: hidden;
+        }
+
+        .listing-thumb img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
         }
 
         .listing-info h3 {

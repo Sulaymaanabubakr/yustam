@@ -83,8 +83,19 @@ const buildListingCard = (item) => {
 
   const thumb = document.createElement('div');
   thumb.className = 'listing-thumb';
-  thumb.setAttribute('aria-hidden', 'true');
-  thumb.textContent = (item.title || 'Y')[0].toUpperCase();
+
+  if (item.image) {
+    const img = document.createElement('img');
+    img.src = item.image;
+    img.alt = item.image_alt || item.title || 'Listing image';
+    img.loading = 'lazy';
+    thumb.classList.add('listing-thumb-image');
+    thumb.appendChild(img);
+  } else {
+    thumb.setAttribute('aria-hidden', 'true');
+    const fallback = (item.title || 'Y').trim().charAt(0).toUpperCase() || 'Y';
+    thumb.textContent = fallback;
+  }
 
   const info = document.createElement('div');
   info.className = 'listing-info';
@@ -105,7 +116,8 @@ const buildListingCard = (item) => {
   meta.className = 'listing-meta';
 
   const price = document.createElement('span');
-  price.textContent = `₦${formatNumber(item.price)}`;
+  const priceValue = Number.isFinite(item.price) ? item.price : Number(item.price || 0);
+  price.textContent = priceValue > 0 ? `₦${formatNumber(priceValue)}` : 'Price on request';
 
   const status = document.createElement('span');
   const statusValue = (item.status || '').toLowerCase();
