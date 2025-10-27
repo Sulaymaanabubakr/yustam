@@ -739,6 +739,7 @@ require_admin_auth();
                 <a class="nav-link active" href="admin-dashboard.php"><i class="ri-dashboard-line"></i> Dashboard</a>
                 <a class="nav-link" href="admin-listings.php"><i class="ri-store-2-line"></i> Listings</a>
                 <a class="nav-link" href="admin-vendors.php"><i class="ri-team-line"></i> Vendors</a>
+                <a class="nav-link" href="admin-verifications.php"><i class="ri-shield-check-line"></i> Verifications</a>
                 <a class="nav-link" href="admin-plans.php"><i class="ri-bar-chart-2-line"></i> Plans &amp; Revenue</a>
                 <a class="nav-link" href="admin-dashboard.php#settings"><i class="ri-settings-3-line"></i> Settings</a>
             </nav>
