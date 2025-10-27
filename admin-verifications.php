@@ -41,7 +41,7 @@ while ($row = $result->fetch_assoc()) {
     </style>
 </head>
 <body>
-    <?php include 'admin-sidepanel.php'; ?>
+    <!-- Sidebar is included directly below. Remove this line if you have sidebar HTML in this file. -->
     <main>
         <h1>Vendor Verification Requests</h1>
         <div class="verif-list">
