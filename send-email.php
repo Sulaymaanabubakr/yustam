@@ -3,9 +3,9 @@ use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 
 // Include PHPMailer classes
-require_once __DIR__ . '/phpmailer/src/Exception.php';
-require_once __DIR__ . '/phpmailer/src/PHPMailer.php';
-require_once __DIR__ . '/phpmailer/src/SMTP.php';
+require_once __DIR__ . '/phpmailer/Exception.php';
+require_once __DIR__ . '/phpmailer/PHPMailer.php';
+require_once __DIR__ . '/phpmailer/SMTP.php';
 
 // Email sending function
 function sendEmail($to, $subject, $message)
