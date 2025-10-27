@@ -52,15 +52,12 @@ function yustam_vendor_ensure_table(mysqli $conn): void
     }
 
     try {
-        $sql = 'SELECT COUNT(*) AS total FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ? LIMIT 1';
-        $stmt = $conn->prepare($sql);
-        if ($stmt) {
-            $stmt->bind_param('s', $table);
-            $stmt->execute();
-            $result = $stmt->get_result();
-            $row = $result ? $result->fetch_assoc() : ['total' => 0];
-            $stmt->close();
-            if ((int) ($row['total'] ?? 0) > 0) {
+        $escaped = $conn->real_escape_string($table);
+        $result = $conn->query("SHOW TABLES LIKE '{$escaped}'");
+        if ($result instanceof mysqli_result) {
+            $exists = $result->num_rows > 0;
+            $result->free();
+            if ($exists) {
                 $ensured = true;
                 return;
             }
@@ -101,6 +98,13 @@ SQL;
 
         $conn->query($createSql);
         $ensured = true;
+    } catch (mysqli_sql_exception $exception) {
+        if ($exception->getCode() === 1050) {
+            $ensured = true;
+            return;
+        }
+        error_log('Unable to ensure vendors table: ' . $exception->getMessage());
+        throw $exception;
     } catch (Throwable $exception) {
         error_log('Unable to ensure vendors table: ' . $exception->getMessage());
         throw $exception;
