@@ -37,11 +37,83 @@ if (!defined('YUSTAM_USERS_TABLE')) {
 }
 
 /**
+ * Ensure the vendors table exists with a baseline schema.
+ */
+function yustam_vendor_ensure_table(mysqli $conn): void
+{
+    static $ensured = false;
+    if ($ensured) {
+        return;
+    }
+
+    $table = YUSTAM_VENDORS_TABLE;
+    if (!preg_match('/^[A-Za-z0-9_]+$/', $table)) {
+        throw new RuntimeException('Invalid vendors table name.');
+    }
+
+    try {
+        $sql = 'SELECT COUNT(*) AS total FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ? LIMIT 1';
+        $stmt = $conn->prepare($sql);
+        if ($stmt) {
+            $stmt->bind_param('s', $table);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            $row = $result ? $result->fetch_assoc() : ['total' => 0];
+            $stmt->close();
+            if ((int) ($row['total'] ?? 0) > 0) {
+                $ensured = true;
+                return;
+            }
+        }
+
+        $createSql = <<<SQL
+CREATE TABLE `{$table}` (
+  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `vendor_uid` VARCHAR(20) DEFAULT NULL,
+  `firebase_uid` VARCHAR(128) DEFAULT NULL,
+  `email` VARCHAR(191) NOT NULL,
+  `full_name` VARCHAR(191) NOT NULL DEFAULT '',
+  `business_name` VARCHAR(191) NOT NULL DEFAULT '',
+  `phone` VARCHAR(50) NOT NULL DEFAULT '',
+  `password` VARCHAR(255) NOT NULL,
+  `business_address` VARCHAR(255) NOT NULL DEFAULT '',
+  `state` VARCHAR(120) NOT NULL DEFAULT '',
+  `category` VARCHAR(120) NOT NULL DEFAULT '',
+  `profile_photo` VARCHAR(255) NOT NULL DEFAULT '',
+  `avatar_url` VARCHAR(255) NOT NULL DEFAULT '',
+  `plan` VARCHAR(100) NOT NULL DEFAULT 'Free',
+  `plan_status` VARCHAR(50) NOT NULL DEFAULT 'active',
+  `plan_expires_at` DATETIME DEFAULT NULL,
+  `verification_status` VARCHAR(50) NOT NULL DEFAULT 'pending',
+  `verification_submitted_at` DATETIME DEFAULT NULL,
+  `verification_feedback` VARCHAR(255) NOT NULL DEFAULT '',
+  `provider` VARCHAR(50) NOT NULL DEFAULT 'email',
+  `verified` TINYINT(1) NOT NULL DEFAULT 0,
+  `status` VARCHAR(50) NOT NULL DEFAULT 'active',
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `vendors_email_unique` (`email`),
+  UNIQUE KEY `vendors_vendor_uid_unique` (`vendor_uid`),
+  UNIQUE KEY `vendors_firebase_uid_unique` (`firebase_uid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+SQL;
+
+        $conn->query($createSql);
+        $ensured = true;
+    } catch (Throwable $exception) {
+        error_log('Unable to ensure vendors table: ' . $exception->getMessage());
+        throw $exception;
+    }
+}
+
+/**
  * Retrieve and cache the list of column names on the vendors table.
  */
 function yustam_vendor_ensure_uid_column(mysqli $conn): void
 {
     try {
+        yustam_vendor_ensure_table($conn);
         $table = YUSTAM_VENDORS_TABLE;
         $check = $conn->query("SHOW COLUMNS FROM `{$table}` LIKE 'vendor_uid'");
         $hasVendorUid = false;
@@ -79,6 +151,7 @@ function yustam_vendor_table_columns(): array
 
     try {
         $conn = get_db_connection();
+        yustam_vendor_ensure_table($conn);
         yustam_vendor_ensure_uid_column($conn);
         $result = $conn->query('SHOW COLUMNS FROM `' . YUSTAM_VENDORS_TABLE . '`');
         if ($result instanceof mysqli_result) {
@@ -417,6 +490,8 @@ function yustam_vendor_find_by_email(string $email, ?mysqli $conn = null): ?arra
     }
 
     $conn = $conn ?: get_db_connection();
+    yustam_vendor_ensure_table($conn);
+    yustam_vendor_ensure_uid_column($conn);
     $table = YUSTAM_VENDORS_TABLE;
     if (!preg_match('/^[A-Za-z0-9_]+$/', $table)) {
         throw new RuntimeException('Invalid vendor table name.');
