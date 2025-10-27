@@ -45,22 +45,30 @@ while ($row = $result->fetch_assoc()) {
     <main>
         <h1>Vendor Verification Requests</h1>
         <div class="verif-list">
-            <?php foreach ($verifications as $verif): ?>
-                <div class="verif-row" data-id="<?= $verif['id'] ?>">
-                    <div class="verif-info">
-                        <strong><?= htmlspecialchars($verif['business_name']) ?></strong> (<?= htmlspecialchars($verif['email']) ?>)<br>
-                        <span>Status: <?= htmlspecialchars($verif['status']) ?></span> | <span>Submitted: <?= htmlspecialchars($verif['submitted_at']) ?></span>
-                    </div>
-                    <div class="verif-actions">
-                        <button class="verif-btn view" data-id="<?= $verif['id'] ?>">View</button>
-                        <form method="post" action="admin-verification-action.php" style="display:inline;">
-                            <input type="hidden" name="id" value="<?= $verif['id'] ?>">
-                            <button class="verif-btn approve" name="action" value="approve" type="submit">Approve</button>
-                            <button class="verif-btn reject" name="action" value="reject" type="submit">Reject</button>
-                        </form>
-                    </div>
+            <?php if (empty($verifications)): ?>
+                <div style="text-align:center; color:#888; padding:2rem; font-size:1.1rem; background:#fff; border-radius:8px; box-shadow:0 2px 8px #eee;">
+                    <i class="ri-shield-check-line" style="font-size:2.2rem; color:#F3731E;"></i><br>
+                    No vendor verification requests yet.<br>
+                    New submissions will appear here for review.
                 </div>
-            <?php endforeach; ?>
+            <?php else: ?>
+                <?php foreach ($verifications as $verif): ?>
+                    <div class="verif-row" data-id="<?= $verif['id'] ?>">
+                        <div class="verif-info">
+                            <strong><?= htmlspecialchars($verif['business_name']) ?></strong> (<?= htmlspecialchars($verif['email']) ?>)<br>
+                            <span>Status: <?= htmlspecialchars($verif['status']) ?></span> | <span>Submitted: <?= htmlspecialchars($verif['submitted_at']) ?></span>
+                        </div>
+                        <div class="verif-actions">
+                            <button class="verif-btn view" data-id="<?= $verif['id'] ?>">View</button>
+                            <form method="post" action="admin-verification-action.php" style="display:inline;">
+                                <input type="hidden" name="id" value="<?= $verif['id'] ?>">
+                                <button class="verif-btn approve" name="action" value="approve" type="submit">Approve</button>
+                                <button class="verif-btn reject" name="action" value="reject" type="submit">Reject</button>
+                            </form>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            <?php endif; ?>
         </div>
     </main>
     <div id="popup" class="popup" style="display:none;">
