@@ -44,8 +44,14 @@ if (!$vendor) {
 $vendorData = is_array($vendor) ? $vendor : [];
 $vendorUid = yustam_vendor_assign_uid_if_missing($db, $vendorData);
 $_SESSION['vendor_uid'] = $vendorUid;
+
+$vendorFirebaseUid = '';
 if (!empty($vendorData['firebase_uid'])) {
-    $_SESSION['vendor_firebase_uid'] = trim((string) $vendorData['firebase_uid']);
+    $vendorFirebaseUid = trim((string) $vendorData['firebase_uid']);
+    $_SESSION['vendor_firebase_uid'] = $vendorFirebaseUid;
+}
+if ($vendorFirebaseUid === '' && !empty($_SESSION['vendor_firebase_uid'])) {
+    $vendorFirebaseUid = trim((string) $_SESSION['vendor_firebase_uid']);
 }
 if (isset($vendorData['email']) && $vendorData['email'] !== '') {
     $_SESSION['vendor_email'] = $vendorData['email'];
@@ -112,7 +118,9 @@ try {
     error_log('Dashboard listing query failed: ' . $e->getMessage());
 }
 
-if ($vendorUid !== '') {
+$firestoreVendorKey = $vendorFirebaseUid !== '' ? $vendorFirebaseUid : $vendorUid;
+
+if ($firestoreVendorKey !== '') {
     try {
         $firestoreListings = [];
         $firestoreTotal = 0;
@@ -127,7 +135,7 @@ if ($vendorUid !== '') {
                 'fieldFilter' => [
                     'field' => ['fieldPath' => 'vendorUid'],
                     'op' => 'EQUAL',
-                    'value' => yustam_firestore_string($vendorUid),
+                    'value' => yustam_firestore_string($firestoreVendorKey),
                 ],
             ],
             'limit' => 200,
