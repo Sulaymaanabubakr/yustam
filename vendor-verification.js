@@ -231,6 +231,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
       showToast(result.message || 'Documents submitted for review.');
       applyStatus(result.data || {});
+      // Redirect to profile after successful submission
+      setTimeout(() => {
+        window.location.href = 'vendor-profile.php';
+      }, 1200);
     } catch (error) {
       console.error('Verification submission failed:', error);
       showToast(error.message || 'Unable to submit verification.', 'error');

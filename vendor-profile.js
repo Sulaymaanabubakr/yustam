@@ -63,7 +63,7 @@ const updateVerificationCTA = (profile = {}) => {
   const planLabel = typeof profile.plan === 'string' ? profile.plan : '';
   const planName = planLabel.trim().toLowerCase();
 
-  // ✅ Make verification available to all plans, including free
+  // 705 Make verification available to all plans, including free
   const planIsPaid = true;
 
   const verification = profile.verification || {};
@@ -91,6 +91,7 @@ const updateVerificationCTA = (profile = {}) => {
     note = 'Earn buyer trust by completing your verification.';
   }
 
+  // Only enable if rejected, otherwise disable
   verificationBtn.disabled = disabled;
   verificationBtn.classList.toggle('is-disabled', disabled);
   verificationBtn.setAttribute('aria-disabled', String(disabled));
