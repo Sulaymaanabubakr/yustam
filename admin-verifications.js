@@ -15,7 +15,9 @@ const logoutBtn = document.getElementById('logoutBtn');
 const state = {
   records: [],
   selectedId: null,
+  trackingAvailable: true,
 };
+const defaultEmptyStateMarkup = emptyState ? emptyState.innerHTML : '';
 
 const statusClass = (status = '') => {
   const value = status.toLowerCase();
@@ -65,10 +67,29 @@ const renderRecords = () => {
   totalBadge.textContent = `${total} ${total === 1 ? 'request' : 'requests'}`;
 
   if (!total) {
-    emptyState.hidden = false;
+    if (emptyState && defaultEmptyStateMarkup) {
+      if (!state.trackingAvailable) {
+        emptyState.innerHTML = `
+          <i class="ri-shield-check-line" aria-hidden="true"></i>
+          <strong>Verification tracking unavailable.</strong><br>
+          Update the vendors table columns to review submissions.
+        `;
+        emptyState.dataset.state = 'tracking-disabled';
+      } else if (emptyState.dataset.state === 'tracking-disabled') {
+        emptyState.innerHTML = defaultEmptyStateMarkup;
+        delete emptyState.dataset.state;
+      }
+      emptyState.hidden = false;
+    }
     return;
   }
-  emptyState.hidden = true;
+  if (emptyState) {
+    emptyState.hidden = true;
+    if (emptyState.dataset.state === 'tracking-disabled') {
+      emptyState.innerHTML = defaultEmptyStateMarkup;
+      delete emptyState.dataset.state;
+    }
+  }
 
   state.records.forEach((record) => {
     const row = document.createElement('article');
@@ -116,8 +137,13 @@ const fetchVerifications = async () => {
     if (!payload.success || !Array.isArray(payload.data)) {
       throw new Error(payload.message || 'Unable to load verification requests.');
     }
+    const wasTrackingAvailable = state.trackingAvailable;
+    state.trackingAvailable = !(payload?.meta && payload.meta.trackingAvailable === false);
     state.records = payload.data;
     renderRecords();
+    if (wasTrackingAvailable && !state.trackingAvailable) {
+      showToast('Vendor verification tracking is not configured.');
+    }
   } catch (error) {
     console.error('Admin verification load error', error);
     showToast(error.message || 'Unable to load verification requests.');

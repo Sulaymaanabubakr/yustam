@@ -19,6 +19,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/firebase-admin.php';
 require_once __DIR__ . '/notifications-storage.php';
+require_once __DIR__ . '/api/chat/firebase.php';
 
 $vendorId = (int) $_SESSION['vendor_id'];
 if ($vendorId <= 0) {
@@ -66,7 +67,7 @@ function yustam_table_exists(mysqli $db, string $table): bool
 $vendorTable = YUSTAM_VENDORS_TABLE;
 $vendorRow = null;
 
-$fetchVendor = $db->prepare(sprintf('SELECT id, email, firebase_uid FROM `%s` WHERE id = ? LIMIT 1', $vendorTable));
+$fetchVendor = $db->prepare(sprintf('SELECT id, email, firebase_uid, vendor_uid FROM `%s` WHERE id = ? LIMIT 1', $vendorTable));
 if ($fetchVendor) {
     $fetchVendor->bind_param('i', $vendorId);
     $fetchVendor->execute();
@@ -81,6 +82,8 @@ if (!$vendorRow) {
 }
 
 $firebaseUid = trim((string) ($vendorRow['firebase_uid'] ?? ''));
+$vendorEmail = trim((string) ($vendorRow['email'] ?? ''));
+$vendorUid = trim((string) ($vendorRow['vendor_uid'] ?? ''));
 $settingsFile = __DIR__ . '/data/vendor-settings/vendor_' . $vendorId . '.json';
 
 $db->begin_transaction();
@@ -135,6 +138,65 @@ if (is_file($settingsFile)) {
     @unlink($settingsFile);
 }
 
+// Delete vendor data from Firestore
+$potentialFirestoreIds = array_filter([
+    $firebaseUid,
+    $vendorUid,
+    $vendorEmail,
+    (string) $vendorId
+], fn($id) => $id !== '');
+
+foreach ($potentialFirestoreIds as $firestoreId) {
+    try {
+        // Delete vendor document from Firestore if it exists
+        yustam_firestore_delete_document('vendors/' . $firestoreId);
+    } catch (Throwable $firestoreError) {
+        // Log but continue - document might not exist in Firestore
+        error_log('Vendor deletion: unable to delete Firestore vendor document for ID ' . $firestoreId . ': ' . $firestoreError->getMessage());
+    }
+}
+
+// Delete vendor's listings from Firestore
+if ($vendorUid !== '' || $firebaseUid !== '') {
+    try {
+        $vendorQueryId = $firebaseUid !== '' ? $firebaseUid : $vendorUid;
+        
+        // Query listings by vendorId to get their document IDs
+        $listingsQuery = [
+            'structuredQuery' => [
+                'from' => [['collectionId' => 'listings']],
+                'where' => [
+                    'fieldFilter' => [
+                        'field' => ['fieldPath' => 'vendorId'],
+                        'op' => 'EQUAL',
+                        'value' => yustam_firestore_string($vendorQueryId)
+                    ]
+                ],
+                'select' => [
+                    'fields' => [
+                        ['fieldPath' => '__name__']
+                    ]
+                ]
+            ]
+        ];
+        
+        $listingResults = yustam_firestore_run_query($listingsQuery);
+        foreach ($listingResults as $result) {
+            if (isset($result['document']['name'])) {
+                $listingPath = yustam_firestore_relative_path($result['document']['name']);
+                try {
+                    yustam_firestore_delete_document($listingPath);
+                } catch (Throwable $listingDeleteError) {
+                    error_log('Vendor deletion: unable to delete Firestore listing ' . $listingPath . ': ' . $listingDeleteError->getMessage());
+                }
+            }
+        }
+    } catch (Throwable $listingsError) {
+        error_log('Vendor deletion: unable to query/delete Firestore listings for vendor ' . $vendorId . ': ' . $listingsError->getMessage());
+    }
+}
+
+// Delete Firebase Authentication user
 if ($firebaseUid !== '') {
     try {
         yustam_firebase_delete_user($firebaseUid);

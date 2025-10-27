@@ -5,6 +5,8 @@ require_once __DIR__ . '/admin-session.php';
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/send-email.php';
 require_once __DIR__ . '/notifications-storage.php';
+require_once __DIR__ . '/firebase-admin.php';
+require_once __DIR__ . '/api/chat/firebase.php';
 
 require_admin_auth();
 
@@ -169,15 +171,39 @@ switch ($action) {
         ]);
     }
     case 'delete': {
-        $cascade = !empty($data['cascade']);
+        $firebaseUid = trim((string) ($vendor['firebase_uid'] ?? ''));
+        $vendorEmail = trim((string) ($vendor['email'] ?? ''));
+        $vendorUid = trim((string) ($vendor['vendor_uid'] ?? ''));
+        $settingsFile = __DIR__ . '/data/vendor-settings/vendor_' . $vendorId . '.json';
+
         $db->begin_transaction();
         try {
-            if ($cascade && vendor_table_exists($db, 'listings')) {
+            if (vendor_table_exists($db, 'listings')) {
                 $deleteListingsStmt = $db->prepare('DELETE FROM `listings` WHERE vendor_id = ?');
-                if ($deleteListingsStmt) {
+                if ($deleteListingsStmt instanceof mysqli_stmt) {
                     vendor_action_bind($deleteListingsStmt, 'i', [$vendorId]);
                     $deleteListingsStmt->execute();
                     $deleteListingsStmt->close();
+                }
+            }
+
+            if (vendor_table_exists($db, 'password_resets')) {
+                $deleteResetsStmt = $db->prepare('DELETE FROM `password_resets` WHERE user_id = ?');
+                if ($deleteResetsStmt instanceof mysqli_stmt) {
+                    vendor_action_bind($deleteResetsStmt, 'i', [$vendorId]);
+                    $deleteResetsStmt->execute();
+                    $deleteResetsStmt->close();
+                }
+            }
+
+            yustam_vendor_notifications_ensure_table($db);
+            $notificationsTable = yustam_vendor_notifications_table();
+            if ($notificationsTable !== '' && vendor_table_exists($db, $notificationsTable)) {
+                $deleteNotificationsStmt = $db->prepare(sprintf('DELETE FROM `%s` WHERE vendor_id = ?', $notificationsTable));
+                if ($deleteNotificationsStmt instanceof mysqli_stmt) {
+                    vendor_action_bind($deleteNotificationsStmt, 'i', [$vendorId]);
+                    $deleteNotificationsStmt->execute();
+                    $deleteNotificationsStmt->close();
                 }
             }
 
@@ -189,17 +215,6 @@ switch ($action) {
             $deleteVendorStmt->execute();
             $deleteVendorStmt->close();
 
-            yustam_vendor_notifications_ensure_table($db);
-            $notificationsTable = yustam_vendor_notifications_table();
-            if (vendor_table_exists($db, $notificationsTable)) {
-                $deleteNotificationsStmt = $db->prepare(sprintf('DELETE FROM `%s` WHERE vendor_id = ?', $notificationsTable));
-                if ($deleteNotificationsStmt instanceof mysqli_stmt) {
-                    vendor_action_bind($deleteNotificationsStmt, 'i', [$vendorId]);
-                    $deleteNotificationsStmt->execute();
-                    $deleteNotificationsStmt->close();
-                }
-            }
-
             $db->commit();
         } catch (Throwable $exception) {
             $db->rollback();
@@ -209,9 +224,74 @@ switch ($action) {
             ], 500);
         }
 
+        if (is_file($settingsFile)) {
+            @unlink($settingsFile);
+        }
+
+        $potentialFirestoreIds = array_unique(array_values(array_filter([
+            $firebaseUid,
+            $vendorUid,
+            $vendorEmail,
+            (string) $vendorId,
+        ], static fn($id) => $id !== '')));
+
+        foreach ($potentialFirestoreIds as $firestoreId) {
+            try {
+                yustam_firestore_delete_document('vendors/' . $firestoreId);
+            } catch (Throwable $firestoreError) {
+                error_log('Admin vendor deletion: unable to delete Firestore vendor document for ID ' . $firestoreId . ': ' . $firestoreError->getMessage());
+            }
+        }
+
+        if ($vendorUid !== '' || $firebaseUid !== '') {
+            try {
+                $vendorQueryId = $firebaseUid !== '' ? $firebaseUid : $vendorUid;
+
+                $listingsQuery = [
+                    'structuredQuery' => [
+                        'from' => [['collectionId' => 'listings']],
+                        'where' => [
+                            'fieldFilter' => [
+                                'field' => ['fieldPath' => 'vendorId'],
+                                'op' => 'EQUAL',
+                                'value' => yustam_firestore_string($vendorQueryId),
+                            ],
+                        ],
+                        'select' => [
+                            'fields' => [
+                                ['fieldPath' => '__name__'],
+                            ],
+                        ],
+                    ],
+                ];
+
+                $listingResults = yustam_firestore_run_query($listingsQuery);
+                foreach ($listingResults as $result) {
+                    if (isset($result['document']['name'])) {
+                        $listingPath = yustam_firestore_relative_path($result['document']['name']);
+                        try {
+                            yustam_firestore_delete_document($listingPath);
+                        } catch (Throwable $listingDeleteError) {
+                            error_log('Admin vendor deletion: unable to delete Firestore listing ' . $listingPath . ': ' . $listingDeleteError->getMessage());
+                        }
+                    }
+                }
+            } catch (Throwable $listingsError) {
+                error_log('Admin vendor deletion: unable to remove Firestore listings for vendor ' . $vendorId . ': ' . $listingsError->getMessage());
+            }
+        }
+
+        if ($firebaseUid !== '') {
+            try {
+                yustam_firebase_delete_user($firebaseUid);
+            } catch (Throwable $firebaseError) {
+                error_log('Admin vendor deletion: unable to delete Firebase account for vendor ' . $vendorId . ': ' . $firebaseError->getMessage());
+            }
+        }
+
         respond_vendor_action([
             'success' => true,
-            'message' => $cascade ? 'Vendor and associated listings deleted.' : 'Vendor account deleted successfully.',
+            'message' => 'Vendor account and listings deleted successfully.',
         ]);
     }
     case 'notify': {
