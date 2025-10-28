@@ -1772,14 +1772,19 @@ const authTimeoutId = setTimeout(() => {
   }
 }, AUTH_CHECK_TIMEOUT);
 
+let authResolved = false;
+
 onAuthStateChanged(auth, (user) => {
-  clearTimeout(authTimeoutId);
-  if (!user || !user.uid) {
-    redirectToVendorLogin();
+  if (user && user.uid) {
+    clearTimeout(authTimeoutId);
+    authResolved = true;
+    currentUser = user;
+    persistYustamUid(user.uid);
+    toggleLoader(false);
     return;
   }
 
-  currentUser = user;
-  persistYustamUid(user.uid);
-  toggleLoader(false);
+  if (authResolved) {
+    redirectToVendorLogin();
+  }
 });
