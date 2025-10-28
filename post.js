@@ -142,26 +142,6 @@ const persistYustamUid = (uid) => {
   }
 };
 
-function getStoredYustamUid() {
-  try {
-    const sessionUid = sessionStorage.getItem(YUSTAM_UID_STORAGE_KEY);
-    if (sessionUid && sessionUid.trim()) {
-      return sessionUid.trim();
-    }
-  } catch (error) {
-    console.warn('[post] unable to read session UID', error);
-  }
-  try {
-    const localUid = localStorage.getItem(YUSTAM_UID_STORAGE_KEY);
-    if (localUid && localUid.trim()) {
-      return localUid.trim();
-    }
-  } catch (error) {
-    console.warn('[post] unable to read local UID', error);
-  }
-  return '';
-}
-
 const phoneBrandOptions = Array.from(
   new Set([
     ...popularPhoneBrands,
@@ -1712,50 +1692,6 @@ const createListingDocument = (formValues, imageUrls) => {
   };
 };
 
-const fetchVendorSession = async () => {
-  try {
-    const response = await fetch('vendor-dashboard.php?format=json', {
-      headers: { Accept: 'application/json' },
-      credentials: 'same-origin',
-      cache: 'no-store',
-    });
-
-    if (response.status === 401) {
-      return null;
-    }
-
-    let payload = {};
-    try {
-      payload = await response.json();
-    } catch (parseError) {
-      console.warn('[post] unable to parse vendor session payload', parseError);
-      return null;
-    }
-
-    if (!response.ok || !payload || payload.success === false) {
-      return null;
-    }
-
-    const data = payload.data || {};
-    const session = data.session || {};
-    const profile = data.profile || {};
-    const vendorUid = session.vendorUid || profile.uid || '';
-    const vendorId = session.vendorId || profile.id || '';
-    const fallbackUid = vendorUid || vendorId || '';
-    if (!fallbackUid) {
-      return null;
-    }
-
-    return {
-      uid: fallbackUid,
-      profile,
-    };
-  } catch (error) {
-    console.error('[post] vendor session lookup failed', error);
-    return null;
-  }
-};
-
 const handleSubmit = async () => {
   if (!currentUser || !currentUser.uid) {
     showToast('Please log in again to post your listing.');
@@ -1824,31 +1760,26 @@ logoutBtn.addEventListener('click', async () => {
 toggleLoader(true);
 initializeForm();
 
-onAuthStateChanged(auth, async (user) => {
-  if (user && user.uid) {
-    currentUser = user;
-    persistYustamUid(user.uid);
-    toggleLoader(false);
-    return;
-  }
+const AUTH_CHECK_TIMEOUT = 5000;
 
-  const storedUid = getStoredYustamUid();
-  if (storedUid) {
-    currentUser = { uid: storedUid };
-    toggleLoader(false);
-    return;
-  }
-
-  const sessionUser = await fetchVendorSession();
-  if (sessionUser && sessionUser.uid) {
-    currentUser = {
-      uid: sessionUser.uid,
-      profile: sessionUser.profile || {},
-    };
-    persistYustamUid(sessionUser.uid);
-    toggleLoader(false);
-    return;
-  }
-
+const redirectToVendorLogin = () => {
   window.location.href = 'vendor-login.html';
+};
+
+const authTimeoutId = setTimeout(() => {
+  if (!currentUser) {
+    redirectToVendorLogin();
+  }
+}, AUTH_CHECK_TIMEOUT);
+
+onAuthStateChanged(auth, (user) => {
+  clearTimeout(authTimeoutId);
+  if (!user || !user.uid) {
+    redirectToVendorLogin();
+    return;
+  }
+
+  currentUser = user;
+  persistYustamUid(user.uid);
+  toggleLoader(false);
 });
