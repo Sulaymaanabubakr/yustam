@@ -122,6 +122,46 @@ const PHONE_BRAND_OTHER_VALUE = '__custom_brand__';
 const PHONE_BRAND_OTHER_LABEL = 'Other / Custom Brand';
 const MODEL_OTHER_LABEL = 'Other / Custom Model';
 
+const YUSTAM_UID_STORAGE_KEY = 'yustam_uid';
+const FIREBASE_UID_STORAGE_KEY = 'firebase_uid';
+
+const persistYustamUid = (uid) => {
+  const value = typeof uid === 'string' ? uid.trim() : '';
+  if (!value) return;
+  try {
+    sessionStorage.setItem(YUSTAM_UID_STORAGE_KEY, value);
+    sessionStorage.setItem(FIREBASE_UID_STORAGE_KEY, value);
+  } catch (error) {
+    console.warn('[post] unable to persist session uid', error);
+  }
+  try {
+    localStorage.setItem(YUSTAM_UID_STORAGE_KEY, value);
+    localStorage.setItem(FIREBASE_UID_STORAGE_KEY, value);
+  } catch (error) {
+    console.warn('[post] unable to persist uid locally', error);
+  }
+};
+
+function getStoredYustamUid() {
+  try {
+    const sessionUid = sessionStorage.getItem(YUSTAM_UID_STORAGE_KEY);
+    if (sessionUid && sessionUid.trim()) {
+      return sessionUid.trim();
+    }
+  } catch (error) {
+    console.warn('[post] unable to read session UID', error);
+  }
+  try {
+    const localUid = localStorage.getItem(YUSTAM_UID_STORAGE_KEY);
+    if (localUid && localUid.trim()) {
+      return localUid.trim();
+    }
+  } catch (error) {
+    console.warn('[post] unable to read local UID', error);
+  }
+  return '';
+}
+
 const phoneBrandOptions = Array.from(
   new Set([
     ...popularPhoneBrands,
@@ -1672,8 +1712,52 @@ const createListingDocument = (formValues, imageUrls) => {
   };
 };
 
+const fetchVendorSession = async () => {
+  try {
+    const response = await fetch('vendor-dashboard.php?format=json', {
+      headers: { Accept: 'application/json' },
+      credentials: 'same-origin',
+      cache: 'no-store',
+    });
+
+    if (response.status === 401) {
+      return null;
+    }
+
+    let payload = {};
+    try {
+      payload = await response.json();
+    } catch (parseError) {
+      console.warn('[post] unable to parse vendor session payload', parseError);
+      return null;
+    }
+
+    if (!response.ok || !payload || payload.success === false) {
+      return null;
+    }
+
+    const data = payload.data || {};
+    const session = data.session || {};
+    const profile = data.profile || {};
+    const vendorUid = session.vendorUid || profile.uid || '';
+    const vendorId = session.vendorId || profile.id || '';
+    const fallbackUid = vendorUid || vendorId || '';
+    if (!fallbackUid) {
+      return null;
+    }
+
+    return {
+      uid: fallbackUid,
+      profile,
+    };
+  } catch (error) {
+    console.error('[post] vendor session lookup failed', error);
+    return null;
+  }
+};
+
 const handleSubmit = async () => {
-  if (!currentUser) {
+  if (!currentUser || !currentUser.uid) {
     showToast('Please log in again to post your listing.');
     return;
   }
@@ -1732,38 +1816,39 @@ logoutBtn.addEventListener('click', async () => {
     await signOut(auth);
   } catch (error) {
     console.error('Logout failed', error);
-    showToast('Unable to logout. Please try again.');
+  } finally {
+    window.location.href = 'logout.php';
   }
 });
 
 toggleLoader(true);
 initializeForm();
 
-onAuthStateChanged(auth, (user) => {
-  if (!user) {
-    window.location.href = 'vendor-login.html';
+onAuthStateChanged(auth, async (user) => {
+  if (user && user.uid) {
+    currentUser = user;
+    persistYustamUid(user.uid);
+    toggleLoader(false);
     return;
   }
 
-  currentUser = user;
-  toggleLoader(false);
+  const storedUid = getStoredYustamUid();
+  if (storedUid) {
+    currentUser = { uid: storedUid };
+    toggleLoader(false);
+    return;
+  }
+
+  const sessionUser = await fetchVendorSession();
+  if (sessionUser && sessionUser.uid) {
+    currentUser = {
+      uid: sessionUser.uid,
+      profile: sessionUser.profile || {},
+    };
+    persistYustamUid(sessionUser.uid);
+    toggleLoader(false);
+    return;
+  }
+
+  window.location.href = 'vendor-login.html';
 });
-const getStoredYustamUid = () => {
-  try {
-    const sessionUid = sessionStorage.getItem('yustam_uid');
-    if (sessionUid && sessionUid.trim()) {
-      return sessionUid.trim();
-    }
-  } catch (error) {
-    console.warn('[post] unable to read session UID', error);
-  }
-  try {
-    const localUid = localStorage.getItem('yustam_uid');
-    if (localUid && localUid.trim()) {
-      return localUid.trim();
-    }
-  } catch (error) {
-    console.warn('[post] unable to read local UID', error);
-  }
-  return '';
-};

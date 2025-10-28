@@ -370,6 +370,9 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
         'success' => true,
         'data' => [
             'profile' => [
+                'id' => $vendorId,
+                'uid' => $vendorUid,
+                'firebaseUid' => $vendorFirebaseUid,
                 'name' => $vendorName,
                 'businessName' => $businessName,
                 'phone' => $phone,
@@ -379,6 +382,11 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
             ],
             'stats' => $stats,
             'listings' => $listings,
+            'session' => [
+                'vendorId' => $vendorId,
+                'vendorUid' => $vendorUid,
+                'firebaseUid' => $vendorFirebaseUid,
+            ],
         ],
     ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     exit;

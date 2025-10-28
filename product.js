@@ -851,6 +851,8 @@ const renderSpecifications = (listing = {}) => {
     if (rawValue === undefined || rawValue === null || rawValue === '') return;
     const normalisedKey = key.toLowerCase();
     if (excludedKeys.has(normalisedKey)) return;
+    if (normalisedKey.includes('uid')) return;
+    if (normalisedKey.includes('sync')) return;
     if (normalisedKey.includes('image') || normalisedKey.includes('photo') || normalisedKey.includes('url')) return;
 
     let displayValue = rawValue;
