@@ -1225,6 +1225,7 @@ const categoryConfig = {
 
 let currentUser = null;
 let selectedImages = [];
+let vendorContext = null;
 
 const showToast = (message) => {
   toast.textContent = message;
@@ -1673,6 +1674,64 @@ const uploadListingImages = async (userId) => {
   return Promise.all(uploads);
 };
 
+const deriveListingTitle = (values = {}, fallbackSubcategory = '') => {
+  const candidates = [
+    values.title,
+    values.productTitle,
+    values.productName,
+    values.listingTitle,
+    values.serviceName,
+    values.name,
+    values.model,
+    values.type,
+    values.itemType,
+  ];
+
+  const firstMatch = candidates.find((value) => typeof value === 'string' && value.trim());
+  if (firstMatch) {
+    return firstMatch.trim();
+  }
+
+  if (values.brand && values.model) {
+    const combo = `${values.brand} ${values.model}`.trim();
+    if (combo) return combo;
+  }
+
+  if (typeof values.brand === 'string' && values.brand.trim()) {
+    return values.brand.trim();
+  }
+
+  if (fallbackSubcategory && fallbackSubcategory.trim()) {
+    return fallbackSubcategory.trim();
+  }
+
+  return 'Marketplace Listing';
+};
+
+const resolveVendorMetadata = () => {
+  const sessionMeta = vendorContext?.session || {};
+  const profileMeta = vendorContext?.profile || {};
+  const firebaseUid = auth.currentUser?.uid || currentUser?.uid || sessionMeta.vendorUid || '';
+  const tidy = (value) => (typeof value === 'string' ? value.trim() : '');
+
+  const vendorNumericId = sessionMeta.vendorId ?? sessionMeta.vendorID ?? '';
+  const vendorIdString = vendorNumericId === '' || vendorNumericId === null
+    ? ''
+    : String(vendorNumericId).trim();
+
+  return {
+    vendorUid: firebaseUid,
+    vendorFirebaseUid: sessionMeta.firebaseUid || firebaseUid,
+    vendorID: vendorIdString,
+    vendorName: tidy(profileMeta.businessName) || tidy(profileMeta.name),
+    vendorBusinessName: tidy(profileMeta.businessName),
+    vendorEmail: tidy(profileMeta.email),
+    vendorPlan: tidy(profileMeta.plan),
+    vendorLocation: tidy(profileMeta.location),
+    vendorPhone: tidy(profileMeta.phone),
+  };
+};
+
 const createListingDocument = (formValues, imageUrls) => {
   const filteredValues = { ...formValues };
   Object.keys(filteredValues).forEach((key) => {
@@ -1681,13 +1740,32 @@ const createListingDocument = (formValues, imageUrls) => {
     }
   });
 
+  const listingTitle = deriveListingTitle(filteredValues, subcategorySelect.value);
+  const vendorMeta = resolveVendorMetadata();
+  const vendorDisplayName =
+    vendorMeta.vendorName || vendorMeta.vendorBusinessName || 'Vendor';
+
   return {
     ...filteredValues,
     category: categorySelect.value,
     subcategory: subcategorySelect.value,
-    vendorUid: auth.currentUser?.uid || currentUser?.uid || '', // ✅ ensure vendorUid is always saved
+    title: listingTitle,
+    productTitle: listingTitle,
+    listingTitle,
+    vendorUid: vendorMeta.vendorUid,
+    vendorFirebaseUid: vendorMeta.vendorFirebaseUid,
+    vendorID: vendorMeta.vendorID,
+    vendorId: vendorMeta.vendorID,
+    vendorName: vendorDisplayName,
+    vendorBusinessName: vendorMeta.vendorBusinessName,
+    vendorEmail: vendorMeta.vendorEmail,
+    vendorPlan: vendorMeta.vendorPlan || 'Free',
+    vendorLocation: vendorMeta.vendorLocation,
+    vendorPhone: vendorMeta.vendorPhone,
     status: 'pending',
     imageUrls,
+    images: imageUrls,
+    coverImage: imageUrls[0] || '',
     createdAt: serverTimestamp(),
   };
 };
@@ -1695,6 +1773,11 @@ const createListingDocument = (formValues, imageUrls) => {
 const handleSubmit = async () => {
   if (!currentUser || !currentUser.uid) {
     showToast('Please log in again to post your listing.');
+    return;
+  }
+
+  if (!vendorContext) {
+    showToast('Still loading your vendor profile. Please try again in a moment.');
     return;
   }
 
@@ -1764,26 +1847,45 @@ const redirectToVendorLogin = () => {
   window.location.href = 'vendor-login.html';
 };
 
-const AUTH_CHECK_TIMEOUT = 5000;
-let authResolved = false;
-
-const authTimeoutId = setTimeout(() => {
-  if (!authResolved) {
-    redirectToVendorLogin();
+const fetchVendorContext = async () => {
+  try {
+    const response = await fetch('vendor-dashboard.php?format=json', {
+      headers: { Accept: 'application/json' },
+      credentials: 'same-origin',
+      cache: 'no-store',
+    });
+    if (!response.ok) {
+      return null;
+    }
+    const payload = await response.json().catch(() => null);
+    if (!payload || payload.success === false) {
+      return null;
+    }
+    return {
+      profile: payload.data?.profile || {},
+      session: payload.data?.session || {},
+    };
+  } catch (error) {
+    console.error('[post] vendor context fetch failed', error);
+    return null;
   }
-}, AUTH_CHECK_TIMEOUT);
+};
 
-onAuthStateChanged(auth, (user) => {
-  if (user && user.uid) {
-    authResolved = true;
-    clearTimeout(authTimeoutId);
-    currentUser = user;
-    persistYustamUid(user.uid);
-    toggleLoader(false);
+onAuthStateChanged(auth, async (user) => {
+  if (!user || !user.uid) {
+    redirectToVendorLogin();
     return;
   }
 
-  if (authResolved) {
+  currentUser = user;
+  persistYustamUid(user.uid);
+
+  const context = await fetchVendorContext();
+  if (!context) {
     redirectToVendorLogin();
+    return;
   }
+
+  vendorContext = context;
+  toggleLoader(false);
 });

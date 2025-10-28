@@ -1,6 +1,19 @@
+import { auth, db } from './firebase.js';
+import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js';
+import {
+  collection,
+  getDocs,
+  limit,
+  orderBy,
+  query,
+  where,
+} from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
+
 let vendorData = {};
 let vendorStats = {};
 let vendorListings = [];
+let firestoreListings = [];
+let firebaseUser = null;
 
 const qs = (selector) => document.querySelector(selector);
 const qsa = (selector) => Array.from(document.querySelectorAll(selector));
@@ -31,6 +44,54 @@ const fillText = (id, value, fallback = '—') => {
 };
 
 const formatNumber = (value) => new Intl.NumberFormat('en-NG').format(Number(value || 0));
+
+const resolveListingImage = (item = {}) => {
+  if (typeof item.image === 'string' && item.image.trim()) return item.image;
+  if (Array.isArray(item.images) && item.images.length) return item.images[0];
+  if (Array.isArray(item.imageUrls) && item.imageUrls.length) return item.imageUrls[0];
+  if (typeof item.coverImage === 'string' && item.coverImage.trim()) return item.coverImage;
+  return '';
+};
+
+const resolveListingTitle = (item = {}) => {
+  const candidates = [
+    item.title,
+    item.productTitle,
+    item.productName,
+    item.listingTitle,
+    item.name,
+    item.type,
+    item.itemType,
+    item.subcategory,
+  ];
+  const match = candidates.find((value) => typeof value === 'string' && value.trim());
+  return match ? match.trim() : 'Untitled';
+};
+
+const formatListingDate = (value) => {
+  if (!value) return '';
+  let date;
+  if (value.toDate && typeof value.toDate === 'function') {
+    date = value.toDate();
+  } else if (value.seconds) {
+    date = new Date(value.seconds * 1000);
+  } else if (typeof value === 'string') {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) {
+      date = parsed;
+    }
+  } else if (value instanceof Date) {
+    date = value;
+  }
+  if (!date) return '';
+  return date.toLocaleDateString('en-NG', { day: '2-digit', month: 'short', year: 'numeric' });
+};
+
+const resolveListingLink = (item = {}) => {
+  if (typeof item.link === 'string' && item.link.trim()) return item.link;
+  if (item.id) return `product.html?id=${encodeURIComponent(item.id)}`;
+  return '#';
+};
 
 const hydrateProfile = () => {
   const welcomeName = document.getElementById('welcomeName');
@@ -84,16 +145,19 @@ const buildListingCard = (item) => {
   const thumb = document.createElement('div');
   thumb.className = 'listing-thumb';
 
-  if (item.image) {
+  const imageSrc = resolveListingImage(item);
+  const titleText = resolveListingTitle(item);
+
+  if (imageSrc) {
     const img = document.createElement('img');
-    img.src = item.image;
-    img.alt = item.image_alt || item.title || 'Listing image';
+    img.src = imageSrc;
+    img.alt = item.image_alt || titleText || 'Listing image';
     img.loading = 'lazy';
     thumb.classList.add('listing-thumb-image');
     thumb.appendChild(img);
   } else {
     thumb.setAttribute('aria-hidden', 'true');
-    const fallback = (item.title || 'Y').trim().charAt(0).toUpperCase() || 'Y';
+    const fallback = (titleText || 'Y').trim().charAt(0).toUpperCase() || 'Y';
     thumb.textContent = fallback;
   }
 
@@ -101,10 +165,14 @@ const buildListingCard = (item) => {
   info.className = 'listing-info';
 
   const title = document.createElement('h3');
-  title.textContent = item.title || 'Untitled';
+  title.textContent = titleText || 'Untitled';
 
   const metaLine = document.createElement('p');
-  metaLine.textContent = item.added_on ? `Added ${item.added_on}` : 'Recently added';
+  const addedDisplay = item.added_on || formatListingDate(item.createdAt) || '';
+  const addedLabel = addedDisplay
+    ? (addedDisplay.trim().toLowerCase().startsWith('added') ? addedDisplay : `Added ${addedDisplay}`)
+    : 'Recently added';
+  metaLine.textContent = addedLabel;
 
   info.appendChild(title);
   info.appendChild(metaLine);
@@ -137,9 +205,9 @@ const buildListingCard = (item) => {
   actions.className = 'listing-actions';
 
   const viewLink = document.createElement('a');
-  viewLink.href = item.link || '#';
+  viewLink.href = resolveListingLink(item);
   viewLink.textContent = 'View Listing';
-  viewLink.setAttribute('aria-label', `View listing ${escapeHTML(item.title || '')}`);
+  viewLink.setAttribute('aria-label', `View listing ${escapeHTML(titleText || '')}`);
 
   actions.appendChild(viewLink);
 
@@ -158,14 +226,16 @@ const hydrateListings = () => {
     grid.innerHTML = '';
   }
 
-  if (!vendorListings.length) {
+  const sourceListings = firestoreListings.length ? firestoreListings : vendorListings;
+
+  if (!sourceListings.length) {
     if (emptyState) emptyState.hidden = false;
     return;
   }
 
   if (emptyState) emptyState.hidden = true;
 
-  vendorListings.forEach((item) => {
+  sourceListings.forEach((item) => {
     if (!grid) return;
     grid.appendChild(buildListingCard(item));
   });
@@ -287,6 +357,7 @@ const fetchDashboardData = async () => {
     hydrateProfile();
     hydrateStats();
     hydrateListings();
+    loadFirestoreListings();
     showDashboard();
   } catch (error) {
     console.error('Dashboard load error', error);
@@ -294,7 +365,59 @@ const fetchDashboardData = async () => {
   }
 };
 
+const normaliseFirestoreListing = (docSnap) => {
+  const data = docSnap.data() || {};
+  return {
+    id: docSnap.id,
+    title: resolveListingTitle(data),
+    price: typeof data.price === 'number' ? data.price : Number(data.price || 0),
+    status: data.status || 'pending',
+    added_on: formatListingDate(data.createdAt),
+    views: typeof data.views === 'number' ? data.views : Number(data.views || 0),
+    image: resolveListingImage(data),
+    image_alt: data.productTitle || data.title || 'Listing image',
+    link: resolveListingLink({ id: docSnap.id, link: data.productUrl || data.link }),
+  };
+};
+
+const loadFirestoreListings = async () => {
+  const vendorUidCandidate =
+    (vendorData && (vendorData.firebaseUid || vendorData.uid)) ||
+    firebaseUser?.uid ||
+    sessionStorage.getItem('firebase_uid') ||
+    localStorage.getItem('firebase_uid');
+
+  if (!vendorUidCandidate) {
+    return;
+  }
+
+  try {
+    const listingsRef = collection(db, 'listings');
+    const listingsQuery = query(
+      listingsRef,
+      where('vendorUid', '==', vendorUidCandidate),
+      orderBy('createdAt', 'desc'),
+      limit(50),
+    );
+    const snapshot = await getDocs(listingsQuery);
+    const mapped = snapshot.docs.map(normaliseFirestoreListing);
+    if (mapped.length) {
+      firestoreListings = mapped;
+      hydrateListings();
+    }
+  } catch (error) {
+    console.error('[vendor-dashboard] unable to load listings from Firestore', error);
+  }
+};
+
 window.addEventListener('DOMContentLoaded', () => {
   bindActions();
   fetchDashboardData();
+});
+
+onAuthStateChanged(auth, (user) => {
+  firebaseUser = user;
+  if (user) {
+    loadFirestoreListings();
+  }
 });
