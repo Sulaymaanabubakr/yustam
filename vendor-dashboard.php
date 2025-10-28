@@ -373,6 +373,7 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
                 'id' => $vendorId,
                 'uid' => $vendorUid,
                 'firebaseUid' => $vendorFirebaseUid,
+                'email' => $vendorData['email'] ?? '',
                 'name' => $vendorName,
                 'businessName' => $businessName,
                 'phone' => $phone,

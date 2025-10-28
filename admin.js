@@ -61,7 +61,8 @@ import { auth, db } from './firebase.js';
             return value || 'Active';
         };
 
-        const fallbackVendorAvatar = 'https://via.placeholder.com/80x80?text=VP';
+        const fallbackVendorAvatar = 'https://placehold.co/80x80?text=VP';
+        const fallbackListingThumb = 'https://placehold.co/64x64?text=IMG';
 
         let selectedListingId = null;
         let selectedListingVendor = null;
@@ -109,6 +110,36 @@ import { auth, db } from './firebase.js';
             sidebar.classList.toggle('active');
         };
 
+        const resolveListingTitle = (data = {}) => {
+            const candidates = [
+                data.title,
+                data.productTitle,
+                data.productName,
+                data.name,
+                data.serviceName,
+                data.listingTitle,
+                data.model,
+                data.type,
+                data.itemType,
+                data.brand,
+                data.subcategory,
+                data.category,
+            ];
+            const title = candidates.find((value) => typeof value === 'string' && value.trim().length);
+            return title ? escapeHtml(title) : 'Untitled listing';
+        };
+
+        const resolveVendorLabel = (data = {}) => {
+            const candidates = [
+                data.vendorName,
+                data.vendorBusinessName,
+                data.vendorCompany,
+                data.vendorEmail,
+            ];
+            const label = candidates.find((value) => typeof value === 'string' && value.trim().length);
+            return label ? escapeHtml(label) : 'Unknown vendor';
+        };
+
         const renderListings = (listings) => {
             recentListingsWrap.innerHTML = '';
             const pendingListings = listings.filter((listing) => ((listing.data().status || 'pending').toLowerCase() === 'pending'));
@@ -119,22 +150,30 @@ import { auth, db } from './firebase.js';
             noListings.style.display = 'none';
             pendingListings.forEach((listing) => {
                 const data = listing.data();
-                const thumb = Array.isArray(data.images) && data.images.length ? data.images[0] : '';
+                const images = Array.isArray(data.images) && data.images.length
+                    ? data.images
+                    : Array.isArray(data.imageUrls) ? data.imageUrls : [];
+                const thumb = images.length ? images[0] : '';
+                const safeThumb = thumb ? escapeHtml(thumb) : fallbackListingThumb;
+                const titleLabel = resolveListingTitle(data);
+                const categoryLabel = escapeHtml(data.category || '-');
+                const subcategoryLabel = escapeHtml(data.subcategory || '-');
+                const vendorLabel = resolveVendorLabel(data);
                 const card = document.createElement('article');
                 card.className = 'listing-card';
                 card.dataset.id = listing.id;
                 card.innerHTML = `
-                    <img class="listing-thumb" src="${thumb || 'https://via.placeholder.com/64x64?text=IMG'}" alt="${data.title || data.productName || 'Listing'} image">
+                    <img class="listing-thumb" src="${safeThumb}" alt="${titleLabel} image">
                     <div class="listing-meta">
                         <div style="display:flex; justify-content:space-between; gap:0.75rem; align-items:flex-start; flex-wrap:wrap;">
-                            <h3>${data.title || data.productName || 'Untitled listing'}</h3>
+                            <h3>${titleLabel}</h3>
                             <span class="status-chip status-pending">Pending</span>
                         </div>
-                        <span class="meta-line"><i class="ri-stack-line"></i> ${data.category || '—'} &middot; ${data.subcategory || '—'}</span>
-                        <span class="meta-line"><i class="ri-user-smile-line"></i> ${data.vendorName || data.vendorEmail || 'Unknown vendor'}</span>
+                        <span class="meta-line"><i class="ri-stack-line"></i> ${categoryLabel} &middot; ${subcategoryLabel}</span>
+                        <span class="meta-line"><i class="ri-user-smile-line"></i> ${vendorLabel}</span>
                         <div class="listing-actions">
-                            <button class="btn btn-approve" data-action="approve" data-id="${listing.id}" data-vendor="${data.vendorID || ''}">Approve</button>
-                            <button class="btn btn-reject" data-action="reject" data-id="${listing.id}" data-vendor="${data.vendorID || ''}">Reject</button>
+                            <button class="btn btn-approve" data-action="approve" data-id="${listing.id}" data-vendor="${data.vendorID || data.vendorId || ''}">Approve</button>
+                            <button class="btn btn-reject" data-action="reject" data-id="${listing.id}" data-vendor="${data.vendorID || data.vendorId || ''}">Reject</button>
                         </div>
                     </div>
                 `;

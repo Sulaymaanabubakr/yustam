@@ -1,49 +1,43 @@
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js';
-    import { getAuth, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js';
-    import {
-      getFirestore,
-      collection,
-      doc,
-      getDoc,
-      onSnapshot,
-      query,
-      orderBy,
-      updateDoc,
-      deleteDoc,
-      addDoc,
-      serverTimestamp,
-      where
-    } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
-    import firebaseConfig from './firebase.js';
+import { auth, db } from './firebase.js';
+import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js';
+import {
+  collection,
+  doc,
+  getDoc,
+  onSnapshot,
+  query,
+  orderBy,
+  updateDoc,
+  deleteDoc,
+  addDoc,
+  serverTimestamp,
+  where,
+} from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
 
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-    const db = getFirestore(app);
-
-    const logoutBtn = document.getElementById('logoutBtn');
-    const searchInput = document.getElementById('searchInput');
-    const categoryFilter = document.getElementById('categoryFilter');
-    const statusFilter = document.getElementById('statusFilter');
-    const refreshBtn = document.getElementById('refreshBtn');
-    const loader = document.getElementById('loader');
-    const listingsContainer = document.getElementById('listingsContainer');
-    const tableBody = document.getElementById('tableBody');
-    const cardsContainer = document.getElementById('cardsContainer');
-    const emptyState = document.getElementById('emptyState');
-    const pagination = document.getElementById('pagination');
-    const prevPage = document.getElementById('prevPage');
-    const nextPage = document.getElementById('nextPage');
-    const pageIndicator = document.getElementById('pageIndicator');
-    const feedbackModal = document.getElementById('feedbackModal');
-    const deleteModal = document.getElementById('deleteModal');
-    const feedbackMessage = document.getElementById('feedbackMessage');
-    const cancelFeedback = document.getElementById('cancelFeedback');
-    const submitFeedback = document.getElementById('submitFeedback');
-    const cancelDelete = document.getElementById('cancelDelete');
-    const confirmDelete = document.getElementById('confirmDelete');
-    const toast = document.getElementById('toast');
-    const notificationsBtn = document.getElementById('notificationsBtn');
-    const notificationBadge = document.getElementById('notificationBadge');
+const logoutBtn = document.getElementById('logoutBtn');
+const searchInput = document.getElementById('searchInput');
+const categoryFilter = document.getElementById('categoryFilter');
+const statusFilter = document.getElementById('statusFilter');
+const refreshBtn = document.getElementById('refreshBtn');
+const loader = document.getElementById('loader');
+const listingsContainer = document.getElementById('listingsContainer');
+const tableBody = document.getElementById('tableBody');
+const cardsContainer = document.getElementById('cardsContainer');
+const emptyState = document.getElementById('emptyState');
+const pagination = document.getElementById('pagination');
+const prevPage = document.getElementById('prevPage');
+const nextPage = document.getElementById('nextPage');
+const pageIndicator = document.getElementById('pageIndicator');
+const feedbackModal = document.getElementById('feedbackModal');
+const deleteModal = document.getElementById('deleteModal');
+const feedbackMessage = document.getElementById('feedbackMessage');
+const cancelFeedback = document.getElementById('cancelFeedback');
+const submitFeedback = document.getElementById('submitFeedback');
+const cancelDelete = document.getElementById('cancelDelete');
+const confirmDelete = document.getElementById('confirmDelete');
+const toast = document.getElementById('toast');
+const notificationsBtn = document.getElementById('notificationsBtn');
+const notificationBadge = document.getElementById('notificationBadge');
 
     const ensureSession = async () => {
       try {
@@ -150,26 +144,30 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.4/fireba
     function renderTableRows(items) {
       tableBody.innerHTML = items.map(item => {
         const vendor = vendorsMap.get(item.vendorId) || {};
-        const thumb = item.images?.[0] || 'https://via.placeholder.com/80x80.png?text=YUSTAM';
+        const images = Array.isArray(item.images) && item.images.length
+          ? item.images
+          : Array.isArray(item.imageUrls) ? item.imageUrls : [];
+        const thumb = images.length ? images[0] : 'https://placehold.co/80x80?text=YUS';
+        const title = item.title || item.productTitle || item.productName || item.subcategory || 'Untitled listing';
         return `
           <tr data-id="${item.id}">
             <td>
               <div style="display:flex;align-items:center;gap:14px;">
-                <img src="${thumb}" alt="${item.title || 'Listing image'}" class="thumb" />
+                <img src="${thumb}" alt="${title}" class="thumb" />
                 <div>
-                  <strong>${item.title || 'Untitled listing'}</strong>
+                  <strong>${title}</strong>
                   <div style="font-size:13px;color:rgba(17,17,17,0.6);">${item.subcategory || ''}</div>
                 </div>
               </div>
             </td>
-            <td>${item.category || '—'}</td>
+            <td>${item.category || '-'}</td>
             <td>
               <div style="display:flex;flex-direction:column;gap:2px;">
-                <span>${item.vendorName || vendor.displayName || 'Unknown Vendor'}</span>
-                <small style="color:rgba(17,17,17,0.6);">${vendor.email || ''}</small>
+                <span>${item.vendorName || vendor.displayName || vendor.name || 'Unknown Vendor'}</span>
+                <small style="color:rgba(17,17,17,0.6);">${vendor.email || item.vendorEmail || ''}</small>
               </div>
             </td>
-            <td>${vendor.plan || item.plan || 'Free'}</td>
+            <td>${vendor.plan || item.vendorPlan || item.plan || 'Free'}</td>
             <td>${renderStatusChip(item.status)}</td>
             <td>${formatDate(item.createdAt)}</td>
             <td>${renderActions(item.id, item.status, item.vendorId || '')}</td>
@@ -185,19 +183,23 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.4/fireba
     function renderCards(items) {
       cardsContainer.innerHTML = items.map(item => {
         const vendor = vendorsMap.get(item.vendorId) || {};
-        const thumb = item.images?.[0] || 'https://via.placeholder.com/80x80.png?text=YUSTAM';
+        const images = Array.isArray(item.images) && item.images.length
+          ? item.images
+          : Array.isArray(item.imageUrls) ? item.imageUrls : [];
+        const thumb = images.length ? images[0] : 'https://placehold.co/80x80?text=YUS';
+        const title = item.title || item.productTitle || item.productName || item.subcategory || 'Untitled listing';
         return `
           <article class="mobile-card" data-id="${item.id}">
             <div class="mobile-card-header">
-              <img src="${thumb}" alt="${item.title || 'Listing image'}" class="thumb" style="width:64px;height:64px;" />
+              <img src="${thumb}" alt="${title}" class="thumb" style="width:64px;height:64px;" />
               <div>
-                <h4>${item.title || 'Untitled listing'}</h4>
+                <h4>${title}</h4>
                 ${renderStatusChip(item.status)}
               </div>
             </div>
             <div class="mobile-meta">
               <span><strong>Category:</strong> ${item.category || '—'} &middot; ${item.subcategory || ''}</span>
-              <span><strong>Vendor:</strong> ${item.vendorName || vendor.displayName || 'Unknown'} (${vendor.plan || item.plan || 'Free'})</span>
+              <span><strong>Vendor:</strong> ${item.vendorName || vendor.displayName || vendor.name || 'Unknown'} (${vendor.plan || item.vendorPlan || item.plan || 'Free'})</span>
               <span><strong>Date:</strong> ${formatDate(item.createdAt)}</span>
             </div>
             <div class="mobile-actions" data-id="${item.id}">
