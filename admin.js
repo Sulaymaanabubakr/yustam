@@ -286,17 +286,29 @@ import { auth, db } from './firebase.js';
             }
         };
 
+        const performListingAction = async (listingId, action, extra = {}) => {
+            const body = new URLSearchParams({ listingId, action });
+            if (extra.reason) body.append('reason', extra.reason);
+            const response = await fetch('admin-listing-action.php', {
+                method: 'POST',
+                credentials: 'same-origin',
+                body,
+            });
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok || !payload?.success) {
+                throw new Error(payload?.message || 'Unable to process listing action.');
+            }
+            return payload;
+        };
+
         const approveListing = async (listingId) => {
             try {
-                await updateDoc(doc(db, 'listings', listingId), {
-                    status: 'approved',
-                    statusUpdatedAt: serverTimestamp()
-                });
+                await performListingAction(listingId, 'approve');
                 showToast('Listing approved!');
                 removeListingCard(listingId);
             } catch (error) {
                 console.error('approveListing', error);
-                showToast('Could not approve listing.', 2500);
+                showToast(error.message || 'Could not approve listing.', 2500);
             }
         };
 
@@ -322,26 +334,13 @@ import { auth, db } from './firebase.js';
             }
             sendFeedback.disabled = true;
             try {
-                await updateDoc(doc(db, 'listings', selectedListingId), {
-                    status: 'rejected',
-                    feedback: { reason, updatedAt: serverTimestamp() }
-                });
-                if (selectedListingVendor) {
-                    await addDoc(collection(db, 'notifications'), {
-                        vendorID: selectedListingVendor,
-                        type: 'listing-rejected',
-                        message: reason,
-                        listingId: selectedListingId,
-                        read: false,
-                        createdAt: serverTimestamp()
-                    });
-                }
+                await performListingAction(selectedListingId, 'reject', { reason });
                 showToast('Feedback sent to vendor.');
                 removeListingCard(selectedListingId);
                 closeRejectModal();
             } catch (error) {
                 console.error('rejectListing', error);
-                showToast('Could not reject listing.', 2500);
+                showToast(error.message || 'Could not reject listing.', 2500);
             } finally {
                 sendFeedback.disabled = false;
             }
