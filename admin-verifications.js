@@ -12,9 +12,8 @@ const detailStatus = document.getElementById('detailStatus');
 const detailTitle = document.getElementById('detailTitle');
 const detailMeta = document.getElementById('detailMeta');
 const toast = document.getElementById('toast');
-const sidebar = document.getElementById('sidebar');
-const menuToggle = document.getElementById('menuToggle');
 const logoutBtn = document.getElementById('logoutBtn');
+const backButton = document.getElementById('backButton');
 
 const state = {
   records: [],
@@ -401,17 +400,13 @@ const handleCardAction = async (action, id) => {
 };
 
 const initializeEvents = () => {
-  if (menuToggle) {
-    menuToggle.addEventListener('click', () => {
-      sidebar?.classList.toggle('active');
-    });
-  }
+  backButton?.addEventListener('click', () => {
+    window.location.href = 'admin-dashboard.php';
+  });
 
-  if (logoutBtn) {
-    logoutBtn.addEventListener('click', () => {
-      window.location.href = 'admin-logout.php';
-    });
-  }
+  logoutBtn?.addEventListener('click', () => {
+    window.location.href = 'admin-logout.php';
+  });
 
   container?.addEventListener('click', (event) => {
     const target = event.target.closest('button[data-action]');

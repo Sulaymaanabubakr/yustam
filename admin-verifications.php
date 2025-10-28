@@ -927,133 +927,95 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         button { font-family: inherit; }
 
-        .app-shell {
-            display: grid;
-            grid-template-columns: 260px 1fr;
-            min-height: 100vh;
-        }
-
         header.topbar {
             position: sticky;
             top: 0;
-            z-index: 40;
-            grid-column: 1 / -1;
-            background: rgba(0, 77, 64, 0.95);
-            color: var(--white);
+            z-index: 60;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 0.45rem clamp(0.9rem, 2.6vw, 1.25rem);
-            min-height: 52px;
-            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.16);
+            padding: 0.6rem clamp(1rem, 3vw, 1.85rem);
+            background: linear-gradient(135deg, rgba(0, 77, 64, 0.95), rgba(0, 77, 64, 0.88));
+            color: var(--white);
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
             backdrop-filter: blur(12px);
+        }
+
+        .topbar-left {
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+        }
+
+        .icon-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 1px solid rgba(255, 255, 255, 0.22);
+            background: rgba(255, 255, 255, 0.14);
+            color: var(--white);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: transform 0.2s ease, background 0.2s ease;
+        }
+
+        .icon-btn:hover,
+        .icon-btn:focus-visible {
+            transform: translateY(-1px);
+            background: rgba(255, 255, 255, 0.24);
         }
 
         .brand {
             display: inline-flex;
             align-items: center;
-            gap: 0.5rem;
-            font-size: clamp(1.05rem, 2.6vw, 1.4rem);
+            gap: 0.55rem;
+            font-size: clamp(1.1rem, 3vw, 1.55rem);
         }
 
         .brand span {
             font-family: 'Anton', sans-serif;
-            letter-spacing: 0.08em;
+            letter-spacing: 0.09em;
         }
 
         .logo-img {
-            width: 32px;
-            height: 32px;
-            border-radius: 10px;
-            object-fit: cover;
-            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.18);
-        }
-
-        .menu-toggle {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
             width: 34px;
             height: 34px;
-            border-radius: 50%;
-            border: none;
-            background: rgba(255, 255, 255, 0.16);
-            color: var(--white);
-            cursor: pointer;
-            margin-right: 0.55rem;
-            transition: transform 0.2s ease, background 0.2s ease;
+            border-radius: 11px;
+            object-fit: cover;
+            box-shadow: 0 4px 11px rgba(0, 0, 0, 0.18);
         }
 
         .top-actions {
             display: flex;
-            gap: 0.45rem;
             align-items: center;
-        }
-
-        .top-action {
-            width: 34px;
-            height: 34px;
-            border-radius: 50%;
-            border: none;
-            background: rgba(255, 255, 255, 0.16);
-            color: var(--white);
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: transform 0.2s ease, background 0.2s ease;
-        }
-
-        .menu-toggle:hover,
-        .menu-toggle:focus-visible,
-        .top-action:hover,
-        .top-action:focus-visible {
-            transform: translateY(-2px);
-            background: rgba(255, 255, 255, 0.24);
-        }
-
-        aside.sidebar {
-            background: rgba(255, 255, 255, 0.72);
-            backdrop-filter: blur(14px);
-            box-shadow: 6px 0 24px rgba(0, 0, 0, 0.1);
-            padding: 1.5rem 1.25rem;
-        }
-
-        .sidebar-header {
-            font-family: 'Anton', sans-serif;
-            letter-spacing: 0.08em;
-            color: var(--emerald);
-            margin-bottom: 2rem;
-        }
-
-        .nav-links { display: grid; gap: 0.5rem; }
-
-        .nav-link {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            padding: 0.75rem 0.9rem;
-            border-radius: 14px;
-            color: var(--emerald);
-            font-weight: 600;
-            background: rgba(255, 255, 255, 0.6);
-            box-shadow: inset 0 0 0 1px rgba(0, 77, 64, 0.1);
-            transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
-        }
-
-        .nav-link:hover,
-        .nav-link:focus-visible,
-        .nav-link.active {
-            transform: translateX(4px);
-            background: rgba(0, 77, 64, 0.08);
-            box-shadow: inset 0 0 0 2px rgba(0, 77, 64, 0.25);
+            gap: 0.65rem;
         }
 
         main {
-            padding: clamp(1.5rem, 3vw, 2.75rem) clamp(1.25rem, 4vw, 3rem);
+            width: min(1200px, calc(100% - clamp(2rem, 6vw, 4.5rem)));
+            margin: clamp(1.8rem, 4vw, 2.8rem) auto clamp(3rem, 5vw, 4.5rem);
             display: grid;
-            gap: 1.6rem;
-            background: transparent;
+            gap: clamp(1.6rem, 3vw, 2.4rem);
+        }
+
+        .page-heading {
+            display: grid;
+            gap: 0.45rem;
+        }
+
+        .page-heading h1 {
+            font-family: 'Anton', sans-serif;
+            font-size: clamp(1.9rem, 4.5vw, 2.6rem);
+            letter-spacing: 0.06em;
+            color: var(--emerald);
+        }
+
+        .page-heading p {
+            color: rgba(17, 17, 17, 0.64);
+            max-width: 640px;
+            font-size: 0.98rem;
         }
 
         .section-card {
@@ -1074,7 +1036,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             gap: 0.8rem;
         }
 
-        .section-header h1 {
+        .section-header h1,
+        .section-header h2 {
             font-size: clamp(1.6rem, 4vw, 2.2rem);
             color: var(--emerald);
         }
@@ -1361,55 +1324,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             background: rgba(234, 220, 207, 0.85);
         }
 
-        @media (max-width: 900px) {
-            .app-shell { grid-template-columns: 1fr; }
-            aside.sidebar { position: fixed; inset: 72px auto 0 0; width: 260px; transform: translateX(-110%); transition: transform 0.3s cubic-bezier(.2,.8,.2,1); z-index: 50; }
-            aside.sidebar.active { transform: translateX(0); }
-            .menu-toggle { display: inline-flex; }
-            main { margin-top: 72px; }
-        }
     </style>
 </head>
 <body>
-    <div class="app-shell">
-        <header class="topbar">
+    <header class="topbar">
+        <div class="topbar-left">
+            <button class="icon-btn" id="backButton" aria-label="Back to dashboard"><i class="ri-arrow-left-line"></i></button>
             <div class="brand">
-                <button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation"><i class="ri-menu-line"></i></button>
                 <img src="logo.jpeg" alt="YUSTAM logo" class="logo-img">
-                <span style="font-family:'Anton',sans-serif; letter-spacing:0.1em;">YUSTAM Admin</span>
+                <span>YUSTAM Admin</span>
             </div>
-            <div class="top-actions">
-                <button class="top-action" id="logoutBtn" aria-label="Sign out"><i class="ri-logout-box-r-line"></i></button>
+        </div>
+        <div class="top-actions">
+            <button class="icon-btn" id="logoutBtn" aria-label="Sign out"><i class="ri-logout-box-r-line"></i></button>
+        </div>
+    </header>
+
+    <main>
+        <div class="page-heading">
+            <h1>Vendor Verification Requests</h1>
+            <p>Review submitted documents, provide feedback, and approve or reject verification attempts from vendors.</p>
+        </div>
+
+        <section class="section-card">
+            <div class="section-header">
+                <h2>Verification Queue</h2>
+                <span class="badge-pill" id="totalBadge">0 requests</span>
             </div>
-        </header>
-
-        <aside class="sidebar" id="sidebar" aria-label="Admin navigation">
-            <div class="sidebar-header">Control Centre</div>
-            <nav class="nav-links">
-                <a class="nav-link" href="admin-dashboard.php"><i class="ri-dashboard-line"></i> Dashboard</a>
-                <a class="nav-link" href="admin-listings.php"><i class="ri-store-2-line"></i> Listings</a>
-                <a class="nav-link" href="admin-vendors.php"><i class="ri-team-line"></i> Vendors</a>
-                <a class="nav-link active" href="admin-verifications.php"><i class="ri-shield-check-line"></i> Verifications</a>
-                <a class="nav-link" href="admin-plans.php"><i class="ri-bar-chart-2-line"></i> Plans &amp; Revenue</a>
-                <a class="nav-link" href="admin-dashboard.php#settings"><i class="ri-settings-3-line"></i> Settings</a>
-            </nav>
-        </aside>
-
-        <main>
-            <section class="section-card">
-                <div class="section-header">
-                    <h1>Vendor Verification Requests</h1>
-                    <span class="badge-pill" id="totalBadge">0 requests</span>
-                </div>
-                <div id="verificationsContainer" class="verifications-grid"></div>
-                <div id="emptyState" class="empty-state" hidden>
-                    <i class="ri-shield-check-line" aria-hidden="true"></i>
-                    <strong>No vendor verification requests yet.</strong><br>
-                    New submissions will appear here for review.
-                </div>
-            </section>
-        </main>
-    </div>
+            <div id="verificationsContainer" class="verifications-grid"></div>
+            <div id="emptyState" class="empty-state" hidden>
+                <i class="ri-shield-check-line" aria-hidden="true"></i>
+                <strong>No vendor verification requests yet.</strong><br>
+                New submissions will appear here for review.
+            </div>
+        </section>
+    </main>
 
     <section class="detail-overlay" id="detailView" aria-hidden="true" hidden>
         <div class="detail-container" role="dialog" aria-labelledby="detailTitle">
