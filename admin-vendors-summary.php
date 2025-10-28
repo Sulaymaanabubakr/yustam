@@ -214,6 +214,9 @@ function yustam_prepare_vendor_summary(mysqli $db, string $vendorTable, array $p
             }
         }
 
+        $vendorUidColumn = yustam_vendor_table_has_column('vendor_uid') ? 'vendor_uid' : null;
+        $firebaseUidColumn = yustam_vendor_table_has_column('firebase_uid') ? 'firebase_uid' : null;
+
         while ($row = $recentResult->fetch_assoc()) {
             $planValue = array_key_exists('plan', $row) ? ($row['plan'] ?? '') : '';
             $planLabel = yustam_format_plan_label($planValue);
@@ -253,6 +256,8 @@ function yustam_prepare_vendor_summary(mysqli $db, string $vendorTable, array $p
                 'name' => trim((string) ($row[$nameColumn] ?? '')) ?: 'Vendor',
                 'businessName' => $businessColumn ? (string) ($row[$businessColumn] ?? '') : '',
                 'email' => $emailColumn ? (string) ($row[$emailColumn] ?? '') : '',
+                'vendorUid' => $vendorUidColumn ? (string) ($row[$vendorUidColumn] ?? '') : '',
+                'firebaseUid' => $firebaseUidColumn ? (string) ($row[$firebaseUidColumn] ?? '') : '',
                 'plan' => $planLabel,
                 'planSlug' => $planSlug,
                 'status' => $statusLabel,
@@ -279,4 +284,3 @@ try {
         'message' => 'Unable to prepare vendor summary.',
     ]);
 }
-
