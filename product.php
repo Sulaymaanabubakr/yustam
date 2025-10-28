@@ -948,14 +948,32 @@ $placeholderImage = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABA
 
         @media (max-width: 720px) {
             .product-nav {
-                flex-direction: column;
-                align-items: stretch;
-                gap: 12px;
+                flex-direction: row;
+                align-items: center;
+                gap: 14px;
+                padding: 14px 18px;
             }
 
-            .nav-button {
-                width: 100%;
-                justify-content: center;
+            .product-nav__actions {
+                flex: 0 0 auto;
+            }
+
+            .product-nav__brand {
+                flex: 1 1 auto;
+                min-width: 0;
+                justify-content: flex-start;
+            }
+
+            .product-nav__brand-text {
+                align-items: flex-start;
+            }
+
+            .product-nav__brand-name {
+                font-size: clamp(1.05rem, 4vw, 1.3rem);
+            }
+
+            .product-nav__brand-tagline {
+                font-size: 0.78rem;
             }
 
             .product-shell {
