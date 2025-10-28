@@ -69,9 +69,9 @@ const resetBtn = document.getElementById('resetBtn');
 const ITEMS_PER_PAGE = 8;
 const PLACEHOLDER_IMAGE = 'https://images.unsplash.com/photo-1545239351-1141bd82e8a6?auto=format&fit=crop&w=800&q=80';
 const emptyStateDefaultText = emptyState ? emptyState.textContent.trim() : '';
-const LOADING_TEXT = 'Loading marketplace listings...';
-const ERROR_TEXT = 'We could not load marketplace listings right now. Please refresh to try again.';
-const NO_LISTINGS_TEXT = 'No vendor listings are available yet. Vendors are adding their products soon.';
+const LOADING_TEXT = 'Loading listings...';
+const ERROR_TEXT = 'We could not load listings right now. Please refresh to try again.';
+const NO_LISTINGS_TEXT = 'No listings are available yet. Vendors are adding their products soon.';
 
 let currentPage = 1;
 let allListings = [];
