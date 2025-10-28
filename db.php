@@ -409,6 +409,29 @@ function yustam_vendor_find_by_firebase_uid(string $firebaseUid, ?mysqli $conn =
     return $vendor ?: null;
 }
 
+function yustam_vendor_find_by_id(int $vendorId, ?mysqli $conn = null): ?array
+{
+    if ($vendorId <= 0) {
+        return null;
+    }
+
+    $conn = $conn ?: get_db_connection();
+    yustam_vendor_ensure_uid_column($conn);
+
+    $sql = sprintf('SELECT * FROM `%s` WHERE `id` = ? LIMIT 1', YUSTAM_VENDORS_TABLE);
+    $stmt = $conn->prepare($sql);
+    if (!$stmt) {
+        throw new RuntimeException('Unable to prepare vendor id lookup statement: ' . $conn->error);
+    }
+    $stmt->bind_param('i', $vendorId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $vendor = $result ? $result->fetch_assoc() : null;
+    $stmt->close();
+
+    return $vendor ?: null;
+}
+
 function yustam_vendor_find_by_email(string $email, ?mysqli $conn = null): ?array
 {
     $normalized = strtolower(trim($email));

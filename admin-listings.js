@@ -59,6 +59,141 @@ const notificationBadge = document.getElementById('notificationBadge');
     let vendorsMap = new Map();
     let unsubscribeListings = null;
 
+    const vendorDirectory = new Map();
+    const listingDirectory = new Map();
+
+    const escapeHtml = (value) => String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+
+    const normaliseKey = (value) => (typeof value === 'string' ? value.trim().toLowerCase() : '');
+
+    const storeVendorRecord = (record = {}) => {
+      if (!record || typeof record !== 'object') return;
+      const register = (prefix, value, normalise = false) => {
+        if (value === undefined || value === null) return;
+        const raw = String(value).trim();
+        if (!raw) return;
+        const key = normalise ? normaliseKey(raw) : raw;
+        if (!key) return;
+        vendorDirectory.set(`${prefix}:${key}`, record);
+      };
+      register('id', record.id);
+      register('uid', record.uid || record.vendorUid, true);
+      register('firebase', record.firebaseUid, true);
+      register('email', record.email, true);
+      register('business', record.businessName, true);
+    };
+
+    const findVendorRecord = (listing = {}) => {
+      if (!listing || typeof listing !== 'object') return null;
+      const candidates = [];
+      const maybeAdd = (prefix, value, normalise = false) => {
+        if (value === undefined || value === null) return;
+        const raw = String(value).trim();
+        if (!raw) return;
+        candidates.push(`${prefix}:${normalise ? normaliseKey(raw) : raw}`);
+      };
+      maybeAdd('id', listing.vendorId ?? listing.vendorID ?? listing.vendor_id ?? '');
+      maybeAdd('uid', listing.vendorUid ?? listing.vendorUID ?? listing.vendorFirebaseUid ?? '');
+      maybeAdd('firebase', listing.vendorFirebaseUid ?? listing.vendorUid ?? '');
+      maybeAdd('email', listing.vendorEmail ?? '');
+      maybeAdd('business', listing.vendorBusinessName ?? listing.vendorBusiness ?? '');
+
+      for (const key of candidates) {
+        if (vendorDirectory.has(key)) {
+          return vendorDirectory.get(key);
+        }
+      }
+      return null;
+    };
+
+    const vendorLabelFromRecord = (record) => {
+      if (!record) return '';
+      return record.businessName || record.name || record.email || '';
+    };
+
+    const vendorPlanFromRecord = (record, fallback = 'Free') => {
+      if (!record) return fallback;
+      return record.plan || fallback;
+    };
+
+    const indexVendorRecord = (record = {}) => {
+      const register = (key) => {
+        if (!key) return;
+        vendorsMap.set(String(key), record);
+      };
+      register(record.id);
+      register(record.uid);
+      register(record.vendorUid);
+      register(record.firebaseUid);
+      register(record.email);
+    };
+
+    const ingestVendorSummary = (vendors = []) => {
+      vendors.forEach((vendor) => {
+        const record = {
+          id: vendor.id ?? '',
+          uid: vendor.vendorUid || vendor.uid || '',
+          vendorUid: vendor.vendorUid || vendor.uid || '',
+          firebaseUid: vendor.firebaseUid || '',
+          name: vendor.name || vendor.businessName || 'Vendor',
+          businessName: vendor.businessName || '',
+          email: vendor.email || '',
+          plan: vendor.plan || '',
+        };
+        storeVendorRecord(record);
+        indexVendorRecord(record);
+      });
+      if (allListings.length) {
+        applyFilters();
+      }
+    };
+
+    const resolveVendorMeta = (listing = {}) => {
+      const primary = findVendorRecord(listing)
+        || vendorsMap.get(listing.vendorId)
+        || vendorsMap.get(listing.vendorID)
+        || vendorsMap.get(listing.vendorUid)
+        || vendorsMap.get(listing.vendorUID)
+        || vendorsMap.get(listing.vendorFirebaseUid)
+        || null;
+
+      const fallbackName = listing.vendorName
+        || listing.vendorBusinessName
+        || listing.vendorEmail
+        || '';
+
+      const vendorName = vendorLabelFromRecord(primary) || fallbackName || 'Unknown Vendor';
+      const vendorEmail = (primary && primary.email) || listing.vendorEmail || '';
+      const vendorPlan = vendorPlanFromRecord(primary, listing.vendorPlan || listing.plan || 'Free');
+
+      return {
+        record: primary,
+        name: vendorName,
+        email: vendorEmail,
+        plan: vendorPlan,
+      };
+    };
+
+    async function seedVendorDirectory() {
+      try {
+        const response = await fetch('admin-vendors-summary.php', {
+          method: 'GET',
+          credentials: 'same-origin',
+          headers: { Accept: 'application/json' },
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !payload?.success) return;
+        ingestVendorSummary(payload.vendors || []);
+      } catch (error) {
+        console.error('Vendor directory preload failed:', error);
+      }
+    }
+
     function showToast(message, tone = 'success') {
       toast.textContent = message;
       toast.style.background = tone === 'error' ? 'rgba(216, 67, 21, 0.92)' : 'rgba(0, 77, 64, 0.92)';
@@ -112,9 +247,17 @@ const notificationBadge = document.getElementById('notificationBadge');
       const status = statusFilter.value;
 
       filteredListings = allListings.filter(item => {
-        const matchesSearch = !search || (item.title?.toLowerCase().includes(search) || item.vendorName?.toLowerCase().includes(search));
-        const matchesCategory = category === 'all' || item.category === category;
-        const matchesStatus = status === 'all' || item.status === status;
+        const vendorMeta = resolveVendorMeta(item);
+        const searchTargets = [
+          item.title || '',
+          vendorMeta.name || '',
+          item.vendorEmail || '',
+          vendorMeta.email || '',
+        ].map((value) => value.toLowerCase());
+
+        const matchesSearch = !search || searchTargets.some((value) => value && value.includes(search));
+        const matchesCategory = category === 'all' || (item.category || '').toLowerCase() === category.toLowerCase();
+        const matchesStatus = status === 'all' || (item.status || 'pending') === status;
         return matchesSearch && matchesCategory && matchesStatus;
       });
 
@@ -139,7 +282,8 @@ const notificationBadge = document.getElementById('notificationBadge');
 
     function renderTableRows(items) {
       tableBody.innerHTML = items.map(item => {
-        const vendor = vendorsMap.get(item.vendorId) || {};
+        listingDirectory.set(item.id, item);
+        const vendorMeta = resolveVendorMeta(item);
         const images = Array.isArray(item.images) && item.images.length
           ? item.images
           : Array.isArray(item.imageUrls) ? item.imageUrls : [];
@@ -149,21 +293,21 @@ const notificationBadge = document.getElementById('notificationBadge');
           <tr data-id="${item.id}">
             <td>
               <div style="display:flex;align-items:center;gap:14px;">
-                <img src="${thumb}" alt="${title}" class="thumb" />
+                <img src="${thumb}" alt="${escapeHtml(title)}" class="thumb" />
                 <div>
-                  <strong>${title}</strong>
-                  <div style="font-size:13px;color:rgba(17,17,17,0.6);">${item.subcategory || ''}</div>
+                  <strong>${escapeHtml(title)}</strong>
+                  <div style="font-size:13px;color:rgba(17,17,17,0.6);">${escapeHtml(item.subcategory || '')}</div>
                 </div>
               </div>
             </td>
-            <td>${item.category || '-'}</td>
+            <td>${escapeHtml(item.category || '-')}</td>
             <td>
               <div style="display:flex;flex-direction:column;gap:2px;">
-                <span>${item.vendorName || vendor.displayName || vendor.name || 'Unknown Vendor'}</span>
-                <small style="color:rgba(17,17,17,0.6);">${vendor.email || item.vendorEmail || ''}</small>
+                <span>${escapeHtml(vendorMeta.name)}</span>
+                <small style="color:rgba(17,17,17,0.6);">${escapeHtml(vendorMeta.email)}</small>
               </div>
             </td>
-            <td>${vendor.plan || item.vendorPlan || item.plan || 'Free'}</td>
+            <td>${escapeHtml(vendorMeta.plan)}</td>
             <td>${renderStatusChip(item.status)}</td>
             <td>${formatDate(item.createdAt)}</td>
             <td>${renderActions(item.id, item.status, item.vendorId || '')}</td>
@@ -178,7 +322,8 @@ const notificationBadge = document.getElementById('notificationBadge');
 
     function renderCards(items) {
       cardsContainer.innerHTML = items.map(item => {
-        const vendor = vendorsMap.get(item.vendorId) || {};
+        listingDirectory.set(item.id, item);
+        const vendorMeta = resolveVendorMeta(item);
         const images = Array.isArray(item.images) && item.images.length
           ? item.images
           : Array.isArray(item.imageUrls) ? item.imageUrls : [];
@@ -187,15 +332,15 @@ const notificationBadge = document.getElementById('notificationBadge');
         return `
           <article class="mobile-card" data-id="${item.id}">
             <div class="mobile-card-header">
-              <img src="${thumb}" alt="${title}" class="thumb" style="width:64px;height:64px;" />
+              <img src="${thumb}" alt="${escapeHtml(title)}" class="thumb" style="width:64px;height:64px;" />
               <div>
-                <h4>${title}</h4>
+                <h4>${escapeHtml(title)}</h4>
                 ${renderStatusChip(item.status)}
               </div>
             </div>
             <div class="mobile-meta">
-              <span><strong>Category:</strong> ${item.category || '—'} &middot; ${item.subcategory || ''}</span>
-              <span><strong>Vendor:</strong> ${item.vendorName || vendor.displayName || vendor.name || 'Unknown'} (${vendor.plan || item.vendorPlan || item.plan || 'Free'})</span>
+              <span><strong>Category:</strong> ${escapeHtml(item.category || '-')} &middot; ${escapeHtml(item.subcategory || '')}</span>
+              <span><strong>Vendor:</strong> ${escapeHtml(vendorMeta.name)} (${escapeHtml(vendorMeta.plan)})</span>
               <span><strong>Date:</strong> ${formatDate(item.createdAt)}</span>
             </div>
             <div class="mobile-actions" data-id="${item.id}">
@@ -241,6 +386,7 @@ const notificationBadge = document.getElementById('notificationBadge');
     }
 
     function renderListings() {
+      listingDirectory.clear();
       const pageItems = paginateListings();
       renderTableRows(pageItems);
       renderCards(pageItems);
@@ -363,7 +509,21 @@ const notificationBadge = document.getElementById('notificationBadge');
       const vendorsQuery = query(collection(db, 'vendors'));
       onSnapshot(vendorsQuery, snapshot => {
         snapshot.docs.forEach(docSnap => {
-          vendorsMap.set(docSnap.id, docSnap.data());
+          const data = docSnap.data() || {};
+          const record = {
+            id: docSnap.id,
+            uid: data.vendorUid || data.vendorUID || data.uid || '',
+            vendorUid: data.vendorUid || data.vendorUID || data.uid || '',
+            firebaseUid: data.firebaseUid || data.vendorFirebaseUid || data.uid || '',
+            name: data.displayName || data.name || data.businessName || 'Vendor',
+            businessName: data.businessName || data.storeName || '',
+            email: data.email || '',
+            plan: data.plan || data.currentPlan || '',
+            profilePhoto: data.profilePhoto || data.avatarUrl || data.logoUrl || '',
+            status: data.status || '',
+          };
+          storeVendorRecord(record);
+          indexVendorRecord(record);
         });
         renderListings();
       });
@@ -482,6 +642,7 @@ const notificationBadge = document.getElementById('notificationBadge');
         } else {
           console.warn('Auth admin user not available; continuing with PHP session only.');
         }
+        await seedVendorDirectory();
         subscribeListings();
         fetchVendors();
         if (user) {

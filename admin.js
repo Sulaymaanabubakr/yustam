@@ -26,6 +26,56 @@ import { auth, db } from './firebase.js';
             premium: document.querySelector('[data-plan-count="premium"]')
         };
 
+        const vendorDirectory = new Map();
+        const listingCache = new Map();
+
+        const normaliseKey = (value) => (typeof value === 'string' ? value.trim().toLowerCase() : '');
+
+        const storeVendorRecord = (record = {}) => {
+            if (!record || typeof record !== 'object') return;
+            const register = (prefix, value, shouldNormalise = false) => {
+                if (value === undefined || value === null) return;
+                const raw = String(value).trim();
+                if (!raw) return;
+                const key = shouldNormalise ? normaliseKey(raw) : raw;
+                if (!key) return;
+                vendorDirectory.set(`${prefix}:${key}`, record);
+            };
+            register('id', record.id);
+            register('uid', record.uid || record.vendorUid, true);
+            register('firebase', record.firebaseUid, true);
+            register('email', record.email, true);
+            register('business', record.businessName, true);
+        };
+
+        const findVendorRecord = (listing = {}) => {
+            if (!listing || typeof listing !== 'object') return null;
+            const candidates = [];
+            const maybeAdd = (prefix, value, shouldNormalise = false) => {
+                if (value === undefined || value === null) return;
+                const raw = String(value).trim();
+                if (!raw) return;
+                candidates.push(`${prefix}:${shouldNormalise ? normaliseKey(raw) : raw}`);
+            };
+            maybeAdd('id', listing.vendorID ?? listing.vendorId ?? listing.vendor_id ?? '');
+            maybeAdd('uid', listing.vendorUid ?? listing.vendorUID ?? listing.vendorFirebaseUid ?? '');
+            maybeAdd('firebase', listing.vendorFirebaseUid ?? listing.vendorUid ?? '');
+            maybeAdd('email', listing.vendorEmail ?? '');
+            maybeAdd('business', listing.vendorBusinessName ?? listing.vendorBusiness ?? '');
+
+            for (const key of candidates) {
+                if (vendorDirectory.has(key)) {
+                    return vendorDirectory.get(key);
+                }
+            }
+            return null;
+        };
+
+        const vendorLabelFromRecord = (record) => {
+            if (!record) return '';
+            return escapeHtml(record.businessName || record.name || record.email || '');
+        };
+
         const PLAN_PRICING = {
             plus: 3000,
             pro: 5000,
@@ -140,8 +190,26 @@ import { auth, db } from './firebase.js';
             return label ? escapeHtml(label) : 'Unknown vendor';
         };
 
+        const refreshListingVendorLabels = () => {
+            listingCache.forEach((data, listingId) => {
+                const card = recentListingsWrap.querySelector(`[data-id="${listingId}"]`);
+                if (!card) return;
+                const vendorSpan = card.querySelector('[data-role="vendor-label"]');
+                if (!vendorSpan) return;
+                const vendorRecord = findVendorRecord(data);
+                if (!vendorRecord) return;
+                const vendorLabel = vendorLabelFromRecord(vendorRecord);
+                if (!vendorLabel) return;
+                const nextMarkup = `<i class="ri-user-smile-line"></i> ${vendorLabel}`;
+                if (vendorSpan.innerHTML !== nextMarkup) {
+                    vendorSpan.innerHTML = nextMarkup;
+                }
+            });
+        };
+
         const renderListings = (listings) => {
             recentListingsWrap.innerHTML = '';
+            listingCache.clear();
             const pendingListings = listings.filter((listing) => ((listing.data().status || 'pending').toLowerCase() === 'pending'));
             if (!pendingListings.length) {
                 noListings.style.display = 'block';
@@ -150,6 +218,7 @@ import { auth, db } from './firebase.js';
             noListings.style.display = 'none';
             pendingListings.forEach((listing) => {
                 const data = listing.data();
+                listingCache.set(listing.id, data);
                 const images = Array.isArray(data.images) && data.images.length
                     ? data.images
                     : Array.isArray(data.imageUrls) ? data.imageUrls : [];
@@ -158,7 +227,8 @@ import { auth, db } from './firebase.js';
                 const titleLabel = resolveListingTitle(data);
                 const categoryLabel = escapeHtml(data.category || '-');
                 const subcategoryLabel = escapeHtml(data.subcategory || '-');
-                const vendorLabel = resolveVendorLabel(data);
+                const vendorRecord = findVendorRecord(data);
+                const vendorLabel = vendorLabelFromRecord(vendorRecord) || resolveVendorLabel(data);
                 const card = document.createElement('article');
                 card.className = 'listing-card';
                 card.dataset.id = listing.id;
@@ -170,7 +240,7 @@ import { auth, db } from './firebase.js';
                             <span class="status-chip status-pending">Pending</span>
                         </div>
                         <span class="meta-line"><i class="ri-stack-line"></i> ${categoryLabel} &middot; ${subcategoryLabel}</span>
-                        <span class="meta-line"><i class="ri-user-smile-line"></i> ${vendorLabel}</span>
+                        <span class="meta-line" data-role="vendor-label"><i class="ri-user-smile-line"></i> ${vendorLabel}</span>
                         <div class="listing-actions">
                             <button class="btn btn-approve" data-action="approve" data-id="${listing.id}" data-vendor="${data.vendorID || data.vendorId || ''}">Approve</button>
                             <button class="btn btn-reject" data-action="reject" data-id="${listing.id}" data-vendor="${data.vendorID || data.vendorId || ''}">Reject</button>
@@ -179,6 +249,7 @@ import { auth, db } from './firebase.js';
                 `;
                 recentListingsWrap.appendChild(card);
             });
+            refreshListingVendorLabels();
         };
 
         const removeListingCard = (listingId) => {
@@ -186,6 +257,7 @@ import { auth, db } from './firebase.js';
             if (card) {
                 card.remove();
             }
+            listingCache.delete(listingId);
             if (!recentListingsWrap.children.length) {
                 noListings.style.display = 'block';
             }
@@ -206,6 +278,7 @@ import { auth, db } from './firebase.js';
                 const joinedMarkup = vendor.joined
                     ? `<small style="color:rgba(17,17,17,0.45); display:block; margin-top:4px;">Joined ${escapeHtml(vendor.joined)}</small>`
                     : '';
+                storeVendorRecord(vendor);
                 const card = document.createElement('article');
                 card.className = 'vendor-card';
                 card.innerHTML = `
@@ -247,9 +320,13 @@ import { auth, db } from './firebase.js';
             return vendors.map((vendor) => {
                 const planLabel = formatPlanLabel(vendor.plan);
                 const joinedDisplay = (vendor.joined && vendor.joined !== '-') ? vendor.joined : '';
-                return {
+                const record = {
                     id: vendor.id ?? '',
+                    uid: vendor.vendorUid || vendor.uid || '',
+                    vendorUid: vendor.vendorUid || vendor.uid || '',
+                    firebaseUid: vendor.firebaseUid || '',
                     name: vendor.name || vendor.businessName || 'Vendor',
+                    businessName: vendor.businessName || '',
                     email: vendor.email || '',
                     plan: planLabel,
                     planSlug: vendor.planSlug || slugifyPlan(planLabel),
@@ -257,6 +334,8 @@ import { auth, db } from './firebase.js';
                     profilePhoto: vendor.profilePhoto || '',
                     joined: joinedDisplay,
                 };
+                storeVendorRecord(record);
+                return record;
             });
         };
 
@@ -277,6 +356,7 @@ import { auth, db } from './firebase.js';
                 const total = payload.summary?.total ?? vendors.length;
                 statsElements.vendors.textContent = total.toString();
                 vendorSummaryErrorShown = false;
+                refreshListingVendorLabels();
             } catch (error) {
                 console.error('Vendor summary load failed:', error);
                 if (!vendorSummaryErrorShown) {

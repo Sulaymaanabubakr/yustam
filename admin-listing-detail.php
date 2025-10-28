@@ -625,6 +625,11 @@ require_admin_auth();
       color: rgba(0, 0, 0, 0.55);
     }
 
+    button.disabled {
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+
     .empty-state {
       padding: 28px;
       text-align: center;
@@ -657,6 +662,21 @@ require_admin_auth();
       display: grid;
       gap: 12px 24px;
       grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    }
+
+    .extra-details {
+      display: grid;
+      gap: 12px 24px;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    }
+
+    .extra-detail {
+      display: grid;
+      gap: 4px;
+      background: rgba(255, 255, 255, 0.72);
+      border-radius: var(--radius-md);
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      padding: 12px 14px;
     }
 
     .metadata-item {
@@ -761,8 +781,9 @@ require_admin_auth();
           </div>
           <div>
             <div class="small-label">Description</div>
-            <p id="listingDescription" class="description muted">—</p>
+            <p id="listingDescription" class="description muted">-</p>
           </div>
+          <div id="extraDetails" class="extra-details hidden"></div>
           <div id="feedbackBlock" class="badge-group hidden">
             <span class="small-label">Feedback</span>
             <span id="feedbackChip" class="status-chip status-rejected">No feedback yet</span>
@@ -863,10 +884,8 @@ require_admin_auth();
     © 2025 YUSTAM - All Rights Reserved.
   </footer>
 
-  <!-- Firebase Logic -->
   <script src="theme-manager.js" defer></script>
-<script type="module" src="admin-listing-detail.js"></script>
-<script type="module" src="firebase.js"></script>
+  <script type="module" src="admin-listing-detail.js"></script>
 </body>
 </html>
 
