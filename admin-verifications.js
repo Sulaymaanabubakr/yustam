@@ -16,8 +16,10 @@ const state = {
   records: [],
   selectedId: null,
   trackingAvailable: true,
+  requestTracking: false,
 };
 const defaultEmptyStateMarkup = emptyState ? emptyState.innerHTML : '';
+const findRecordById = (id) => state.records.find((item) => item.id === id);
 
 const statusClass = (status = '') => {
   const value = status.toLowerCase();
@@ -68,7 +70,7 @@ const renderRecords = () => {
 
   if (!total) {
     if (emptyState && defaultEmptyStateMarkup) {
-      if (!state.trackingAvailable) {
+      if (!state.trackingAvailable && !state.requestTracking) {
         emptyState.innerHTML = `
           <i class="ri-shield-check-line" aria-hidden="true"></i>
           <strong>Verification tracking unavailable.</strong><br>
@@ -95,6 +97,11 @@ const renderRecords = () => {
     const row = document.createElement('article');
     row.className = 'verif-row';
     row.dataset.id = record.id;
+    if (record.request_id) {
+      row.dataset.requestId = record.request_id;
+    } else {
+      delete row.dataset.requestId;
+    }
     row.innerHTML = `
       <div class="verif-meta">
         <strong>${escapeHtml(record.business_name || 'Unknown vendor')}</strong>
@@ -137,11 +144,13 @@ const fetchVerifications = async () => {
     if (!payload.success || !Array.isArray(payload.data)) {
       throw new Error(payload.message || 'Unable to load verification requests.');
     }
+    const meta = payload?.meta || {};
     const wasTrackingAvailable = state.trackingAvailable;
-    state.trackingAvailable = !(payload?.meta && payload.meta.trackingAvailable === false);
+    state.trackingAvailable = meta.trackingAvailable !== false;
+    state.requestTracking = Boolean(meta.requestTracking);
     state.records = payload.data;
     renderRecords();
-    if (wasTrackingAvailable && !state.trackingAvailable) {
+    if (wasTrackingAvailable && !state.trackingAvailable && !state.requestTracking) {
       showToast('Vendor verification tracking is not configured.');
     }
   } catch (error) {
@@ -151,7 +160,12 @@ const fetchVerifications = async () => {
 };
 
 const fetchDetail = async (id) => {
-  const response = await fetch(`admin-verifications.php?format=json&detail=${id}`, { credentials: 'same-origin' });
+  const params = new URLSearchParams({ format: 'json', detail: id });
+  const currentRecord = findRecordById(id);
+  if (currentRecord?.request_id) {
+    params.append('request_id', currentRecord.request_id);
+  }
+  const response = await fetch(`admin-verifications.php?${params.toString()}`, { credentials: 'same-origin' });
   if (!response.ok) throw new Error('Unable to load verification details.');
   const payload = await response.json();
   if (!payload.success || !payload.data) throw new Error(payload.message || 'Verification details unavailable.');
@@ -159,11 +173,16 @@ const fetchDetail = async (id) => {
 };
 
 const submitAction = async (id, action, feedback = '') => {
+  const record = findRecordById(id);
+  const requestPayload = { id, action, feedback };
+  if (record?.request_id) {
+    requestPayload.request_id = record.request_id;
+  }
   const response = await fetch('admin-verifications.php', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'same-origin',
-    body: JSON.stringify({ id, action, feedback }),
+    body: JSON.stringify(requestPayload),
   });
   const payload = await response.json();
   if (!response.ok || !payload.success) {
@@ -201,6 +220,9 @@ const handleCardAction = async (action, id) => {
   if (action === 'view') {
     try {
       const detail = await fetchDetail(id);
+      if (detail) {
+        upsertRecord(detail);
+      }
       state.selectedId = id;
       renderDetail(detail);
       toggleModal(true);
