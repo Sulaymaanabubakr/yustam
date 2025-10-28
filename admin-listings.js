@@ -7,10 +7,6 @@ import {
   onSnapshot,
   query,
   orderBy,
-  updateDoc,
-  deleteDoc,
-  addDoc,
-  serverTimestamp,
   where,
 } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
 
@@ -279,50 +275,41 @@ const notificationBadge = document.getElementById('notificationBadge');
       deleteModal.setAttribute('aria-hidden', 'true');
     }
 
+    async function performListingAction(listingId, action, extra = {}) {
+      const body = new URLSearchParams({ listingId, action });
+      if (extra.reason) body.append('reason', extra.reason);
+      const response = await fetch('admin-listing-action.php', {
+        method: 'POST',
+        credentials: 'same-origin',
+        body,
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload?.success) {
+        throw new Error(payload?.message || 'Listing action failed.');
+      }
+      return payload;
+    }
+
     async function approveListing(listingId) {
       try {
-        const listingRef = doc(db, 'listings', listingId);
-        await updateDoc(listingRef, { status: 'approved', reviewedAt: serverTimestamp() });
+        await performListingAction(listingId, 'approve');
         showToast('Listing approved successfully.');
         updateListingLocalState(listingId, 'approved');
       } catch (error) {
         console.error(error);
-        showToast('Failed to approve listing.', 'error');
+        showToast(error.message || 'Failed to approve listing.', 'error');
       }
     }
 
     async function rejectListing(reason) {
       if (!activeListingId) return;
       try {
-        const listingRef = doc(db, 'listings', activeListingId);
-        const listingSnapshot = await getDoc(listingRef);
-        const listingData = listingSnapshot.data();
-
-        await updateDoc(listingRef, {
-          status: 'rejected',
-          feedback: {
-            reason,
-            updatedAt: serverTimestamp(),
-          },
-          reviewedAt: serverTimestamp()
-        });
-
-        if (listingData?.vendorId) {
-          await addDoc(collection(db, 'notifications'), {
-            vendorId: listingData.vendorId,
-            type: 'listing_rejected',
-            listingId: activeListingId,
-            message: reason,
-            createdAt: serverTimestamp(),
-            read: false
-          });
-        }
-
+        await performListingAction(activeListingId, 'reject', { reason });
         showToast('Feedback sent to vendor.');
         updateListingLocalState(activeListingId, 'rejected');
       } catch (error) {
         console.error(error);
-        showToast('Failed to reject listing.', 'error');
+        showToast(error.message || 'Failed to reject listing.', 'error');
       } finally {
         closeFeedbackModal();
       }
@@ -331,14 +318,14 @@ const notificationBadge = document.getElementById('notificationBadge');
     async function deleteListing() {
       if (!activeDeleteId) return;
       try {
-        await deleteDoc(doc(db, 'listings', activeDeleteId));
+        await performListingAction(activeDeleteId, 'delete');
         showToast('Listing deleted permanently.');
         allListings = allListings.filter(item => item.id !== activeDeleteId);
         filteredListings = filteredListings.filter(item => item.id !== activeDeleteId);
         renderListings();
       } catch (error) {
         console.error(error);
-        showToast('Failed to delete listing.', 'error');
+        showToast(error.message || 'Failed to delete listing.', 'error');
       } finally {
         closeDeleteModal();
       }
