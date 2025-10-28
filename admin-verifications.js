@@ -80,6 +80,89 @@ const escapeHtml = (value) => String(value ?? '')
   .replace(/"/g, '&quot;')
   .replace(/'/g, '&#39;');
 
+const toFileArray = (value) => {
+  if (!value) return [];
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed ? [trimmed] : [];
+  }
+  if (typeof value === 'object') {
+    return Object.values(value);
+  }
+  return [];
+};
+
+const resolveFileUrl = (file) => {
+  if (!file) return '';
+  if (typeof file === 'string') return file.trim();
+  const candidates = ['url', 'secure_url', 'download_url', 'signed_url', 'href', 'link', 'path', 'file', 'file_path', 'source'];
+  for (const key of candidates) {
+    const value = file[key];
+    if (!value) continue;
+    if (typeof value === 'string' && value.trim()) return value.trim();
+    if (typeof value === 'object') {
+      for (const nestedKey of ['url', 'secure_url', 'download_url', 'signed_url']) {
+        const nestedValue = value[nestedKey];
+        if (typeof nestedValue === 'string' && nestedValue.trim()) {
+          return nestedValue.trim();
+        }
+      }
+    }
+  }
+  if (file.public_id) {
+    const cloudName = file.cloud_name || window.CLOUDINARY_CLOUD_NAME || '';
+    const resourceType = file.resource_type || 'image';
+    const deliveryType = file.type || 'upload';
+    const format = file.format ? `.${file.format}` : '';
+    if (cloudName) {
+      return `https://res.cloudinary.com/${encodeURIComponent(cloudName)}/${resourceType}/${deliveryType}/${file.public_id}${format}`;
+    }
+  }
+  return '';
+};
+
+const resolveFileName = (file, index) => {
+  if (!file) return `Document ${index + 1}`;
+  if (typeof file === 'string') return `Document ${index + 1}`;
+  const candidates = ['name', 'label', 'title', 'filename', 'file_name', 'original_filename', 'document', 'document_type', 'type', 'public_id'];
+  for (const key of candidates) {
+    if (file[key] && String(file[key]).trim()) return String(file[key]).trim();
+  }
+  return `Document ${index + 1}`;
+};
+
+const resolveMediaKind = (file, url) => {
+  const hints = [];
+  if (file && typeof file === 'object') {
+    ['media_type', 'mime', 'mime_type', 'content_type', 'resource_type', 'type', 'format'].forEach((key) => {
+      if (file[key]) hints.push(String(file[key]).toLowerCase());
+    });
+  }
+  if (url && typeof url === 'string') {
+    if (url.startsWith('data:')) {
+      const match = url.match(/^data:([^;,]+)/i);
+      if (match && match[1]) hints.push(match[1].toLowerCase());
+    }
+    const path = url.split('?')[0];
+    const extension = path.includes('.') ? path.split('.').pop().toLowerCase() : '';
+    if (extension) hints.push(extension);
+  }
+  if (hints.some((hint) => hint.includes('image') || ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'heic', 'heif'].includes(hint))) {
+    return 'image';
+  }
+  if (hints.some((hint) => hint.includes('pdf') || hint === 'pdf')) {
+    return 'pdf';
+  }
+  if (hints.some((hint) => hint.includes('video') || ['mp4', 'mov', 'avi', 'mkv', 'webm'].includes(hint))) {
+    return 'video';
+  }
+  if (hints.some((hint) => hint.includes('audio') || ['mp3', 'wav', 'ogg', 'aac'].includes(hint))) {
+    return 'audio';
+  }
+  return 'other';
+};
+
 const showToast = (message, duration = 2600) => {
   if (!toast) return;
   toast.textContent = message;
@@ -314,7 +397,16 @@ const renderDetail = (record) => {
     detailBody.innerHTML = cardMarkup || '<div class="detail-card"><strong>No extra details available.</strong></div>';
   }
 
-  const files = Array.isArray(record.files) ? record.files : [];
+  const files = toFileArray(record.files)
+    .map((entry, index) => {
+      const url = resolveFileUrl(entry);
+      if (!url) return null;
+      const name = resolveFileName(entry, index);
+      const kind = resolveMediaKind(entry, url);
+      return { name, url, kind };
+    })
+    .filter(Boolean);
+
   if (detailFiles) {
     if (!files.length) {
       detailFiles.innerHTML = `
@@ -322,15 +414,10 @@ const renderDetail = (record) => {
         <div class="detail-card"><label>Documents</label><strong>No supporting documents supplied.</strong></div>
       `;
     } else {
-      const fileItems = files.map((file, index) => {
-        const name = typeof file.name === 'string' && file.name.trim() ? file.name.trim() : `File ${index + 1}`;
-        const url = typeof file.url === 'string' ? file.url : '';
-        const safeUrl = escapeHtml(url);
-        const safeName = escapeHtml(name);
-        const baseUrl = url.split('?')[0].toLowerCase();
-        const isImage = /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(baseUrl);
-        const isPdf = baseUrl.endsWith('.pdf');
-        if (isImage) {
+      const fileItems = files.map((file) => {
+        const safeUrl = escapeHtml(file.url);
+        const safeName = escapeHtml(file.name);
+        if (file.kind === 'image') {
           return `
             <article class="detail-file">
               <img src="${safeUrl}" alt="${safeName}">
@@ -338,7 +425,7 @@ const renderDetail = (record) => {
             </article>
           `;
         }
-        if (isPdf) {
+        if (file.kind === 'pdf') {
           return `
             <article class="detail-file">
               <embed src="${safeUrl}" type="application/pdf">
@@ -460,3 +547,4 @@ const initializeEvents = () => {
 
 initializeEvents();
 fetchVerifications();
+

@@ -85,38 +85,213 @@ function normalise_verification_status(string $value): string
     return strtolower($trimmed);
 }
 
-function decode_verification_files($value): array
+function guess_verification_media_type_from_url(string $url): string
 {
-    if (is_array($value)) {
-        $files = [];
-        foreach ($value as $entry) {
-            if (is_array($entry)) {
-                $files[] = $entry;
-            } elseif (is_string($entry) && $entry !== '') {
-                $files[] = ['name' => $entry, 'url' => $entry];
-            }
-        }
-        return $files;
+    $trimmed = trim($url);
+    if ($trimmed === '') {
+        return '';
     }
 
-    if (is_string($value) && trim($value) !== '') {
-        $decoded = json_decode($value, true);
-        if (is_array($decoded)) {
-            $files = [];
-            foreach ($decoded as $entry) {
-                if (is_array($entry)) {
-                    $files[] = $entry;
-                } elseif (is_string($entry) && $entry !== '') {
-                    $files[] = ['name' => $entry, 'url' => $entry];
+    if (strncmp($trimmed, 'data:', 5) === 0) {
+        if (preg_match('/^data:([^;,]+)/i', $trimmed, $matches)) {
+            return strtolower((string) ($matches[1] ?? ''));
+        }
+        return '';
+    }
+
+    $path = (string) parse_url($trimmed, PHP_URL_PATH);
+    if ($path !== '') {
+        $extension = strtolower((string) pathinfo($path, PATHINFO_EXTENSION));
+        if (in_array($extension, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'heic', 'heif'], true)) {
+            return 'image';
+        }
+        if ($extension === 'pdf') {
+            return 'application/pdf';
+        }
+        if (in_array($extension, ['mp4', 'mov', 'avi', 'mkv', 'webm'], true)) {
+            return 'video';
+        }
+        if (in_array($extension, ['mp3', 'wav', 'ogg', 'aac'], true)) {
+            return 'audio';
+        }
+        if (in_array($extension, ['doc', 'docx'], true)) {
+            return 'application/msword';
+        }
+        if (in_array($extension, ['xls', 'xlsx'], true)) {
+            return 'application/vnd.ms-excel';
+        }
+        if (in_array($extension, ['ppt', 'pptx'], true)) {
+            return 'application/vnd.ms-powerpoint';
+        }
+    }
+
+    return '';
+}
+
+function normalise_verification_file_entry($entry, int $index): ?array
+{
+    if ($entry === null) {
+        return null;
+    }
+
+    if (is_string($entry)) {
+        $url = trim($entry);
+        if ($url === '') {
+            return null;
+        }
+        return [
+            'name' => sprintf('Document %d', $index + 1),
+            'url' => $url,
+            'media_type' => guess_verification_media_type_from_url($url),
+            '__source' => 'string',
+        ];
+    }
+
+    if (!is_array($entry)) {
+        if (is_object($entry)) {
+            $entry = (array) $entry;
+        } else {
+            return null;
+        }
+    }
+
+    $flat = $entry;
+    if (isset($flat['file']) && is_array($flat['file'])) {
+        $flat = array_merge($flat, $flat['file']);
+    }
+
+    $url = '';
+    $urlCandidates = ['url', 'secure_url', 'download_url', 'signed_url', 'href', 'link', 'file', 'path', 'file_path', 'source'];
+    foreach ($urlCandidates as $candidate) {
+        if (!array_key_exists($candidate, $flat)) {
+            continue;
+        }
+        $value = $flat[$candidate];
+        if (is_string($value) && trim($value) !== '') {
+            $url = trim($value);
+            break;
+        }
+        if (is_array($value) || is_object($value)) {
+            $valueArray = (array) $value;
+            foreach (['url', 'secure_url', 'download_url', 'signed_url'] as $nested) {
+                if (isset($valueArray[$nested]) && trim((string) $valueArray[$nested]) !== '') {
+                    $url = trim((string) $valueArray[$nested]);
+                    break 2;
                 }
             }
-            if ($files) {
-                return $files;
+        }
+    }
+
+    if ($url === '' && isset($flat['public_id'])) {
+        $cloudName = isset($flat['cloud_name']) ? trim((string) $flat['cloud_name']) : '';
+        $publicId = trim((string) $flat['public_id']);
+        $resourceType = isset($flat['resource_type']) ? trim((string) $flat['resource_type']) : 'image';
+        $deliveryType = isset($flat['type']) ? trim((string) $flat['type']) : 'upload';
+        $format = isset($flat['format']) ? trim((string) $flat['format']) : '';
+        if ($publicId !== '') {
+            if ($cloudName !== '') {
+                $url = sprintf(
+                    'https://res.cloudinary.com/%s/%s/%s/%s%s',
+                    rawurlencode($cloudName),
+                    $resourceType !== '' ? $resourceType : 'image',
+                    $deliveryType !== '' ? $deliveryType : 'upload',
+                    ltrim($publicId, '/'),
+                    $format !== '' ? '.' . $format : ''
+                );
+            } elseif (isset($_ENV['CLOUDINARY_CLOUD_NAME'])) {
+                $url = sprintf(
+                    'https://res.cloudinary.com/%s/image/upload/%s%s',
+                    rawurlencode((string) $_ENV['CLOUDINARY_CLOUD_NAME']),
+                    ltrim($publicId, '/'),
+                    $format !== '' ? '.' . $format : ''
+                );
             }
         }
     }
 
-    return [];
+    $name = '';
+    foreach (['name', 'label', 'title', 'filename', 'file_name', 'original_filename', 'document', 'document_type', 'type'] as $candidate) {
+        if (isset($flat[$candidate]) && trim((string) $flat[$candidate]) !== '') {
+            $name = trim((string) $flat[$candidate]);
+            break;
+        }
+    }
+    if ($name === '') {
+        $name = sprintf('Document %d', $index + 1);
+    }
+
+    $mediaType = '';
+    foreach (['media_type', 'mime', 'mime_type', 'content_type', 'resource_type', 'type', 'format'] as $candidate) {
+        if (isset($flat[$candidate]) && trim((string) $flat[$candidate]) !== '') {
+            $mediaType = strtolower(trim((string) $flat[$candidate]));
+            break;
+        }
+    }
+
+    if ($mediaType === '' && $url !== '') {
+        $mediaType = guess_verification_media_type_from_url($url);
+    }
+
+    $result = [
+        'name' => $name,
+        '__source' => isset($flat['__source']) ? $flat['__source'] : 'entry',
+    ];
+
+    if ($url !== '') {
+        $result['url'] = $url;
+    }
+
+    if ($mediaType !== '') {
+        $result['media_type'] = $mediaType;
+    }
+
+    if (isset($flat['format']) && trim((string) $flat['format']) !== '') {
+        $result['format'] = strtolower(trim((string) $flat['format']));
+    }
+
+    if (isset($flat['public_id']) && trim((string) $flat['public_id']) !== '') {
+        $result['public_id'] = trim((string) $flat['public_id']);
+    }
+
+    return $url === '' ? null : $result;
+}
+
+function decode_verification_files($value): array
+{
+    $rawEntries = [];
+
+    if (is_string($value)) {
+        $trimmed = trim($value);
+        if ($trimmed === '') {
+            return [];
+        }
+        $decoded = json_decode($trimmed, true);
+        if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+            $rawEntries = $decoded;
+        } else {
+            $rawEntries = [$trimmed];
+        }
+    } elseif (is_array($value)) {
+        $rawEntries = $value;
+    } elseif (is_object($value)) {
+        $rawEntries = (array) $value;
+    } else {
+        return [];
+    }
+
+    if ($rawEntries && array_keys($rawEntries) !== range(0, count($rawEntries) - 1)) {
+        $rawEntries = array_values($rawEntries);
+    }
+
+    $files = [];
+    foreach ($rawEntries as $index => $entry) {
+        $normalised = normalise_verification_file_entry($entry, (int) $index);
+        if ($normalised !== null) {
+            $files[] = $normalised;
+        }
+    }
+
+    return $files;
 }
 
 function map_vendor_verification_row(array $row, array $context): array
