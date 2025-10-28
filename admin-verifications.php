@@ -640,10 +640,12 @@ function fetch_all_vendor_verifications(mysqli $db, array $context): array
     $records = array_values($recordsByVendor);
 
     usort($records, static function (array $a, array $b): int {
-        $aTime = strtotime((string) ($a['submitted_at'] ?? '')) ?: 0;
-        $bTime = strtotime((string) ($b['submitted_at'] ?? '')) ?: 0;
+        $aTime = strtotime((string) ($a['submitted_at'] ?? '')) ?: strtotime((string) ($a['reviewed_at'] ?? '')) ?: 0;
+        $bTime = strtotime((string) ($b['submitted_at'] ?? '')) ?: strtotime((string) ($b['reviewed_at'] ?? '')) ?: 0;
         if ($aTime === $bTime) {
-            return ($b['id'] ?? 0) <=> ($a['id'] ?? 0);
+            $aOrder = (int) ($a['request_id'] ?? $a['id'] ?? 0);
+            $bOrder = (int) ($b['request_id'] ?? $b['id'] ?? 0);
+            return $bOrder <=> $aOrder;
         }
         return $bTime <=> $aTime;
     });
@@ -941,56 +943,56 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 0.55rem clamp(1rem, 2.8vw, 1.45rem);
-            min-height: 60px;
-            box-shadow: 0 8px 22px rgba(0, 0, 0, 0.18);
+            padding: 0.45rem clamp(0.9rem, 2.6vw, 1.25rem);
+            min-height: 52px;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.16);
             backdrop-filter: blur(12px);
         }
 
         .brand {
             display: inline-flex;
             align-items: center;
-            gap: 0.55rem;
-            font-size: clamp(1.15rem, 3vw, 1.55rem);
+            gap: 0.5rem;
+            font-size: clamp(1.05rem, 2.6vw, 1.4rem);
         }
 
         .brand span {
             font-family: 'Anton', sans-serif;
-            letter-spacing: 0.095em;
+            letter-spacing: 0.08em;
         }
 
         .logo-img {
-            width: 36px;
-            height: 36px;
-            border-radius: 11px;
+            width: 32px;
+            height: 32px;
+            border-radius: 10px;
             object-fit: cover;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.18);
         }
 
         .menu-toggle {
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            width: 38px;
-            height: 38px;
+            width: 34px;
+            height: 34px;
             border-radius: 50%;
             border: none;
             background: rgba(255, 255, 255, 0.16);
             color: var(--white);
             cursor: pointer;
-            margin-right: 0.6rem;
+            margin-right: 0.55rem;
             transition: transform 0.2s ease, background 0.2s ease;
         }
 
         .top-actions {
             display: flex;
-            gap: 0.5rem;
+            gap: 0.45rem;
             align-items: center;
         }
 
         .top-action {
-            width: 38px;
-            height: 38px;
+            width: 34px;
+            height: 34px;
             border-radius: 50%;
             border: none;
             background: rgba(255, 255, 255, 0.16);
@@ -1132,7 +1134,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             gap: 0.35rem;
         }
 
-        .btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+        .btn:disabled { opacity: 0.55; cursor: not-allowed; transform: none; pointer-events: none; }
 
         .btn-view { background: rgba(0, 77, 64, 0.12); color: var(--emerald); }
         .btn-approve { background: var(--emerald); color: var(--white); }
@@ -1156,46 +1158,182 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         .empty-state i { display: block; font-size: 2.2rem; margin-bottom: 0.6rem; color: rgba(243, 115, 30, 0.75); }
 
-        .modal-backdrop {
+        .detail-overlay {
             position: fixed;
             inset: 0;
-            background: rgba(17, 17, 17, 0.45);
+            background: rgba(0, 0, 0, 0.35);
             display: none;
-            align-items: center;
+            align-items: flex-start;
             justify-content: center;
-            padding: 1.5rem;
+            overflow-y: auto;
             z-index: 60;
+            padding: clamp(1.2rem, 4vw, 2rem);
         }
 
-        .modal-backdrop.active { display: flex; }
+        .detail-overlay.active { display: flex; }
 
-        .modal-card {
-            background: rgba(255, 255, 255, 0.95);
-            border-radius: var(--radius-lg);
-            padding: clamp(1.4rem, 3vw, 2rem);
-            max-width: min(560px, 92vw);
-            width: 100%;
-            box-shadow: var(--shadow);
+        .detail-container {
+            background: rgba(255, 255, 255, 0.97);
+            border-radius: 20px;
+            margin: 0 auto;
+            max-width: min(1040px, 96vw);
+            box-shadow: 0 28px 65px rgba(17, 17, 17, 0.18);
+            padding: clamp(1.5rem, 4vw, 2.2rem);
             display: grid;
-            gap: 1.1rem;
+            gap: 1.4rem;
         }
 
-        .modal-card h2 { color: var(--emerald); font-size: 1.4rem; }
+        .detail-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1rem;
+        }
 
-        .modal-body { display: grid; gap: 0.75rem; font-size: 0.95rem; color: rgba(17, 17, 17, 0.75); }
+        .detail-back {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+            border: none;
+            background: rgba(0, 77, 64, 0.14);
+            color: var(--emerald);
+            padding: 0.45rem 0.95rem;
+            border-radius: 999px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s ease, transform 0.2s ease;
+        }
 
-        .file-list { display: grid; gap: 0.4rem; }
+        .detail-back:hover,
+        .detail-back:focus-visible {
+            background: rgba(0, 77, 64, 0.22);
+            transform: translateX(-1px);
+        }
 
-        .file-link { color: var(--emerald); font-weight: 600; text-decoration: underline; }
+        .detail-status {
+            align-self: flex-start;
+            font-weight: 600;
+            color: rgba(17, 17, 17, 0.65);
+        }
 
-        textarea.feedback-input {
+        .detail-summary h2 {
+            margin-bottom: 0.4rem;
+            font-size: clamp(1.55rem, 3.5vw, 2rem);
+            color: var(--emerald);
+        }
+
+        .detail-meta {
+            display: grid;
+            gap: 0.4rem;
+            color: rgba(17, 17, 17, 0.7);
+            font-size: 0.96rem;
+        }
+
+        .detail-meta span {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+        }
+
+        .detail-files {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .detail-section-title {
+            font-weight: 700;
+            color: var(--emerald);
+            text-transform: uppercase;
+            font-size: 0.9rem;
+            letter-spacing: 0.08em;
+        }
+
+        .detail-files-grid {
+            display: grid;
+            gap: 1rem;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        }
+
+        .detail-file {
+            background: rgba(0, 77, 64, 0.06);
+            border-radius: 16px;
+            padding: 0.85rem;
+        }
+
+        .detail-file img,
+        .detail-file iframe,
+        .detail-file embed {
             width: 100%;
-            min-height: 110px;
             border-radius: 12px;
+            display: block;
+            object-fit: contain;
+            max-height: 540px;
+            background: #0f0f0f;
+        }
+
+        .detail-file a {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            color: var(--emerald);
+            font-weight: 600;
+            margin-top: 0.5rem;
+        }
+
+        .detail-notes {
+            display: grid;
+            gap: 0.6rem;
+        }
+
+        .detail-notes textarea {
+            width: 100%;
+            min-height: 120px;
+            border-radius: 14px;
             border: 1px solid rgba(0, 77, 64, 0.2);
             padding: 0.75rem;
             font-family: inherit;
             resize: vertical;
+        }
+
+        .detail-notes textarea.is-readonly {
+            background: rgba(0, 0, 0, 0.04);
+            color: rgba(17, 17, 17, 0.7);
+            cursor: default;
+        }
+
+        .detail-grid {
+            display: grid;
+            gap: clamp(1.2rem, 3vw, 1.6rem);
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        }
+
+        .detail-card {
+            background: rgba(255, 255, 255, 0.82);
+            border-radius: 18px;
+            padding: 0.9rem 1rem;
+            box-shadow: 0 12px 26px rgba(17, 17, 17, 0.08);
+            display: grid;
+            gap: 0.35rem;
+        }
+
+        .detail-card label {
+            font-size: 0.78rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: rgba(17, 17, 17, 0.45);
+        }
+
+        .detail-card strong { color: rgba(17, 17, 17, 0.85); }
+
+        .detail-actions-row {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .detail-actions-row .btn {
+            min-width: 140px;
         }
 
         .toast {
@@ -1273,21 +1411,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </main>
     </div>
 
-    <div class="modal-backdrop" id="verificationModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
-        <div class="modal-card">
-            <div class="modal-header">
-                <h2 id="modalTitle">Verification Request</h2>
+    <section class="detail-overlay" id="detailView" aria-hidden="true" hidden>
+        <div class="detail-container" role="dialog" aria-labelledby="detailTitle">
+            <div class="detail-top">
+                <button class="detail-back" id="detailBack"><i class="ri-arrow-left-line"></i> Back to requests</button>
+                <span class="status-chip" id="detailStatus"></span>
             </div>
-            <div class="modal-body" id="modalBody"></div>
-            <label for="modalFeedback" style="font-weight:600; color:var(--emerald);">Feedback to vendor</label>
-            <textarea id="modalFeedback" class="feedback-input" placeholder="Add optional notes for the vendor"></textarea>
-            <div class="verif-actions">
-                <button class="btn btn-view" id="modalClose">Close</button>
-                <button class="btn btn-reject" id="modalReject"><i class="ri-close-circle-line"></i> Reject</button>
-                <button class="btn btn-approve" id="modalApprove"><i class="ri-shield-check-line"></i> Approve</button>
+            <div class="detail-summary">
+                <h2 id="detailTitle">Verification Request</h2>
+                <div class="detail-meta" id="detailMeta"></div>
+            </div>
+            <div class="detail-grid" id="detailBody"></div>
+            <div class="detail-files" id="detailFiles"></div>
+            <div class="detail-notes">
+                <label for="detailFeedback" style="font-weight:600; color:var(--emerald);">Feedback to vendor</label>
+                <textarea id="detailFeedback" placeholder="Add optional notes for the vendor"></textarea>
+            </div>
+            <div class="detail-actions-row">
+                <button class="btn btn-reject" id="detailReject"><i class="ri-close-circle-line"></i> Reject</button>
+                <button class="btn btn-approve" id="detailApprove"><i class="ri-shield-check-line"></i> Approve</button>
             </div>
         </div>
-    </div>
+    </section>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
