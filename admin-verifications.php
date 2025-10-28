@@ -43,6 +43,8 @@ $filesColumn = pick_vendor_column(['verification_files', 'kyc_files', 'verificat
 $historyColumn = pick_vendor_column(['verification_history', 'kyc_history'], $vendorColumns);
 $planColumn = pick_vendor_column(['plan', 'plan_level', 'subscription_plan'], $vendorColumns) ?? (in_array('plan', $vendorColumns, true) ? 'plan' : null);
 
+$requestTrackingEnabled = vendor_verifications_table_exists($db);
+
 $verificationContext = [
     'table' => $vendorTable,
     'columns' => $vendorColumns,
@@ -54,7 +56,8 @@ $verificationContext = [
     'filesColumn' => $filesColumn,
     'historyColumn' => $historyColumn,
     'planColumn' => $planColumn,
-    'trackingAvailable' => ($statusColumn !== null || $submittedColumn !== null),
+    'trackingAvailable' => ($statusColumn !== null || $submittedColumn !== null || $requestTrackingEnabled),
+    'requestTracking' => $requestTrackingEnabled,
     'nameCandidates' => ['business_name', 'store_name', 'company_name', 'name', 'full_name'],
     'emailCandidates' => ['email', 'contact_email'],
     'phoneCandidates' => ['phone', 'contact_phone', 'business_phone'],
@@ -84,6 +87,18 @@ function normalise_verification_status(string $value): string
 
 function decode_verification_files($value): array
 {
+    if (is_array($value)) {
+        $files = [];
+        foreach ($value as $entry) {
+            if (is_array($entry)) {
+                $files[] = $entry;
+            } elseif (is_string($entry) && $entry !== '') {
+                $files[] = ['name' => $entry, 'url' => $entry];
+            }
+        }
+        return $files;
+    }
+
     if (is_string($value) && trim($value) !== '') {
         $decoded = json_decode($value, true);
         if (is_array($decoded)) {
@@ -115,31 +130,97 @@ function map_vendor_verification_row(array $row, array $context): array
     $historyColumn = $context['historyColumn'];
     $planColumn = $context['planColumn'];
 
+    $primaryId = isset($row['id']) ? (int) $row['id'] : 0;
+    $vendorId = isset($row['vendor_id']) ? (int) $row['vendor_id'] : $primaryId;
+
     $statusRaw = '';
     if ($statusColumn && array_key_exists($statusColumn, $row)) {
         $statusRaw = (string) $row[$statusColumn];
+    } elseif (array_key_exists('status', $row)) {
+        $statusRaw = (string) $row['status'];
+    } elseif (array_key_exists('status_raw', $row)) {
+        $statusRaw = (string) $row['status_raw'];
     }
 
     $statusNormalised = normalise_verification_status($statusRaw);
-    $submittedAt = $submittedColumn && array_key_exists($submittedColumn, $row) ? (string) ($row[$submittedColumn] ?? '') : '';
-    $reviewedAt = $reviewedColumn && array_key_exists($reviewedColumn, $row) ? (string) ($row[$reviewedColumn] ?? '') : '';
-    $feedback = $feedbackColumn && array_key_exists($feedbackColumn, $row) ? (string) ($row[$feedbackColumn] ?? '') : '';
+
+    $submittedAt = '';
+    $submittedCandidates = array_filter([$submittedColumn, 'submitted_at', 'requested_at', 'created_at']);
+    foreach ($submittedCandidates as $candidate) {
+        if ($candidate && array_key_exists($candidate, $row) && $row[$candidate] !== null && $row[$candidate] !== '') {
+            $submittedAt = (string) $row[$candidate];
+            break;
+        }
+    }
+
+    $reviewedAt = '';
+    $reviewedCandidates = array_filter([$reviewedColumn, 'reviewed_at', 'approved_at', 'completed_at', 'updated_at']);
+    foreach ($reviewedCandidates as $candidate) {
+        if ($candidate && array_key_exists($candidate, $row) && $row[$candidate] !== null && $row[$candidate] !== '') {
+            $reviewedAt = (string) $row[$candidate];
+            break;
+        }
+    }
+
+    $feedback = '';
+    $feedbackCandidates = array_filter([$feedbackColumn, 'feedback', 'comment', 'notes']);
+    foreach ($feedbackCandidates as $candidate) {
+        if ($candidate && array_key_exists($candidate, $row) && $row[$candidate] !== null && $row[$candidate] !== '') {
+            $feedback = (string) $row[$candidate];
+            break;
+        }
+    }
 
     if ($statusNormalised === '' && $submittedAt !== '') {
         $statusNormalised = 'pending';
-        $statusRaw = 'pending';
+        $statusRaw = $statusRaw !== '' ? $statusRaw : 'pending';
     }
 
     $reviewerId = null;
-    if ($reviewerColumn && array_key_exists($reviewerColumn, $row) && $row[$reviewerColumn] !== '' && $row[$reviewerColumn] !== null) {
-        $reviewerId = (int) $row[$reviewerColumn];
+    $reviewerCandidates = array_filter([$reviewerColumn, 'reviewer_id', 'approved_by']);
+    foreach ($reviewerCandidates as $candidate) {
+        if ($candidate && array_key_exists($candidate, $row) && $row[$candidate] !== '' && $row[$candidate] !== null) {
+            $reviewerId = (int) $row[$candidate];
+            break;
+        }
     }
 
-    $planLevel = $planColumn && array_key_exists($planColumn, $row) ? (string) ($row[$planColumn] ?? '') : '';
+    $planLevel = '';
+    $planCandidates = array_filter([$planColumn, 'plan', 'plan_level', 'subscription_plan']);
+    foreach ($planCandidates as $candidate) {
+        if ($candidate && array_key_exists($candidate, $row) && $row[$candidate] !== null && $row[$candidate] !== '') {
+            $planLevel = (string) $row[$candidate];
+            break;
+        }
+    }
+
+    $files = [];
+    if ($filesColumn && array_key_exists($filesColumn, $row)) {
+        $files = decode_verification_files($row[$filesColumn]);
+    } elseif (array_key_exists('files', $row)) {
+        $files = decode_verification_files($row['files']);
+    }
+
+    $history = '';
+    if ($historyColumn && array_key_exists($historyColumn, $row)) {
+        $history = (string) ($row[$historyColumn] ?? '');
+    } elseif (array_key_exists('history', $row)) {
+        $history = (string) ($row['history'] ?? '');
+    }
+
+    $requestId = null;
+    if (array_key_exists('request_id', $row)) {
+        $requestId = (int) $row['request_id'];
+    } elseif ($vendorId > 0 && $primaryId > 0 && $primaryId !== $vendorId) {
+        $requestId = $primaryId;
+    }
+
+    $resolvedId = $vendorId > 0 ? $vendorId : $primaryId;
 
     return [
-        'id' => isset($row['id']) ? (int) $row['id'] : 0,
-        'vendor_id' => isset($row['id']) ? (int) $row['id'] : 0,
+        'id' => $resolvedId,
+        'vendor_id' => $vendorId,
+        'request_id' => $requestId,
         'business_name' => value_from_candidates($row, $context['nameCandidates']),
         'email' => value_from_candidates($row, $context['emailCandidates']),
         'phone' => value_from_candidates($row, $context['phoneCandidates']),
@@ -151,8 +232,9 @@ function map_vendor_verification_row(array $row, array $context): array
         'reviewer_id' => $reviewerId,
         'feedback' => $feedback,
         'plan_level' => $planLevel,
-        'files' => $filesColumn && array_key_exists($filesColumn, $row) ? decode_verification_files($row[$filesColumn]) : [],
-        'history' => $historyColumn && array_key_exists($historyColumn, $row) ? (string) ($row[$historyColumn] ?? '') : '',
+        'files' => $files,
+        'history' => $history,
+        'source' => isset($row['__source']) ? (string) $row['__source'] : 'vendors',
     ];
 }
 
@@ -172,7 +254,255 @@ function should_include_verification(array $record): bool
     return true;
 }
 
-function fetch_vendor_verification(mysqli $db, int $vendorId, array $context): ?array
+function vendor_verifications_table_exists(mysqli $db): bool
+{
+    static $exists = null;
+
+    if ($exists !== null) {
+        return $exists;
+    }
+
+    try {
+        $tableName = $db->real_escape_string('vendor_verifications');
+        $result = $db->query("SHOW TABLES LIKE '{$tableName}'");
+        $exists = $result instanceof mysqli_result && $result->num_rows > 0;
+        if ($result instanceof mysqli_result) {
+            $result->free();
+        }
+    } catch (Throwable $exception) {
+        error_log('Unable to inspect vendor_verifications table: ' . $exception->getMessage());
+        $exists = false;
+    }
+
+    return $exists;
+}
+
+function vendor_verifications_table_columns(mysqli $db): array
+{
+    static $columns = null;
+
+    if (is_array($columns)) {
+        return $columns;
+    }
+
+    $columns = [];
+
+    if (!vendor_verifications_table_exists($db)) {
+        return $columns;
+    }
+
+    try {
+        $result = $db->query('SHOW COLUMNS FROM `vendor_verifications`');
+        if ($result instanceof mysqli_result) {
+            while ($row = $result->fetch_assoc()) {
+                if (isset($row['Field'])) {
+                    $columns[] = $row['Field'];
+                }
+            }
+            $result->free();
+        }
+    } catch (Throwable $exception) {
+        error_log('Unable to inspect vendor_verifications columns: ' . $exception->getMessage());
+    }
+
+    return $columns;
+}
+
+function fetch_latest_verification_requests_map(mysqli $db): array
+{
+    if (!vendor_verifications_table_exists($db)) {
+        return [];
+    }
+
+    $requests = [];
+
+    try {
+        $sql = 'SELECT *, id AS request_id FROM `vendor_verifications` ORDER BY COALESCE(submitted_at, created_at, updated_at) DESC, id DESC LIMIT 400';
+        $result = $db->query($sql);
+        if ($result instanceof mysqli_result) {
+            while ($row = $result->fetch_assoc()) {
+                $vendorId = isset($row['vendor_id']) ? (int) $row['vendor_id'] : 0;
+                if ($vendorId <= 0 || isset($requests[$vendorId])) {
+                    continue;
+                }
+                $row['request_id'] = isset($row['request_id']) ? (int) $row['request_id'] : (int) ($row['id'] ?? 0);
+                $row['__source'] = 'vendor_verifications';
+                $requests[$vendorId] = $row;
+            }
+            $result->free();
+        }
+    } catch (Throwable $exception) {
+        error_log('Unable to load vendor verification requests: ' . $exception->getMessage());
+    }
+
+    return $requests;
+}
+
+function fetch_verification_request_by_vendor(mysqli $db, int $vendorId, ?int $requestId = null): ?array
+{
+    if (!vendor_verifications_table_exists($db)) {
+        return null;
+    }
+
+    try {
+        if ($requestId !== null && $requestId > 0) {
+            $stmt = $db->prepare('SELECT *, id AS request_id FROM `vendor_verifications` WHERE id = ? LIMIT 1');
+            if ($stmt === false) {
+                return null;
+            }
+            $stmt->bind_param('i', $requestId);
+        } else {
+            $stmt = $db->prepare('SELECT *, id AS request_id FROM `vendor_verifications` WHERE vendor_id = ? ORDER BY COALESCE(submitted_at, created_at, updated_at) DESC, id DESC LIMIT 1');
+            if ($stmt === false) {
+                return null;
+            }
+            $stmt->bind_param('i', $vendorId);
+        }
+
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $row = $result ? $result->fetch_assoc() : null;
+        $stmt->close();
+
+        if (!$row) {
+            return null;
+        }
+
+        $row['request_id'] = isset($row['request_id']) ? (int) $row['request_id'] : (int) ($row['id'] ?? 0);
+        $row['__source'] = 'vendor_verifications';
+        return $row;
+    } catch (Throwable $exception) {
+        error_log('Unable to fetch vendor verification request: ' . $exception->getMessage());
+        return null;
+    }
+}
+
+function merge_verification_request_row(array $record, array $requestRow, array $context): array
+{
+    if (!isset($record['vendor_id']) || !$record['vendor_id']) {
+        $record['vendor_id'] = isset($requestRow['vendor_id']) ? (int) $requestRow['vendor_id'] : 0;
+    }
+
+    if (!isset($record['id']) || !$record['id']) {
+        $record['id'] = $record['vendor_id'] ?: (isset($requestRow['id']) ? (int) $requestRow['id'] : 0);
+    }
+
+    if (isset($requestRow['request_id']) || isset($requestRow['id'])) {
+        $requestId = isset($requestRow['request_id']) ? (int) $requestRow['request_id'] : (int) $requestRow['id'];
+        if ($requestId > 0) {
+            $record['request_id'] = $requestId;
+        }
+    }
+
+    if (isset($requestRow['status'])) {
+        $record['status'] = (string) $requestRow['status'];
+        $record['status_normalised'] = normalise_verification_status($record['status']);
+    }
+
+    foreach (['submitted_at', 'created_at', 'requested_at'] as $candidate) {
+        if (isset($requestRow[$candidate]) && $requestRow[$candidate] !== null && $requestRow[$candidate] !== '') {
+            $record['submitted_at'] = (string) $requestRow[$candidate];
+            break;
+        }
+    }
+
+    foreach (['reviewed_at', 'approved_at', 'completed_at', 'updated_at'] as $candidate) {
+        if (isset($requestRow[$candidate]) && $requestRow[$candidate] !== null && $requestRow[$candidate] !== '') {
+            $record['reviewed_at'] = (string) $requestRow[$candidate];
+            break;
+        }
+    }
+
+    if (array_key_exists('feedback', $requestRow)) {
+        $record['feedback'] = (string) ($requestRow['feedback'] ?? '');
+    }
+
+    if (array_key_exists('reviewer_id', $requestRow) && $requestRow['reviewer_id'] !== null && $requestRow['reviewer_id'] !== '') {
+        $record['reviewer_id'] = (int) $requestRow['reviewer_id'];
+    }
+
+    if (array_key_exists('files', $requestRow)) {
+        $files = decode_verification_files($requestRow['files']);
+        if ($files) {
+            $record['files'] = $files;
+        }
+    }
+
+    if (array_key_exists('history', $requestRow) && $requestRow['history'] !== null && $requestRow['history'] !== '') {
+        $record['history'] = (string) $requestRow['history'];
+    }
+
+    if (empty($record['plan_level']) && array_key_exists('plan_level', $requestRow) && $requestRow['plan_level'] !== '') {
+        $record['plan_level'] = (string) $requestRow['plan_level'];
+    } elseif (empty($record['plan_level']) && array_key_exists('plan', $requestRow) && $requestRow['plan'] !== '') {
+        $record['plan_level'] = (string) $requestRow['plan'];
+    }
+
+    if (($record['business_name'] ?? '') === '' && array_key_exists('business_name', $requestRow)) {
+        $record['business_name'] = (string) ($requestRow['business_name'] ?? '');
+    }
+    if (($record['email'] ?? '') === '' && array_key_exists('email', $requestRow)) {
+        $record['email'] = (string) ($requestRow['email'] ?? '');
+    }
+    if (($record['phone'] ?? '') === '' && array_key_exists('phone', $requestRow)) {
+        $record['phone'] = (string) ($requestRow['phone'] ?? '');
+    }
+    if (($record['state'] ?? '') === '' && array_key_exists('state', $requestRow)) {
+        $record['state'] = (string) ($requestRow['state'] ?? '');
+    }
+
+    $record['source'] = isset($requestRow['__source']) ? (string) $requestRow['__source'] : ($record['source'] ?? 'vendors');
+
+    return $record;
+}
+
+function map_request_record(array $requestRow, array $context): array
+{
+    $vendorId = isset($requestRow['vendor_id']) ? (int) $requestRow['vendor_id'] : 0;
+    $syntheticRow = [
+        'id' => $vendorId ?: (int) ($requestRow['request_id'] ?? $requestRow['id'] ?? 0),
+        'vendor_id' => $vendorId,
+        'status' => $requestRow['status'] ?? '',
+        'submitted_at' => $requestRow['submitted_at'] ?? ($requestRow['created_at'] ?? ''),
+        'reviewed_at' => $requestRow['reviewed_at'] ?? ($requestRow['updated_at'] ?? ''),
+        'feedback' => $requestRow['feedback'] ?? '',
+        'files' => $requestRow['files'] ?? [],
+        'history' => $requestRow['history'] ?? '',
+        '__source' => 'vendor_verifications',
+    ];
+
+    foreach ($context['nameCandidates'] as $candidate) {
+        if (array_key_exists($candidate, $requestRow)) {
+            $syntheticRow[$candidate] = $requestRow[$candidate];
+        }
+    }
+    foreach ($context['emailCandidates'] as $candidate) {
+        if (array_key_exists($candidate, $requestRow)) {
+            $syntheticRow[$candidate] = $requestRow[$candidate];
+        }
+    }
+    foreach ($context['phoneCandidates'] as $candidate) {
+        if (array_key_exists($candidate, $requestRow)) {
+            $syntheticRow[$candidate] = $requestRow[$candidate];
+        }
+    }
+    foreach ($context['locationCandidates'] as $candidate) {
+        if (array_key_exists($candidate, $requestRow)) {
+            $syntheticRow[$candidate] = $requestRow[$candidate];
+        }
+    }
+
+    if ($context['planColumn']) {
+        $syntheticRow[$context['planColumn']] = $requestRow['plan'] ?? ($requestRow['plan_level'] ?? ($requestRow['subscription_plan'] ?? ''));
+    } else {
+        $syntheticRow['plan'] = $requestRow['plan'] ?? ($requestRow['plan_level'] ?? ($requestRow['subscription_plan'] ?? ''));
+    }
+
+    $record = map_vendor_verification_row($syntheticRow, $context);
+    return merge_verification_request_row($record, $requestRow, $context);
+}
+
+function fetch_vendor_verification(mysqli $db, int $vendorId, array $context, ?int $requestId = null): ?array
 {
     $sql = sprintf('SELECT * FROM `%s` WHERE id = ? LIMIT 1', $context['table']);
     $stmt = $db->prepare($sql);
@@ -186,12 +516,18 @@ function fetch_vendor_verification(mysqli $db, int $vendorId, array $context): ?
     $row = $result ? $result->fetch_assoc() : null;
     $stmt->close();
 
+    $requestRow = fetch_verification_request_by_vendor($db, $vendorId, $requestId);
+
     if (!$row) {
-        return null;
+        return $requestRow ? map_request_record($requestRow, $context) : null;
     }
 
     $record = map_vendor_verification_row($row, $context);
-    if (!should_include_verification($record)) {
+    if ($requestRow) {
+        $record = merge_verification_request_row($record, $requestRow, $context);
+    }
+
+    if (!should_include_verification($record) && !$requestRow) {
         return null;
     }
 
@@ -200,38 +536,119 @@ function fetch_vendor_verification(mysqli $db, int $vendorId, array $context): ?
 
 function fetch_all_vendor_verifications(mysqli $db, array $context): array
 {
-    if (!$context['trackingAvailable']) {
+    $requestMap = fetch_latest_verification_requests_map($db);
+
+    if (!$context['trackingAvailable'] && !$requestMap) {
         return [];
     }
 
-    $orderColumn = $context['submittedColumn'] ?: 'id';
+    $recordsByVendor = [];
+    $orderColumn = $context['submittedColumn'] ?: ($context['reviewedColumn'] ?: 'id');
 
-    $conditions = [];
-    if ($context['statusColumn']) {
-        $statusCol = $context['statusColumn'];
-        $conditions[] = sprintf('(TRIM(`%1$s`) <> "" AND `%1$s` IS NOT NULL)', $statusCol);
-    }
-    if ($context['submittedColumn']) {
-        $submittedCol = $context['submittedColumn'];
-        $conditions[] = sprintf('`%s` IS NOT NULL', $submittedCol);
-    }
-
-    $whereSql = $conditions ? 'WHERE ' . implode(' OR ', $conditions) : '';
-    $sql = sprintf('SELECT * FROM `%s` %s ORDER BY `%s` DESC LIMIT 200', $context['table'], $whereSql, $orderColumn);
-    $result = $db->query($sql);
-
-    $records = [];
-    if ($result instanceof mysqli_result) {
-        while ($row = $result->fetch_assoc()) {
-            $record = map_vendor_verification_row($row, $context);
-            if (should_include_verification($record)) {
-                $records[] = $record;
+    if ($context['trackingAvailable']) {
+        $conditions = [];
+        if ($context['statusColumn']) {
+            $statusCol = $context['statusColumn'];
+            $conditions[] = sprintf('(TRIM(`%1$s`) <> "" AND `%1$s` IS NOT NULL)', $statusCol);
+        }
+        if ($context['submittedColumn']) {
+            $submittedCol = $context['submittedColumn'];
+            $conditions[] = sprintf('`%s` IS NOT NULL', $submittedCol);
+        }
+        if ($requestMap) {
+            $vendorIdsFilter = array_filter(array_map('intval', array_keys($requestMap)));
+            if ($vendorIdsFilter) {
+                $conditions[] = sprintf('`id` IN (%s)', implode(',', $vendorIdsFilter));
             }
         }
-        $result->free();
+
+        $whereSql = $conditions ? 'WHERE ' . implode(' OR ', $conditions) : '';
+        $sql = sprintf('SELECT * FROM `%s` %s ORDER BY `%s` DESC LIMIT 200', $context['table'], $whereSql, $orderColumn);
+
+        try {
+            $result = $db->query($sql);
+        } catch (Throwable $exception) {
+            error_log('Unable to load vendor verification records: ' . $exception->getMessage());
+            $result = false;
+        }
+
+        if ($result instanceof mysqli_result) {
+            while ($row = $result->fetch_assoc()) {
+                $record = map_vendor_verification_row($row, $context);
+                $vendorKey = $record['vendor_id'] ?: $record['id'];
+                if ($vendorKey <= 0) {
+                    continue;
+                }
+
+                if (isset($requestMap[$vendorKey])) {
+                    $record = merge_verification_request_row($record, $requestMap[$vendorKey], $context);
+                    unset($requestMap[$vendorKey]);
+                }
+
+                if (!should_include_verification($record)) {
+                    continue;
+                }
+
+                $recordsByVendor[$vendorKey] = $record;
+            }
+            $result->free();
+        }
     }
 
-    return $records;
+    if ($requestMap) {
+        $remainingVendorIds = array_filter(array_map('intval', array_keys($requestMap)));
+        if ($remainingVendorIds) {
+            $idsSql = implode(',', $remainingVendorIds);
+            $sql = sprintf('SELECT * FROM `%s` WHERE `id` IN (%s)', $context['table'], $idsSql);
+
+            try {
+                $result = $db->query($sql);
+            } catch (Throwable $exception) {
+                error_log('Unable to load vendor rows for verification requests: ' . $exception->getMessage());
+                $result = false;
+            }
+
+            if ($result instanceof mysqli_result) {
+                while ($row = $result->fetch_assoc()) {
+                    $record = map_vendor_verification_row($row, $context);
+                    $vendorKey = $record['vendor_id'] ?: $record['id'];
+                    if ($vendorKey <= 0 || !isset($requestMap[$vendorKey])) {
+                        continue;
+                    }
+                    $record = merge_verification_request_row($record, $requestMap[$vendorKey], $context);
+                    unset($requestMap[$vendorKey]);
+                    if (should_include_verification($record)) {
+                        $recordsByVendor[$vendorKey] = $record;
+                    }
+                }
+                $result->free();
+            }
+        }
+
+        foreach ($requestMap as $vendorId => $requestRow) {
+            $record = map_request_record($requestRow, $context);
+            $vendorKey = $record['vendor_id'] ?: $record['id'] ?: (int) $vendorId;
+            if ($vendorKey <= 0) {
+                continue;
+            }
+            if (should_include_verification($record)) {
+                $recordsByVendor[$vendorKey] = $record;
+            }
+        }
+    }
+
+    $records = array_values($recordsByVendor);
+
+    usort($records, static function (array $a, array $b): int {
+        $aTime = strtotime((string) ($a['submitted_at'] ?? '')) ?: 0;
+        $bTime = strtotime((string) ($b['submitted_at'] ?? '')) ?: 0;
+        if ($aTime === $bTime) {
+            return ($b['id'] ?? 0) <=> ($a['id'] ?? 0);
+        }
+        return $bTime <=> $aTime;
+    });
+
+    return array_slice($records, 0, 200);
 }
 
 if (isset($_GET['format']) && $_GET['format'] === 'json') {
@@ -239,13 +656,17 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
 
     if (isset($_GET['detail'])) {
         $detailId = (int) $_GET['detail'];
-        $record = $detailId > 0 ? fetch_vendor_verification($db, $detailId, $verificationContext) : null;
+        $requestId = isset($_GET['request_id']) ? (int) $_GET['request_id'] : null;
+        $record = $detailId > 0 ? fetch_vendor_verification($db, $detailId, $verificationContext, $requestId) : null;
         if (!$record) {
             http_response_code(404);
             echo json_encode([
                 'success' => false,
                 'message' => 'Verification request not found.',
-                'meta' => ['trackingAvailable' => $verificationContext['trackingAvailable']],
+                'meta' => [
+                    'trackingAvailable' => $verificationContext['trackingAvailable'],
+                    'requestTracking' => $verificationContext['requestTracking'] ?? false,
+                ],
             ]);
             exit;
         }
@@ -253,7 +674,10 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
         echo json_encode([
             'success' => true,
             'data' => $record,
-            'meta' => ['trackingAvailable' => $verificationContext['trackingAvailable']],
+            'meta' => [
+                'trackingAvailable' => $verificationContext['trackingAvailable'],
+                'requestTracking' => $verificationContext['requestTracking'] ?? false,
+            ],
         ]);
         exit;
     }
@@ -263,7 +687,10 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
     echo json_encode([
         'success' => true,
         'data' => $records,
-        'meta' => ['trackingAvailable' => $verificationContext['trackingAvailable']],
+        'meta' => [
+            'trackingAvailable' => $verificationContext['trackingAvailable'],
+            'requestTracking' => $verificationContext['requestTracking'] ?? false,
+        ],
     ]);
     exit;
 }
@@ -283,6 +710,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $id = isset($payload['id']) ? (int) $payload['id'] : 0;
     $action = isset($payload['action']) ? strtolower(trim((string) $payload['action'])) : '';
     $feedback = isset($payload['feedback']) ? trim((string) $payload['feedback']) : '';
+    $requestId = isset($payload['request_id']) ? (int) $payload['request_id'] : 0;
 
     if ($id <= 0 || !in_array($action, ['approve', 'reject'], true)) {
         http_response_code(400);
@@ -290,16 +718,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
-    if (!$verificationContext['trackingAvailable'] || !$verificationContext['statusColumn']) {
+    if (!$verificationContext['trackingAvailable']) {
         http_response_code(400);
         echo json_encode(['success' => false, 'message' => 'Verification tracking is not configured for this account.']);
         exit;
     }
 
-    $existing = fetch_vendor_verification($db, $id, $verificationContext);
+    $statusColumn = $verificationContext['statusColumn'];
+    $requestTrackingEnabled = $verificationContext['requestTracking'] ?? false;
+
+    if (!$statusColumn && !$requestTrackingEnabled) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'message' => 'Verification tracking is not configured for this account.']);
+        exit;
+    }
+
+    $existing = fetch_vendor_verification($db, $id, $verificationContext, $requestId > 0 ? $requestId : null);
     if (!$existing) {
         http_response_code(404);
         echo json_encode(['success' => false, 'message' => 'Verification request not found.']);
+        exit;
+    }
+
+    $requestRow = $requestTrackingEnabled ? fetch_verification_request_by_vendor($db, $id, $requestId > 0 ? $requestId : null) : null;
+    if ($requestRow) {
+        $requestId = (int) ($requestRow['request_id'] ?? $requestRow['id'] ?? 0);
+    } else {
+        $requestId = 0;
+    }
+    $requestColumns = $requestTrackingEnabled ? vendor_verifications_table_columns($db) : [];
+
+    if (!$statusColumn && !$requestRow) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'message' => 'Verification request data is unavailable for this vendor.']);
         exit;
     }
 
@@ -311,59 +762,116 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $setClauses = [];
     $types = '';
     $params = [];
+    $vendorUpdated = false;
+    $requestUpdated = false;
 
-    $statusColumn = $verificationContext['statusColumn'];
-    $setClauses[] = sprintf('`%s` = ?', $statusColumn);
-    $types .= 's';
-    $params[] = $newStatus;
-
-    if ($verificationContext['feedbackColumn']) {
-        $setClauses[] = sprintf('`%s` = ?', $verificationContext['feedbackColumn']);
+    if ($statusColumn) {
+        $setClauses[] = sprintf('`%s` = ?', $statusColumn);
         $types .= 's';
-        $params[] = $feedback;
+        $params[] = $newStatus;
+
+        if ($verificationContext['feedbackColumn']) {
+            $setClauses[] = sprintf('`%s` = ?', $verificationContext['feedbackColumn']);
+            $types .= 's';
+            $params[] = $feedback;
+        }
+
+        if ($verificationContext['reviewedColumn']) {
+            $setClauses[] = sprintf('`%s` = NOW()', $verificationContext['reviewedColumn']);
+        }
+
+        if ($verificationContext['reviewerColumn']) {
+            $setClauses[] = sprintf('`%s` = ?', $verificationContext['reviewerColumn']);
+            $types .= 'i';
+            $params[] = (int) $_SESSION['admin_id'];
+        }
+
+        if (yustam_vendor_table_has_column('updated_at')) {
+            $setClauses[] = '`updated_at` = NOW()';
+        }
     }
 
-    if ($verificationContext['reviewedColumn']) {
-        $setClauses[] = sprintf('`%s` = NOW()', $verificationContext['reviewedColumn']);
-    }
+    if ($statusColumn && $setClauses) {
+        $sql = sprintf('UPDATE `%s` SET %s WHERE id = ? LIMIT 1', $vendorTable, implode(', ', $setClauses));
+        $stmt = $db->prepare($sql);
+        if ($stmt === false) {
+            http_response_code(500);
+            echo json_encode(['success' => false, 'message' => 'Unable to prepare verification update.']);
+            exit;
+        }
 
-    if ($verificationContext['reviewerColumn']) {
-        $setClauses[] = sprintf('`%s` = ?', $verificationContext['reviewerColumn']);
         $types .= 'i';
-        $params[] = (int) $_SESSION['admin_id'];
+        $params[] = $id;
+
+        $bindParams = [$types];
+        foreach ($params as $index => $value) {
+            $bindParams[] = &$params[$index];
+        }
+
+        call_user_func_array([$stmt, 'bind_param'], $bindParams);
+        $stmt->execute();
+        $stmt->close();
+        $vendorUpdated = true;
     }
 
-    if (yustam_vendor_table_has_column('updated_at')) {
-        $setClauses[] = '`updated_at` = NOW()';
+    if ($requestRow && $requestId > 0) {
+        $requestClauses = [];
+        $requestTypes = '';
+        $requestParams = [];
+
+        if (in_array('status', $requestColumns, true)) {
+            $requestClauses[] = '`status` = ?';
+            $requestTypes .= 's';
+            $requestParams[] = $newStatus;
+        }
+
+        if (in_array('feedback', $requestColumns, true)) {
+            $requestClauses[] = '`feedback` = ?';
+            $requestTypes .= 's';
+            $requestParams[] = $feedback;
+        }
+
+        if (in_array('reviewed_at', $requestColumns, true)) {
+            $requestClauses[] = '`reviewed_at` = NOW()';
+        }
+
+        if (in_array('updated_at', $requestColumns, true)) {
+            $requestClauses[] = '`updated_at` = NOW()';
+        }
+
+        if (in_array('reviewer_id', $requestColumns, true)) {
+            $requestClauses[] = '`reviewer_id` = ?';
+            $requestTypes .= 'i';
+            $requestParams[] = (int) $_SESSION['admin_id'];
+        }
+
+        if ($requestClauses) {
+            $requestSql = sprintf('UPDATE `vendor_verifications` SET %s WHERE id = ? LIMIT 1', implode(', ', $requestClauses));
+            $requestStmt = $db->prepare($requestSql);
+            if ($requestStmt !== false) {
+                $requestTypes .= 'i';
+                $requestParams[] = $requestId;
+
+                $requestBind = [$requestTypes];
+                foreach ($requestParams as $index => $value) {
+                    $requestBind[] = &$requestParams[$index];
+                }
+
+                call_user_func_array([$requestStmt, 'bind_param'], $requestBind);
+                $requestStmt->execute();
+                $requestStmt->close();
+                $requestUpdated = true;
+            }
+        }
     }
 
-    if (!$setClauses) {
+    if (!$vendorUpdated && !$requestUpdated) {
         http_response_code(500);
         echo json_encode(['success' => false, 'message' => 'Unable to update verification.']);
         exit;
     }
 
-    $sql = sprintf('UPDATE `%s` SET %s WHERE id = ? LIMIT 1', $vendorTable, implode(', ', $setClauses));
-    $stmt = $db->prepare($sql);
-    if ($stmt === false) {
-        http_response_code(500);
-        echo json_encode(['success' => false, 'message' => 'Unable to prepare verification update.']);
-        exit;
-    }
-
-    $types .= 'i';
-    $params[] = $id;
-
-    $bindParams = [$types];
-    foreach ($params as $index => $value) {
-        $bindParams[] = &$params[$index];
-    }
-
-    call_user_func_array([$stmt, 'bind_param'], $bindParams);
-    $stmt->execute();
-    $stmt->close();
-
-    $updated = fetch_vendor_verification($db, $id, $verificationContext);
+    $updated = fetch_vendor_verification($db, $id, $verificationContext, $requestId > 0 ? $requestId : null);
 
     echo json_encode([
         'success' => true,
@@ -433,28 +941,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 0.75rem clamp(1rem, 3vw, 1.75rem);
-            min-height: 72px;
-            box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
+            padding: 0.55rem clamp(1rem, 2.8vw, 1.45rem);
+            min-height: 60px;
+            box-shadow: 0 8px 22px rgba(0, 0, 0, 0.18);
             backdrop-filter: blur(12px);
         }
 
         .brand {
             display: inline-flex;
             align-items: center;
-            gap: 0.65rem;
-            font-size: clamp(1.25rem, 3.5vw, 1.7rem);
+            gap: 0.55rem;
+            font-size: clamp(1.15rem, 3vw, 1.55rem);
         }
 
         .brand span {
             font-family: 'Anton', sans-serif;
-            letter-spacing: 0.11em;
+            letter-spacing: 0.095em;
         }
 
         .logo-img {
-            width: 40px;
-            height: 40px;
-            border-radius: 12px;
+            width: 36px;
+            height: 36px;
+            border-radius: 11px;
             object-fit: cover;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
         }
@@ -463,26 +971,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            width: 42px;
-            height: 42px;
+            width: 38px;
+            height: 38px;
             border-radius: 50%;
             border: none;
             background: rgba(255, 255, 255, 0.16);
             color: var(--white);
             cursor: pointer;
-            margin-right: 0.75rem;
+            margin-right: 0.6rem;
             transition: transform 0.2s ease, background 0.2s ease;
         }
 
         .top-actions {
             display: flex;
-            gap: 0.6rem;
+            gap: 0.5rem;
             align-items: center;
         }
 
         .top-action {
-            width: 40px;
-            height: 40px;
+            width: 38px;
+            height: 38px;
             border-radius: 50%;
             border: none;
             background: rgba(255, 255, 255, 0.16);
