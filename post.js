@@ -142,26 +142,6 @@ const persistYustamUid = (uid) => {
   }
 };
 
-const getStoredYustamUid = () => {
-  try {
-    const sessionUid = sessionStorage.getItem(YUSTAM_UID_STORAGE_KEY);
-    if (sessionUid && sessionUid.trim()) {
-      return sessionUid.trim();
-    }
-  } catch (error) {
-    console.warn('[post] unable to read session UID', error);
-  }
-  try {
-    const localUid = localStorage.getItem(YUSTAM_UID_STORAGE_KEY);
-    if (localUid && localUid.trim()) {
-      return localUid.trim();
-    }
-  } catch (error) {
-    console.warn('[post] unable to read local UID', error);
-  }
-  return '';
-};
-
 const phoneBrandOptions = Array.from(
   new Set([
     ...popularPhoneBrands,
@@ -1712,51 +1692,6 @@ const createListingDocument = (formValues, imageUrls) => {
   };
 };
 
-const fetchVendorSession = async () => {
-  try {
-    const response = await fetch('vendor-dashboard.php?format=json', {
-      headers: { Accept: 'application/json' },
-      credentials: 'same-origin',
-      cache: 'no-store',
-    });
-
-    if (response.status === 401) {
-      return null;
-    }
-
-    let payload = {};
-    try {
-      payload = await response.json();
-    } catch (parseError) {
-      console.warn('[post] unable to parse vendor session payload', parseError);
-      return null;
-    }
-
-    if (!response.ok || payload.success === false) {
-      return null;
-    }
-
-    const data = payload.data || {};
-    const session = data.session || {};
-    const profile = data.profile || {};
-    const vendorUid = session.vendorUid || profile.uid || '';
-    const vendorId = session.vendorId || profile.id || '';
-    const uid = vendorUid || vendorId || '';
-
-    if (!uid) {
-      return null;
-    }
-
-    return {
-      uid,
-      profile,
-    };
-  } catch (error) {
-    console.error('[post] vendor session lookup failed', error);
-    return null;
-  }
-};
-
 const handleSubmit = async () => {
   if (!currentUser || !currentUser.uid) {
     showToast('Please log in again to post your listing.');
@@ -1829,56 +1764,26 @@ const redirectToVendorLogin = () => {
   window.location.href = 'vendor-login.html';
 };
 
-let vendorContextResolved = false;
-let sessionLookupInFlight = false;
+const AUTH_CHECK_TIMEOUT = 5000;
+let authResolved = false;
 
-const applyVendorContext = (uid, profile = {}, firebaseUser = null) => {
-  if (firebaseUser && firebaseUser.uid) {
-    currentUser = firebaseUser;
-    persistYustamUid(firebaseUser.uid);
-  } else if (uid) {
-    currentUser = {
-      uid,
-      profile,
-    };
-    persistYustamUid(uid);
-  } else {
-    return false;
+const authTimeoutId = setTimeout(() => {
+  if (!authResolved) {
+    redirectToVendorLogin();
   }
-
-  toggleLoader(false);
-  vendorContextResolved = true;
-  return true;
-};
-
-const ensureVendorSession = async () => {
-  if (sessionLookupInFlight) {
-    return;
-  }
-
-  sessionLookupInFlight = true;
-  const sessionUser = await fetchVendorSession();
-  sessionLookupInFlight = false;
-
-  if (sessionUser && sessionUser.uid) {
-    applyVendorContext(sessionUser.uid, sessionUser.profile || {});
-    return;
-  }
-
-  const storedUid = getStoredYustamUid();
-  if (storedUid) {
-    applyVendorContext(storedUid);
-    return;
-  }
-
-  redirectToVendorLogin();
-};
+}, AUTH_CHECK_TIMEOUT);
 
 onAuthStateChanged(auth, (user) => {
   if (user && user.uid) {
-    applyVendorContext(user.uid, {}, user);
+    authResolved = true;
+    clearTimeout(authTimeoutId);
+    currentUser = user;
+    persistYustamUid(user.uid);
+    toggleLoader(false);
     return;
   }
 
-  ensureVendorSession();
+  if (authResolved) {
+    redirectToVendorLogin();
+  }
 });

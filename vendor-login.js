@@ -1,5 +1,5 @@
 // ---------- Imports ----------
-import { auth, provider, signInWithPopup } from './firebase.js';
+import { auth, provider, signInWithPopup, signInWithEmailAndPassword } from './firebase.js';
 
 const formSelectors = {
   form: 'loginForm',
@@ -87,7 +87,27 @@ const handleEmailLogin = async (event) => {
       return;
     }
 
-    if (data && (data.firebase_uid || data.uid)) {
+    let firebaseUser = null;
+    try {
+      const credential = await signInWithEmailAndPassword(auth, email, password);
+      firebaseUser = credential && credential.user ? credential.user : null;
+    } catch (firebaseError) {
+      console.error('Firebase sign-in error', firebaseError);
+      const errorCode = (firebaseError && firebaseError.code) || '';
+      const firebaseMessageMap = {
+        'auth/invalid-credential': 'Incorrect email or password.',
+        'auth/user-disabled': 'This account has been disabled. Contact support for help.',
+        'auth/too-many-requests': 'Too many attempts. Please wait and try again.',
+      };
+      const firebaseMessage =
+        firebaseMessageMap[errorCode] || 'We could not finalise your sign in. Please try again.';
+      setMessage(firebaseMessage);
+      return;
+    }
+
+    if (firebaseUser && firebaseUser.uid) {
+      syncYustamUid(firebaseUser.uid);
+    } else if (data && (data.firebase_uid || data.uid)) {
       syncYustamUid(data.firebase_uid || data.uid);
     }
 
