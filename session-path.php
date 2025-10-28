@@ -10,6 +10,7 @@ if (!defined('YUSTAM_SESSION_PATH')) {
         mkdir($sessionPath, 0775, true);
     }
     ini_set('session.save_path', $sessionPath);
+    ini_set('session.gc_maxlifetime', 60 * 60 * 24 * 30); // keep session files ~30 days
     define('YUSTAM_SESSION_PATH', $sessionPath);
 }
 
