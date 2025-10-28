@@ -70,13 +70,25 @@ const clearBadges = (host) => {
   host?.querySelectorAll('.verification-badge').forEach((badge) => badge.remove());
 };
 
+const hideEmptyState = () => {
+  if (!listingsEmptyEl) return;
+  listingsEmptyEl.hidden = true;
+  listingsEmptyEl.setAttribute('hidden', '');
+  listingsEmptyEl.style.display = 'none';
+};
+
+const showEmptyState = () => {
+  if (!listingsEmptyEl) return;
+  listingsEmptyEl.hidden = false;
+  listingsEmptyEl.removeAttribute('hidden');
+  listingsEmptyEl.style.display = '';
+};
+
 const showListingsLoading = () => {
   if (listingsCountEl) {
     listingsCountEl.textContent = 'Loading listings...';
   }
-  if (listingsEmptyEl) {
-    listingsEmptyEl.hidden = true;
-  }
+  hideEmptyState();
 };
 
 const toStringId = (value) => {
@@ -308,6 +320,46 @@ const verificationLabel = (state) => {
   }
 };
 
+const tidyLocationPart = (value) => {
+  if (typeof value !== 'string') return '';
+  return value.replace(/^\s*,+/, '').replace(/,\s*$/g, '').trim();
+};
+
+const buildPrimaryLocation = (vendor = {}) => {
+  const rawParts = [vendor.city, vendor.state, vendor.country];
+
+  if (Array.isArray(vendor.location)) {
+    rawParts.push(...vendor.location);
+  } else if (typeof vendor.location === 'string' && vendor.location.trim()) {
+    rawParts.push(...vendor.location.split(','));
+  }
+
+  const seen = new Set();
+  const cleaned = [];
+
+  rawParts.forEach((part) => {
+    const normalised = tidyLocationPart(part);
+    if (!normalised) {
+      return;
+    }
+    const key = normalised.toLowerCase();
+    if (seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    cleaned.push(normalised);
+  });
+
+  if (cleaned.length === 0 && typeof vendor.location === 'string') {
+    const fallback = tidyLocationPart(vendor.location);
+    if (fallback) {
+      cleaned.push(fallback);
+    }
+  }
+
+  return cleaned.join(', ');
+};
+
 const applyVendorProfile = (vendor) => {
   if (!vendor) return;
 
@@ -334,15 +386,7 @@ const applyVendorProfile = (vendor) => {
     document.body.dataset.vendorFirebaseUid = vendor.firebaseUid;
   }
 
-  const locationParts = [
-    vendor.city,
-    vendor.state,
-    vendor.country,
-    vendor.location,
-  ]
-    .map((part) => (typeof part === 'string' ? part.trim() : ''))
-    .filter(Boolean);
-  const primaryLocation = locationParts.length ? locationParts.join(', ') : '';
+  const primaryLocation = buildPrimaryLocation(vendor);
 
   const bio =
     vendor.about ||
@@ -491,19 +535,23 @@ const buildListingCard = (listing) => {
 };
 
 const renderListings = (listingDocs = []) => {
-  if (!listingsGrid || !listingsCountEl || !listingsEmptyEl) return;
+  if (!listingsGrid) return;
 
   listingsGrid.innerHTML = '';
 
   if (!Array.isArray(listingDocs) || listingDocs.length === 0) {
-    listingsEmptyEl.hidden = false;
-    listingsCountEl.textContent = '0 listings';
+    if (listingsCountEl) {
+      listingsCountEl.textContent = '0 listings';
+    }
+    showEmptyState();
     return;
   }
 
-  listingsEmptyEl.hidden = true;
+  hideEmptyState();
   const plural = listingDocs.length === 1 ? 'listing' : 'listings';
-  listingsCountEl.textContent = `${listingDocs.length} ${plural}`;
+  if (listingsCountEl) {
+    listingsCountEl.textContent = `${listingDocs.length} ${plural}`;
+  }
 
   listingDocs.forEach((listing) => {
     listingsGrid.appendChild(buildListingCard(listing));
