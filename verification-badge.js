@@ -49,9 +49,28 @@ export function verificationPlanLabel(plan) {
 }
 
 export function createVerificationBadge(plan, options = {}) {
-  return null;
+  const slug = normalisePlanSlug(plan);
+  const className = PLAN_CLASS_MAP[slug] || PLAN_CLASS_MAP.free;
+  const label = options.roleLabel || verificationPlanLabel(plan);
+  const verified = options.verified !== false;
+  const icon = verified ? 'ri-shield-check-line' : 'ri-time-line';
+  const statusLabel = verified ? 'Verified Vendor' : 'Pending Review';
+
+  return `
+    <span class="verification-badge ${className} ${verified ? 'is-verified' : 'is-pending'}">
+      <i class="${icon}" aria-hidden="true"></i>
+      <span class="verification-badge__role">${label}</span>
+      <span class="verification-badge__status">${statusLabel}</span>
+    </span>
+  `;
 }
 
 export function appendVerificationBadge(target, plan, options = {}) {
-  return null;
+  if (!target) return null;
+  const markup = createVerificationBadge(plan, options);
+  const wrapper = document.createElement('span');
+  wrapper.className = 'verification-badge';
+  wrapper.innerHTML = markup;
+  target.appendChild(wrapper);
+  return wrapper;
 }
