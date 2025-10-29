@@ -48,29 +48,54 @@ export function verificationPlanLabel(plan) {
   return `${sentence} Seller`;
 }
 
-export function createVerificationBadge(plan, options = {}) {
-  const slug = normalisePlanSlug(plan);
-  const className = PLAN_CLASS_MAP[slug] || PLAN_CLASS_MAP.free;
-  const label = options.roleLabel || verificationPlanLabel(plan);
-  const verified = options.verified !== false;
-  const icon = verified ? 'ri-shield-check-line' : 'ri-time-line';
-  const statusLabel = verified ? 'Verified Vendor' : 'Pending Review';
+export function createVerificationBadge(verificationState, options = {}) {
+  const state = String(verificationState ?? '').trim().toLowerCase();
+  let resolvedState = 'unverified';
+  if (state === 'verified' || state === 'approved' || state === 'active') {
+    resolvedState = 'verified';
+  } else if (state === 'pending' || state === 'processing' || state === 'under review' || state === 'under_review') {
+    resolvedState = 'pending';
+  }
 
-  return `
-    <span class="verification-badge ${className} ${verified ? 'is-verified' : 'is-pending'}">
-      <i class="${icon}" aria-hidden="true"></i>
-      <span class="verification-badge__role">${label}</span>
-      <span class="verification-badge__status">${statusLabel}</span>
-    </span>
-  `;
+  const icon =
+    resolvedState === 'verified'
+      ? 'ri-shield-check-line'
+      : resolvedState === 'pending'
+      ? 'ri-time-line'
+      : 'ri-alert-line';
+
+  const label =
+    resolvedState === 'verified'
+      ? options.verifiedLabel || 'Verified Vendor'
+      : resolvedState === 'pending'
+      ? options.pendingLabel || 'Pending Review'
+      : options.unverifiedLabel || 'Not Verified';
+
+  const badgeClass =
+    resolvedState === 'verified' ? 'verified' : resolvedState === 'pending' ? 'pending' : 'unverified';
+
+  return `<span class="vendor-badge vendor-verified ${badgeClass}"><i class="${icon}" aria-hidden="true"></i>${label}</span>`;
 }
 
 export function appendVerificationBadge(target, plan, options = {}) {
   if (!target) return null;
-  const markup = createVerificationBadge(plan, options);
+  if (options.verified === false) return null;
+
+  const slug = normalisePlanSlug(plan);
+  const className = PLAN_CLASS_MAP[slug] || PLAN_CLASS_MAP.free;
+  const label = options.roleLabel || 'Verified Vendor';
+  if (!label) return null;
+
   const wrapper = document.createElement('span');
-  wrapper.className = 'verification-badge';
-  wrapper.innerHTML = markup;
+  wrapper.className = `verification-badge verification-badge--inline ${className}`;
+  wrapper.innerHTML = `<i class="ri-shield-check-line" aria-hidden="true"></i><span>${label}</span>`;
+  if (options.title) {
+    wrapper.title = options.title;
+  } else {
+    const planLabel = plan ? verificationPlanLabel(plan) : '';
+    const suffix = planLabel && planLabel !== label ? ` · ${planLabel}` : '';
+    wrapper.title = `${label}${suffix}`.trim();
+  }
   target.appendChild(wrapper);
   return wrapper;
 }

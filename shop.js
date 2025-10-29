@@ -88,6 +88,53 @@ let selectedVendorName = '';
 const vendorDetailCache = new Map();
 const vendorDetailInFlight = new Map();
 
+const normaliseCacheKey = (value) => {
+  if (value === null || value === undefined) return '';
+  return value.toString().trim();
+};
+
+const pickFirstString = (...values) => {
+  for (const value of values) {
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (trimmed) {
+        return trimmed;
+      }
+    }
+  }
+  return '';
+};
+
+const pickFirstDefined = (...values) => {
+  for (const value of values) {
+    if (value === undefined || value === null) continue;
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (trimmed) {
+        return trimmed;
+      }
+      continue;
+    }
+    return value;
+  }
+  return '';
+};
+
+const mergeVendorRecords = (base = {}, incoming = {}) => {
+  const result = { ...base };
+  Object.entries(incoming).forEach(([key, value]) => {
+    if (value === undefined || value === null) return;
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (!trimmed) return;
+      result[key] = trimmed;
+      return;
+    }
+    result[key] = value;
+  });
+  return result;
+};
+
 const escapeHtml = (value) =>
   String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -117,7 +164,10 @@ const formatPlanLabel = (plan) => {
   const trimmed = String(plan).trim();
   if (!trimmed) return '';
   const lower = trimmed.toLowerCase();
-  return lower.endsWith('plan') ? trimmed : `${trimmed} Plan`;
+  if (lower.endsWith('plan') || /seller|vendor/.test(lower)) {
+    return trimmed;
+  }
+  return `${trimmed} Plan`;
 };
 
 const normaliseVerificationState = (value) => {
@@ -220,9 +270,11 @@ const updateVendorShowcase = () => {
       vendorInfo.verification || vendorData?.verification || vendorData?.verification_status || vendorData?.verified,
     );
     if (showcaseVerification === 'verified') {
+      const inlineTitle = showcasePlan ? verificationPlanLabel(showcasePlan) : 'Verified Vendor';
       appendVerificationBadge(vendorShowcaseName, showcasePlan, {
         verified: true,
-        roleLabel: verificationPlanLabel(showcasePlan),
+        roleLabel: 'Verified Vendor',
+        title: inlineTitle,
       });
     }
   }
@@ -237,8 +289,15 @@ const updateVendorShowcase = () => {
   }
 
   if (vendorShowcaseBadges) {
-    const planBadge = vendorEntry ? createPlanBadge(vendorInfo.plan) : '';
-    const verificationBadge = vendorEntry ? createVerificationBadge(vendorInfo.verification) : '';
+    const planBadge = vendorInfo.plan ? createPlanBadge(vendorInfo.plan) : '';
+    const verificationValue = vendorInfo.verification;
+    const showVerificationBadge =
+      verificationValue !== undefined &&
+      verificationValue !== null &&
+      !(typeof verificationValue === 'string' && !verificationValue.trim());
+    const verificationBadge = showVerificationBadge
+      ? createVerificationBadge(normaliseVerificationState(verificationValue))
+      : '';
     vendorShowcaseBadges.innerHTML = [planBadge, verificationBadge].filter(Boolean).join('');
   }
 
@@ -380,37 +439,76 @@ const deriveLocation = (data) => {
 };
 
 const getVendorInfo = (vendorId, listingData = {}) => {
-  const vendor = vendorMap.get(vendorId) || {};
+  const vendorRecord = vendorMap.get(vendorId) || {};
+  const vendorDetail = getVendorDetailFromCache(vendorId);
+  const detailSnapshot = vendorDetail ? mapVendorDetailToSnapshot(vendorDetail) : null;
+
   const name =
-    vendor.displayName ||
-    vendor.businessName ||
-    vendor.name ||
-    listingData.vendorName ||
-    'Marketplace Vendor';
-  const plan = vendor.plan || listingData.vendorPlan || '';
-  const planLabel = verificationPlanLabel(plan);
-  const verification =
-    vendor.verificationStatus ||
-    vendor.verification_state ||
-    vendor.verificationStage ||
-    vendor.verification ||
-    listingData.vendorVerified ||
-    vendor.status ||
-    '';
+    pickFirstString(
+      vendorRecord.displayName,
+      vendorRecord.businessName,
+      detailSnapshot?.displayName,
+      detailSnapshot?.businessName,
+      vendorRecord.name,
+      listingData.vendorName,
+      listingData.vendor,
+      vendorId ? vendorId.toString() : '',
+    ) || 'Marketplace Vendor';
+
+  const plan = pickFirstString(
+    vendorRecord.plan,
+    vendorRecord.planLabel,
+    detailSnapshot?.plan,
+    detailSnapshot?.planLabel,
+    vendorDetail?.planLabel,
+    vendorDetail?.plan,
+    listingData.vendorPlan,
+  );
+
+  const planLabel = plan ? verificationPlanLabel(plan) : '';
+
+  const verification = pickFirstDefined(
+    vendorRecord.verificationStatus,
+    vendorRecord.verification_state,
+    vendorRecord.verificationStage,
+    vendorRecord.verification,
+    vendorRecord.status,
+    detailSnapshot?.verification,
+    detailSnapshot?.verificationStatus,
+    detailSnapshot?.verificationLabel,
+    vendorDetail?.verificationState,
+    vendorDetail?.verificationLabel,
+    listingData.vendorVerified,
+  );
 
   maybeFetchVendorDetail(vendorId, { plan, verification });
   return { name, plan, planLabel, verification };
 };
 
 const maybeFetchVendorDetail = (vendorId, current = {}) => {
-  const candidate = vendorId || '';
+  const candidate = normaliseCacheKey(vendorId);
   if (!candidate) return;
-  const hasPlan = current.plan && current.plan.trim() !== '';
-  const hasVerification = current.verification && current.verification.trim() !== '';
+  const hasPlan =
+    typeof current.plan === 'string'
+      ? current.plan.trim() !== ''
+      : current.plan !== undefined && current.plan !== null;
+  const hasVerification =
+    typeof current.verification === 'string'
+      ? current.verification.trim() !== ''
+      : current.verification !== undefined && current.verification !== null;
   if (hasPlan && hasVerification) return;
-  if (vendorDetailCache.has(candidate) || vendorDetailInFlight.has(candidate)) return;
+  const candidateLower = candidate.toLowerCase();
+  if (
+    vendorDetailCache.has(candidate) ||
+    (candidateLower !== candidate && vendorDetailCache.has(candidateLower)) ||
+    vendorDetailInFlight.has(candidate) ||
+    (candidateLower !== candidate && vendorDetailInFlight.has(candidateLower))
+  ) {
+    return;
+  }
 
-  const url = Number.isInteger(Number(candidate))
+  const isNumericId = /^[0-9]+$/.test(candidate);
+  const url = isNumericId
     ? `vendor-storefront-data.php?vendorId=${encodeURIComponent(candidate)}`
     : `vendor-storefront-data.php?id=${encodeURIComponent(candidate)}`;
 
@@ -425,43 +523,92 @@ const maybeFetchVendorDetail = (vendorId, current = {}) => {
     })
     .finally(() => {
       vendorDetailInFlight.delete(candidate);
+      if (candidateLower !== candidate) {
+        vendorDetailInFlight.delete(candidateLower);
+      }
     });
 
   vendorDetailInFlight.set(candidate, promise);
+  if (candidateLower !== candidate) {
+    vendorDetailInFlight.set(candidateLower, promise);
+  }
 };
 
 const mapVendorDetailToSnapshot = (vendor = {}) => {
+  const plan = pickFirstString(vendor.plan, vendor.planLabel);
+  const verification = pickFirstDefined(
+    vendor.verificationState,
+    vendor.verificationLabel,
+    vendor.verification,
+  );
+
   return {
-    displayName: vendor.displayName || vendor.businessName || vendor.vendorUid || '',
-    businessName: vendor.businessName || '',
-    plan: vendor.plan || vendor.planLabel || '',
-    verification: vendor.verificationState || vendor.verificationLabel || '',
-    verificationStatus: vendor.verificationState || '',
-    status: vendor.verificationState || '',
-    profilePhoto: vendor.avatar || '',
-    location: vendor.location || '',
-    city: vendor.city || '',
-    state: vendor.state || '',
+    displayName: pickFirstString(vendor.displayName, vendor.businessName, vendor.vendorUid),
+    businessName: pickFirstString(vendor.businessName, vendor.displayName),
+    plan,
+    planLabel: plan ? verificationPlanLabel(plan) : '',
+    verification,
+    verificationStatus: verification,
+    verificationLabel: typeof verification === 'string' ? verification : '',
+    status: verification,
+    profilePhoto: pickFirstString(vendor.avatar, vendor.profilePhoto, vendor.photo),
+    location: pickFirstString(vendor.location, vendor.state),
+    city: pickFirstString(vendor.city),
+    state: pickFirstString(vendor.state, vendor.location),
   };
 };
 
 const applyVendorDetail = (candidateKey, detail) => {
   const mapped = mapVendorDetailToSnapshot(detail);
-  const keys = new Set([candidateKey]);
-  if (detail.vendorUid) keys.add(detail.vendorUid);
-  if (detail.firebaseUid) keys.add(detail.firebaseUid);
+  const keys = new Set([candidateKey, detail.vendorUid, detail.firebaseUid, detail.vendorId, detail.vendorID]);
   if (detail.id) keys.add(String(detail.id));
 
   keys.forEach((key) => {
-    const safeKey = (key || '').toString().trim();
+    const safeKey = normaliseCacheKey(key);
     if (!safeKey) return;
     vendorDetailCache.set(safeKey, detail);
+    const lowerKey = safeKey.toLowerCase();
+    if (lowerKey && lowerKey !== safeKey) {
+      vendorDetailCache.set(lowerKey, detail);
+    }
     const existing = vendorMap.get(safeKey) || {};
-    vendorMap.set(safeKey, { ...existing, ...mapped });
+    const updated = mergeVendorRecords(existing, mapped);
+    vendorMap.set(safeKey, updated);
   });
 
   rebuildListings();
   updateVendorShowcase();
+};
+
+const getVendorDetailFromCache = (vendorId) => {
+  const safeKey = normaliseCacheKey(vendorId);
+  if (!safeKey) return null;
+  if (vendorDetailCache.has(safeKey)) {
+    return vendorDetailCache.get(safeKey);
+  }
+  const lowerKey = safeKey.toLowerCase();
+  if (lowerKey && vendorDetailCache.has(lowerKey)) {
+    return vendorDetailCache.get(lowerKey);
+  }
+  for (const detail of vendorDetailCache.values()) {
+    if (!detail) continue;
+    const candidates = [
+      detail.vendorUid,
+      detail.firebaseUid,
+      detail.vendorId,
+      detail.vendorID,
+      detail.id,
+    ];
+    if (
+      candidates.some((candidate) => {
+        const candidateKey = normaliseCacheKey(candidate);
+        return candidateKey && candidateKey.toLowerCase() === lowerKey;
+      })
+    ) {
+      return detail;
+    }
+  }
+  return null;
 };
 
 const transformListing = (docSnap) => {
@@ -557,7 +704,7 @@ const renderProducts = () => {
     card.dataset.location = item.locationFilterValue || '';
     card.dataset.plan = item.vendorPlan || '';
     card.dataset.verified = verificationState;
-    card.dataset.planLabel = item.vendorPlanLabel || verificationPlanLabel(item.vendorPlan || '');
+    card.dataset.planLabel = item.vendorPlanLabel || (item.vendorPlan ? verificationPlanLabel(item.vendorPlan) : '');
 
     card.innerHTML = `
       <img src="${escapeHtml(item.image)}" alt="${escapeHtml(item.title)}" loading="lazy" />
@@ -587,10 +734,12 @@ const renderProducts = () => {
     if (vendorNameEl) {
       clearBadges(vendorNameEl);
       if (verificationState === 'verified') {
-        const planLabel = item.vendorPlanLabel || verificationPlanLabel(item.vendorPlan || '');
+        const inlineTitle =
+          item.vendorPlanLabel || (item.vendorPlan ? verificationPlanLabel(item.vendorPlan) : 'Verified Vendor');
         appendVerificationBadge(vendorNameEl, item.vendorPlan || '', {
           verified: true,
-          roleLabel: planLabel,
+          roleLabel: 'Verified Vendor',
+          title: inlineTitle,
         });
       }
     }
@@ -770,7 +919,8 @@ const startRealtimeListeners = () => {
       vendorMap = new Map(snapshot.docs.map((docSnap) => [docSnap.id, docSnap.data()]));
       vendorDetailCache.forEach((detail, key) => {
         const existing = vendorMap.get(key) || {};
-        vendorMap.set(key, { ...existing, ...mapVendorDetailToSnapshot(detail) });
+        const updated = mergeVendorRecords(existing, mapVendorDetailToSnapshot(detail));
+        vendorMap.set(key, updated);
       });
       updateVendorShowcase();
       if (!isLoadingListings) {
