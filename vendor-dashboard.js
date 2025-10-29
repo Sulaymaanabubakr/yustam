@@ -8,12 +8,15 @@ import {
   query,
   where,
 } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
+import { setupListingEditor, statusLabel, formatCurrency } from './vendor-listing-editor.js';
 
 let vendorData = {};
 let vendorStats = {};
 let vendorListings = [];
 let firestoreListings = [];
 let firebaseUser = null;
+let listingEditorControls = null;
+const listingLookup = new Map();
 
 const qs = (selector) => document.querySelector(selector);
 const qsa = (selector) => Array.from(document.querySelectorAll(selector));
@@ -93,6 +96,62 @@ const resolveListingLink = (item = {}) => {
   return '#';
 };
 
+const normaliseListingRecord = (item = {}) => {
+  const idCandidates = [
+    item.id,
+    item.listing_id,
+    item.listingId,
+    item.firestore_id,
+    item.firestoreId,
+    item.public_id,
+    item.publicId,
+  ];
+  const idMatch = idCandidates.find((value) => value !== undefined && value !== null && String(value).trim() !== '');
+  const id = idMatch ? String(idMatch).trim() : '';
+
+  const statusRaw = String(item.status_raw ?? item.status ?? 'pending').toLowerCase();
+  const priceCandidate =
+    item.price !== undefined && item.price !== null && item.price !== ''
+      ? Number.parseFloat(item.price)
+      : null;
+  const price = Number.isFinite(priceCandidate) ? priceCandidate : null;
+
+  const imagesArray = Array.isArray(item.images)
+    ? item.images
+    : Array.isArray(item.imageUrls)
+      ? item.imageUrls
+      : [];
+
+  let addedOn = item.added_on || item.addedOn || '';
+  if (!addedOn) {
+    addedOn = formatListingDate(item.createdAt || item.created_at) || '';
+  }
+
+  const listing = {
+    id,
+    title: resolveListingTitle(item),
+    description: item.description || '',
+    price,
+    status_raw: statusRaw,
+    status: statusRaw,
+    status_label: statusLabel(statusRaw),
+    added_on: addedOn,
+    views: Number.isFinite(Number(item.views)) ? Number(item.views) : 0,
+    image: resolveListingImage({ ...item, id }),
+    images: imagesArray.filter((value) => typeof value === 'string' && value.trim() !== ''),
+    link: item.link || resolveListingLink({ ...item, id }),
+    category: item.category || '',
+    subcategory: item.subcategory || '',
+    location: item.location || '',
+    city: item.city || '',
+    state: item.state || '',
+    country: item.country || '',
+    image_alt: item.image_alt || resolveListingTitle(item) || 'Listing image',
+  };
+
+  return listing;
+};
+
 const hydrateProfile = () => {
   const welcomeName = document.getElementById('welcomeName');
   const headerGreeting = document.getElementById('headerGreeting');
@@ -109,7 +168,7 @@ const hydrateProfile = () => {
 
   if (headerGreeting) {
     if (business && location) {
-      headerGreeting.textContent = `${business} • ${location}`;
+      headerGreeting.textContent = `${business} - ${location}`;
     } else if (business) {
       headerGreeting.textContent = business;
     } else if (location) {
@@ -135,7 +194,33 @@ const hydrateStats = () => {
   }
 };
 
+const refreshStatsFromListings = () => {
+  const sourceListings = firestoreListings.length ? firestoreListings : vendorListings;
+  if (!sourceListings.length) {
+    return;
+  }
+
+  const totals = sourceListings.reduce(
+    (acc, listing) => {
+      const record = normaliseListingRecord(listing);
+      acc.total += 1;
+      if (['approved', 'active', 'live', 'available'].includes(record.status_raw)) {
+        acc.active += 1;
+      }
+      acc.views += Number.isFinite(Number(record.views)) ? Number(record.views) : 0;
+      return acc;
+    },
+    { total: 0, active: 0, views: 0 },
+  );
+
+  vendorStats.total_listings = totals.total;
+  vendorStats.active_listings = totals.active;
+  vendorStats.total_views = totals.views;
+  hydrateStats();
+};
+
 const buildListingCard = (item) => {
+  const listing = normaliseListingRecord(item);
   const card = document.createElement('article');
   card.className = 'listing-card';
 
@@ -145,13 +230,13 @@ const buildListingCard = (item) => {
   const thumb = document.createElement('div');
   thumb.className = 'listing-thumb';
 
-  const imageSrc = resolveListingImage(item);
-  const titleText = resolveListingTitle(item);
+  const imageSrc = listing.image;
+  const titleText = listing.title;
 
   if (imageSrc) {
     const img = document.createElement('img');
     img.src = imageSrc;
-    img.alt = item.image_alt || titleText || 'Listing image';
+    img.alt = listing.image_alt || titleText || 'Listing image';
     img.loading = 'lazy';
     thumb.classList.add('listing-thumb-image');
     thumb.appendChild(img);
@@ -168,7 +253,7 @@ const buildListingCard = (item) => {
   title.textContent = titleText || 'Untitled';
 
   const metaLine = document.createElement('p');
-  const addedDisplay = item.added_on || formatListingDate(item.createdAt) || '';
+  const addedDisplay = listing.added_on || formatListingDate(listing.createdAt) || '';
   const addedLabel = addedDisplay
     ? (addedDisplay.trim().toLowerCase().startsWith('added') ? addedDisplay : `Added ${addedDisplay}`)
     : 'Recently added';
@@ -184,17 +269,17 @@ const buildListingCard = (item) => {
   meta.className = 'listing-meta';
 
   const price = document.createElement('span');
-  const priceValue = Number.isFinite(item.price) ? item.price : Number(item.price || 0);
-  price.textContent = priceValue > 0 ? `₦${formatNumber(priceValue)}` : 'Price on request';
+  const priceValue = Number.isFinite(listing.price) ? listing.price : Number(listing.price || 0);
+  price.textContent = priceValue > 0 ? formatCurrency(priceValue) : 'Price on request';
 
   const status = document.createElement('span');
-  const statusValue = (item.status || '').toLowerCase();
+  const statusValue = (listing.status_raw || listing.status || '').toLowerCase();
   status.className = `status-pill ${statusValue ? `status-${statusValue}` : 'status-draft'}`;
-  status.textContent = item.status || 'Draft';
+  status.textContent = listing.status_label || statusLabel(statusValue);
 
   const views = document.createElement('span');
   views.className = 'listing-views';
-  const viewCount = typeof item.views === 'number' ? item.views : Number(item.views || 0);
+  const viewCount = typeof listing.views === 'number' ? listing.views : Number(listing.views || 0);
   views.textContent = `${formatNumber(viewCount)} views`;
 
   meta.appendChild(price);
@@ -205,11 +290,21 @@ const buildListingCard = (item) => {
   actions.className = 'listing-actions';
 
   const viewLink = document.createElement('a');
-  viewLink.href = resolveListingLink(item);
+  viewLink.href = listing.link || resolveListingLink(listing);
   viewLink.textContent = 'View Listing';
   viewLink.setAttribute('aria-label', `View listing ${escapeHTML(titleText || '')}`);
 
+  const editButton = document.createElement('button');
+  editButton.type = 'button';
+  editButton.textContent = 'Edit Listing';
+  editButton.addEventListener('click', () => {
+    if (listingEditorControls && typeof listingEditorControls.open === 'function') {
+      listingEditorControls.open(listing);
+    }
+  });
+
   actions.appendChild(viewLink);
+  actions.appendChild(editButton);
 
   card.appendChild(top);
   card.appendChild(meta);
@@ -226,6 +321,8 @@ const hydrateListings = () => {
     grid.innerHTML = '';
   }
 
+  listingLookup.clear();
+
   const sourceListings = firestoreListings.length ? firestoreListings : vendorListings;
 
   if (!sourceListings.length) {
@@ -237,7 +334,9 @@ const hydrateListings = () => {
 
   sourceListings.forEach((item) => {
     if (!grid) return;
-    grid.appendChild(buildListingCard(item));
+    const listing = normaliseListingRecord(item);
+    listingLookup.set(listing.id, listing);
+    grid.appendChild(buildListingCard(listing));
   });
 };
 
@@ -324,6 +423,39 @@ const showLoaderMessage = (title, subtitle) => {
   if (loaderMessages[1]) loaderMessages[1].textContent = subtitle || '';
 };
 
+const handleListingUpdate = (updated) => {
+  const listing = normaliseListingRecord(updated);
+  if (!listing.id) {
+    return;
+  }
+
+  let updatedVendor = false;
+  vendorListings = vendorListings.map((item) => {
+    if (item.id === listing.id) {
+      updatedVendor = true;
+      return listing;
+    }
+    return item;
+  });
+
+  let updatedFirestore = false;
+  firestoreListings = firestoreListings.map((item) => {
+    if (item.id === listing.id) {
+      updatedFirestore = true;
+      return listing;
+    }
+    return item;
+  });
+
+  if (!updatedVendor && !updatedFirestore) {
+    vendorListings.unshift(listing);
+  }
+
+  listingLookup.set(listing.id, listing);
+  refreshStatsFromListings();
+  hydrateListings();
+};
+
 const fetchDashboardData = async () => {
   try {
     showLoaderMessage('Preparing your dashboard…', 'Fetching your latest stats.');
@@ -352,7 +484,7 @@ const fetchDashboardData = async () => {
     const data = payload.data || {};
     vendorData = data.profile || {};
     vendorStats = data.stats || {};
-    vendorListings = Array.isArray(data.listings) ? data.listings : [];
+    vendorListings = Array.isArray(data.listings) ? data.listings.map((listing) => normaliseListingRecord(listing)) : [];
 
     hydrateProfile();
     hydrateStats();
@@ -367,17 +499,26 @@ const fetchDashboardData = async () => {
 
 const normaliseFirestoreListing = (docSnap) => {
   const data = docSnap.data() || {};
-  return {
+  const base = {
     id: docSnap.id,
     title: resolveListingTitle(data),
     price: typeof data.price === 'number' ? data.price : Number(data.price || 0),
     status: data.status || 'pending',
+    status_raw: data.status || 'pending',
     added_on: formatListingDate(data.createdAt),
     views: typeof data.views === 'number' ? data.views : Number(data.views || 0),
     image: resolveListingImage(data),
-    image_alt: data.productTitle || data.title || 'Listing image',
+    images: Array.isArray(data.imageUrls) ? data.imageUrls : data.images,
+    description: data.description || data.details || '',
     link: resolveListingLink({ id: docSnap.id, link: data.productUrl || data.link }),
+    category: data.category || '',
+    subcategory: data.subcategory || '',
+    location: data.vendorLocation || data.location || '',
+    city: data.city || '',
+    state: data.state || '',
+    country: data.country || '',
   };
+  return normaliseListingRecord(base);
 };
 
 const loadFirestoreListings = async () => {
@@ -404,6 +545,7 @@ const loadFirestoreListings = async () => {
     if (mapped.length) {
       firestoreListings = mapped;
       hydrateListings();
+      refreshStatsFromListings();
     }
   } catch (error) {
     console.error('[vendor-dashboard] unable to load listings from Firestore', error);
@@ -411,6 +553,7 @@ const loadFirestoreListings = async () => {
 };
 
 window.addEventListener('DOMContentLoaded', () => {
+  listingEditorControls = setupListingEditor({ onSubmitSuccess: handleListingUpdate });
   bindActions();
   fetchDashboardData();
 });

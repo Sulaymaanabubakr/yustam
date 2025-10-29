@@ -118,9 +118,41 @@ try {
         }
     }
 
+    $columnImageUrls = null;
+    foreach (['image_urls', 'imageUrls'] as $candidate) {
+        if (in_array($candidate, $listingsColumns, true)) {
+            $columnImageUrls = $candidate;
+            break;
+        }
+    }
+
     $selectParts = [sprintf('%s AS listing_id', $columnFirestoreId), 'title', 'price', 'status', 'created_at', 'views'];
     if ($columnPrimaryImage !== null) {
         $selectParts[] = sprintf('%s AS listing_image', $columnPrimaryImage);
+    }
+    if ($columnImageUrls !== null) {
+        $selectParts[] = sprintf('%s AS listing_gallery', $columnImageUrls);
+    }
+    if (in_array('description', $listingsColumns, true)) {
+        $selectParts[] = 'description';
+    }
+    if (in_array('category', $listingsColumns, true)) {
+        $selectParts[] = 'category';
+    }
+    if (in_array('subcategory', $listingsColumns, true)) {
+        $selectParts[] = 'subcategory';
+    }
+    if (in_array('location', $listingsColumns, true)) {
+        $selectParts[] = 'location';
+    }
+    if (in_array('city', $listingsColumns, true)) {
+        $selectParts[] = 'city';
+    }
+    if (in_array('state', $listingsColumns, true)) {
+        $selectParts[] = 'state';
+    }
+    if (in_array('country', $listingsColumns, true)) {
+        $selectParts[] = 'country';
     }
 
     $listingSql = sprintf(
@@ -136,14 +168,35 @@ try {
         $statusValue = strtolower(trim((string)($row['status'] ?? '')));
         $isActive = in_array($statusValue, ['active', 'published', 'approved', 'live', 'available'], true);
         $imageValue = $columnPrimaryImage !== null ? ($row['listing_image'] ?? '') : '';
+        $galleryRaw = $columnImageUrls !== null ? ($row['listing_gallery'] ?? '') : '';
+        $gallery = [];
+        if (is_string($galleryRaw) && $galleryRaw !== '') {
+            $decoded = json_decode($galleryRaw, true);
+            if (is_array($decoded)) {
+                $gallery = array_values(array_filter(
+                    array_map(static fn($value) => is_string($value) ? trim($value) : '', $decoded)
+                ));
+            }
+        }
+
         $listings[] = [
+            'id' => (string) ($row['listing_id'] ?? ''),
             'title' => $row['title'] ?? 'Untitled',
+            'description' => $row['description'] ?? '',
             'price' => isset($row['price']) ? (float)$row['price'] : 0.0,
             'status' => $row['status'] ?? 'Draft',
+            'status_raw' => $statusValue,
+            'category' => $row['category'] ?? '',
+            'subcategory' => $row['subcategory'] ?? '',
+            'location' => $row['location'] ?? '',
+            'city' => $row['city'] ?? '',
+            'state' => $row['state'] ?? '',
+            'country' => $row['country'] ?? '',
             'added_on' => isset($row['created_at']) ? date('j M Y', strtotime($row['created_at'])) : '-',
-            'link' => 'product.php?id=' . ($row['listing_id'] ?? ''),
+            'link' => 'product.php?id=' . urlencode((string) ($row['listing_id'] ?? '')),
             'views' => (int)($row['views'] ?? 0),
-            'image' => $imageValue,
+            'image' => $imageValue !== '' ? $imageValue : ($gallery[0] ?? ''),
+            'images' => $gallery,
             'image_alt' => isset($row['title']) && trim((string)$row['title']) !== '' ? trim((string)$row['title']) : 'Listing image',
         ];
         $stats['total_listings']++;
@@ -292,36 +345,33 @@ if ($firestoreVendorKey !== '') {
             }
             $price = is_numeric($priceCandidate) ? (float)$priceCandidate : 0.0;
 
-            $imageUrl = '';
+            $imageCollection = [];
             if (isset($fields['imageUrls']) && is_array($fields['imageUrls'])) {
                 foreach ($fields['imageUrls'] as $candidateImage) {
                     if (is_string($candidateImage) && trim($candidateImage) !== '') {
-                        $imageUrl = trim($candidateImage);
-                        break;
-                    }
-                    if (is_array($candidateImage)) {
+                        $imageCollection[] = trim($candidateImage);
+                    } elseif (is_array($candidateImage)) {
                         $nestedUrl = $candidateImage['url'] ?? ($candidateImage['secure_url'] ?? '');
                         if (is_string($nestedUrl) && trim($nestedUrl) !== '') {
-                            $imageUrl = trim($nestedUrl);
-                            break;
+                            $imageCollection[] = trim($nestedUrl);
                         }
                     }
                 }
             }
 
-            if ($imageUrl === '' && isset($fields['primaryImage'])) {
+            if (empty($imageCollection) && isset($fields['primaryImage'])) {
                 $fallbackImage = $fields['primaryImage'];
                 if (is_string($fallbackImage) && trim($fallbackImage) !== '') {
-                    $imageUrl = trim($fallbackImage);
+                    $imageCollection[] = trim($fallbackImage);
                 } elseif (is_array($fallbackImage)) {
                     $nestedUrl = $fallbackImage['url'] ?? ($fallbackImage['secure_url'] ?? '');
                     if (is_string($nestedUrl) && trim($nestedUrl) !== '') {
-                        $imageUrl = trim($nestedUrl);
+                        $imageCollection[] = trim($nestedUrl);
                     }
                 }
             }
 
-            if ($imageUrl === '') {
+            if (empty($imageCollection)) {
                 $imageCandidates = [];
                 foreach (['images', 'photos', 'photoUrls', 'gallery', 'thumbnails'] as $imageField) {
                     if (isset($fields[$imageField])) {
@@ -330,19 +380,19 @@ if ($firestoreVendorKey !== '') {
                 }
                 foreach ($imageCandidates as $candidateSet) {
                     if (is_string($candidateSet) && trim($candidateSet) !== '') {
-                        $imageUrl = trim($candidateSet);
+                        $imageCollection[] = trim($candidateSet);
                         break;
                     }
                     if (is_array($candidateSet)) {
                         foreach ($candidateSet as $candidateImage) {
                             if (is_string($candidateImage) && trim($candidateImage) !== '') {
-                                $imageUrl = trim($candidateImage);
+                                $imageCollection[] = trim($candidateImage);
                                 break 2;
                             }
                             if (is_array($candidateImage)) {
                                 $nestedUrl = $candidateImage['url'] ?? ($candidateImage['secure_url'] ?? '');
                                 if (is_string($nestedUrl) && trim($nestedUrl) !== '') {
-                                    $imageUrl = trim($nestedUrl);
+                                    $imageCollection[] = trim($nestedUrl);
                                     break 2;
                                 }
                             }
@@ -350,6 +400,8 @@ if ($firestoreVendorKey !== '') {
                     }
                 }
             }
+
+            $imageUrl = $imageCollection[0] ?? '';
 
             $createdRaw = $fields['createdAt'] ?? ($fields['created_at'] ?? '');
             if (is_array($createdRaw) && isset($createdRaw['seconds'])) {
@@ -366,13 +418,23 @@ if ($firestoreVendorKey !== '') {
             }
 
             $firestoreListings[] = [
+                'id' => $docId,
                 'title' => $title,
+                'description' => $fields['description'] ?? ($fields['details'] ?? ''),
                 'price' => $price,
                 'status' => $statusValue !== '' ? ucwords($statusValue) : 'Pending',
+                'status_raw' => $statusValue,
+                'category' => $fields['category'] ?? '',
+                'subcategory' => $fields['subcategory'] ?? '',
+                'location' => $fields['vendorLocation'] ?? ($fields['location'] ?? ''),
+                'city' => $fields['city'] ?? '',
+                'state' => $fields['state'] ?? '',
+                'country' => $fields['country'] ?? '',
                 'added_on' => $addedOn,
                 'link' => $docId !== '' ? 'product.php?id=' . urlencode($docId) : '#',
                 'views' => $viewsCount,
                 'image' => $imageUrl,
+                'images' => $imageCollection,
                 'image_alt' => $title !== 'Untitled' ? $title : 'Listing image',
                 'sort_ts' => $addedTimestamp,
             ];
@@ -686,6 +748,31 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
             font-size: 0.95rem;
         }
 
+        .section-actions {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+        }
+
+        .section-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            font-weight: 600;
+            color: var(--orange);
+            background: rgba(243, 115, 30, 0.14);
+            padding: 0.55rem 1rem;
+            border-radius: 999px;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .section-link:hover,
+        .section-link:focus-visible {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 24px rgba(243, 115, 30, 0.22);
+        }
+
         .badge {
             background: rgba(0, 77, 64, 0.12);
             color: var(--emerald);
@@ -787,9 +874,11 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
         .listing-actions {
             display: flex;
             gap: 0.6rem;
+            flex-wrap: wrap;
         }
 
-        .listing-actions a {
+        .listing-actions a,
+        .listing-actions button {
             border-radius: 999px;
             padding: 0.55rem 1.1rem;
             background: rgba(0, 77, 64, 0.12);
@@ -798,10 +887,22 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
             text-decoration: none;
             font-size: 0.9rem;
             transition: transform 200ms ease, box-shadow 200ms ease;
+            border: none;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+
+        .listing-actions button {
+            background: rgba(243, 115, 30, 0.16);
+            color: var(--orange);
         }
 
         .listing-actions a:hover,
-        .listing-actions a:focus-visible {
+        .listing-actions button:hover,
+        .listing-actions a:focus-visible,
+        .listing-actions button:focus-visible {
             transform: translateY(-2px);
             box-shadow: 0 12px 22px rgba(0, 0, 0, 0.12);
         }
@@ -938,7 +1039,206 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
             animation: spin 1s linear infinite;
         }
 
+        .listing-editor {
+            position: fixed;
+            inset: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            z-index: 140;
+        }
+
+        .listing-editor.is-open {
+            display: flex;
+        }
+
+        .listing-editor[hidden] {
+            display: none !important;
+        }
+
+        .listing-editor__overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(17, 17, 17, 0.48);
+            backdrop-filter: blur(2px);
+        }
+
+        .listing-editor__dialog {
+            position: relative;
+            background: #ffffff;
+            border-radius: 20px;
+            width: min(540px, 100%);
+            max-height: min(90vh, 640px);
+            overflow: hidden auto;
+            box-shadow: 0 28px 60px rgba(0, 0, 0, 0.16);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .listing-editor__form {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            padding: 1.5rem;
+        }
+
+        .listing-editor__header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+        }
+
+        .listing-editor__header h2 {
+            margin: 0;
+            font-size: 1.25rem;
+        }
+
+        .listing-editor__close {
+            border: none;
+            background: rgba(0, 0, 0, 0.06);
+            border-radius: 50%;
+            width: 36px;
+            height: 36px;
+            display: grid;
+            place-items: center;
+            cursor: pointer;
+        }
+
+        .listing-editor__status {
+            min-height: 1.2rem;
+            font-size: 0.85rem;
+            color: rgba(17, 17, 17, 0.6);
+        }
+
+        .listing-editor__field {
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+        }
+
+        .listing-editor__field label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: rgba(17, 17, 17, 0.72);
+        }
+
+        .listing-editor__field input,
+        .listing-editor__field select,
+        .listing-editor__field textarea {
+            width: 100%;
+            border: 1px solid rgba(17, 17, 17, 0.12);
+            border-radius: 12px;
+            padding: 0.65rem 0.75rem;
+            font-size: 0.95rem;
+            font-family: inherit;
+            transition: border 160ms ease, box-shadow 160ms ease;
+        }
+
+        .listing-editor__field input:focus,
+        .listing-editor__field select:focus,
+        .listing-editor__field textarea:focus {
+            outline: none;
+            border-color: rgba(0, 77, 64, 0.4);
+            box-shadow: 0 0 0 4px rgba(0, 77, 64, 0.12);
+        }
+
+        .listing-editor__grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.75rem;
+        }
+
+        .listing-editor__preview {
+            border-radius: 14px;
+            background: rgba(0, 77, 64, 0.08);
+            padding: 0.75rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .listing-editor__preview[hidden] {
+            display: none !important;
+        }
+
+        .listing-editor__preview-label {
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: rgba(17, 17, 17, 0.62);
+        }
+
+        .listing-editor__preview img {
+            width: 100%;
+            border-radius: 12px;
+            object-fit: cover;
+            max-height: 220px;
+        }
+
+        .listing-editor__actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.85rem;
+            margin-top: 0.5rem;
+        }
+
+        .listing-editor__secondary {
+            border: none;
+            background: rgba(17, 17, 17, 0.08);
+            color: rgba(17, 17, 17, 0.82);
+            padding: 0.65rem 1.3rem;
+            border-radius: 999px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .listing-editor__submit {
+            border: none;
+            background: linear-gradient(135deg, var(--orange), #ff8845);
+            color: #fff;
+            padding: 0.7rem 1.6rem;
+            border-radius: 999px;
+            cursor: pointer;
+            font-weight: 700;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.6rem;
+        }
+
+        .listing-editor__submit[disabled] {
+            opacity: 0.7;
+            cursor: wait;
+        }
+
+        .listing-editor__spinner {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.4);
+            border-top-color: #fff;
+            animation: spin 720ms linear infinite;
+            display: none;
+        }
+
+        .listing-editor__submit[disabled] .listing-editor__spinner {
+            display: inline-block;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
         @media (max-width: 768px) {
+            .listing-editor__dialog {
+                width: min(480px, 100%);
+            }
+
+            .listing-editor__form {
+                padding: 1.25rem;
+            }
             .dashboard-header {
                 padding: 0.85rem clamp(1rem, 4vw, 1.4rem);
             }
@@ -964,6 +1264,24 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
         }
 
         @media (max-width: 600px) {
+            .listing-editor {
+                align-items: flex-end;
+                padding: 0;
+            }
+
+            .listing-editor__dialog {
+                width: 100%;
+                max-height: 94vh;
+                border-radius: 24px 24px 0 0;
+            }
+
+            .listing-editor__form {
+                padding: 1.25rem 1.15rem 1.5rem;
+            }
+
+            .listing-editor__grid {
+                grid-template-columns: 1fr;
+            }
             main {
                 width: calc(100% - 2.8rem);
                 padding: 1.8rem 0 3.6rem;
@@ -980,10 +1298,6 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
                 align-items: flex-start;
                 gap: 1rem;
             }
-        }
-
-        @keyframes spin {
-            to { transform: rotate(1turn); }
         }
 
         @keyframes fadeUp {
@@ -1076,7 +1390,13 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
                     <h2 id="listingsTitle">Your Listings</h2>
                     <p class="section-subtitle">Manage the gems currently shining in the marketplace.</p>
                 </div>
-                <div class="badge" id="listingsBadge">0 Active</div>
+                <div class="section-actions">
+                    <a href="vendor-listings.php" class="section-link">
+                        Manage all
+                        <i class="ri-arrow-right-up-line" aria-hidden="true"></i>
+                    </a>
+                    <div class="badge" id="listingsBadge">0 Active</div>
+                </div>
             </div>
             <div class="empty-state" id="emptyState" hidden>
                 <i class="ri-inbox-archive-line" aria-hidden="true"></i>
@@ -1109,15 +1429,8 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
     <footer>
         © 2025 YUSTAM Marketplace — <a href="contact.html">Support</a>
     </footer>
+    <?php require __DIR__ . '/vendor-listing-editor-modal.php'; ?>
   <script src="theme-manager.js" defer></script>
 <script type="module" src="vendor-dashboard.js"></script>
 </body>
 </html>
-
-
-
-
-
-
-
-
