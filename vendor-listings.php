@@ -426,6 +426,10 @@ $displayTitle = $businessName !== '' ? $businessName : $vendorName;
             place-items: center;
         }
 
+        .empty-state[hidden] {
+            display: none !important;
+        }
+
         .empty-state i {
             font-size: 2rem;
             color: rgba(0, 77, 64, 0.35);
