@@ -1,13 +1,4 @@
 import { appendVerificationBadge, verificationPlanLabel } from './verification-badge.js';
-import { db } from './firebase.js';
-import {
-  collection,
-  getDocs,
-  limit,
-  orderBy,
-  query,
-  where,
-} from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
 
 const vendorId = document.body?.dataset?.vendorId?.trim() || '';
 
@@ -27,7 +18,6 @@ const websiteEl = document.getElementById('storefrontWebsite');
 const listingsGrid = document.getElementById('listingsGrid');
 const listingsCountEl = document.getElementById('listingsCount');
 const listingsEmptyEl = document.getElementById('listingsEmpty');
-let firestoreListingsAttempted = false;
 
 const formatCurrency = (value) =>
   new Intl.NumberFormat('en-NG', {
@@ -82,198 +72,6 @@ const showEmptyState = () => {
   listingsEmptyEl.hidden = false;
   listingsEmptyEl.removeAttribute('hidden');
   listingsEmptyEl.style.display = '';
-};
-
-const showListingsLoading = () => {
-  if (listingsCountEl) {
-    listingsCountEl.textContent = 'Loading listings...';
-  }
-  hideEmptyState();
-};
-
-const toStringId = (value) => {
-  if (typeof value === 'string') {
-    return value.trim();
-  }
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return String(value);
-  }
-  return '';
-};
-
-const collectVendorIdentifiers = (vendor = {}) => {
-  const identifiers = new Set();
-  const add = (candidate) => {
-    const value = toStringId(candidate);
-    if (value) {
-      identifiers.add(value);
-    }
-  };
-
-  add(vendorId);
-  add(document.body?.dataset?.vendorUid);
-  add(vendor.vendorUid);
-  add(vendor.firebaseUid);
-  add(vendor.uid);
-  add(vendor.id);
-  add(vendor.sql?.vendor_uid);
-  add(vendor.sql?.firebase_uid);
-  add(vendor.firestore?.id);
-  add(vendor.firestore?.uid);
-  add(vendor.firestore?.vendorUid);
-  add(vendor.firestore?.firebaseUid);
-
-  return Array.from(identifiers);
-};
-
-const pickListingImage = (data = {}) => {
-  const images = Array.isArray(data.images) ? data.images : [];
-  if (images.length) {
-    const match = images.find((entry) => typeof entry === 'string' && entry.trim());
-    if (match) return match;
-  }
-
-  const imageUrls = Array.isArray(data.imageUrls) ? data.imageUrls : [];
-  if (imageUrls.length) {
-    const match = imageUrls.find((entry) => typeof entry === 'string' && entry.trim());
-    if (match) return match;
-  }
-
-  if (typeof data.image === 'string' && data.image.trim()) {
-    return data.image.trim();
-  }
-
-  if (typeof data.coverImage === 'string' && data.coverImage.trim()) {
-    return data.coverImage.trim();
-  }
-
-  return '';
-};
-
-const normaliseListingTitle = (data = {}) => {
-  const candidates = [
-    data.title,
-    data.productTitle,
-    data.productName,
-    data.listingTitle,
-    data.name,
-    data.type,
-    data.itemType,
-  ];
-  const match = candidates.find((value) => typeof value === 'string' && value.trim());
-  return match ? match.trim() : 'Marketplace Listing';
-};
-
-const parsePrice = (value) => {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return value;
-  }
-  if (typeof value === 'string') {
-    const cleaned = value.replace(/[^0-9.]/g, '');
-    const parsed = Number(cleaned);
-    if (Number.isFinite(parsed)) {
-      return parsed;
-    }
-  }
-  return null;
-};
-
-const toIsoDate = (value) => {
-  if (!value) return null;
-  if (typeof value.toDate === 'function') {
-    const date = value.toDate();
-    return Number.isNaN(date?.getTime?.()) ? null : date.toISOString();
-  }
-  if (value.seconds) {
-    const date = new Date(value.seconds * 1000);
-    return Number.isNaN(date.getTime()) ? null : date.toISOString();
-  }
-  if (typeof value === 'string') {
-    const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? null : date.toISOString();
-  }
-  if (value instanceof Date) {
-    return Number.isNaN(value.getTime()) ? null : value.toISOString();
-  }
-  return null;
-};
-
-const normaliseFirestoreListing = (doc) => {
-  const data = (typeof doc.data === 'function' ? doc.data() : doc) || {};
-  return {
-    id: doc.id || data.id || '',
-    title: normaliseListingTitle(data),
-    price: parsePrice(data.price ?? data.amount),
-    category: typeof data.category === 'string' ? data.category : '',
-    subcategory: typeof data.subcategory === 'string' ? data.subcategory : '',
-    status: typeof data.status === 'string' ? data.status : '',
-    image: pickListingImage(data),
-    location:
-      typeof data.location === 'string' && data.location.trim()
-        ? data.location.trim()
-        : [data.vendorLocation, data.city, data.state]
-            .map((value) => (typeof value === 'string' ? value.trim() : ''))
-            .filter(Boolean)
-            .join(', '),
-    createdAt: toIsoDate(data.createdAt ?? data.created_at ?? doc.createTime ?? null),
-  };
-};
-
-const fetchFirestoreListings = async (vendor) => {
-  if (firestoreListingsAttempted) return null;
-  firestoreListingsAttempted = true;
-
-  const identifiers = collectVendorIdentifiers(vendor);
-  if (!identifiers.length) {
-    return null;
-  }
-
-  showListingsLoading();
-
-  const candidateFields = ['vendorUid', 'vendorUID', 'vendorFirebaseUid', 'vendorId', 'vendor_id', 'vendorID'];
-  const listingsRef = collection(db, 'listings');
-  const seen = new Set();
-  const aggregated = [];
-
-  const runQuery = async (field, candidate) => {
-    const baseQuery = [where(field, '==', candidate), limit(36)];
-    try {
-      const ordered = query(listingsRef, ...baseQuery, orderBy('createdAt', 'desc'));
-      return await getDocs(ordered);
-    } catch (error) {
-      if (error?.code === 'failed-precondition') {
-        const fallback = query(listingsRef, ...baseQuery);
-        return await getDocs(fallback);
-      }
-      throw error;
-    }
-  };
-
-  for (const candidate of identifiers) {
-    for (const field of candidateFields) {
-      try {
-        const snapshot = await runQuery(field, candidate);
-        snapshot.forEach((doc) => {
-          if (seen.has(doc.id)) return;
-          const listing = normaliseFirestoreListing(doc);
-          seen.add(listing.id || doc.id);
-          aggregated.push(listing);
-        });
-      } catch (error) {
-        console.warn('[storefront] Firestore query failed', { field, candidate, error });
-      }
-    }
-  }
-
-  if (aggregated.length) {
-    aggregated.sort((a, b) => {
-      const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-      const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-      return bTime - aTime;
-    });
-  }
-
-  return aggregated;
 };
 
 const slugify = (value, fallback = 'free') => {
@@ -598,22 +396,6 @@ const loadVendorStorefront = async () => {
     applyVendorProfile(payload.vendor || {});
     const initialListings = Array.isArray(payload.listings) ? payload.listings : [];
     renderListings(initialListings);
-
-    if (!initialListings.length) {
-      try {
-        const firestoreListings = await fetchFirestoreListings(payload.vendor || {});
-        if (Array.isArray(firestoreListings) && firestoreListings.length) {
-          renderListings(firestoreListings);
-        } else if (!initialListings.length) {
-          renderListings([]);
-        }
-      } catch (firestoreError) {
-        console.error('[storefront] Firestore fallback failed', firestoreError);
-        if (!initialListings.length) {
-          renderListings([]);
-        }
-      }
-    }
   } catch (error) {
     console.error('[storefront] load failed', error);
     showHeroError(error.message || 'Unable to load vendor storefront');
