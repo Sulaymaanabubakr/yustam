@@ -198,6 +198,13 @@ const createVerificationBadge = (value) => {
   return '<span class="vendor-badge vendor-verified unverified"><i class="ri-alert-line" aria-hidden="true"></i>Not Verified</span>';
 };
 
+const createVendorStatusBadge = (state) => {
+  if (state === 'verified') {
+    return '<span class="vendor-badge vendor-verified verified"><i class="ri-shield-check-line" aria-hidden="true"></i>Verified Vendor</span>';
+  }
+  return '<span class="vendor-badge vendor-verified unverified"><i class="ri-alert-line" aria-hidden="true"></i>Not Verified</span>';
+};
+
 const findVendorById = (idValue) => {
   if (!idValue) return null;
   if (vendorMap.has(idValue)) {
@@ -423,10 +430,29 @@ const pickListingImage = (data) => {
   return PLACEHOLDER_IMAGE;
 };
 
-const deriveLocation = (data) => {
-  const state = (data.state || data.location || '').trim();
-  const city = (data.city || '').trim();
-  if (state && city && state.toLowerCase() !== city.toLowerCase()) {
+const isGenericLocation = (value) => {
+  if (!value) return true;
+  const lowered = value.trim().toLowerCase();
+  return (
+    lowered === '' ||
+    lowered === 'nigeria' ||
+    lowered === 'ng' ||
+    lowered === 'all' ||
+    lowered === 'any' ||
+    lowered === 'nationwide'
+  );
+};
+
+const deriveLocation = (data, vendorInfo = {}) => {
+  const listingState = (data.state || data.location || data.region || '').trim();
+  const listingCity = (data.city || data.lga || data.localGovernment || '').trim();
+  const vendorState = (vendorInfo.state || '').trim();
+  const vendorCity = (vendorInfo.city || '').trim();
+
+  const state = !isGenericLocation(listingState) ? listingState : vendorState;
+  const city = !isGenericLocation(listingCity) ? listingCity : vendorCity;
+
+  if (city && state && city.toLowerCase() !== state.toLowerCase()) {
     return { label: `${city}, ${state}`, filterValue: state };
   }
   if (state) {
@@ -455,7 +481,7 @@ const getVendorInfo = (vendorId, listingData = {}) => {
       vendorId ? vendorId.toString() : '',
     ) || 'Marketplace Vendor';
 
-  const plan = pickFirstString(
+  const planRaw = pickFirstString(
     vendorRecord.plan,
     vendorRecord.planLabel,
     detailSnapshot?.plan,
@@ -465,7 +491,30 @@ const getVendorInfo = (vendorId, listingData = {}) => {
     listingData.vendorPlan,
   );
 
+  const plan = planRaw || 'Free';
   const planLabel = plan ? verificationPlanLabel(plan) : '';
+
+  const state = pickFirstString(
+    vendorRecord.state,
+    vendorRecord.region,
+    vendorRecord.location,
+    detailSnapshot?.state,
+    detailSnapshot?.region,
+    detailSnapshot?.location,
+    listingData.state,
+    listingData.location,
+  );
+
+  const city = pickFirstString(
+    vendorRecord.city,
+    vendorRecord.town,
+    vendorRecord.localGovernment,
+    vendorRecord.lga,
+    detailSnapshot?.city,
+    detailSnapshot?.town,
+    detailSnapshot?.localGovernment,
+    listingData.city,
+  );
 
   const verification = pickFirstDefined(
     vendorRecord.verificationStatus,
@@ -482,7 +531,7 @@ const getVendorInfo = (vendorId, listingData = {}) => {
   );
 
   maybeFetchVendorDetail(vendorId, { plan, verification });
-  return { name, plan, planLabel, verification };
+  return { name, plan, planLabel, verification, state, city };
 };
 
 const maybeFetchVendorDetail = (vendorId, current = {}) => {
@@ -626,7 +675,7 @@ const transformListing = (docSnap) => {
     null;
   const priceValue = Number(data.price ?? data.amount ?? data.listingPrice ?? 0);
   const price = Number.isFinite(priceValue) ? priceValue : 0;
-  const { label: locationLabel, filterValue: locationFilterValue } = deriveLocation(data);
+  const { label: locationLabel, filterValue: locationFilterValue } = deriveLocation(data, vendorInfo);
 
   return {
     id: docSnap.id,
@@ -690,8 +739,12 @@ const renderProducts = () => {
 
   itemsToRender.forEach((item, index) => {
     const verificationState = normaliseVerificationState(item.vendorVerified);
-    const planBadge = createPlanBadge(item.vendorPlan);
-    const verificationBadge = createVerificationBadge(verificationState);
+    const statusBadge = createVendorStatusBadge(verificationState);
+    const planBadge = createPlanBadge(item.vendorPlan || item.vendorPlanLabel || 'Free Plan');
+    const vendorNameMarkup =
+      item.vendorId
+        ? `<a class="vendor-badge vendor-name vendor-link vendor-name-text" href="vendor-storefront.php?vendorId=${encodeURIComponent(item.vendorId)}">${escapeHtml(item.vendor)}</a>`
+        : `<span class="vendor-badge vendor-name vendor-name-text">${escapeHtml(item.vendor)}</span>`;
     const planParam = encodeURIComponent(item.vendorPlan || '');
     const verifiedParam = encodeURIComponent(verificationState);
     const vendorIdParam = item.vendorId ? `&vendorId=${encodeURIComponent(item.vendorId)}` : '';
@@ -715,14 +768,10 @@ const renderProducts = () => {
           <span>${escapeHtml(item.category || 'Marketplace')}</span>
           <span><i class="ri-map-pin-line"></i> ${escapeHtml(item.locationLabel || 'Nigeria')}</span>
         </div>
-        ${planBadge || verificationBadge ? `<div class="vendor-badges">${planBadge}${verificationBadge}</div>` : ''}
-        <div class="product-meta" style="justify-content:flex-start; gap:8px;">
-          <i class="ri-user-3-line" style="color: var(--emerald);"></i>
-          ${
-            item.vendorId
-              ? `<a class="vendor-link vendor-name-text" href="vendor-storefront.php?vendorId=${encodeURIComponent(item.vendorId)}">${escapeHtml(item.vendor)}</a>`
-              : `<span class="vendor-name-text">${escapeHtml(item.vendor)}</span>`
-          }
+        <div class="vendor-badges vendor-summary">
+          ${statusBadge}
+          ${planBadge}
+          ${vendorNameMarkup}
         </div>
         <div class="product-actions">
           <a class="btn btn-outline" href="product.php?id=${encodeURIComponent(item.id)}${vendorIdParam}&plan=${planParam}&verified=${verifiedParam}" aria-label="View details of ${escapeHtml(item.title)}">View Details</a>
@@ -730,19 +779,6 @@ const renderProducts = () => {
         </div>
       </div>
     `;
-    const vendorNameEl = card.querySelector('.vendor-name-text');
-    if (vendorNameEl) {
-      clearBadges(vendorNameEl);
-      if (verificationState === 'verified') {
-        const inlineTitle =
-          item.vendorPlanLabel || (item.vendorPlan ? verificationPlanLabel(item.vendorPlan) : 'Verified Vendor');
-        appendVerificationBadge(vendorNameEl, item.vendorPlan || '', {
-          verified: true,
-          roleLabel: 'Verified Vendor',
-          title: inlineTitle,
-        });
-      }
-    }
 
     productGrid.appendChild(card);
   });
