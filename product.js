@@ -609,6 +609,7 @@ async function launchChatWithMessage(message) {
   if (metadata.vendorUid) params.set('vendor', metadata.vendorUid);
   if (metadata.vendorName) params.set('vendor_name', metadata.vendorName);
   if (metadata.buyerName) params.set('buyer_name', metadata.buyerName);
+  params.set('role', 'buyer');
   if (trimmedMessage) {
     if (messageSent) {
       params.set('quick_sent', '1');
