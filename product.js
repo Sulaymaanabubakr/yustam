@@ -643,12 +643,8 @@ async function launchChatWithMessage(message) {
   if (metadata.vendorName) params.set('vendor_name', metadata.vendorName);
   if (metadata.buyerName) params.set('buyer_name', metadata.buyerName);
   params.set('role', 'buyer');
-  if (trimmedMessage) {
-    if (messageSent) {
-      params.set('quick_sent', '1');
-    } else {
-      params.set('prefill', trimmedMessage);
-    }
+  if (trimmedMessage && !messageSent) {
+    params.set('prefill', trimmedMessage);
   }
 
   window.location.href = `chat-thread.php?${params.toString()}`;

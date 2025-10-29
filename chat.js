@@ -398,9 +398,6 @@ class ChatController {
 
   loadPrefill() {
     if (!this.messageInput) return;
-    if (this.context.quickSent && this.canSend) {
-      showToast('We already sent your quick message to the vendor.', 'success');
-    }
     if (typeof this.context.prefill === 'string' && this.context.prefill.trim()) {
       this.messageInput.value = this.context.prefill.trim();
       this.updateSendAvailability();
