@@ -60,7 +60,7 @@ const toggleLoader = (visible) => {
 const normalizeListing = (raw = {}) => {
   const identifier = raw.id ?? raw.listingId ?? raw.firestore_id ?? raw.public_id ?? '';
   const id = identifier !== undefined && identifier !== null ? String(identifier) : '';
-  const statusRaw = String(raw.status_raw ?? raw.status ?? 'pending').toLowerCase();
+  const statusRaw = normalizeStatus(String(raw.status_raw ?? raw.status ?? 'pending'));
   const priceValue =
     raw.price === null || raw.price === undefined || raw.price === ''
       ? null
@@ -100,6 +100,45 @@ const normalizeListing = (raw = {}) => {
     state: raw.state || '',
     country: raw.country || '',
   };
+};
+
+const normalizeStatus = (value) => {
+  const trimmed = value.trim().toLowerCase();
+  if (!trimmed) {
+    return 'pending';
+  }
+
+  const canonical = trimmed.replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const map = {
+    'approved': 'approved',
+    'approved live': 'approved',
+    'approved - live': 'approved',
+    'live': 'approved',
+    'pending review': 'pending',
+    'pending': 'pending',
+    'awaiting approval': 'pending',
+    'draft': 'draft',
+    'unlisted': 'unlisted',
+    'temporarily unlisted': 'unlisted',
+    'sold': 'sold',
+    'sold out': 'sold',
+    'sold / out of stock': 'sold',
+    'archived': 'archived',
+    'inactive': 'archived',
+    'rejected': 'pending',
+  };
+
+  if (map[canonical]) {
+    return map[canonical];
+  }
+
+  for (const key of Object.keys(map)) {
+    if (canonical.includes(key)) {
+      return map[key];
+    }
+  }
+
+  return canonical;
 };
 
 const upsertListing = (listing) => {
