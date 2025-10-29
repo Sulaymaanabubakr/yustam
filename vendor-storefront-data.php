@@ -378,6 +378,7 @@ function yustam_storefront_fetch_sql_listings(int $vendorId, int $limit = 36): a
 
     try {
         $conn = get_db_connection();
+        yustam_listings_ensure_table($conn);
         if (!yustam_storefront_listings_table_has_column($conn, 'vendor_id')) {
             return [];
         }
@@ -409,8 +410,8 @@ function yustam_storefront_fetch_sql_listings(int $vendorId, int $limit = 36): a
         }
         $stmt->close();
 
-        $listings = [];
-        foreach ($rows as $row) {
+    $listings = [];
+    foreach ($rows as $row) {
             $priceValue = null;
             foreach (['price', 'amount', 'listing_price', 'selling_price'] as $priceColumn) {
                 if (isset($row[$priceColumn]) && is_numeric($row[$priceColumn])) {
@@ -445,14 +446,26 @@ function yustam_storefront_fetch_sql_listings(int $vendorId, int $limit = 36): a
             $createdValue = $row['created_at'] ?? ($row['updated_at'] ?? null);
             $createdIso = yustam_storefront_parse_datetime($createdValue);
 
+            $imageUrlsRaw = isset($row['image_urls']) ? (string) $row['image_urls'] : '';
+            $imageUrls = [];
+            if ($imageUrlsRaw !== '') {
+                $decoded = json_decode($imageUrlsRaw, true);
+                if (is_array($decoded)) {
+                    $imageUrls = array_values(array_filter(
+                        array_map(static fn($value) => is_string($value) ? trim($value) : '', $decoded)
+                    ));
+                }
+            }
+
             $listings[] = [
-                'id' => (string) ($row['public_id'] ?? $row['uid'] ?? $row['id'] ?? ''),
+                'id' => (string) ($row['public_id'] ?? $row['firestore_id'] ?? $row['uid'] ?? $row['id'] ?? ''),
                 'title' => yustam_storefront_first_non_empty(
                     (string) ($row['title'] ?? ''),
                     (string) ($row['name'] ?? ''),
                     (string) ($row['product_title'] ?? ''),
                     'Marketplace Listing'
                 ),
+                'description' => (string) ($row['description'] ?? ''),
                 'price' => $priceValue,
                 'category' => $categoryValue,
                 'subcategory' => $subcategoryValue,
@@ -460,6 +473,10 @@ function yustam_storefront_fetch_sql_listings(int $vendorId, int $limit = 36): a
                 'image' => $imageValue,
                 'location' => $locationValue,
                 'createdAt' => $createdIso,
+                'city' => (string) ($row['city'] ?? ''),
+                'state' => (string) ($row['state'] ?? ''),
+                'country' => (string) ($row['country'] ?? ''),
+                'images' => $imageUrls,
             ];
         }
 
@@ -625,6 +642,7 @@ function yustam_storefront_transform_listing(string $id, array $fields, array $m
             (string) ($fields['productName'] ?? ''),
             'Marketplace Listing'
         ),
+        'description' => (string) ($fields['description'] ?? $fields['details'] ?? ''),
         'price' => is_numeric($priceRaw) ? (float) $priceRaw : null,
         'category' => (string) ($fields['category'] ?? ''),
         'subcategory' => (string) ($fields['subcategory'] ?? ''),
@@ -636,7 +654,11 @@ function yustam_storefront_transform_listing(string $id, array $fields, array $m
             (string) ($fields['city'] ?? ''),
             (string) ($fields['state'] ?? '')
         ),
+        'city' => (string) ($fields['city'] ?? ''),
+        'state' => (string) ($fields['state'] ?? ''),
+        'country' => (string) ($fields['country'] ?? ''),
         'createdAt' => $createdAt,
+        'images' => $images,
     ];
 }
 
@@ -725,6 +747,41 @@ function yustam_storefront_fetch_listings(array $candidates, int $limit = 24): a
     return $listings;
 }
 
+function yustam_storefront_sync_listings_to_sql(array $vendorPayload, array $listings): void
+{
+    if (empty($listings)) {
+        return;
+    }
+
+    try {
+        $conn = get_db_connection();
+        $vendorId = isset($vendorPayload['id']) ? (int) $vendorPayload['id'] : 0;
+        $vendorUid = isset($vendorPayload['vendorUid']) ? (string) $vendorPayload['vendorUid'] : '';
+        foreach ($listings as $listing) {
+            yustam_listings_upsert($conn, [
+                'vendor_id' => $vendorId,
+                'vendor_uid' => $vendorUid,
+                'firestore_id' => $listing['id'] ?? '',
+                'public_id' => $listing['id'] ?? '',
+                'title' => $listing['title'] ?? 'Marketplace Listing',
+                'description' => $listing['description'] ?? '',
+                'price' => $listing['price'] ?? null,
+                'status' => $listing['status'] ?? '',
+                'primary_image' => $listing['image'] ?? '',
+                'image_urls' => $listing['images'] ?? null,
+                'category' => $listing['category'] ?? '',
+                'subcategory' => $listing['subcategory'] ?? '',
+                'location' => $listing['location'] ?? '',
+                'city' => $listing['city'] ?? '',
+                'state' => $listing['state'] ?? '',
+                'country' => $listing['country'] ?? '',
+            ]);
+        }
+    } catch (Throwable $exception) {
+        error_log('Storefront SQL sync failed: ' . $exception->getMessage());
+    }
+}
+
 try {
     $sqlVendor = yustam_storefront_lookup_sql_vendor($identifier);
 
@@ -756,6 +813,9 @@ try {
             $identifier,
         ];
         $listings = yustam_storefront_fetch_listings($listingIdentifiers, 36);
+        if ($listings) {
+            yustam_storefront_sync_listings_to_sql($vendorPayload, $listings);
+        }
     }
 
     $responsePayload = [

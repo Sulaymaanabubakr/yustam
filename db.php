@@ -35,6 +35,9 @@ define('YUSTAM_ADMINS_TABLE', 'admins');
 if (!defined('YUSTAM_USERS_TABLE')) {
     define('YUSTAM_USERS_TABLE', YUSTAM_VENDORS_TABLE);
 }
+if (!defined('YUSTAM_LISTINGS_TABLE')) {
+    define('YUSTAM_LISTINGS_TABLE', 'listings');
+}
 
 /**
  * Retrieve and cache the list of column names on the vendors table.
@@ -588,6 +591,193 @@ function yustam_admin_updated_column(): ?string
         }
     }
     return null;
+}
+
+function yustam_listings_table_name(): string
+{
+    return YUSTAM_LISTINGS_TABLE;
+}
+
+function yustam_listings_ensure_table(mysqli $conn): void
+{
+    static $ensured = false;
+    if ($ensured) {
+        return;
+    }
+
+    $table = yustam_listings_table_name();
+    if (!preg_match('/^[A-Za-z0-9_]+$/', $table)) {
+        throw new RuntimeException('Invalid listings table name.');
+    }
+
+    $sql = sprintf(
+        'CREATE TABLE IF NOT EXISTS `%s` (
+            `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `vendor_id` INT UNSIGNED NOT NULL DEFAULT 0,
+            `vendor_uid` VARCHAR(128) NOT NULL,
+            `firestore_id` VARCHAR(128) NOT NULL,
+            `public_id` VARCHAR(128) DEFAULT NULL,
+            `title` VARCHAR(255) NOT NULL,
+            `description` TEXT NULL,
+            `price` DECIMAL(12,2) NULL,
+            `status` VARCHAR(32) NOT NULL DEFAULT \'pending\',
+            `primary_image` VARCHAR(255) NULL,
+            `image_urls` LONGTEXT NULL,
+            `category` VARCHAR(120) NULL,
+            `subcategory` VARCHAR(120) NULL,
+            `location` VARCHAR(255) NULL,
+            `city` VARCHAR(120) NULL,
+            `state` VARCHAR(120) NULL,
+            `country` VARCHAR(120) NULL,
+            `views` INT UNSIGNED NOT NULL DEFAULT 0,
+            `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `uniq_firestore_id` (`firestore_id`),
+            KEY `idx_vendor_id` (`vendor_id`),
+            KEY `idx_vendor_uid` (`vendor_uid`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci',
+        $table
+    );
+
+    $conn->query($sql);
+
+    $columnCheck = $conn->query("SHOW COLUMNS FROM `{$table}` LIKE 'public_id'");
+    $hasPublicId = $columnCheck instanceof mysqli_result && $columnCheck->num_rows > 0;
+    if ($columnCheck instanceof mysqli_result) {
+        $columnCheck->free();
+    }
+    if (!$hasPublicId) {
+        $conn->query("ALTER TABLE `{$table}` ADD COLUMN `public_id` VARCHAR(128) DEFAULT NULL AFTER `firestore_id`");
+    }
+
+    $indexCheck = $conn->query("SHOW INDEX FROM `{$table}` WHERE Key_name = 'uniq_public_id'");
+    $hasPublicIndex = $indexCheck instanceof mysqli_result && $indexCheck->num_rows > 0;
+    if ($indexCheck instanceof mysqli_result) {
+        $indexCheck->free();
+    }
+    if (!$hasPublicIndex) {
+        $conn->query("ALTER TABLE `{$table}` ADD UNIQUE KEY `uniq_public_id` (`public_id`)");
+    }
+
+    $ensured = true;
+}
+
+function yustam_listings_upsert(mysqli $conn, array $listing): void
+{
+    $firestoreId = isset($listing['firestore_id']) ? trim((string) $listing['firestore_id']) : '';
+    if ($firestoreId === '') {
+        return;
+    }
+
+    yustam_listings_ensure_table($conn);
+    $table = yustam_listings_table_name();
+
+    $vendorId = isset($listing['vendor_id']) ? (int) $listing['vendor_id'] : 0;
+    $vendorUid = trim((string) ($listing['vendor_uid'] ?? ''));
+    if ($vendorUid === '' && $vendorId > 0) {
+        try {
+            $vendorRecord = yustam_vendor_find_by_id($vendorId, $conn);
+            if ($vendorRecord) {
+                $vendorUid = yustam_vendor_assign_uid_if_missing($conn, $vendorRecord);
+            }
+        } catch (Throwable $exception) {
+            $vendorUid = '';
+        }
+    }
+    if ($vendorUid === '') {
+        $vendorUid = $vendorId > 0 ? sprintf('vendor-%d', $vendorId) : 'unknown';
+    }
+
+    $title = trim((string) ($listing['title'] ?? 'Marketplace Listing'));
+    if ($title === '') {
+        $title = 'Marketplace Listing';
+    }
+    $description = (string) ($listing['description'] ?? '');
+    $status = trim((string) ($listing['status'] ?? 'pending'));
+    if ($status === '') {
+        $status = 'pending';
+    }
+
+    $priceValue = null;
+    if (isset($listing['price']) && $listing['price'] !== '') {
+        $numeric = (float) preg_replace('/[^0-9.\-]/', '', (string) $listing['price']);
+        $priceValue = number_format($numeric, 2, '.', '');
+    }
+
+    $primaryImage = trim((string) ($listing['primary_image'] ?? $listing['image'] ?? ''));
+
+    $imagePayload = $listing['image_urls'] ?? ($listing['images'] ?? null);
+    if (is_array($imagePayload)) {
+        $imageUrls = json_encode(array_values(array_filter(
+            array_map(static fn($value) => is_string($value) ? trim($value) : '', $imagePayload)
+        )), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    } elseif (is_string($imagePayload)) {
+        $imageUrls = trim($imagePayload);
+    } else {
+        $imageUrls = '';
+    }
+
+    $category = trim((string) ($listing['category'] ?? ''));
+    $subcategory = trim((string) ($listing['subcategory'] ?? ''));
+    $location = trim((string) ($listing['location'] ?? ''));
+    $city = trim((string) ($listing['city'] ?? ''));
+    $state = trim((string) ($listing['state'] ?? ''));
+    $country = trim((string) ($listing['country'] ?? ''));
+
+    $publicId = trim((string) ($listing['public_id'] ?? ''));
+    if ($publicId === '') {
+        $publicId = $firestoreId;
+    }
+
+    $sql = sprintf(
+        'INSERT INTO `%s` (vendor_id, vendor_uid, firestore_id, public_id, title, description, price, status, primary_image, image_urls, category, subcategory, location, city, state, country)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE
+            title = VALUES(title),
+            description = VALUES(description),
+            price = VALUES(price),
+            status = VALUES(status),
+            public_id = VALUES(public_id),
+            primary_image = VALUES(primary_image),
+            image_urls = VALUES(image_urls),
+            category = VALUES(category),
+            subcategory = VALUES(subcategory),
+            location = VALUES(location),
+            city = VALUES(city),
+            state = VALUES(state),
+            country = VALUES(country),
+            updated_at = NOW()',
+        $table
+    );
+
+    $stmt = $conn->prepare($sql);
+    if (!$stmt) {
+        throw new RuntimeException('Unable to prepare listings upsert statement: ' . $conn->error);
+    }
+
+    $stmt->bind_param(
+        'isssssssssssssss',
+        $vendorId,
+        $vendorUid,
+        $firestoreId,
+        $publicId,
+        $title,
+        $description,
+        $priceValue,
+        $status,
+        $primaryImage,
+        $imageUrls,
+        $category,
+        $subcategory,
+        $location,
+        $city,
+        $state,
+        $country
+    );
+
+    $stmt->execute();
+    $stmt->close();
 }
 
 /**
