@@ -1729,55 +1729,6 @@ $quickChatProductImage = $primaryImage;
             background: rgba(189, 0, 49, 0.82);
         }
 
-        .floating-cta {
-            position: fixed;
-            right: 24px;
-            bottom: 24px;
-            display: flex;
-            flex-direction: column;
-            gap: 14px;
-            z-index: 20;
-        }
-
-        .floating-button {
-            display: inline-flex;
-            align-items: center;
-            gap: 12px;
-            padding: 14px 22px;
-            border-radius: 999px;
-            background: var(--white);
-            color: var(--emerald-dark);
-            font-weight: 600;
-            box-shadow: var(--shadow-soft);
-            transition: transform 0.25s ease, box-shadow 0.25s ease;
-        }
-
-        .floating-button i {
-            font-size: 1.35rem;
-        }
-
-        .floating-button--primary {
-            background: linear-gradient(135deg, var(--orange), var(--orange-deep));
-            color: var(--white);
-        }
-
-        .floating-button--whatsapp {
-            background: linear-gradient(135deg, #25D366, #128C7E);
-            color: var(--white);
-        }
-
-        .floating-button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 18px 38px rgba(0, 0, 0, 0.18);
-        }
-
-        .floating-button.is-disabled {
-            background: rgba(255, 255, 255, 0.6);
-            color: rgba(16, 22, 19, 0.45);
-            box-shadow: none;
-            cursor: not-allowed;
-        }
-
         .product-footer {
             margin-top: auto;
             padding: 32px 16px 48px;
@@ -1836,10 +1787,6 @@ $quickChatProductImage = $primaryImage;
                 grid-template-columns: 1fr;
             }
 
-            .floating-cta {
-                right: 16px;
-                bottom: 16px;
-            }
         }
 
         @media (max-width: 720px) {
@@ -1896,35 +1843,6 @@ $quickChatProductImage = $primaryImage;
                 padding: 22px;
             }
 
-            .floating-cta {
-                position: sticky;
-                bottom: unset;
-                right: unset;
-                left: unset;
-                flex-direction: row;
-                justify-content: center;
-                gap: 12px;
-                padding: 0 16px;
-                margin: 0 auto 24px;
-            }
-
-            .floating-button {
-                flex: 1;
-                justify-content: center;
-                min-width: 0;
-                padding: 12px 14px;
-                gap: 8px;
-                font-size: 0.95rem;
-                box-shadow: 0 10px 24px rgba(1, 56, 47, 0.14);
-            }
-
-            .floating-button i {
-                font-size: 1.1rem;
-            }
-
-            .floating-button span {
-                white-space: nowrap;
-            }
         }
 
         @media (prefers-reduced-motion: reduce) {
@@ -2128,20 +2046,6 @@ $quickChatProductImage = $primaryImage;
             </div>
         </section>
     </main>
-    <div class="floating-cta" aria-label="Quick actions">
-        <button id="chatWithVendorBtn" class="floating-button floating-button--primary" type="button" aria-label="Chat with vendor">
-            <i class="ri-message-3-fill" aria-hidden="true"></i>
-            <span>Chat with vendor</span>
-        </button>
-        <button id="floatingCallBtn" class="floating-button is-disabled" type="button" aria-label="Call vendor" aria-disabled="true">
-            <i class="ri-phone-line" aria-hidden="true"></i>
-            <span>Call vendor</span>
-        </button>
-        <button id="floatingWhatsappBtn" class="floating-button floating-button--whatsapp is-disabled" type="button" aria-label="WhatsApp vendor" aria-disabled="true">
-            <i class="ri-whatsapp-line" aria-hidden="true"></i>
-            <span>WhatsApp vendor</span>
-        </button>
-    </div>
     <footer class="product-footer">
         <div class="product-footer__inner">
             <nav class="footer-links" aria-label="Footer navigation">
