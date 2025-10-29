@@ -215,7 +215,8 @@ if ($totalRows > 0) {
         $selectStmt->execute();
         $result = $selectStmt->get_result();
         while ($row = $result->fetch_assoc()) {
-            $listings[] = format_listing_row($row, $columns);
+            $formatted = format_listing_row($row, $columns);
+            $listings[] = yustam_vendor_resolve_live_status($conn, $columns, $formatted);
         }
         $selectStmt->close();
     }
@@ -513,4 +514,116 @@ function vendor_listings_from_firestore(string $vendorUid, string $statusFilter,
     }
 
     return $response;
+}
+
+function yustam_vendor_resolve_live_status(mysqli $conn, array $columns, array $listing): array
+{
+    $statusRaw = isset($listing['status_raw']) ? (string)$listing['status_raw'] : '';
+    $identifier = isset($listing['id']) ? (string)$listing['id'] : '';
+    if ($identifier === '' || $statusRaw !== 'pending') {
+        return $listing;
+    }
+
+    try {
+        $document = yustam_firestore_get_document('listings/' . $identifier);
+    } catch (Throwable $exception) {
+        error_log('vendor listings status refresh failed: ' . $exception->getMessage());
+        return $listing;
+    }
+
+    if (!is_array($document) || !isset($document['fields']) || !is_array($document['fields'])) {
+        return $listing;
+    }
+
+    $fields = $document['fields'];
+    $firestoreStatus = '';
+    if (isset($fields['status'])) {
+        $firestoreStatus = (string) yustam_firestore_decode($fields['status']);
+    }
+
+    if ($firestoreStatus === '') {
+        return $listing;
+    }
+
+    $normalized = yustam_normalize_listing_status($firestoreStatus);
+    if ($normalized === '' || $normalized === $statusRaw) {
+        return $listing;
+    }
+
+    $listing['status'] = $normalized;
+    $listing['status_raw'] = $normalized;
+
+    yustam_vendor_update_listing_status($conn, $columns, $identifier, $normalized);
+
+    return $listing;
+}
+
+function yustam_vendor_update_listing_status(mysqli $conn, array $columns, string $listingId, string $status): void
+{
+    $table = yustam_listings_table_name();
+
+    $hasColumn = static function (string $name) use ($columns): bool {
+        return in_array($name, $columns, true);
+    };
+
+    if (!$hasColumn('status')) {
+        return;
+    }
+
+    $matchClauses = [];
+    $types = '';
+    $params = [];
+
+    if ($hasColumn('firestore_id')) {
+        $matchClauses[] = '`firestore_id` = ?';
+        $types .= 's';
+        $params[] = $listingId;
+    }
+    if ($hasColumn('public_id')) {
+        $matchClauses[] = '`public_id` = ?';
+        $types .= 's';
+        $params[] = $listingId;
+    }
+    if ($hasColumn('id') && ctype_digit($listingId)) {
+        $matchClauses[] = '`id` = ?';
+        $types .= 'i';
+        $params[] = (int)$listingId;
+    }
+
+    if (!$matchClauses) {
+        return;
+    }
+
+    $setParts = ['`status` = ?'];
+    $setTypes = 's';
+    $setParams = [$status];
+
+    if ($hasColumn('updated_at')) {
+        $setParts[] = '`updated_at` = NOW()';
+    }
+
+    $sql = sprintf(
+        'UPDATE `%s` SET %s WHERE %s LIMIT 1',
+        $table,
+        implode(', ', $setParts),
+        implode(' OR ', $matchClauses)
+    );
+
+    $stmt = $conn->prepare($sql);
+    if (!$stmt) {
+        error_log('vendor listings status sync prepare failed: ' . $conn->error);
+        return;
+    }
+
+    $signature = $setTypes . $types;
+    $values = array_merge($setParams, $params);
+    $stmt->bind_param($signature, ...$values);
+
+    try {
+        $stmt->execute();
+    } catch (Throwable $exception) {
+        error_log('vendor listings status sync failed: ' . $exception->getMessage());
+    }
+
+    $stmt->close();
 }
