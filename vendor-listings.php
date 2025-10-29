@@ -741,6 +741,112 @@ $displayTitle = $businessName !== '' ? $businessName : $vendorName;
                 border-radius: 20px 20px 0 0;
             }
         }
+
+        .confirm-modal {
+            position: fixed;
+            inset: 0;
+            display: none;
+            align-items: flex-end;
+            justify-content: center;
+            padding: 1.25rem;
+            z-index: 200;
+        }
+
+        .confirm-modal.is-open {
+            display: flex;
+        }
+
+        .confirm-modal__overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(17, 17, 17, 0.45);
+            backdrop-filter: blur(2px);
+        }
+
+        .confirm-modal__dialog {
+            position: relative;
+            width: 100%;
+            max-width: 420px;
+            background: var(--white);
+            border-radius: 24px;
+            box-shadow: 0 24px 48px rgba(17, 17, 17, 0.18);
+            padding: 1.75rem 1.5rem;
+            display: grid;
+            gap: 1.1rem;
+            text-align: center;
+        }
+
+        .confirm-modal__icon {
+            width: 72px;
+            height: 72px;
+            border-radius: 50%;
+            background: rgba(220, 38, 38, 0.12);
+            color: #DC2626;
+            display: grid;
+            place-items: center;
+            margin: 0 auto;
+            font-size: 2rem;
+        }
+
+        .confirm-modal__dialog h2 {
+            margin: 0;
+            font-size: 1.25rem;
+        }
+
+        .confirm-modal__dialog p {
+            margin: 0;
+            color: var(--muted);
+            font-size: 0.95rem;
+            line-height: 1.5;
+        }
+
+        .confirm-modal__actions {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .confirm-modal__actions button {
+            border: none;
+            border-radius: 999px;
+            padding: 0.85rem 1.2rem;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .confirm-modal__secondary {
+            background: rgba(17, 24, 39, 0.08);
+            color: rgba(17, 24, 39, 0.88);
+        }
+
+        .confirm-modal__danger {
+            background: rgba(220, 38, 38, 1);
+            color: #fff;
+        }
+
+        .confirm-modal__actions button:hover,
+        .confirm-modal__actions button:focus-visible {
+            transform: translateY(-1px);
+            box-shadow: 0 14px 28px rgba(17, 17, 17, 0.16);
+        }
+
+        @media (min-width: 640px) {
+            .confirm-modal {
+                align-items: center;
+            }
+
+            .confirm-modal__actions {
+                flex-direction: row;
+                justify-content: center;
+            }
+
+            .confirm-modal__secondary,
+            .confirm-modal__danger {
+                flex: 1;
+            }
+        }
     </style>
 </head>
 <body>
@@ -825,6 +931,21 @@ $displayTitle = $businessName !== '' ? $businessName : $vendorName;
             </button>
         </section>
     </main>
+
+    <div id="confirmModal" class="confirm-modal" aria-hidden="true" role="dialog">
+        <div class="confirm-modal__overlay" data-confirm-cancel></div>
+        <div class="confirm-modal__dialog" role="document">
+            <div class="confirm-modal__icon" aria-hidden="true">
+                <i class="ri-alert-line"></i>
+            </div>
+            <h2 id="confirmModalTitle">Delete listing?</h2>
+            <p id="confirmModalMessage">Removing this listing will take it offline for shoppers.</p>
+            <div class="confirm-modal__actions">
+                <button type="button" class="confirm-modal__secondary" data-confirm-cancel>Keep listing</button>
+                <button type="button" class="confirm-modal__danger" data-confirm-accept>Delete listing</button>
+            </div>
+        </div>
+    </div>
 
     <?php require __DIR__ . '/vendor-listing-editor-modal.php'; ?>
     <script src="theme-manager.js" defer></script>
