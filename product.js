@@ -1,7 +1,7 @@
 import { db, firebaseConfig } from './firebase.js';
 import { buildChatId as computeChatId, ensureChat } from './chat-service.js';
 import { deleteDoc, doc, getDoc, setDoc } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
-import { appendVerificationBadge, normalisePlanSlug, verificationPlanLabel } from './verification-badge.js';
+import { normalisePlanSlug, verificationPlanLabel } from './plan-utils.js';
 
 const urlParams = new URLSearchParams(window.location.search);
 
@@ -84,20 +84,6 @@ if (typeof window !== 'undefined') {
 const serverListing = serverInitialState?.listing || null;
 const serverVendorSnapshot = serverInitialState?.vendor || null;
 
-const clearBadges = (host) => {
-  if (!host) return;
-  host.querySelectorAll('.verification-badge').forEach((badge) => badge.remove());
-};
-
-const renderVerificationBadge = (host, planValue, isVerified, roleLabel) => {
-  if (!host) return;
-  clearBadges(host);
-  if (!isVerified) return;
-  appendVerificationBadge(host, planValue, {
-    verified: true,
-    roleLabel: roleLabel || verificationPlanLabel(planValue),
-  });
-};
 const PLACEHOLDER_IMAGE = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
 const QUICK_MESSAGE_ENDPOINT = './api/chat/send-message.php';
 const FIRESTORE_REST_BASE = firebaseConfig?.projectId
@@ -281,15 +267,6 @@ const applyVendorBadges = (planOverride, verificationOverride) => {
     document.body.dataset.vendorPlanLabel = planRoleLabel || '';
     document.body.dataset.vendorPlanSlug = planSlug;
     document.body.dataset.vendorVerified = verificationState;
-  }
-
-  renderVerificationBadge(vendorNameEl, planValue, verificationState === 'verified', planRoleLabel);
-  if (vendorBusinessEl && !vendorBusinessEl.hidden) {
-    renderVerificationBadge(vendorBusinessEl, planValue, verificationState === 'verified', planRoleLabel);
-  }
-  const quickHeadingEl = document.getElementById('quickChatCard')?.querySelector('h3');
-  if (quickHeadingEl) {
-    renderVerificationBadge(quickHeadingEl, planValue, verificationState === 'verified', planRoleLabel);
   }
 
   if (vendorBadgesContainer) {
@@ -738,12 +715,8 @@ const updateQuickChatDataset = () => {
   }
   if (quickChatHeading) {
     quickChatHeading.textContent = `Chat with ${currentVendorName || 'Vendor'}`;
-    renderVerificationBadge(
-      quickChatHeading,
-      datasetPlan,
-      datasetVerification === 'verified',
-      datasetPlanLabel
-    );
+    quickChatHeading.dataset.vendorVerified = datasetVerification;
+    quickChatHeading.dataset.vendorPlan = datasetPlan;
   }
 };
 

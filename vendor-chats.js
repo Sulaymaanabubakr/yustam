@@ -4,7 +4,7 @@ import {
   subscribeTyping,
   showToast,
 } from './chat-service.js';
-import { appendVerificationBadge, verificationPlanLabel, normalisePlanSlug } from './verification-badge.js';
+import { verificationPlanLabel, normalisePlanSlug } from './plan-utils.js';
 
 const bootstrap = window.__CHAT_BOOTSTRAP__ || {};
 if (bootstrap.role !== 'vendor' || !bootstrap.vendor?.uid) {
@@ -56,19 +56,9 @@ if (planLabelEl) {
     bootstrap.vendor?.plan_label || verificationPlanLabel(currentVendorPlan);
 }
 
-const applyHeaderBadge = () => {
-  if (!headerVendorNameEl) return;
-  headerVendorNameEl.querySelectorAll('.verification-badge').forEach((badge) => badge.remove());
-  if (currentVendorVerifiedState === 'verified') {
-    const label = document.body.dataset.vendorPlanLabel || verificationPlanLabel(currentVendorPlan);
-    appendVerificationBadge(headerVendorNameEl, currentVendorPlan, {
-      verified: true,
-      roleLabel: label,
-    });
-  }
-};
-
-applyHeaderBadge();
+if (headerVendorNameEl) {
+  headerVendorNameEl.dataset.vendorVerified = currentVendorVerifiedState;
+}
 
 let overlayHidden = false;
 document.body?.classList.add('is-loading');

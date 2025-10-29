@@ -1,4 +1,3 @@
-import { appendVerificationBadge, verificationPlanLabel } from './verification-badge.js';
 
 const vendorId = document.body?.dataset?.vendorId?.trim() || '';
 
@@ -54,10 +53,6 @@ const safeLink = (element, value, href) => {
   element.removeAttribute('aria-disabled');
   element.style.pointerEvents = '';
   element.style.opacity = '';
-};
-
-const clearBadges = (host) => {
-  host?.querySelectorAll('.verification-badge').forEach((badge) => badge.remove());
 };
 
 const hideEmptyState = () => {
@@ -221,23 +216,11 @@ const applyVendorProfile = (vendor) => {
   }
 
   if (nameEl) {
-    clearBadges(nameEl);
-    if (isVerified) {
-      appendVerificationBadge(nameEl, planLabel, {
-        verified: true,
-        roleLabel: verificationPlanLabel(planLabel),
-      });
-    }
+    nameEl.dataset.vendorVerified = verificationState;
   }
 
   if (businessEl && businessName) {
-    clearBadges(businessEl);
-    if (isVerified) {
-      appendVerificationBadge(businessEl, planLabel, {
-        verified: true,
-        roleLabel: verificationPlanLabel(planLabel),
-      });
-    }
+    businessEl.dataset.vendorVerified = verificationState;
   }
 
   if (locationEl) {

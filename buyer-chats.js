@@ -4,7 +4,6 @@ import {
   subscribeTyping,
   showToast,
 } from './chat-service.js';
-import { appendVerificationBadge, verificationPlanLabel } from './verification-badge.js';
 
 const bootstrap = window.__CHAT_BOOTSTRAP__ || {};
 if (bootstrap.role !== 'buyer' || !bootstrap.buyer?.uid) {
@@ -177,15 +176,8 @@ function renderChats(chats) {
     const title = document.createElement('strong');
     title.textContent = chat.vendor_name || 'Vendor';
     headerRow.appendChild(title);
-    const vendorPlanValue = chat.vendor_plan || '';
     const vendorVerificationState = String(chat.vendor_verified || chat.vendor_verification || '').toLowerCase();
-    if (vendorVerificationState === 'verified') {
-      const planLabel = chat.vendor_plan_label || verificationPlanLabel(vendorPlanValue);
-      appendVerificationBadge(title, vendorPlanValue, {
-        verified: true,
-        roleLabel: planLabel,
-      });
-    }
+    title.dataset.vendorVerified = vendorVerificationState;
 
     const lastDate = toDate(chat.last_ts);
     const timeText = lastDate ? relativeTimeFrom(lastDate) : '';
