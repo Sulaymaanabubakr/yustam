@@ -10,6 +10,26 @@ import {
 } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
 import { setupListingEditor, statusLabel, formatCurrency } from './vendor-listing-editor.js';
 
+if ('scrollRestoration' in history) {
+  history.scrollRestoration = 'manual';
+}
+
+const resetScrollPosition = () => {
+  window.scrollTo({ top: 0, behavior: 'auto' });
+};
+
+if (document.readyState === 'complete' || document.readyState === 'interactive') {
+  resetScrollPosition();
+} else {
+  window.addEventListener('DOMContentLoaded', resetScrollPosition, { once: true });
+}
+
+window.addEventListener('pageshow', (event) => {
+  if (event.persisted) {
+    resetScrollPosition();
+  }
+});
+
 let vendorData = {};
 let vendorStats = {};
 let vendorListings = [];
