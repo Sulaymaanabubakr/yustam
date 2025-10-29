@@ -2,6 +2,8 @@
 require_once __DIR__ . '/session-path.php';
 session_start();
 require_once __DIR__ . '/verification-badge.php';
+require_once __DIR__ . '/firebase-support.php';
+require_once __DIR__ . '/db.php';
 
 $productId = isset($_GET['id']) ? trim((string) $_GET['id']) : '';
 if ($productId === '') {
@@ -9,6 +11,15 @@ if ($productId === '') {
 }
 $productTitle = 'Loading listing...';
 $productPrice = 0;
+$productPriceLabel = 'Contact vendor';
+$productDescription = 'The vendor has not provided additional details yet.';
+$productStatusValue = 'checking';
+$productStatusLabel = 'Checking availability';
+$productCategory = '';
+$productSubcategory = '';
+$productCategoryLabel = '';
+$productImages = [];
+$primaryImage = '';
 
 $vendorUidParam = isset($_GET['vendorUid']) ? trim((string) $_GET['vendorUid']) : '';
 $vendorIdParam = isset($_GET['vendorId']) ? trim((string) $_GET['vendorId']) : '';
@@ -38,6 +49,32 @@ if ($vendorUid === '' && $vendorId !== '' && $vendorId !== $vendorNumericIdSessi
 $vendorUid = trim((string) $vendorUid);
 
 $vendorName = 'Marketplace Vendor';
+$vendorBusinessName = '';
+$vendorEmail = '';
+$vendorPhone = '';
+$vendorWhatsapp = '';
+$vendorLocation = '';
+$vendorCity = '';
+$vendorState = '';
+$vendorAddress = '';
+$vendorPhoto = '';
+$vendorSince = '';
+$vendorNumericId = $vendorNumericIdSession;
+$vendorIdCandidates = array_filter(
+    [$vendorNumericIdSession, $vendorIdParam, $vendorId],
+    static function ($value) {
+        return is_string($value) && trim($value) !== '';
+    }
+);
+$vendorUidCandidates = array_filter(
+    [$vendorUidParam, $vendorFirebaseUidSession, $vendorLegacyUidSession, $vendorUid],
+    static function ($value) {
+        return is_string($value) && trim($value) !== '';
+    }
+);
+$vendorEmailCandidates = [];
+$vendorRecord = null;
+$vendorFirestore = null;
 
 $buyerNumericId = isset($_SESSION['buyer_id']) ? (string) $_SESSION['buyer_id'] : '';
 $buyerFirebaseUidSession = isset($_SESSION['buyer_firebase_uid']) ? trim((string) $_SESSION['buyer_firebase_uid']) : '';
@@ -145,20 +182,799 @@ function yustam_verification_icon(string $state): string
     return 'ri-alert-line';
 }
 
+$friendlyNormalizerPattern = '/[^a-z0-9]+/';
+
+function yustam_product_first_non_empty(array $values): string
+{
+    foreach ($values as $value) {
+        if (is_string($value)) {
+            $trimmed = trim($value);
+            if ($trimmed !== '') {
+                return $trimmed;
+            }
+        } elseif (is_numeric($value)) {
+            $stringValue = trim((string) $value);
+            if ($stringValue !== '') {
+                return $stringValue;
+            }
+        }
+    }
+
+    return '';
+}
+
+function yustam_product_format_currency($amount): string
+{
+    if (!is_numeric($amount)) {
+        return 'Contact vendor';
+    }
+    $value = (float) $amount;
+    if ($value <= 0) {
+        return 'Contact vendor';
+    }
+
+    return '₦' . number_format($value, 0, '.', ',');
+}
+
+function yustam_product_status_label(string $status): string
+{
+    $normalized = strtolower(trim($status));
+
+    switch ($normalized) {
+        case '':
+        case 'approved':
+        case 'available':
+        case 'active':
+            return 'Available';
+        case 'pending':
+        case 'in_review':
+        case 'in-review':
+        case 'under review':
+        case 'processing':
+            return 'Pending Approval';
+        case 'sold':
+        case 'soldout':
+        case 'sold_out':
+            return 'Sold Out';
+        case 'suspended':
+        case 'disabled':
+        case 'unavailable':
+        case 'inactive':
+            return 'Temporarily Unavailable';
+        default:
+            $label = str_replace(['_', '-'], ' ', $normalized);
+            return ucwords($label);
+    }
+}
+
+function yustam_product_decode_firestore_value($value)
+{
+    if (!is_array($value)) {
+        return $value;
+    }
+
+    if (array_key_exists('stringValue', $value)) {
+        return (string) $value['stringValue'];
+    }
+    if (array_key_exists('integerValue', $value)) {
+        return (int) $value['integerValue'];
+    }
+    if (array_key_exists('doubleValue', $value)) {
+        return (float) $value['doubleValue'];
+    }
+    if (array_key_exists('booleanValue', $value)) {
+        return (bool) $value['booleanValue'];
+    }
+    if (array_key_exists('timestampValue', $value)) {
+        return (string) $value['timestampValue'];
+    }
+    if (array_key_exists('mapValue', $value) && isset($value['mapValue']['fields'])) {
+        return yustam_product_decode_firestore_fields($value['mapValue']['fields']);
+    }
+    if (array_key_exists('arrayValue', $value) && isset($value['arrayValue']['values']) && is_array($value['arrayValue']['values'])) {
+        $decoded = [];
+        foreach ($value['arrayValue']['values'] as $inner) {
+            $decoded[] = yustam_product_decode_firestore_value($inner);
+        }
+        return $decoded;
+    }
+    if (array_key_exists('nullValue', $value)) {
+        return null;
+    }
+    if (array_key_exists('referenceValue', $value)) {
+        return (string) $value['referenceValue'];
+    }
+
+    return $value;
+}
+
+function yustam_product_decode_firestore_fields(array $fields): array
+{
+    $decoded = [];
+    foreach ($fields as $key => $value) {
+        $decoded[$key] = yustam_product_decode_firestore_value($value);
+    }
+    return $decoded;
+}
+
+function yustam_product_fetch_firestore_document(string $collection, string $id): ?array
+{
+    $collection = trim($collection);
+    $id = trim($id);
+    if ($collection === '' || $id === '') {
+        return null;
+    }
+
+    try {
+        if (yustam_firebase_service_account_available()) {
+            $projectId = yustam_firebase_project_id();
+            $endpoint = sprintf(
+                'https://firestore.googleapis.com/v1/projects/%s/databases/(default)/documents/%s/%s',
+                rawurlencode($projectId),
+                rawurlencode($collection),
+                rawurlencode($id)
+            );
+            $headers = [
+                'Authorization: Bearer ' . yustam_firebase_access_token(['https://www.googleapis.com/auth/datastore']),
+            ];
+            $response = yustam_firebase_http_json('GET', $endpoint, null, $headers);
+        } else {
+            $config = yustam_firebase_config();
+            $projectId = isset($config['projectId']) ? trim((string) $config['projectId']) : '';
+            if ($projectId === '') {
+                return null;
+            }
+            $endpoint = sprintf(
+                'https://firestore.googleapis.com/v1/projects/%s/databases/(default)/documents/%s/%s',
+                rawurlencode($projectId),
+                rawurlencode($collection),
+                rawurlencode($id)
+            );
+            $apiKey = isset($config['apiKey']) ? trim((string) $config['apiKey']) : '';
+            if ($apiKey !== '') {
+                $endpoint .= '?key=' . rawurlencode($apiKey);
+            }
+            $response = yustam_firebase_http_json('GET', $endpoint);
+        }
+
+        $status = (int) ($response['status'] ?? 0);
+        if ($status === 404) {
+            return null;
+        }
+        if ($status < 200 || $status >= 300) {
+            throw new RuntimeException('Firestore request failed with status ' . $status);
+        }
+
+        $payload = json_decode((string) ($response['body'] ?? ''), true);
+        if (!is_array($payload) || !isset($payload['fields']) || !is_array($payload['fields'])) {
+            return null;
+        }
+
+        $decoded = yustam_product_decode_firestore_fields($payload['fields']);
+        $decoded['id'] = $id;
+        if (isset($payload['name'])) {
+            $decoded['namePath'] = (string) $payload['name'];
+        }
+        if (isset($payload['createTime'])) {
+            $decoded['createTime'] = (string) $payload['createTime'];
+        }
+        if (isset($payload['updateTime'])) {
+            $decoded['updateTime'] = (string) $payload['updateTime'];
+        }
+
+        return $decoded;
+    } catch (Throwable $error) {
+        error_log('Product Firestore fetch failed: ' . $error->getMessage());
+        return null;
+    }
+}
+
+function yustam_product_fetch_first_firestore_document(string $collection, array $candidates): ?array
+{
+    $checked = [];
+    foreach ($candidates as $candidate) {
+        if (!is_string($candidate) && !is_numeric($candidate)) {
+            continue;
+        }
+        $id = trim((string) $candidate);
+        if ($id === '' || isset($checked[$id])) {
+            continue;
+        }
+        $checked[$id] = true;
+        $document = yustam_product_fetch_firestore_document($collection, $id);
+        if ($document !== null) {
+            return $document;
+        }
+    }
+
+    return null;
+}
+
+function yustam_product_sanitise_phone(string $phone): string
+{
+    $sanitised = preg_replace('/[^0-9+]/', '', $phone);
+    if (!is_string($sanitised)) {
+        return '';
+    }
+
+    return ltrim($sanitised);
+}
+
+function yustam_product_format_joined_date($value): string
+{
+    if (!is_string($value)) {
+        return '';
+    }
+    $trimmed = trim($value);
+    if ($trimmed === '') {
+        return '';
+    }
+
+    $timestamp = strtotime($trimmed);
+    if ($timestamp === false) {
+        return '';
+    }
+
+    return date('M j, Y', $timestamp);
+}
+
 $vendorPlanInput = $_GET['plan'] ?? '';
 if (!is_string($vendorPlanInput)) {
     $vendorPlanInput = '';
 }
 $vendorPlanInput = trim($vendorPlanInput);
 $vendorPlan = $vendorPlanInput !== '' ? $vendorPlanInput : 'Free';
+
+$vendorVerifiedInput = $_GET['verified'] ?? '';
+if (!is_string($vendorVerifiedInput)) {
+    $vendorVerifiedInput = '';
+}
+$vendorVerificationState = $vendorVerifiedInput !== '' ? yustam_normalise_verification($vendorVerifiedInput) : 'unverified';
+
+$listingDocument = null;
+if ($productId !== '' && $productId !== 'listing-preview') {
+    $listingDocument = yustam_product_fetch_firestore_document('listings', $productId);
+    if ($listingDocument) {
+        $titleCandidate = yustam_product_first_non_empty([
+            $listingDocument['title'] ?? null,
+            $listingDocument['productTitle'] ?? null,
+            $listingDocument['product_name'] ?? null,
+            $listingDocument['name'] ?? null,
+            $listingDocument['model'] ?? null,
+        ]);
+        if ($titleCandidate !== '') {
+            $productTitle = $titleCandidate;
+        }
+
+        $priceCandidate = $listingDocument['price'] ?? ($listingDocument['amount'] ?? null);
+        if (is_numeric($priceCandidate)) {
+            $productPrice = (float) $priceCandidate;
+            $productPriceLabel = yustam_product_format_currency($productPrice);
+        }
+
+        $descriptionCandidate = yustam_product_first_non_empty([
+            $listingDocument['description'] ?? null,
+            $listingDocument['details'] ?? null,
+            $listingDocument['summary'] ?? null,
+            $productDescription,
+        ]);
+        if ($descriptionCandidate !== '') {
+            $productDescription = $descriptionCandidate;
+        }
+
+        $statusCandidate = yustam_product_first_non_empty([
+            $listingDocument['status'] ?? null,
+            $listingDocument['state'] ?? null,
+            $listingDocument['listingStatus'] ?? null,
+        ]);
+        if ($statusCandidate !== '') {
+            $productStatusValue = strtolower($statusCandidate);
+        }
+
+        $productCategory = yustam_product_first_non_empty([
+            $listingDocument['category'] ?? null,
+            $listingDocument['department'] ?? null,
+        ]);
+        $productSubcategory = yustam_product_first_non_empty([
+            $listingDocument['subcategory'] ?? null,
+            $listingDocument['subCategory'] ?? null,
+            $listingDocument['collection'] ?? null,
+        ]);
+        $categoryParts = array_filter([$productCategory, $productSubcategory], static function ($value) {
+            return is_string($value) && trim($value) !== '';
+        });
+        $productCategoryLabel = $categoryParts ? implode(' / ', array_map('trim', $categoryParts)) : '';
+
+        $singleImageFields = ['primaryImage', 'featuredImage', 'coverImage', 'mainImage', 'image', 'thumbnail'];
+        foreach ($singleImageFields as $field) {
+            if (!empty($listingDocument[$field])) {
+                $productImages[] = trim((string) $listingDocument[$field]);
+            }
+        }
+        $arrayImageFields = ['imageUrls', 'images', 'gallery', 'photos', 'media', 'imageList'];
+        foreach ($arrayImageFields as $field) {
+            if (!empty($listingDocument[$field]) && is_array($listingDocument[$field])) {
+                foreach ($listingDocument[$field] as $imageValue) {
+                    $imageValue = trim((string) $imageValue);
+                    if ($imageValue !== '') {
+                        $productImages[] = $imageValue;
+                    }
+                }
+            }
+        }
+
+        $listingVendorIdValue = yustam_product_first_non_empty([
+            $listingDocument['vendorID'] ?? null,
+            $listingDocument['vendorId'] ?? null,
+            $listingDocument['vendor_id'] ?? null,
+            $listingDocument['vendor'] ?? null,
+        ]);
+        if ($listingVendorIdValue !== '') {
+            $vendorId = $listingVendorIdValue;
+            $vendorIdCandidates[] = $listingVendorIdValue;
+        }
+
+        $listingVendorUidValue = yustam_product_first_non_empty([
+            $listingDocument['vendorUid'] ?? null,
+            $listingDocument['vendorUID'] ?? null,
+            $listingDocument['vendorFirebaseUid'] ?? null,
+        ]);
+        if ($listingVendorUidValue !== '') {
+            $vendorUid = $listingVendorUidValue;
+            $vendorUidCandidates[] = $listingVendorUidValue;
+        }
+
+        $listingVendorName = yustam_product_first_non_empty([
+            $listingDocument['vendorName'] ?? null,
+            $listingDocument['vendorDisplayName'] ?? null,
+            $listingDocument['vendorBusiness'] ?? null,
+            $listingDocument['vendor'] ?? null,
+        ]);
+        if ($listingVendorName !== '') {
+            $vendorName = $listingVendorName;
+        }
+
+        $listingVendorBusiness = yustam_product_first_non_empty([
+            $listingDocument['vendorBusiness'] ?? null,
+            $listingDocument['businessName'] ?? null,
+            $listingDocument['storeName'] ?? null,
+        ]);
+        if ($listingVendorBusiness !== '') {
+            $vendorBusinessName = $listingVendorBusiness;
+        }
+
+        $listingVendorPlan = yustam_product_first_non_empty([
+            $listingDocument['vendorPlan'] ?? null,
+            $listingDocument['plan'] ?? null,
+        ]);
+        if ($listingVendorPlan !== '') {
+            $vendorPlan = $listingVendorPlan;
+        }
+
+        $listingVendorVerification = yustam_product_first_non_empty([
+            $listingDocument['vendorVerified'] ?? null,
+            $listingDocument['verification'] ?? null,
+            $listingDocument['verificationStatus'] ?? null,
+        ]);
+        if ($listingVendorVerification !== '') {
+            $vendorVerificationState = yustam_normalise_verification($listingVendorVerification);
+        }
+
+        $listingVendorEmail = yustam_product_first_non_empty([
+            $listingDocument['vendorEmail'] ?? null,
+            $listingDocument['vendorEmailAddress'] ?? null,
+        ]);
+        if ($listingVendorEmail !== '') {
+            $vendorEmail = $listingVendorEmail;
+            $vendorEmailCandidates[] = $listingVendorEmail;
+        }
+
+        $listingVendorPhone = yustam_product_first_non_empty([
+            $listingDocument['vendorPhone'] ?? null,
+            $listingDocument['vendorPhoneNumber'] ?? null,
+            $listingDocument['vendorContactPhone'] ?? null,
+        ]);
+        if ($listingVendorPhone !== '') {
+            $vendorPhone = $listingVendorPhone;
+        }
+
+        $listingVendorWhatsapp = yustam_product_first_non_empty([
+            $listingDocument['vendorWhatsapp'] ?? null,
+            $listingDocument['vendorWhatsApp'] ?? null,
+        ]);
+        if ($listingVendorWhatsapp !== '') {
+            $vendorWhatsapp = $listingVendorWhatsapp;
+        }
+
+        $listingVendorLocation = yustam_product_first_non_empty([
+            $listingDocument['vendorLocation'] ?? null,
+            $listingDocument['location'] ?? null,
+        ]);
+        if ($listingVendorLocation !== '') {
+            $vendorLocation = $listingVendorLocation;
+        }
+
+        $listingVendorCity = yustam_product_first_non_empty([
+            $listingDocument['vendorCity'] ?? null,
+            $listingDocument['city'] ?? null,
+        ]);
+        if ($listingVendorCity !== '') {
+            $vendorCity = $listingVendorCity;
+        }
+
+        $listingVendorState = yustam_product_first_non_empty([
+            $listingDocument['vendorState'] ?? null,
+            $listingDocument['state'] ?? null,
+        ]);
+        if ($listingVendorState !== '') {
+            $vendorState = $listingVendorState;
+        }
+    }
+}
+
+$vendorIdCandidates = array_values(array_filter(array_unique(array_map('trim', $vendorIdCandidates)), static function ($value) {
+    return $value !== '';
+}));
+$vendorUidCandidates = array_values(array_filter(array_unique(array_map('trim', $vendorUidCandidates)), static function ($value) {
+    return $value !== '';
+}));
+$vendorEmailCandidates = array_values(array_filter(array_unique(array_map('trim', $vendorEmailCandidates)), static function ($value) {
+    return $value !== '';
+}));
+
+$allVendorLookupCandidates = array_values(array_unique(array_merge($vendorIdCandidates, $vendorUidCandidates)));
+if (!$vendorRecord && $allVendorLookupCandidates) {
+    $vendorConn = null;
+    try {
+        $vendorConn = get_db_connection();
+    } catch (Throwable $error) {
+        $vendorConn = null;
+    }
+    if ($vendorConn) {
+        foreach ($allVendorLookupCandidates as $candidate) {
+            if (ctype_digit($candidate)) {
+                $lookup = yustam_vendor_find_by_id((int) $candidate, $vendorConn);
+                if ($lookup) {
+                    $vendorRecord = $lookup;
+                    break;
+                }
+            }
+        }
+        if (!$vendorRecord) {
+            foreach ($allVendorLookupCandidates as $candidate) {
+                $lookup = yustam_vendor_find_by_uid($candidate, $vendorConn);
+                if ($lookup) {
+                    $vendorRecord = $lookup;
+                    break;
+                }
+            }
+        }
+        if (!$vendorRecord && $vendorEmailCandidates) {
+            foreach ($vendorEmailCandidates as $candidate) {
+                $lookup = yustam_vendor_find_by_email($candidate, $vendorConn);
+                if ($lookup) {
+                    $vendorRecord = $lookup;
+                    break;
+                }
+            }
+        }
+    }
+}
+
+if ($vendorRecord) {
+    if (isset($vendorRecord['id']) && trim((string) $vendorRecord['id']) !== '') {
+        $vendorNumericId = trim((string) $vendorRecord['id']);
+        $vendorId = $vendorNumericId;
+    }
+
+    $recordUid = yustam_product_first_non_empty([
+        $vendorRecord['vendor_uid'] ?? null,
+        $vendorRecord['firebase_uid'] ?? null,
+    ]);
+    if ($recordUid !== '') {
+        $vendorUid = $recordUid;
+        $vendorUidCandidates[] = $recordUid;
+    }
+
+    $recordName = yustam_product_first_non_empty([
+        $vendorRecord['business_name'] ?? null,
+        $vendorRecord['store_name'] ?? null,
+        $vendorRecord['company_name'] ?? null,
+        $vendorRecord['full_name'] ?? null,
+        $vendorRecord['name'] ?? null,
+    ]);
+    if ($recordName !== '') {
+        $vendorName = $recordName;
+    }
+
+    $recordBusinessName = yustam_product_first_non_empty([
+        $vendorRecord['business_name'] ?? null,
+        $vendorRecord['store_name'] ?? null,
+        $vendorRecord['company_name'] ?? null,
+    ]);
+    if ($recordBusinessName !== '') {
+        $vendorBusinessName = $recordBusinessName;
+    }
+
+    $recordPlan = yustam_product_first_non_empty([
+        $vendorRecord['plan'] ?? null,
+        $vendorRecord['plan_name'] ?? null,
+    ]);
+    if ($recordPlan !== '') {
+        $vendorPlan = $recordPlan;
+    }
+
+    foreach (['verification_status', 'verification_state', 'kyc_status', 'verification_stage', 'verified', 'status'] as $statusColumn) {
+        if (isset($vendorRecord[$statusColumn])) {
+            $statusValue = yustam_product_first_non_empty([$vendorRecord[$statusColumn]]);
+            if ($statusValue !== '') {
+                $vendorVerificationState = yustam_normalise_verification($statusValue);
+                break;
+            }
+        }
+    }
+
+    $recordEmail = yustam_product_first_non_empty([
+        $vendorRecord['email'] ?? null,
+        $vendorRecord['contact_email'] ?? null,
+    ]);
+    if ($recordEmail !== '') {
+        $vendorEmail = $recordEmail;
+        $vendorEmailCandidates[] = $recordEmail;
+    }
+
+    $recordPhone = yustam_product_first_non_empty([
+        $vendorRecord['phone'] ?? null,
+        $vendorRecord['contact_phone'] ?? null,
+        $vendorRecord['whatsapp'] ?? null,
+        $vendorRecord['whatsapp_number'] ?? null,
+    ]);
+    if ($recordPhone !== '') {
+        $vendorPhone = $recordPhone;
+    }
+
+    $recordWhatsapp = yustam_product_first_non_empty([
+        $vendorRecord['whatsapp'] ?? null,
+        $vendorRecord['whatsapp_number'] ?? null,
+    ]);
+    if ($recordWhatsapp !== '') {
+        $vendorWhatsapp = $recordWhatsapp;
+    }
+
+    $recordAddress = yustam_product_first_non_empty([
+        $vendorRecord['business_address'] ?? null,
+        $vendorRecord['address'] ?? null,
+    ]);
+    if ($recordAddress !== '') {
+        $vendorAddress = $recordAddress;
+    }
+
+    $recordCity = yustam_product_first_non_empty([
+        $vendorRecord['city'] ?? null,
+        $vendorRecord['lga'] ?? null,
+    ]);
+    if ($recordCity !== '') {
+        $vendorCity = $recordCity;
+    }
+
+    $recordState = yustam_product_first_non_empty([
+        $vendorRecord['state'] ?? null,
+        $vendorRecord['region'] ?? null,
+    ]);
+    if ($recordState !== '') {
+        $vendorState = $recordState;
+    }
+
+    $recordPhoto = yustam_product_first_non_empty([
+        $vendorRecord['profile_photo'] ?? null,
+        $vendorRecord['avatar_url'] ?? null,
+        $vendorRecord['logo'] ?? null,
+    ]);
+    if ($recordPhoto !== '') {
+        $vendorPhoto = $recordPhoto;
+    }
+
+    $recordSince = yustam_product_first_non_empty([
+        $vendorRecord['created_at'] ?? null,
+        $vendorRecord['registered_at'] ?? null,
+        $vendorRecord['joined_at'] ?? null,
+    ]);
+    if ($recordSince !== '') {
+        $formattedSince = yustam_product_format_joined_date($recordSince);
+        if ($formattedSince !== '') {
+            $vendorSince = $formattedSince;
+        }
+    }
+}
+
+$vendorIdCandidates = array_values(array_filter(array_unique(array_merge($vendorIdCandidates, isset($vendorRecord['id']) ? [trim((string) $vendorRecord['id'])] : [])), static function ($value) {
+    return $value !== '';
+}));
+$vendorUidCandidates = array_values(array_filter(array_unique(array_merge($vendorUidCandidates, isset($vendorRecord['vendor_uid']) ? [trim((string) $vendorRecord['vendor_uid'])] : [])), static function ($value) {
+    return $value !== '';
+}));
+
+$vendorFirestoreCandidates = array_merge($vendorUidCandidates, $vendorIdCandidates);
+if ($listingDocument) {
+    $vendorFirestoreCandidates[] = $listingDocument['vendorFirebaseUid'] ?? '';
+    $vendorFirestoreCandidates[] = $listingDocument['vendorUid'] ?? '';
+    $vendorFirestoreCandidates[] = $listingDocument['vendorUID'] ?? '';
+}
+if ($vendorRecord) {
+    $vendorFirestoreCandidates[] = $vendorRecord['firebase_uid'] ?? '';
+    $vendorFirestoreCandidates[] = $vendorRecord['vendor_uid'] ?? '';
+}
+$vendorFirestoreCandidates = array_values(array_filter(array_unique(array_map('trim', $vendorFirestoreCandidates)), static function ($value) {
+    return $value !== '';
+}));
+$vendorFirestore = yustam_product_fetch_first_firestore_document('vendors', $vendorFirestoreCandidates);
+if ($vendorFirestore) {
+    $firestoreUid = yustam_product_first_non_empty([
+        $vendorFirestore['vendorUid'] ?? null,
+        $vendorFirestore['uid'] ?? null,
+        $vendorFirestore['id'] ?? null,
+    ]);
+    if ($firestoreUid !== '') {
+        $vendorUid = $firestoreUid;
+    }
+
+    $firestoreName = yustam_product_first_non_empty([
+        $vendorFirestore['displayName'] ?? null,
+        $vendorFirestore['businessName'] ?? null,
+        $vendorFirestore['brand'] ?? null,
+        $vendorFirestore['name'] ?? null,
+    ]);
+    if ($firestoreName !== '') {
+        $vendorName = $firestoreName;
+    }
+
+    $firestoreBusiness = yustam_product_first_non_empty([
+        $vendorFirestore['businessName'] ?? null,
+        $vendorFirestore['storeName'] ?? null,
+    ]);
+    if ($firestoreBusiness !== '') {
+        $vendorBusinessName = $firestoreBusiness;
+    }
+
+    $firestorePlan = yustam_product_first_non_empty([
+        $vendorFirestore['plan'] ?? null,
+        $vendorFirestore['planLabel'] ?? null,
+    ]);
+    if ($firestorePlan !== '') {
+        $vendorPlan = $firestorePlan;
+    }
+
+    $firestoreVerification = yustam_product_first_non_empty([
+        $vendorFirestore['verificationStatus'] ?? null,
+        $vendorFirestore['verification'] ?? null,
+        $vendorFirestore['status'] ?? null,
+    ]);
+    if ($firestoreVerification !== '') {
+        $vendorVerificationState = yustam_normalise_verification($firestoreVerification);
+    }
+
+    $firestoreEmail = yustam_product_first_non_empty([
+        $vendorFirestore['email'] ?? null,
+        $vendorFirestore['contactEmail'] ?? null,
+    ]);
+    if ($firestoreEmail !== '') {
+        $vendorEmail = $firestoreEmail;
+        $vendorEmailCandidates[] = $firestoreEmail;
+    }
+
+    $firestorePhone = yustam_product_first_non_empty([
+        $vendorFirestore['phone'] ?? null,
+        $vendorFirestore['contactPhone'] ?? null,
+        $vendorFirestore['phoneNumber'] ?? null,
+    ]);
+    if ($firestorePhone !== '') {
+        $vendorPhone = $firestorePhone;
+    }
+
+    $firestoreWhatsapp = yustam_product_first_non_empty([
+        $vendorFirestore['whatsapp'] ?? null,
+        $vendorFirestore['whatsApp'] ?? null,
+    ]);
+    if ($firestoreWhatsapp !== '') {
+        $vendorWhatsapp = $firestoreWhatsapp;
+    }
+
+    $firestoreLocation = yustam_product_first_non_empty([
+        $vendorFirestore['location'] ?? null,
+        $vendorFirestore['address'] ?? null,
+    ]);
+    if ($firestoreLocation !== '') {
+        $vendorLocation = $firestoreLocation;
+    }
+
+    $firestoreCity = yustam_product_first_non_empty([
+        $vendorFirestore['city'] ?? null,
+        $vendorFirestore['lga'] ?? null,
+    ]);
+    if ($firestoreCity !== '') {
+        $vendorCity = $firestoreCity;
+    }
+
+    $firestoreState = yustam_product_first_non_empty([
+        $vendorFirestore['state'] ?? null,
+        $vendorFirestore['region'] ?? null,
+    ]);
+    if ($firestoreState !== '') {
+        $vendorState = $firestoreState;
+    }
+
+    $firestorePhoto = yustam_product_first_non_empty([
+        $vendorFirestore['profilePhoto'] ?? null,
+        $vendorFirestore['avatarUrl'] ?? null,
+        $vendorFirestore['logo'] ?? null,
+    ]);
+    if ($firestorePhoto !== '') {
+        $vendorPhoto = $firestorePhoto;
+    }
+
+    if ($vendorSince === '') {
+        $firestoreSince = yustam_product_first_non_empty([
+            $vendorFirestore['createdAt'] ?? null,
+            $vendorFirestore['created_at'] ?? null,
+            $vendorFirestore['joinedAt'] ?? null,
+        ]);
+        if ($firestoreSince !== '') {
+            $formattedSince = yustam_product_format_joined_date($firestoreSince);
+            if ($formattedSince !== '') {
+                $vendorSince = $formattedSince;
+            }
+        }
+    }
+}
+
+$productImages = array_values(array_filter(array_unique(array_map('trim', $productImages)), static function ($image) {
+    return $image !== '';
+}));
+if ($primaryImage === '' && $productImages) {
+    $primaryImage = $productImages[0];
+}
+
+$productTitle = trim($productTitle) !== '' && $productTitle !== 'Loading listing...' ? $productTitle : 'Marketplace Listing';
+$productStatusValue = ($productStatusValue === '' || $productStatusValue === 'checking') ? 'available' : $productStatusValue;
+$productStatusLabel = yustam_product_status_label($productStatusValue);
+$productStatusClass = 'status-chip';
+$productStatusSlug = preg_replace('/[^a-z0-9]+/', '-', strtolower($productStatusValue));
+if ($productStatusSlug !== '') {
+    $productStatusClass .= ' status-' . $productStatusSlug;
+}
+
+if ($vendorName === '') {
+    $vendorName = 'Marketplace Vendor';
+}
+if ($vendorBusinessName === '') {
+    $vendorBusinessName = $vendorName;
+}
+if ($vendorUid === '' && $vendorId !== '') {
+    $vendorUid = (string) $vendorId;
+}
+if (($vendorNumericId === '' || !ctype_digit((string) $vendorNumericId)) && ctype_digit((string) $vendorId)) {
+    $vendorNumericId = (string) $vendorId;
+}
+
+$vendorLocationDisplay = '';
+if (trim((string) $vendorLocation) !== '') {
+    $vendorLocationDisplay = trim((string) $vendorLocation);
+} else {
+    $locationParts = array_filter([
+        trim((string) $vendorCity),
+        trim((string) $vendorState),
+    ], static function ($value) {
+        return $value !== '';
+    });
+    if ($locationParts) {
+        $vendorLocationDisplay = implode(', ', array_unique($locationParts));
+    } elseif (trim((string) $vendorAddress) !== '') {
+        $vendorLocationDisplay = trim((string) $vendorAddress);
+    }
+}
+
 $vendorPlanLabel = yustam_format_plan_label($vendorPlan);
 $vendorPlanSlug = yustam_slugify_plan($vendorPlan);
-
-$vendorVerifiedInput = $_GET['verified'] ?? 'unverified';
-if (!is_string($vendorVerifiedInput)) {
-    $vendorVerifiedInput = 'verified';
-}
-$vendorVerificationState = yustam_normalise_verification($vendorVerifiedInput);
 $vendorVerificationLabel = yustam_verification_label($vendorVerificationState);
 $vendorVerificationIcon = yustam_verification_icon($vendorVerificationState);
 $vendorIsVerified = $vendorVerificationState === 'verified';
@@ -170,6 +986,82 @@ $vendorVerificationBadge = yustam_render_verification_badge(
     ]
 );
 
+$vendorPhoneSanitised = $vendorPhone !== '' ? yustam_product_sanitise_phone($vendorPhone) : '';
+$vendorPhoneLinkClass = 'contact-button contact-button--phone' . ($vendorPhoneSanitised !== '' ? '' : ' is-disabled');
+$vendorPhoneHref = $vendorPhoneSanitised !== '' ? 'tel:' . $vendorPhoneSanitised : '#';
+$vendorPhoneAriaDisabled = $vendorPhoneSanitised !== '' ? 'false' : 'true';
+$vendorPhoneDisplay = $vendorPhoneSanitised !== '' ? $vendorPhone : 'Unavailable';
+
+$vendorWhatsappSource = $vendorWhatsapp !== '' ? $vendorWhatsapp : $vendorPhone;
+$vendorWhatsappSanitised = $vendorWhatsappSource !== '' ? yustam_product_sanitise_phone($vendorWhatsappSource) : '';
+$vendorWhatsappHref = $vendorWhatsappSanitised !== '' ? 'https://wa.me/' . $vendorWhatsappSanitised : '';
+$vendorWhatsappLinkClass = 'contact-button contact-button--whatsapp' . ($vendorWhatsappHref !== '' ? '' : ' is-disabled');
+$vendorWhatsappAriaDisabled = $vendorWhatsappHref !== '' ? 'false' : 'true';
+
+$vendorEmailAvailable = $vendorEmail !== '';
+$vendorEmailHref = $vendorEmailAvailable ? 'mailto:' . $vendorEmail : '#';
+$vendorEmailAriaDisabled = $vendorEmailAvailable ? 'false' : 'true';
+
+$vendorAvatarSrc = $vendorPhoto !== '' ? $vendorPhoto : 'logo.jpeg';
+$vendorSinceDisplay = $vendorSince;
+
+$categoryIsHidden = $productCategoryLabel === '';
+$vendorBusinessHidden = trim((string) $vendorBusinessName) === '';
+$vendorLocationHidden = $vendorLocationDisplay === '';
+$vendorSinceHidden = trim((string) $vendorSinceDisplay) === '';
+$quickChatVendorUid = $vendorUid !== '' ? $vendorUid : ($vendorId !== '' ? $vendorId : $vendorNumericId);
+$quickChatVendorId = $vendorNumericId !== '' ? $vendorNumericId : (ctype_digit((string) $vendorId) ? (string) $vendorId : '');
+
+$initialState = [
+    'listing' => $listingDocument,
+    'vendor' => [
+        'id' => $vendorId,
+        'vendorId' => $vendorId,
+        'vendorUid' => $vendorUid,
+        'uid' => $vendorUid,
+        'displayName' => $vendorName,
+        'name' => $vendorName,
+        'businessName' => $vendorBusinessName,
+        'plan' => $vendorPlan,
+        'planLabel' => $vendorPlanLabel,
+        'planSlug' => $vendorPlanSlug,
+        'verificationStatus' => $vendorVerificationState,
+        'verification_state' => $vendorVerificationState,
+        'status' => $vendorVerificationState,
+        'email' => $vendorEmail,
+        'contactEmail' => $vendorEmail,
+        'phone' => $vendorPhone,
+        'contactPhone' => $vendorPhone,
+        'whatsapp' => $vendorWhatsappSource,
+        'location' => $vendorLocationDisplay,
+        'city' => $vendorCity,
+        'state' => $vendorState,
+        'address' => $vendorAddress,
+        'profilePhoto' => $vendorPhoto,
+        'avatarUrl' => $vendorPhoto,
+        'logo' => $vendorPhoto,
+        'since' => $vendorSince,
+    ],
+    'vendorRecord' => $vendorRecord,
+    'vendorFirestore' => $vendorFirestore,
+    'meta' => [
+        'price' => [
+            'value' => $productPrice,
+            'label' => $productPriceLabel,
+        ],
+        'status' => [
+            'value' => $productStatusValue,
+            'label' => $productStatusLabel,
+        ],
+        'category' => [
+            'category' => $productCategory,
+            'subcategory' => $productSubcategory,
+            'label' => $productCategoryLabel,
+        ],
+        'primaryImage' => $primaryImage,
+    ],
+];
+
 $chatId = $vendorId && $buyerId ? $vendorId . '_' . $buyerId . '_' . $productId : '';
 $vendorProfileUrl = 'vendor-storefront.php';
 if (is_string($vendorId) && trim($vendorId) !== '') {
@@ -177,6 +1069,10 @@ if (is_string($vendorId) && trim($vendorId) !== '') {
 }
 
 $placeholderImage = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
+if ($primaryImage === '') {
+    $primaryImage = $placeholderImage;
+}
+$quickChatProductImage = $primaryImage;
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -1064,19 +1960,21 @@ $placeholderImage = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABA
         <section class="product-hero">
             <div class="product-gallery">
                 <figure class="product-gallery__stage" aria-label="Product gallery">
-                    <img id="productImage" src="<?= htmlspecialchars($placeholderImage, ENT_QUOTES, 'UTF-8'); ?>" alt="Listing image preview" loading="lazy">
-                    <span id="productStatus" class="status-chip">Checking availability</span>
+                    <img id="productImage" src="<?= htmlspecialchars($primaryImage, ENT_QUOTES, 'UTF-8'); ?>" alt="<?= htmlspecialchars($productTitle, ENT_QUOTES, 'UTF-8'); ?> image" loading="lazy">
+                    <span id="productStatus" class="<?= htmlspecialchars($productStatusClass, ENT_QUOTES, 'UTF-8'); ?>">
+                        <?= htmlspecialchars($productStatusLabel, ENT_QUOTES, 'UTF-8'); ?>
+                    </span>
                 </figure>
                 <div id="thumbStrip" class="product-gallery__thumbs" aria-label="Listing gallery thumbnails"></div>
             </div>
             <div class="product-summary">
                 <div class="product-summary__header">
-                    <span id="categoryLine" class="category-pill" hidden>
+                    <span id="categoryLine" class="category-pill" <?= $categoryIsHidden ? 'hidden' : ''; ?>>
                         <i class="ri-price-tag-3-line" aria-hidden="true"></i>
-                        <span id="categoryLabel"></span>
+                        <span id="categoryLabel"><?= htmlspecialchars($productCategoryLabel, ENT_QUOTES, 'UTF-8'); ?></span>
                     </span>
                     <h1 id="productName"><?= htmlspecialchars($productTitle, ENT_QUOTES, 'UTF-8'); ?></h1>
-                    <p id="productPrice" class="product-price">&ndash;</p>
+                    <p id="productPrice" class="product-price"><?= htmlspecialchars($productPriceLabel, ENT_QUOTES, 'UTF-8'); ?></p>
                 </div>
                 <div class="product-summary__cta">
                     <button id="saveListingBtn" class="save-btn" type="button">
@@ -1101,7 +1999,7 @@ $placeholderImage = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABA
             <article class="detail-card">
                 <h2>About this listing</h2>
                 <p id="productDesc" class="product-description">
-                    We are gathering the full description from the vendor.
+                    <?= nl2br(htmlspecialchars($productDescription, ENT_QUOTES, 'UTF-8')); ?>
                 </p>
             </article>
             <article class="detail-card">
@@ -1114,14 +2012,14 @@ $placeholderImage = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABA
             id="quickChatCard"
             class="quick-chat-card"
             data-chat-id="<?= htmlspecialchars($chatId, ENT_QUOTES, 'UTF-8'); ?>"
-            data-vendor-id="<?= htmlspecialchars($vendorNumericId, ENT_QUOTES, 'UTF-8'); ?>"
-            data-vendor-uid="<?= htmlspecialchars($vendorUid !== '' ? $vendorUid : ($vendorId !== '' ? $vendorId : $vendorNumericId), ENT_QUOTES, 'UTF-8'); ?>"
+            data-vendor-id="<?= htmlspecialchars($quickChatVendorId, ENT_QUOTES, 'UTF-8'); ?>"
+            data-vendor-uid="<?= htmlspecialchars($quickChatVendorUid, ENT_QUOTES, 'UTF-8'); ?>"
             data-vendor-name="<?= htmlspecialchars($vendorName, ENT_QUOTES, 'UTF-8'); ?>"
             data-buyer-id="<?= htmlspecialchars($buyerNumericId, ENT_QUOTES, 'UTF-8'); ?>"
             data-buyer-uid="<?= htmlspecialchars($buyerUid !== '' ? $buyerUid : $buyerNumericId, ENT_QUOTES, 'UTF-8'); ?>"
             data-product-id="<?= htmlspecialchars($productId, ENT_QUOTES, 'UTF-8'); ?>"
             data-product-title="<?= htmlspecialchars($productTitle, ENT_QUOTES, 'UTF-8'); ?>"
-            data-product-image="<?= htmlspecialchars($placeholderImage, ENT_QUOTES, 'UTF-8'); ?>"
+            data-product-image="<?= htmlspecialchars($quickChatProductImage, ENT_QUOTES, 'UTF-8'); ?>"
         >
             <h3>Chat with <?= htmlspecialchars($vendorName, ENT_QUOTES, 'UTF-8'); ?><?= $vendorVerificationBadge; ?></h3>
             <p>Send a quick message and we'll notify the vendor instantly, then open a secure YUSTAM chat so you can keep the conversation going.</p>
@@ -1149,10 +2047,12 @@ $placeholderImage = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABA
         </section>
         <section class="vendor-card" aria-labelledby="vendorTitle">
             <header class="vendor-card__header">
-                <img id="vendorAvatar" src="logo.jpeg" alt="Vendor profile photo" class="vendor-avatar">
+                <img id="vendorAvatar" src="<?= htmlspecialchars($vendorAvatarSrc, ENT_QUOTES, 'UTF-8'); ?>" alt="Vendor profile photo" class="vendor-avatar">
                 <div>
                     <h2 id="vendorTitle"><?= htmlspecialchars($vendorName, ENT_QUOTES, 'UTF-8'); ?><?= $vendorVerificationBadge; ?></h2>
-                    <p id="vendorBusiness" class="vendor-business" hidden></p>
+                    <p id="vendorBusiness" class="vendor-business" <?= $vendorBusinessHidden ? 'hidden' : ''; ?>>
+                        <?= htmlspecialchars($vendorBusinessName, ENT_QUOTES, 'UTF-8'); ?>
+                    </p>
                     <div class="vendor-badges" id="vendorBadges">
                         <span
                             class="vendor-badge vendor-plan vendor-plan-<?= htmlspecialchars($vendorPlanSlug, ENT_QUOTES, 'UTF-8'); ?>"
@@ -1174,22 +2074,22 @@ $placeholderImage = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABA
             <div class="vendor-card__contact">
                 <a
                     id="vendorPhoneLink"
-                    class="contact-button contact-button--phone is-disabled"
-                    href="#"
-                    aria-disabled="true"
+                    class="<?= htmlspecialchars($vendorPhoneLinkClass, ENT_QUOTES, 'UTF-8'); ?>"
+                    href="<?= htmlspecialchars($vendorPhoneSanitised !== '' ? $vendorPhoneHref : '#', ENT_QUOTES, 'UTF-8'); ?>"
+                    aria-disabled="<?= htmlspecialchars($vendorPhoneAriaDisabled, ENT_QUOTES, 'UTF-8'); ?>"
                     data-display-label="Call Vendor"
                 >
                     <i class="ri-phone-line" aria-hidden="true"></i>
                     <span data-contact-label>Call Vendor</span>
-                    <span data-contact-value>Unavailable</span>
+                    <span data-contact-value><?= htmlspecialchars($vendorPhoneDisplay, ENT_QUOTES, 'UTF-8'); ?></span>
                 </a>
                 <a
                     id="vendorWhatsappLink"
-                    class="contact-button contact-button--whatsapp is-disabled"
-                    href="#"
+                    class="<?= htmlspecialchars($vendorWhatsappLinkClass, ENT_QUOTES, 'UTF-8'); ?>"
+                    href="<?= htmlspecialchars($vendorWhatsappHref !== '' ? $vendorWhatsappHref : '#', ENT_QUOTES, 'UTF-8'); ?>"
                     target="_blank"
                     rel="noopener"
-                    aria-disabled="true"
+                    aria-disabled="<?= htmlspecialchars($vendorWhatsappAriaDisabled, ENT_QUOTES, 'UTF-8'); ?>"
                     data-display-label="WhatsApp Vendor"
                 >
                     <i class="ri-whatsapp-line" aria-hidden="true"></i>
@@ -1199,15 +2099,17 @@ $placeholderImage = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABA
             <div class="vendor-card__details">
                 <div class="vendor-card__detail">
                     <span class="label">Email</span>
-                    <a id="vendorEmailLink" href="#" aria-disabled="true">Unavailable</a>
+                    <a id="vendorEmailLink" href="<?= htmlspecialchars($vendorEmailHref, ENT_QUOTES, 'UTF-8'); ?>" aria-disabled="<?= htmlspecialchars($vendorEmailAriaDisabled, ENT_QUOTES, 'UTF-8'); ?>">
+                        <?= htmlspecialchars($vendorEmailAvailable ? $vendorEmail : 'Unavailable', ENT_QUOTES, 'UTF-8'); ?>
+                    </a>
                 </div>
-                <div id="vendorLocationRow" class="vendor-card__detail" hidden>
+                <div id="vendorLocationRow" class="vendor-card__detail" <?= $vendorLocationHidden ? 'hidden' : ''; ?>>
                     <span class="label">Location</span>
-                    <span id="vendorLocation"></span>
+                    <span id="vendorLocation"><?= htmlspecialchars($vendorLocationDisplay, ENT_QUOTES, 'UTF-8'); ?></span>
                 </div>
-                <div id="vendorSinceRow" class="vendor-card__detail" hidden>
+                <div id="vendorSinceRow" class="vendor-card__detail" <?= $vendorSinceHidden ? 'hidden' : ''; ?>>
                     <span class="label">Member since</span>
-                    <span id="vendorSince"></span>
+                    <span id="vendorSince"><?= htmlspecialchars($vendorSinceDisplay, ENT_QUOTES, 'UTF-8'); ?></span>
                 </div>
             </div>
         </section>
@@ -1248,8 +2150,10 @@ $placeholderImage = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABA
             <small>&copy; <?= date('Y'); ?> YUSTAM Marketplace. All rights reserved.</small>
         </div>
     </footer>
+    <script type="application/json" id="productInitialData"><?= json_encode($initialState, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); ?></script>
     <script src="theme-manager.js" defer></script>
     <script type="module" src="product.js"></script>
     <script type="module" src="firebase.js"></script>
 </body>
 </html>
+

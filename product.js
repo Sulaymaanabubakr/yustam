@@ -69,6 +69,21 @@ const floatingCallBtn = document.getElementById('floatingCallBtn');
 const floatingWhatsappBtn = document.getElementById('floatingWhatsappBtn');
 const chatWithVendorBtn = document.getElementById('chatWithVendorBtn');
 
+const initialDataElement = document.getElementById('productInitialData');
+let serverInitialState = null;
+if (initialDataElement && initialDataElement.textContent) {
+  try {
+    serverInitialState = JSON.parse(initialDataElement.textContent);
+  } catch (error) {
+    console.warn('[product] unable to parse initial product data', error);
+  }
+}
+if (typeof window !== 'undefined') {
+  window.__YUSTAM_PRODUCT_STATE__ = serverInitialState;
+}
+const serverListing = serverInitialState?.listing || null;
+const serverVendorSnapshot = serverInitialState?.vendor || null;
+
 const clearBadges = (host) => {
   if (!host) return;
   host.querySelectorAll('.verification-badge').forEach((badge) => badge.remove());
@@ -1091,15 +1106,34 @@ const loadVendorProfile = async (vendorIdValue) => {
     }
   }
 
-  if (!vendorIdValue) {
+  const serverVendorCandidates = [];
+  if (serverVendorSnapshot) {
+    ['vendorId', 'id', 'vendorUid', 'uid'].forEach((key) => {
+      const value = serverVendorSnapshot[key];
+      if (value) {
+        serverVendorCandidates.push(String(value).trim());
+      }
+    });
+  }
+
+  const effectiveVendorId = vendorIdValue || currentVendorId || serverVendorCandidates[0] || null;
+
+  if (!effectiveVendorId && serverVendorSnapshot) {
+    applyVendorData(serverVendorSnapshot, serverVendorSnapshot.vendorId || serverVendorSnapshot.id || currentVendorId);
+  } else if (!effectiveVendorId && !serverVendorSnapshot) {
     applyVendorData(null, currentVendorId);
     return;
+  } else if (effectiveVendorId && serverVendorSnapshot && serverVendorCandidates.includes(String(effectiveVendorId))) {
+    applyVendorData(serverVendorSnapshot, effectiveVendorId);
   }
 
   let vendorData = null;
 
   try {
-    const vendorSnap = await getDoc(doc(db, 'vendors', vendorIdValue));
+    if (!effectiveVendorId) {
+      return;
+    }
+    const vendorSnap = await getDoc(doc(db, 'vendors', effectiveVendorId));
     if (vendorSnap.exists()) {
       vendorData = vendorSnap.data();
     }
@@ -1108,10 +1142,12 @@ const loadVendorProfile = async (vendorIdValue) => {
   }
 
   if (!vendorData) {
-    vendorData = await fetchFirestoreDocument('vendors', vendorIdValue);
+    vendorData = await fetchFirestoreDocument('vendors', effectiveVendorId);
   }
 
-  applyVendorData(vendorData, vendorIdValue);
+  if (vendorData) {
+    applyVendorData(vendorData, effectiveVendorId);
+  }
 };
 
 const applyListingData = (listing = {}) => {
@@ -1135,8 +1171,20 @@ const applyListingData = (listing = {}) => {
   updateNegotiationSuggestion();
 
   if (productDescEl) {
-    productDescEl.textContent =
-      listing.description || listing.details || 'The vendor has not provided additional details yet.';
+    const descriptionText =
+      listing.description ||
+      listing.details ||
+      listing.summary ||
+      listing.productDescription ||
+      '';
+    if (descriptionText) {
+      productDescEl.textContent = descriptionText;
+    } else {
+      const existing = (productDescEl.textContent || '').trim();
+      if (!existing) {
+        productDescEl.textContent = 'The vendor has not provided additional details yet.';
+      }
+    }
   }
 
   updateFeatureList(extractFeatures(listing));
@@ -1170,32 +1218,54 @@ const applyListingData = (listing = {}) => {
 const loadListing = async () => {
   if (!productId) {
     updateStatusBadge('unavailable');
-    productPriceEl.textContent = 'Unavailable';
+    if (productPriceEl) {
+      productPriceEl.textContent = 'Unavailable';
+    }
     updateWhatsappLinks();
     return;
   }
 
   let listingData = null;
 
+  if (serverListing) {
+    listingData = serverListing;
+    applyListingData(listingData);
+  }
+
+  if (serverVendorSnapshot) {
+    const vendorIdentifier =
+      serverVendorSnapshot.vendorId ||
+      serverVendorSnapshot.id ||
+      serverVendorSnapshot.vendorUid ||
+      serverVendorSnapshot.uid ||
+      currentVendorId;
+    applyVendorData(serverVendorSnapshot, vendorIdentifier);
+  }
+
+  let fetchedListing = null;
+
   try {
     const listingSnap = await getDoc(doc(db, 'listings', productId));
     if (listingSnap.exists()) {
-      listingData = listingSnap.data();
+      fetchedListing = listingSnap.data();
     }
   } catch (error) {
     console.error('[product] listing load failed', error);
   }
 
-  if (!listingData) {
-    listingData = await fetchFirestoreDocument('listings', productId);
+  if (!fetchedListing) {
+    fetchedListing = await fetchFirestoreDocument('listings', productId);
   }
 
-  if (listingData) {
+  if (fetchedListing) {
+    listingData = fetchedListing;
     applyListingData(listingData);
     await loadVendorProfile(listingData.vendorID || listingData.vendorId || listingData.vendor || currentVendorId);
-  } else {
+  } else if (!serverListing) {
     updateStatusBadge('unavailable');
-    productPriceEl.textContent = 'Unavailable';
+    if (productPriceEl) {
+      productPriceEl.textContent = 'Unavailable';
+    }
     if (featureListEl) featureListEl.hidden = true;
     if (specListEl) {
       specListEl.innerHTML = '';
@@ -1205,6 +1275,7 @@ const loadListing = async () => {
   }
 
   updateWhatsappLinks();
+  updateCallLinks();
 };
 
 updateQuickChatDataset();
