@@ -109,6 +109,7 @@ class ChatController {
 
     this.unsubscribeMessages = null;
     this.unsubscribeTyping = null;
+    this.pendingScrollFrame = null;
   }
 
   async init() {
@@ -126,6 +127,7 @@ class ChatController {
     this.loadPrefill();
     this.startSubscriptions();
     this.loadChatSummary();
+    this.scrollToBottom(true);
   }
 
   destroy() {
@@ -136,6 +138,10 @@ class ChatController {
     if (this.unsubscribeTyping) {
       this.unsubscribeTyping();
       this.unsubscribeTyping = null;
+    }
+    if (this.pendingScrollFrame !== null) {
+      cancelAnimationFrame(this.pendingScrollFrame);
+      this.pendingScrollFrame = null;
     }
     this.stopTyping();
     this.cancelVoiceRecording();
@@ -172,7 +178,6 @@ class ChatController {
     };
     this.optimisticMessages.push(payload);
     this.renderMessages();
-    this.scrollToBottom(true);
   }
 
   removeOptimisticMessage(clientTag) {
@@ -827,7 +832,6 @@ class ChatController {
     });
     this.messageList.appendChild(fragment);
     this.scrollToBottom(true);
-    this.scrollButton?.classList.remove('is-visible');
   }
 
   renderMessage(message) {
@@ -912,8 +916,36 @@ class ChatController {
   scrollToBottom(force = false) {
     const container = this.scrollContainer;
     if (!container) return;
-    container.scrollTop = container.scrollHeight;
-    this.scrollButton?.classList.remove('is-visible');
+    const applyScroll = () => {
+      container.scrollTop = container.scrollHeight;
+      this.scrollButton?.classList.remove('is-visible');
+    };
+
+    applyScroll();
+
+    if (this.pendingScrollFrame !== null) {
+      cancelAnimationFrame(this.pendingScrollFrame);
+      this.pendingScrollFrame = null;
+    }
+
+    let remainingPasses = force ? 2 : 1;
+    const scheduleNextPass = () => {
+      if (remainingPasses <= 0) {
+        this.pendingScrollFrame = null;
+        return;
+      }
+      this.pendingScrollFrame = requestAnimationFrame(() => {
+        applyScroll();
+        remainingPasses -= 1;
+        scheduleNextPass();
+      });
+    };
+
+    scheduleNextPass();
+
+    if (force) {
+      window.setTimeout(applyScroll, 80);
+    }
   }
 
   handleListScroll() {
