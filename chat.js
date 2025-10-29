@@ -109,6 +109,9 @@ class ChatController {
 
     this.unsubscribeMessages = null;
     this.unsubscribeTyping = null;
+    this.noticeBanner = document.getElementById('chatNotice');
+    this.noticeIcon = document.getElementById('chatNoticeIcon');
+    this.noticeText = document.getElementById('chatNoticeText');
     this.pendingScrollFrame = null;
   }
 
@@ -119,6 +122,7 @@ class ChatController {
     this.bindEvents();
     this.updateHeader();
     this.updateOfflineState();
+    this.hideNotice();
 
     await this.ensureChatContext();
     if (this.context.contextIncomplete) {
@@ -143,6 +147,7 @@ class ChatController {
       cancelAnimationFrame(this.pendingScrollFrame);
       this.pendingScrollFrame = null;
     }
+    this.hideNotice();
     this.stopTyping();
     this.cancelVoiceRecording();
     this.optimisticMessages.forEach((message) => {
@@ -997,6 +1002,49 @@ class ChatController {
     }
   }
 
+  showNotice(message, variant = 'info') {
+    if (!this.noticeBanner) return;
+    const tones = ['info', 'success', 'error'];
+    const tone = tones.includes(variant) ? variant : 'info';
+    tones.forEach((toneName) => this.noticeBanner.classList.remove(`chat-notice--${toneName}`));
+    this.noticeBanner.classList.add(`chat-notice--${tone}`, 'is-visible');
+    this.noticeBanner.hidden = false;
+    this.noticeBanner.setAttribute('tabindex', '-1');
+
+    if (typeof this.noticeBanner.focus === 'function') {
+      this.noticeBanner.focus({ preventScroll: true });
+    }
+
+    if (this.noticeText) {
+      this.noticeText.textContent = message;
+    }
+
+    if (this.noticeIcon) {
+      const iconClass = tone === 'success'
+        ? 'ri-checkbox-circle-line'
+        : tone === 'error'
+          ? 'ri-error-warning-line'
+          : 'ri-information-line';
+      this.noticeIcon.className = iconClass;
+      this.noticeIcon.setAttribute('aria-hidden', 'true');
+    }
+  }
+
+  hideNotice() {
+    if (!this.noticeBanner) return;
+    this.noticeBanner.classList.remove('is-visible', 'chat-notice--success', 'chat-notice--error');
+    this.noticeBanner.classList.add('chat-notice--info');
+    this.noticeBanner.hidden = true;
+    this.noticeBanner.removeAttribute('tabindex');
+    if (this.noticeText) {
+      this.noticeText.textContent = '';
+    }
+    if (this.noticeIcon) {
+      this.noticeIcon.className = 'ri-information-line';
+      this.noticeIcon.setAttribute('aria-hidden', 'true');
+    }
+  }
+
   openListing() {
     if (!this.listing.id) {
       showToast('Listing details unavailable.');
@@ -1019,12 +1067,13 @@ class ChatController {
       return;
     }
     try {
+      this.showNotice('Deleting conversation…', 'info');
       await deleteConversation(this.context.chatId);
-      showToast('Conversation removed.', 'success');
-      window.setTimeout(() => this.navigateBack(), 500);
+      this.showNotice('Conversation deleted. Taking you back to your chats…', 'success');
+      window.setTimeout(() => this.navigateBack(), 900);
     } catch (error) {
       console.error('Unable to delete conversation', error);
-      showToast(error?.message || 'Unable to delete conversation.', 'error');
+      this.showNotice(error?.message || 'Unable to delete conversation right now. Please try again.', 'error');
     }
   }
 }

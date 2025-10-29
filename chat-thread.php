@@ -580,6 +580,45 @@ $bootstrap = [
             box-shadow: 0 -8px 16px rgba(15, 106, 83, 0.08);
         }
 
+        .chat-notice {
+            width: min(960px, 100%);
+            margin: 12px auto 0;
+            padding: 12px 16px;
+            border-radius: 14px;
+            border: 1px solid transparent;
+            display: none;
+            align-items: center;
+            gap: 10px;
+            font-weight: 600;
+            letter-spacing: 0.01em;
+        }
+
+        .chat-notice.is-visible {
+            display: flex;
+        }
+
+        .chat-notice i {
+            font-size: 1.2rem;
+        }
+
+        .chat-notice--info {
+            background: rgba(15, 106, 83, 0.1);
+            border-color: rgba(15, 106, 83, 0.32);
+            color: #0f6a53;
+        }
+
+        .chat-notice--success {
+            background: rgba(33, 150, 83, 0.12);
+            border-color: rgba(33, 150, 83, 0.34);
+            color: #137148;
+        }
+
+        .chat-notice--error {
+            background: rgba(220, 65, 47, 0.12);
+            border-color: rgba(220, 65, 47, 0.32);
+            color: #a13327;
+        }
+
         .composer-toolbar {
             display: flex;
             align-items: flex-end;
@@ -861,6 +900,10 @@ $bootstrap = [
                 </button>
             </div>
         </header>
+        <div id="chatNotice" class="chat-notice chat-notice--info" role="status" aria-live="polite" hidden>
+            <i id="chatNoticeIcon" class="ri-information-line" aria-hidden="true"></i>
+            <span id="chatNoticeText"></span>
+        </div>
         <div id="offlineBanner">You are offline. Messages will send when you're back online.</div>
         <main class="thread-main">
             <section id="messageList" class="message-list" aria-live="polite"></section>
