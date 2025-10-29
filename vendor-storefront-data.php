@@ -446,7 +446,12 @@ function yustam_storefront_fetch_sql_listings(int $vendorId, int $limit = 36): a
             $createdValue = $row['created_at'] ?? ($row['updated_at'] ?? null);
             $createdIso = yustam_storefront_parse_datetime($createdValue);
 
-            $imageUrlsRaw = isset($row['image_urls']) ? (string) $row['image_urls'] : '';
+            $imageUrlsRaw = '';
+            if (isset($row['image_urls'])) {
+                $imageUrlsRaw = (string) $row['image_urls'];
+            } elseif (isset($row['imageUrls'])) {
+                $imageUrlsRaw = (string) $row['imageUrls'];
+            }
             $imageUrls = [];
             if ($imageUrlsRaw !== '') {
                 $decoded = json_decode($imageUrlsRaw, true);
@@ -470,7 +475,7 @@ function yustam_storefront_fetch_sql_listings(int $vendorId, int $limit = 36): a
                 'category' => $categoryValue,
                 'subcategory' => $subcategoryValue,
                 'status' => (string) ($row['status'] ?? ($row['listing_status'] ?? '')),
-                'image' => $imageValue,
+                'image' => $imageValue !== '' ? $imageValue : ($imageUrls[0] ?? ''),
                 'location' => $locationValue,
                 'createdAt' => $createdIso,
                 'city' => (string) ($row['city'] ?? ''),

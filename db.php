@@ -673,6 +673,51 @@ function yustam_listings_upsert(mysqli $conn, array $listing): void
     yustam_listings_ensure_table($conn);
     $table = yustam_listings_table_name();
 
+    $columns = [];
+    try {
+        $result = $conn->query('SHOW COLUMNS FROM `' . $table . '`');
+        if ($result instanceof mysqli_result) {
+            while ($row = $result->fetch_assoc()) {
+                if (isset($row['Field'])) {
+                    $columns[] = $row['Field'];
+                }
+            }
+            $result->free();
+        }
+    } catch (Throwable $exception) {
+        $columns = [];
+    }
+
+    $hasColumn = static function (string $name) use ($columns): bool {
+        return in_array($name, $columns, true);
+    };
+
+    $columnVendorUid = null;
+    foreach (['vendor_uid', 'vendorUid'] as $candidate) {
+        if ($hasColumn($candidate)) {
+            $columnVendorUid = $candidate;
+            break;
+        }
+    }
+
+    $columnPrimaryImage = null;
+    foreach (['primary_image', 'primaryImage'] as $candidate) {
+        if ($hasColumn($candidate)) {
+            $columnPrimaryImage = $candidate;
+            break;
+        }
+    }
+
+    $columnImageUrls = null;
+    foreach (['image_urls', 'imageUrls'] as $candidate) {
+        if ($hasColumn($candidate)) {
+            $columnImageUrls = $candidate;
+            break;
+        }
+    }
+
+    $columnPublicId = $hasColumn('public_id') ? 'public_id' : null;
+
     $vendorId = isset($listing['vendor_id']) ? (int) $listing['vendor_id'] : 0;
     $vendorUid = trim((string) ($listing['vendor_uid'] ?? ''));
     if ($vendorUid === '' && $vendorId > 0) {
@@ -685,8 +730,8 @@ function yustam_listings_upsert(mysqli $conn, array $listing): void
             $vendorUid = '';
         }
     }
-    if ($vendorUid === '') {
-        $vendorUid = $vendorId > 0 ? sprintf('vendor-%d', $vendorId) : 'unknown';
+    if ($vendorUid === '' && $vendorId > 0) {
+        $vendorUid = sprintf('vendor-%d', $vendorId);
     }
 
     $title = trim((string) ($listing['title'] ?? 'Marketplace Listing'));
@@ -701,8 +746,10 @@ function yustam_listings_upsert(mysqli $conn, array $listing): void
 
     $priceValue = null;
     if (isset($listing['price']) && $listing['price'] !== '') {
-        $numeric = (float) preg_replace('/[^0-9.\-]/', '', (string) $listing['price']);
-        $priceValue = number_format($numeric, 2, '.', '');
+        $numeric = preg_replace('/[^0-9.\-]/', '', (string) $listing['price']);
+        if ($numeric !== '' && is_numeric($numeric)) {
+            $priceValue = (float) $numeric;
+        }
     }
 
     $primaryImage = trim((string) ($listing['primary_image'] ?? $listing['image'] ?? ''));
@@ -730,25 +777,138 @@ function yustam_listings_upsert(mysqli $conn, array $listing): void
         $publicId = $firestoreId;
     }
 
+    if (!$hasColumn('firestore_id')) {
+        throw new RuntimeException('Listings table is missing the firestore_id column.');
+    }
+
+    $insertColumns = ['`vendor_id`', '`firestore_id`'];
+    $placeholders = ['?', '?'];
+    $types = 'is';
+    $values = [ $vendorId, $firestoreId ];
+    $updateClauses = ['`vendor_id` = VALUES(`vendor_id`)'];
+
+    if ($columnVendorUid !== null) {
+        $insertColumns[] = '`' . $columnVendorUid . '`';
+        $placeholders[] = '?';
+        $types .= 's';
+        $values[] = $vendorUid;
+        $updateClauses[] = '`' . $columnVendorUid . '` = VALUES(`' . $columnVendorUid . '`)';
+    }
+
+    if ($columnPublicId !== null) {
+        $insertColumns[] = '`' . $columnPublicId . '`';
+        $placeholders[] = '?';
+        $types .= 's';
+        $values[] = $publicId;
+        $updateClauses[] = '`' . $columnPublicId . '` = VALUES(`' . $columnPublicId . '`)';
+    }
+
+    if ($hasColumn('title')) {
+        $insertColumns[] = '`title`';
+        $placeholders[] = '?';
+        $types .= 's';
+        $values[] = $title;
+        $updateClauses[] = '`title` = VALUES(`title`)';
+    }
+
+    if ($hasColumn('description')) {
+        $insertColumns[] = '`description`';
+        $placeholders[] = '?';
+        $types .= 's';
+        $values[] = $description;
+        $updateClauses[] = '`description` = VALUES(`description`)';
+    }
+
+    if ($hasColumn('price') && $priceValue !== null) {
+        $insertColumns[] = '`price`';
+        $placeholders[] = '?';
+        $types .= 'd';
+        $values[] = $priceValue;
+        $updateClauses[] = '`price` = VALUES(`price`)';
+    }
+
+    if ($hasColumn('status')) {
+        $insertColumns[] = '`status`';
+        $placeholders[] = '?';
+        $types .= 's';
+        $values[] = $status;
+        $updateClauses[] = '`status` = VALUES(`status`)';
+    }
+
+    if ($columnPrimaryImage !== null) {
+        $insertColumns[] = '`' . $columnPrimaryImage . '`';
+        $placeholders[] = '?';
+        $types .= 's';
+        $values[] = $primaryImage;
+        $updateClauses[] = '`' . $columnPrimaryImage . '` = VALUES(`' . $columnPrimaryImage . '`)';
+    }
+
+    if ($columnImageUrls !== null) {
+        $insertColumns[] = '`' . $columnImageUrls . '`';
+        $placeholders[] = '?';
+        $types .= 's';
+        $values[] = $imageUrls;
+        $updateClauses[] = '`' . $columnImageUrls . '` = VALUES(`' . $columnImageUrls . '`)';
+    }
+
+    if ($hasColumn('category')) {
+        $insertColumns[] = '`category`';
+        $placeholders[] = '?';
+        $types .= 's';
+        $values[] = $category;
+        $updateClauses[] = '`category` = VALUES(`category`)';
+    }
+
+    if ($hasColumn('subcategory')) {
+        $insertColumns[] = '`subcategory`';
+        $placeholders[] = '?';
+        $types .= 's';
+        $values[] = $subcategory;
+        $updateClauses[] = '`subcategory` = VALUES(`subcategory`)';
+    }
+
+    if ($hasColumn('location')) {
+        $insertColumns[] = '`location`';
+        $placeholders[] = '?';
+        $types .= 's';
+        $values[] = $location;
+        $updateClauses[] = '`location` = VALUES(`location`)';
+    }
+
+    if ($hasColumn('city')) {
+        $insertColumns[] = '`city`';
+        $placeholders[] = '?';
+        $types .= 's';
+        $values[] = $city;
+        $updateClauses[] = '`city` = VALUES(`city`)';
+    }
+
+    if ($hasColumn('state')) {
+        $insertColumns[] = '`state`';
+        $placeholders[] = '?';
+        $types .= 's';
+        $values[] = $state;
+        $updateClauses[] = '`state` = VALUES(`state`)';
+    }
+
+    if ($hasColumn('country')) {
+        $insertColumns[] = '`country`';
+        $placeholders[] = '?';
+        $types .= 's';
+        $values[] = $country;
+        $updateClauses[] = '`country` = VALUES(`country`)';
+    }
+
+    if (count($insertColumns) < 3) {
+        return;
+    }
+
     $sql = sprintf(
-        'INSERT INTO `%s` (vendor_id, vendor_uid, firestore_id, public_id, title, description, price, status, primary_image, image_urls, category, subcategory, location, city, state, country)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE
-            title = VALUES(title),
-            description = VALUES(description),
-            price = VALUES(price),
-            status = VALUES(status),
-            public_id = VALUES(public_id),
-            primary_image = VALUES(primary_image),
-            image_urls = VALUES(image_urls),
-            category = VALUES(category),
-            subcategory = VALUES(subcategory),
-            location = VALUES(location),
-            city = VALUES(city),
-            state = VALUES(state),
-            country = VALUES(country),
-            updated_at = NOW()',
-        $table
+        'INSERT INTO `%s` (%s) VALUES (%s) ON DUPLICATE KEY UPDATE %s',
+        $table,
+        implode(', ', $insertColumns),
+        implode(', ', $placeholders),
+        implode(', ', $updateClauses)
     );
 
     $stmt = $conn->prepare($sql);
@@ -756,26 +916,16 @@ function yustam_listings_upsert(mysqli $conn, array $listing): void
         throw new RuntimeException('Unable to prepare listings upsert statement: ' . $conn->error);
     }
 
-    $stmt->bind_param(
-        'isssssssssssssss',
-        $vendorId,
-        $vendorUid,
-        $firestoreId,
-        $publicId,
-        $title,
-        $description,
-        $priceValue,
-        $status,
-        $primaryImage,
-        $imageUrls,
-        $category,
-        $subcategory,
-        $location,
-        $city,
-        $state,
-        $country
-    );
+    $bindValues = [];
+    foreach ($values as $index => $value) {
+        $bindValues[$index] = $value;
+    }
+    $bindParams = [$types];
+    foreach ($bindValues as $index => &$value) {
+        $bindParams[] = &$value;
+    }
 
+    call_user_func_array([$stmt, 'bind_param'], $bindParams);
     $stmt->execute();
     $stmt->close();
 }
@@ -795,4 +945,5 @@ function yustam_chat_build_id(string $buyerUid, string $vendorUid): string
 
     return hash('fnv164', $buyer . '|' . $vendor);
 }
+
 

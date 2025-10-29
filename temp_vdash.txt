@@ -94,56 +94,21 @@ $stats = [
 ];
 
 try {
-    $listingsColumns = [];
-    try {
-        $columnsResult = $db->query('SHOW COLUMNS FROM `listings`');
-        if ($columnsResult instanceof mysqli_result) {
-            while ($col = $columnsResult->fetch_assoc()) {
-                if (isset($col['Field'])) {
-                    $listingsColumns[] = $col['Field'];
-                }
-            }
-            $columnsResult->free();
-        }
-    } catch (Throwable $exception) {
-        $listingsColumns = [];
-    }
-
-    $columnFirestoreId = in_array('firestore_id', $listingsColumns, true) ? 'firestore_id' : 'id';
-    $columnPrimaryImage = null;
-    foreach (['primary_image', 'primaryImage'] as $candidate) {
-        if (in_array($candidate, $listingsColumns, true)) {
-            $columnPrimaryImage = $candidate;
-            break;
-        }
-    }
-
-    $selectParts = [sprintf('%s AS listing_id', $columnFirestoreId), 'title', 'price', 'status', 'created_at', 'views'];
-    if ($columnPrimaryImage !== null) {
-        $selectParts[] = sprintf('%s AS listing_image', $columnPrimaryImage);
-    }
-
-    $listingSql = sprintf(
-        'SELECT %s FROM listings WHERE vendor_id = ? ORDER BY created_at DESC LIMIT 25',
-        implode(', ', $selectParts)
-    );
-
-    $listingStmt = $db->prepare($listingSql);
+    $listingStmt = $db->prepare('SELECT firestore_id, title, price, status, created_at, views, primary_image FROM listings WHERE vendor_id = ? ORDER BY created_at DESC LIMIT 25');
     $listingStmt->bind_param('i', $vendorId);
     $listingStmt->execute();
     $listingResult = $listingStmt->get_result();
     while ($row = $listingResult->fetch_assoc()) {
         $statusValue = strtolower(trim((string)($row['status'] ?? '')));
         $isActive = in_array($statusValue, ['active', 'published', 'approved', 'live', 'available'], true);
-        $imageValue = $columnPrimaryImage !== null ? ($row['listing_image'] ?? '') : '';
         $listings[] = [
             'title' => $row['title'] ?? 'Untitled',
             'price' => isset($row['price']) ? (float)$row['price'] : 0.0,
             'status' => $row['status'] ?? 'Draft',
             'added_on' => isset($row['created_at']) ? date('j M Y', strtotime($row['created_at'])) : '-',
-            'link' => 'product.php?id=' . ($row['listing_id'] ?? ''),
+            'link' => 'product.php?id=' . ($row['firestore_id'] ?? ''),
             'views' => (int)($row['views'] ?? 0),
-            'image' => $imageValue,
+            'image' => $row['primary_image'] ?? '',
             'image_alt' => isset($row['title']) && trim((string)$row['title']) !== '' ? trim((string)$row['title']) : 'Listing image',
         ];
         $stats['total_listings']++;
@@ -1113,6 +1078,7 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
 <script type="module" src="vendor-dashboard.js"></script>
 </body>
 </html>
+
 
 
 
