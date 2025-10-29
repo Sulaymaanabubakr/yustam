@@ -262,7 +262,6 @@ $bootstrap = [
     ],
     'listing' => $listing,
     'prefill' => trim((string)($_GET['prefill'] ?? '')),
-    'quickSent' => isset($_GET['quick_sent']) && $_GET['quick_sent'] !== '' && $_GET['quick_sent'] !== '0',
     'contextIncomplete' => $contextIncomplete,
     'canSend' => $canSendMessages,
 ];
