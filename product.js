@@ -165,7 +165,14 @@ let currentProductImage = productImageEl?.src || '';
 let currentVendorName =
   vendorNameEl?.textContent?.trim?.() || document.body?.dataset?.vendorName || vendorNameParam || 'Vendor';
 let currentVendorId = document.body?.dataset?.vendorId || vendorIdParam || '';
-let currentVendorUid = document.body?.dataset?.vendorUid || (urlParams.get('vendorUid') || '').trim() || currentVendorId;
+const vendorFirebaseUidDataset = document.body?.dataset?.vendorFirebaseUid || '';
+const vendorLegacyUidDataset = document.body?.dataset?.vendorLegacyUid || '';
+let currentVendorUid =
+  vendorFirebaseUidDataset ||
+  document.body?.dataset?.vendorUid ||
+  vendorLegacyUidDataset ||
+  (urlParams.get('vendorUid') || '').trim() ||
+  currentVendorId;
 let currentVendorPlan = document.body?.dataset?.vendorPlan || '';
 let currentVendorVerification = document.body?.dataset?.vendorVerified || '';
 let currentVendorPhone = '';
@@ -176,6 +183,14 @@ if (document.body) {
   }
   if (!document.body.dataset.vendorUid && currentVendorUid) {
     document.body.dataset.vendorUid = currentVendorUid;
+  }
+  if (!document.body.dataset.vendorFirebaseUid && vendorFirebaseUidDataset) {
+    document.body.dataset.vendorFirebaseUid = vendorFirebaseUidDataset;
+  } else if (!document.body.dataset.vendorFirebaseUid && currentVendorUid) {
+    document.body.dataset.vendorFirebaseUid = currentVendorUid;
+  }
+  if (!document.body.dataset.vendorLegacyUid && vendorLegacyUidDataset) {
+    document.body.dataset.vendorLegacyUid = vendorLegacyUidDataset;
   }
   if (!document.body.dataset.vendorName && currentVendorName) {
     document.body.dataset.vendorName = currentVendorName;
@@ -452,7 +467,15 @@ function ensureBuyerAuthenticated() {
 }
 
 function resolveChatMetadata() {
-  const vendorChatUid = currentVendorUid || document.body?.dataset?.vendorUid || currentVendorId || '';
+  const vendorFirebaseUid = document.body?.dataset?.vendorFirebaseUid || '';
+  const vendorLegacyUid = document.body?.dataset?.vendorLegacyUid || '';
+  const vendorChatUid =
+    vendorFirebaseUid ||
+    currentVendorUid ||
+    document.body?.dataset?.vendorUid ||
+    vendorLegacyUid ||
+    currentVendorId ||
+    '';
   const buyerChatUid = buyerUid || buyerNumericId || buyerIdentifier || '';
   const listingId = productId || productIdInput?.value?.trim?.() || '';
   if (!vendorChatUid || !buyerChatUid || !listingId) {
@@ -466,6 +489,8 @@ function resolveChatMetadata() {
     chatId: computeChatId(buyerChatUid, vendorChatUid),
     buyerUid: buyerChatUid,
     vendorUid: vendorChatUid,
+    vendorFirebaseUid: vendorFirebaseUid || vendorChatUid,
+    vendorLegacyUid,
     productId: listingId,
     productTitle: currentProductName || productNameEl?.textContent?.trim?.() || 'Marketplace Listing',
     productImage: currentProductImage || productImageEl?.src || PLACEHOLDER_IMAGE,
@@ -495,6 +520,13 @@ async function ensureQuickConversation(metadata) {
   });
   if (result && result.chatId) {
     metadata.chatId = result.chatId;
+    if (result.buyer_uid) {
+      metadata.buyerUid = result.buyer_uid;
+    }
+    if (result.vendor_uid) {
+      metadata.vendorUid = result.vendor_uid;
+      metadata.vendorFirebaseUid = result.vendor_uid;
+    }
   }
   return result;
 }
@@ -692,6 +724,9 @@ const updateQuickChatDataset = () => {
   if (!quickChatCard) return;
   const metadata = resolveChatMetadata();
   quickChatCard.dataset.vendorUid = metadata?.vendorUid || currentVendorUid || currentVendorId || '';
+  quickChatCard.dataset.vendorFirebaseUid =
+    metadata?.vendorFirebaseUid || document.body?.dataset?.vendorFirebaseUid || quickChatCard.dataset.vendorUid || '';
+  quickChatCard.dataset.vendorLegacyUid = metadata?.vendorLegacyUid || document.body?.dataset?.vendorLegacyUid || '';
   quickChatCard.dataset.vendorId = currentVendorId || '';
   quickChatCard.dataset.vendorName = metadata?.vendorName || currentVendorName || 'Vendor';
   const datasetPlan = metadata?.vendorPlan || currentVendorPlan || document.body?.dataset?.vendorPlan || '';
@@ -976,9 +1011,22 @@ const applyVendorData = (vendor, vendorIdValue) => {
   }
 
   if (vendor) {
-    if (vendor.vendorUid || vendor.uid) {
-      currentVendorUid = vendor.vendorUid || vendor.uid;
+    const firebaseUidCandidate =
+      vendor.firebaseUid || vendor.firebase_uid || '';
+    const legacyUidCandidate = vendor.vendorUid || vendor.vendor_uid || '';
+
+    if (firebaseUidCandidate) {
+      currentVendorUid = firebaseUidCandidate;
+      document.body.dataset.vendorFirebaseUid = firebaseUidCandidate;
     }
+
+    if (legacyUidCandidate) {
+      document.body.dataset.vendorLegacyUid = legacyUidCandidate;
+      if (!currentVendorUid) {
+        currentVendorUid = legacyUidCandidate;
+      }
+    }
+
     if (currentVendorUid) {
       document.body.dataset.vendorUid = currentVendorUid;
     }
