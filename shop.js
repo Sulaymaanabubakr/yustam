@@ -85,6 +85,8 @@ let listingError = false;
 let selectedVendorId = '';
 let selectedVendorIdNormalized = '';
 let selectedVendorName = '';
+const vendorDetailCache = new Map();
+const vendorDetailInFlight = new Map();
 
 const escapeHtml = (value) =>
   String(value ?? '')
@@ -395,7 +397,71 @@ const getVendorInfo = (vendorId, listingData = {}) => {
     listingData.vendorVerified ||
     vendor.status ||
     '';
+
+  maybeFetchVendorDetail(vendorId, { plan, verification });
   return { name, plan, planLabel, verification };
+};
+
+const maybeFetchVendorDetail = (vendorId, current = {}) => {
+  const candidate = vendorId || '';
+  if (!candidate) return;
+  const hasPlan = current.plan && current.plan.trim() !== '';
+  const hasVerification = current.verification && current.verification.trim() !== '';
+  if (hasPlan && hasVerification) return;
+  if (vendorDetailCache.has(candidate) || vendorDetailInFlight.has(candidate)) return;
+
+  const url = Number.isInteger(Number(candidate))
+    ? `vendor-storefront-data.php?vendorId=${encodeURIComponent(candidate)}`
+    : `vendor-storefront-data.php?id=${encodeURIComponent(candidate)}`;
+
+  const promise = fetch(url, { credentials: 'same-origin' })
+    .then((response) => response.json().catch(() => ({})))
+    .then((payload) => {
+      if (!payload?.success || !payload.vendor) return;
+      applyVendorDetail(candidate, payload.vendor);
+    })
+    .catch((error) => {
+      console.warn('[shop] vendor detail fetch failed', error);
+    })
+    .finally(() => {
+      vendorDetailInFlight.delete(candidate);
+    });
+
+  vendorDetailInFlight.set(candidate, promise);
+};
+
+const mapVendorDetailToSnapshot = (vendor = {}) => {
+  return {
+    displayName: vendor.displayName || vendor.businessName || vendor.vendorUid || '',
+    businessName: vendor.businessName || '',
+    plan: vendor.plan || vendor.planLabel || '',
+    verification: vendor.verificationState || vendor.verificationLabel || '',
+    verificationStatus: vendor.verificationState || '',
+    status: vendor.verificationState || '',
+    profilePhoto: vendor.avatar || '',
+    location: vendor.location || '',
+    city: vendor.city || '',
+    state: vendor.state || '',
+  };
+};
+
+const applyVendorDetail = (candidateKey, detail) => {
+  const mapped = mapVendorDetailToSnapshot(detail);
+  const keys = new Set([candidateKey]);
+  if (detail.vendorUid) keys.add(detail.vendorUid);
+  if (detail.firebaseUid) keys.add(detail.firebaseUid);
+  if (detail.id) keys.add(String(detail.id));
+
+  keys.forEach((key) => {
+    const safeKey = (key || '').toString().trim();
+    if (!safeKey) return;
+    vendorDetailCache.set(safeKey, detail);
+    const existing = vendorMap.get(safeKey) || {};
+    vendorMap.set(safeKey, { ...existing, ...mapped });
+  });
+
+  rebuildListings();
+  updateVendorShowcase();
 };
 
 const transformListing = (docSnap) => {
@@ -702,6 +768,10 @@ const startRealtimeListeners = () => {
     collection(db, 'vendors'),
     (snapshot) => {
       vendorMap = new Map(snapshot.docs.map((docSnap) => [docSnap.id, docSnap.data()]));
+      vendorDetailCache.forEach((detail, key) => {
+        const existing = vendorMap.get(key) || {};
+        vendorMap.set(key, { ...existing, ...mapVendorDetailToSnapshot(detail) });
+      });
       updateVendorShowcase();
       if (!isLoadingListings) {
         rebuildListings();
