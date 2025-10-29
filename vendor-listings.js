@@ -33,6 +33,8 @@ const confirmAccept = confirmModal ? confirmModal.querySelector('[data-confirm-a
 const confirmCancel = confirmModal
   ? Array.from(confirmModal.querySelectorAll('[data-confirm-cancel]'))
   : [];
+const toastBanner = document.getElementById('toastBanner');
+let toastTimer = null;
 
 const listingEditor = setupListingEditor({
   onSubmitSuccess: (listing) => {
@@ -178,6 +180,34 @@ const confirmListingDeletion = (() => {
     });
 })();
 
+const showToast = (message, duration = 3600) => {
+  if (!message) {
+    return;
+  }
+
+  if (!toastBanner) {
+    window.alert(message);
+    return;
+  }
+
+  toastBanner.textContent = message;
+  toastBanner.classList.remove('is-visible');
+  // Force reflow so repeated messages animate consistently.
+  void toastBanner.offsetWidth;
+  toastBanner.classList.add('is-visible');
+  toastBanner.setAttribute('aria-hidden', 'false');
+
+  if (toastTimer) {
+    clearTimeout(toastTimer);
+  }
+
+  toastTimer = window.setTimeout(() => {
+    toastBanner.classList.remove('is-visible');
+    toastBanner.setAttribute('aria-hidden', 'true');
+    toastTimer = null;
+  }, duration);
+};
+
 const requestListingDeletion = async (listing) => {
   if (!listing || !listing.id) {
     return;
@@ -217,8 +247,11 @@ const requestListingDeletion = async (listing) => {
     removeListing(listing.id);
     renderListings();
 
-    const message = payload.message || 'Listing deleted successfully.';
-    window.alert(message);
+    const title = (listing.title || '').toString().trim();
+    const message =
+      payload.message ||
+      (title ? `Listing "${title}" has been deleted. It is no longer visible to shoppers.` : 'Listing deleted successfully.');
+    showToast(message);
   } catch (error) {
     console.error('[vendor-listings] delete failed', error);
     window.alert(error.message || 'Unable to delete this listing right now.');

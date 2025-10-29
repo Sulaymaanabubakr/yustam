@@ -93,6 +93,29 @@ $displayTitle = $businessName !== '' ? $businessName : $vendorName;
             border-bottom: 1px solid rgba(0, 0, 0, 0.06);
         }
 
+        .toast-banner {
+            position: fixed;
+            left: 50%;
+            bottom: 1.4rem;
+            transform: translate(-50%, 130%);
+            background: #004D40;
+            color: #FFFFFF;
+            padding: 0.85rem 1.2rem;
+            border-radius: 16px;
+            box-shadow: 0 18px 38px rgba(0, 77, 64, 0.32);
+            font-weight: 600;
+            font-size: 0.95rem;
+            line-height: 1.4;
+            transition: transform 0.28s ease, opacity 0.28s ease;
+            opacity: 0;
+            z-index: 220;
+        }
+
+        .toast-banner.is-visible {
+            transform: translate(-50%, 0);
+            opacity: 1;
+        }
+
         .header-inner {
             display: flex;
             align-items: center;
@@ -946,6 +969,8 @@ $displayTitle = $businessName !== '' ? $businessName : $vendorName;
             </div>
         </div>
     </div>
+
+    <div id="toastBanner" class="toast-banner" role="status" aria-live="polite" aria-hidden="true"></div>
 
     <?php require __DIR__ . '/vendor-listing-editor-modal.php'; ?>
     <script src="theme-manager.js" defer></script>
