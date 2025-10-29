@@ -406,12 +406,22 @@ $displayTitle = $businessName !== '' ? $businessName : $vendorName;
             color: var(--orange);
         }
 
+        .listing-actions .delete-btn {
+            background: rgba(220, 38, 38, 0.16);
+            color: #DC2626;
+        }
+
         .listing-actions a:hover,
         .listing-actions button:hover,
         .listing-actions a:focus-visible,
         .listing-actions button:focus-visible {
             transform: translateY(-2px);
             box-shadow: 0 12px 24px rgba(17, 17, 17, 0.12);
+        }
+
+        .listing-actions .delete-btn:hover,
+        .listing-actions .delete-btn:focus-visible {
+            box-shadow: 0 12px 24px rgba(220, 38, 38, 0.2);
         }
 
         .empty-state {
