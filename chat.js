@@ -13,14 +13,8 @@ import {
   deleteConversation,
 } from './chat-service.js';
 import { uploadToCloudinary } from './cloudinary.js';
-import { appendVerificationBadge, verificationPlanLabel } from './verification-badge.js';
 
 const thread = window.__CHAT_THREAD__ || {};
-
-const clearBadges = (host) => {
-  if (!host) return;
-  host.querySelectorAll('.verification-badge').forEach((badge) => badge.remove());
-};
 
 if (!thread.chatId || !thread.role || !thread.viewer?.uid) {
   showToast('We could not load this conversation.', 'error');
@@ -945,21 +939,11 @@ class ChatController {
       const nameSpan = document.createElement('span');
       nameSpan.textContent = name;
       this.chatTitle.appendChild(nameSpan);
-      clearBadges(this.chatTitle);
-      if (this.role === 'buyer') {
-        const vendorInfo = this.context.vendor || {};
-        const planValue = vendorInfo.plan || vendorInfo.plan_label || '';
-        const verificationState = String(
-          vendorInfo.verification_state || (vendorInfo.verified ? 'verified' : '')
-        ).toLowerCase();
-        const isVerified = vendorInfo.verified || verificationState === 'verified';
-        if (isVerified) {
-          appendVerificationBadge(this.chatTitle, planValue, {
-            verified: true,
-            roleLabel: verificationPlanLabel(planValue || vendorInfo.plan_label),
-          });
-        }
-      }
+      const vendorInfo = this.context.vendor || {};
+      const verificationState = String(
+        vendorInfo.verification_state || (vendorInfo.verified ? 'verified' : '')
+      ).toLowerCase();
+      this.chatTitle.dataset.vendorVerified = verificationState;
     }
     if (this.chatSubtitle) {
       this.chatSubtitle.textContent = this.listing.title || 'Marketplace listing';

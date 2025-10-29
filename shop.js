@@ -5,7 +5,7 @@ import {
   orderBy,
   query,
 } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
-import { appendVerificationBadge, verificationPlanLabel } from './verification-badge.js';
+import { verificationPlanLabel } from './plan-utils.js';
 
 const productGrid = document.getElementById('productGrid');
 const emptyState = document.getElementById('emptyState');
@@ -271,19 +271,12 @@ const updateVendorShowcase = () => {
 
   if (vendorShowcaseName) {
     vendorShowcaseName.textContent = selectedVendorName;
-    clearBadges(vendorShowcaseName);
     const showcasePlan = vendorInfo.plan || vendorData?.plan || '';
     const showcaseVerification = normaliseVerificationState(
       vendorInfo.verification || vendorData?.verification || vendorData?.verification_status || vendorData?.verified,
     );
-    if (showcaseVerification === 'verified') {
-      const inlineTitle = showcasePlan ? verificationPlanLabel(showcasePlan) : 'Verified Vendor';
-      appendVerificationBadge(vendorShowcaseName, showcasePlan, {
-        verified: true,
-        roleLabel: 'Verified Vendor',
-        title: inlineTitle,
-      });
-    }
+    vendorShowcaseName.dataset.vendorVerified = showcaseVerification;
+    vendorShowcaseName.dataset.vendorPlan = showcasePlan;
   }
 
   if (vendorShowcaseBusiness) {
@@ -1013,7 +1006,3 @@ const initialise = () => {
 document.addEventListener('DOMContentLoaded', initialise);
 window.addEventListener('beforeunload', cleanupListeners);
 window.addEventListener('pagehide', cleanupListeners);
-const clearBadges = (host) => {
-  if (!host) return;
-  host.querySelectorAll('.verification-badge').forEach((badge) => badge.remove());
-};

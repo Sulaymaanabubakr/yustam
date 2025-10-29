@@ -1,6 +1,6 @@
 import { db } from './firebase.js';
 import { collection, onSnapshot, deleteDoc, doc, orderBy, query } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
-import { createVerificationBadge as createVerificationTick, normalisePlanSlug, verificationPlanLabel } from './verification-badge.js';
+import { normalisePlanSlug } from './plan-utils.js';
 
 const buyerUid = document.body?.dataset?.buyerUid || '';
 const buyerNumericId = document.body?.dataset?.buyerId || '';
@@ -106,19 +106,6 @@ if (buyerId && grid) {
           <button class="remove-btn" data-id="${escapeHtml(productKey)}"><i class="ri-delete-bin-line"></i> Remove</button>
         </div>
       `;
-      const vendorMetaEl = card.querySelector('.vendor-meta');
-      if (vendorMetaEl) {
-        vendorMetaEl.querySelectorAll('.verification-badge').forEach((badge) => badge.remove());
-        if (verificationState === 'verified') {
-          const badge = createVerificationTick(vendorPlan, {
-            verified: true,
-            roleLabel: verificationPlanLabel(vendorPlan),
-          });
-          if (badge) {
-            vendorMetaEl.appendChild(badge);
-          }
-        }
-      }
       grid.appendChild(card);
     });
 

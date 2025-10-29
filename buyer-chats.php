@@ -3,7 +3,6 @@ require_once __DIR__ . '/session-path.php';
 session_start();
 
 require_once __DIR__ . '/buyer-storage.php';
-require_once __DIR__ . '/verification-badge.php';
 
 if (!isset($_SESSION['buyer_id'])) {
     header('Location: buyer-login.php');
@@ -63,7 +62,6 @@ $bootstrap = [
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="verification-badges.css">
     <style>
         :root {
             color-scheme: light;
