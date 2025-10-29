@@ -33,6 +33,35 @@ if ($identifier === '') {
     yustam_storefront_error(400, 'Vendor identifier missing.');
 }
 
+$cacheTtlSeconds = 20;
+$cacheFile = null;
+$cachePayload = null;
+
+try {
+    $cacheDir = __DIR__ . '/data/cache';
+    if (!is_dir($cacheDir)) {
+        @mkdir($cacheDir, 0775, true);
+    }
+    if (is_dir($cacheDir) && is_writable($cacheDir)) {
+        $cacheFile = $cacheDir . '/vendor-storefront-' . sha1($identifier) . '.json';
+        if (is_file($cacheFile) && (time() - (int) filemtime($cacheFile) < $cacheTtlSeconds)) {
+            $cachedRaw = file_get_contents($cacheFile);
+            if ($cachedRaw !== false) {
+                $cachePayload = json_decode($cachedRaw, true);
+                if (is_array($cachePayload) && ($cachePayload['success'] ?? false)) {
+                    echo json_encode($cachePayload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+                    exit;
+                }
+                $cachePayload = null;
+            }
+        }
+    } else {
+        $cacheFile = null;
+    }
+} catch (Throwable $cacheError) {
+    $cacheFile = null;
+}
+
 /**
  * Attempt to locate a vendor record in MySQL.
  */
@@ -560,11 +589,25 @@ try {
 
     $listings = yustam_storefront_fetch_listings($listingIdentifiers, 36);
 
-    echo json_encode([
+    $responsePayload = [
         'success' => true,
         'vendor' => $vendorPayload,
         'listings' => $listings,
-    ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    ];
+
+    if ($cacheFile) {
+        try {
+            @file_put_contents(
+                $cacheFile,
+                json_encode($responsePayload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+                LOCK_EX
+            );
+        } catch (Throwable $cacheWriteError) {
+            // Ignore cache write failures.
+        }
+    }
+
+    echo json_encode($responsePayload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 } catch (Throwable $exception) {
     error_log('Vendor storefront load failed: ' . $exception->getMessage());
     yustam_storefront_error(500, 'Unable to load vendor storefront.');
