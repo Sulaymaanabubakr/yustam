@@ -764,6 +764,7 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
             background: rgba(243, 115, 30, 0.14);
             padding: 0.55rem 1rem;
             border-radius: 999px;
+            text-decoration: none;
             transition: transform 0.2s ease, box-shadow 0.2s ease;
         }
 

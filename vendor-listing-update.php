@@ -346,6 +346,81 @@ if ($hasColumn('updated_at')) {
     $listingRow['updated_at'] = date('Y-m-d H:i:s');
 }
 
+$firestoreSynced = false;
+$firestoreDocumentId = '';
+if (!empty($listingRow['firestore_id'])) {
+    $firestoreDocumentId = (string)$listingRow['firestore_id'];
+} elseif (!empty($listingRow['public_id'])) {
+    $firestoreDocumentId = (string)$listingRow['public_id'];
+}
+
+if ($firestoreDocumentId !== '') {
+    try {
+        require_once __DIR__ . '/api/chat/firebase.php';
+
+        $documentPath = yustam_firestore_document_path('listings', $firestoreDocumentId);
+
+        $fields = [
+            'title' => yustam_firestore_string($title),
+            'listingTitle' => yustam_firestore_string($title),
+            'productTitle' => yustam_firestore_string($title),
+            'status' => yustam_firestore_string($statusRaw),
+            'description' => yustam_firestore_string($description),
+        ];
+
+        if ($priceValue === null) {
+            $fields['price'] = yustam_firestore_null();
+            $fields['amount'] = yustam_firestore_null();
+        } else {
+            $fields['price'] = yustam_firestore_double((float)$priceValue);
+            $fields['amount'] = yustam_firestore_double((float)$priceValue);
+        }
+
+        if ($primaryImage === '') {
+            $fields['primaryImage'] = yustam_firestore_null();
+            $fields['coverImage'] = yustam_firestore_null();
+        } else {
+            $fields['primaryImage'] = yustam_firestore_string($primaryImage);
+            $fields['coverImage'] = yustam_firestore_string($primaryImage);
+        }
+
+        $galleryValues = array_values(array_filter($gallery, static fn($value) => is_string($value) && $value !== ''));
+        $fields['imageUrls'] = [
+            'arrayValue' => [
+                'values' => array_map(static fn($value) => yustam_firestore_string($value), $galleryValues),
+            ],
+        ];
+        $fields['images'] = [
+            'arrayValue' => [
+                'values' => array_map(static fn($value) => yustam_firestore_string($value), $galleryValues),
+            ],
+        ];
+
+        $writes = [
+            [
+                'update' => [
+                    'name' => $documentPath,
+                    'fields' => $fields,
+                ],
+                'updateMask' => ['fieldPaths' => array_keys($fields)],
+            ],
+            [
+                'transform' => [
+                    'document' => $documentPath,
+                    'fieldTransforms' => [
+                        ['fieldPath' => 'updatedAt', 'setToServerValue' => 'REQUEST_TIME'],
+                    ],
+                ],
+            ],
+        ];
+
+        yustam_firestore_commit($writes);
+        $firestoreSynced = true;
+    } catch (Throwable $firestoreException) {
+        error_log('Listing update Firestore sync failed (' . $firestoreDocumentId . '): ' . $firestoreException->getMessage());
+    }
+}
+
 $addedOn = '-';
 if (isset($listingRow['created_at']) && $listingRow['created_at']) {
     $timestamp = strtotime((string)$listingRow['created_at']);
@@ -374,4 +449,8 @@ $listingResponse = [
     'link' => 'product.php?id=' . urlencode($identifierValue),
 ];
 
-echo json_encode(['success' => true, 'listing' => $listingResponse], JSON_UNESCAPED_SLASHES);
+echo json_encode([
+    'success' => true,
+    'listing' => $listingResponse,
+    'firestore_synced' => $firestoreSynced,
+], JSON_UNESCAPED_SLASHES);
