@@ -250,6 +250,46 @@ echo json_encode(
     JSON_UNESCAPED_SLASHES
 );
 
+function yustam_normalize_listing_status(string $status): string
+{
+    $trimmed = strtolower(trim($status));
+    if ($trimmed === '') {
+        return 'pending';
+    }
+
+    $canonical = str_replace(['_', '-'], ' ', $trimmed);
+    $canonical = preg_replace('/\s+/', ' ', $canonical);
+
+    $map = [
+        'approved live' => 'approved',
+        'approved' => 'approved',
+        'live' => 'approved',
+        'pending review' => 'pending',
+        'pending' => 'pending',
+        'awaiting approval' => 'pending',
+        'draft' => 'draft',
+        'unlisted' => 'unlisted',
+        'temporarily unlisted' => 'unlisted',
+        'sold' => 'sold',
+        'sold out' => 'sold',
+        'sold / out of stock' => 'sold',
+        'archived' => 'archived',
+        'inactive' => 'archived',
+    ];
+
+    if (isset($map[$canonical])) {
+        return $map[$canonical];
+    }
+
+    foreach ($map as $key => $value) {
+        if (strpos($canonical, $key) !== false) {
+            return $value;
+        }
+    }
+
+    return $trimmed;
+}
+
 function format_listing_row(array $row, array $columns): array
 {
     $identifier = '';
@@ -261,10 +301,7 @@ function format_listing_row(array $row, array $columns): array
         $identifier = (string)$row['id'];
     }
 
-    $statusRaw = strtolower(trim((string)($row['status'] ?? '')));
-    if ($statusRaw === '') {
-        $statusRaw = 'pending';
-    }
+    $statusRaw = yustam_normalize_listing_status((string)($row['status'] ?? ''));
 
     $gallery = [];
     foreach (['image_urls', 'imageUrls'] as $column) {
@@ -391,7 +428,7 @@ function vendor_listings_from_firestore(string $vendorUid, string $statusFilter,
             continue;
         }
 
-        $statusRaw = strtolower(trim((string)($fields['status'] ?? 'pending')));
+        $statusRaw = yustam_normalize_listing_status((string)($fields['status'] ?? 'pending'));
         if ($statusFilter !== '' && $statusRaw !== $statusFilter) {
             continue;
         }
