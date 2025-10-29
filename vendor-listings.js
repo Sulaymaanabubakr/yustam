@@ -26,6 +26,13 @@ const emptyStateCTA = document.getElementById('emptyStateCTA');
 const backButton = document.getElementById('backToDashboard');
 const storefrontButton = document.getElementById('viewStorefront');
 const loader = document.getElementById('pageLoader');
+const confirmModal = document.getElementById('confirmModal');
+const confirmTitle = document.getElementById('confirmModalTitle');
+const confirmMessage = document.getElementById('confirmModalMessage');
+const confirmAccept = confirmModal ? confirmModal.querySelector('[data-confirm-accept]') : null;
+const confirmCancel = confirmModal
+  ? Array.from(confirmModal.querySelectorAll('[data-confirm-cancel]'))
+  : [];
 
 const listingEditor = setupListingEditor({
   onSubmitSuccess: (listing) => {
@@ -110,12 +117,73 @@ const removeListing = (listingId) => {
   state.listings = state.listings.filter((item) => item.id !== listingId);
 };
 
+// Provides a mobile-first confirmation flow for destructive listing actions.
+const confirmListingDeletion = (() => {
+  if (!confirmModal || !confirmAccept || !confirmMessage || !confirmTitle) {
+    return async (listing) => window.confirm('Are you sure you want to delete this listing?');
+  }
+
+  let resolver = null;
+  let previousFocus = null;
+
+  const close = (result) => {
+    confirmModal.classList.remove('is-open');
+    confirmModal.setAttribute('aria-hidden', 'true');
+    document.removeEventListener('keydown', handleKeyDown);
+    const resolveFn = resolver;
+    resolver = null;
+    if (previousFocus && typeof previousFocus.focus === 'function') {
+      previousFocus.focus();
+    }
+    previousFocus = null;
+    if (typeof resolveFn === 'function') {
+      resolveFn(result);
+    }
+  };
+
+  const handleCancel = () => close(false);
+
+  const handleKeyDown = (event) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      handleCancel();
+    }
+  };
+
+  confirmCancel.forEach((element) => {
+    element.addEventListener('click', handleCancel);
+  });
+
+  confirmAccept.addEventListener('click', () => close(true));
+
+  return async (listing) =>
+    new Promise((resolve) => {
+      resolver = resolve;
+      previousFocus = document.activeElement;
+      const title = (listing?.title || '').toString().trim();
+      if (title) {
+        confirmTitle.textContent = `Delete "${title}"?`;
+        confirmMessage.textContent =
+          'Removing this listing will take it offline for shoppers and delete it from your storage. This cannot be undone.';
+      } else {
+        confirmTitle.textContent = 'Delete this listing?';
+        confirmMessage.textContent =
+          'Removing this listing will take it offline for shoppers and delete it from your storage. This cannot be undone.';
+      }
+
+      confirmModal.classList.add('is-open');
+      confirmModal.setAttribute('aria-hidden', 'false');
+      confirmAccept.focus();
+      document.addEventListener('keydown', handleKeyDown);
+    });
+})();
+
 const requestListingDeletion = async (listing) => {
   if (!listing || !listing.id) {
     return;
   }
 
-  const confirmed = window.confirm('Are you sure you want to delete this listing?');
+  const confirmed = await confirmListingDeletion(listing);
   if (!confirmed) {
     return;
   }
