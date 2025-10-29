@@ -26,6 +26,8 @@ $vendorIdParam = isset($_GET['vendorId']) ? trim((string) $_GET['vendorId']) : '
 $vendorFirebaseUidSession = isset($_SESSION['vendor_firebase_uid']) ? trim((string) $_SESSION['vendor_firebase_uid']) : '';
 $vendorLegacyUidSession = isset($_SESSION['vendor_uid']) ? trim((string) $_SESSION['vendor_uid']) : '';
 $vendorNumericIdSession = isset($_SESSION['vendor_id']) ? trim((string) $_SESSION['vendor_id']) : '';
+$vendorFirebaseUid = $vendorFirebaseUidSession;
+$vendorLegacyUid = $vendorLegacyUidSession;
 
 $vendorId = '';
 foreach ([$vendorUidParam, $vendorIdParam, $vendorFirebaseUidSession, $vendorLegacyUidSession, $vendorNumericIdSession] as $candidate) {
@@ -47,6 +49,9 @@ if ($vendorUid === '' && $vendorId !== '' && $vendorId !== $vendorNumericIdSessi
     $vendorUid = $vendorId;
 }
 $vendorUid = trim((string) $vendorUid);
+if ($vendorFirebaseUid === '' && $vendorUid !== '') {
+    $vendorFirebaseUid = $vendorUid;
+}
 
 $vendorName = 'Marketplace Vendor';
 $vendorBusinessName = '';
@@ -667,9 +672,25 @@ if ($vendorRecord) {
         $vendorId = $vendorNumericId;
     }
 
-    $recordUid = yustam_product_first_non_empty([
-        $vendorRecord['vendor_uid'] ?? null,
+    $recordFirebaseUid = yustam_product_first_non_empty([
         $vendorRecord['firebase_uid'] ?? null,
+        $vendorRecord['firebaseUid'] ?? null,
+    ]);
+    if ($recordFirebaseUid !== '') {
+        $vendorFirebaseUid = $recordFirebaseUid;
+    }
+
+    $recordLegacyUid = yustam_product_first_non_empty([
+        $vendorRecord['vendor_uid'] ?? null,
+        $vendorRecord['vendorUid'] ?? null,
+    ]);
+    if ($recordLegacyUid !== '') {
+        $vendorLegacyUid = $recordLegacyUid;
+    }
+
+    $recordUid = yustam_product_first_non_empty([
+        $vendorFirebaseUid,
+        $recordLegacyUid,
     ]);
     if ($recordUid !== '') {
         $vendorUid = $recordUid;
@@ -1011,6 +1032,10 @@ $vendorLocationHidden = $vendorLocationDisplay === '';
 $vendorSinceHidden = trim((string) $vendorSinceDisplay) === '';
 $quickChatVendorUid = $vendorUid !== '' ? $vendorUid : ($vendorId !== '' ? $vendorId : $vendorNumericId);
 $quickChatVendorId = $vendorNumericId !== '' ? $vendorNumericId : (ctype_digit((string) $vendorId) ? (string) $vendorId : '');
+$quickChatVendorFirebaseUid = $vendorFirebaseUid !== '' ? $vendorFirebaseUid : $quickChatVendorUid;
+$quickChatVendorLegacyUid = $vendorLegacyUid !== ''
+    ? $vendorLegacyUid
+    : ($quickChatVendorUid !== '' && $quickChatVendorUid !== $quickChatVendorFirebaseUid ? $quickChatVendorUid : '');
 
 $initialState = [
     'listing' => $listingDocument,
@@ -1862,6 +1887,8 @@ $quickChatProductImage = $primaryImage;
     data-buyer-name="<?= htmlspecialchars($buyerLabel, ENT_QUOTES, 'UTF-8'); ?>"
     data-vendor-id="<?= htmlspecialchars($vendorNumericId, ENT_QUOTES, 'UTF-8'); ?>"
     data-vendor-uid="<?= htmlspecialchars($vendorUid, ENT_QUOTES, 'UTF-8'); ?>"
+    data-vendor-firebase-uid="<?= htmlspecialchars($vendorFirebaseUid, ENT_QUOTES, 'UTF-8'); ?>"
+    data-vendor-legacy-uid="<?= htmlspecialchars($vendorLegacyUid, ENT_QUOTES, 'UTF-8'); ?>"
     data-vendor-name="<?= htmlspecialchars($vendorName, ENT_QUOTES, 'UTF-8'); ?>"
     data-vendor-plan="<?= htmlspecialchars($vendorPlan, ENT_QUOTES, 'UTF-8'); ?>"
     data-vendor-plan-label="<?= htmlspecialchars($vendorPlanLabel, ENT_QUOTES, 'UTF-8'); ?>"
@@ -1945,6 +1972,8 @@ $quickChatProductImage = $primaryImage;
             data-chat-id="<?= htmlspecialchars($chatId, ENT_QUOTES, 'UTF-8'); ?>"
             data-vendor-id="<?= htmlspecialchars($quickChatVendorId, ENT_QUOTES, 'UTF-8'); ?>"
             data-vendor-uid="<?= htmlspecialchars($quickChatVendorUid, ENT_QUOTES, 'UTF-8'); ?>"
+            data-vendor-firebase-uid="<?= htmlspecialchars($quickChatVendorFirebaseUid, ENT_QUOTES, 'UTF-8'); ?>"
+            data-vendor-legacy-uid="<?= htmlspecialchars($quickChatVendorLegacyUid, ENT_QUOTES, 'UTF-8'); ?>"
             data-vendor-name="<?= htmlspecialchars($vendorName, ENT_QUOTES, 'UTF-8'); ?>"
             data-buyer-id="<?= htmlspecialchars($buyerNumericId, ENT_QUOTES, 'UTF-8'); ?>"
             data-buyer-uid="<?= htmlspecialchars($buyerUid !== '' ? $buyerUid : $buyerNumericId, ENT_QUOTES, 'UTF-8'); ?>"
