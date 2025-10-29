@@ -114,6 +114,42 @@ import { auth, db } from './firebase.js';
         const fallbackVendorAvatar = 'https://placehold.co/80x80?text=VP';
         const fallbackListingThumb = 'https://placehold.co/64x64?text=IMG';
 
+        const stripHashFromUrl = () => {
+            const baseUrl = window.location.pathname + window.location.search;
+            history.replaceState(null, '', baseUrl);
+        };
+
+        const handleInternalNavLinks = () => {
+            const navLinks = document.querySelectorAll('.nav-link[href*="#"]');
+            navLinks.forEach((link) => {
+                const href = link.getAttribute('href') || '';
+                const hashIndex = href.indexOf('#');
+                if (hashIndex < 0) return;
+                const targetId = href.slice(hashIndex + 1);
+                if (!targetId) return;
+                link.addEventListener('click', (event) => {
+                    const target = document.getElementById(targetId);
+                    if (!target) return;
+                    event.preventDefault();
+                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    stripHashFromUrl();
+                });
+            });
+
+            if (window.location.hash) {
+                const initialId = window.location.hash.slice(1);
+                const initialTarget = document.getElementById(initialId);
+                if (initialTarget) {
+                    requestAnimationFrame(() => {
+                        initialTarget.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        stripHashFromUrl();
+                    });
+                } else {
+                    stripHashFromUrl();
+                }
+            }
+        };
+
         let selectedListingId = null;
         let selectedListingVendor = null;
         let notificationDocs = [];
@@ -566,6 +602,8 @@ import { auth, db } from './firebase.js';
                 return null;
             }
         };
+
+        handleInternalNavLinks();
 
         const initAuth = () => {
             onAuthStateChanged(auth, async (user) => {
