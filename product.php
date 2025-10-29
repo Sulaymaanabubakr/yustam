@@ -1781,7 +1781,7 @@ $quickChatProductImage = $primaryImage;
         .product-footer {
             margin-top: auto;
             padding: 32px 16px 48px;
-            background: rgba(0, 0, 0, 0.12);
+            background: linear-gradient(135deg, var(--emerald), var(--emerald-dark));
             color: var(--white);
         }
 
@@ -1903,6 +1903,8 @@ $quickChatProductImage = $primaryImage;
                 left: unset;
                 flex-direction: row;
                 justify-content: center;
+                gap: 12px;
+                padding: 0 16px;
                 margin: 0 auto 24px;
             }
 
@@ -1910,6 +1912,18 @@ $quickChatProductImage = $primaryImage;
                 flex: 1;
                 justify-content: center;
                 min-width: 0;
+                padding: 12px 14px;
+                gap: 8px;
+                font-size: 0.95rem;
+                box-shadow: 0 10px 24px rgba(1, 56, 47, 0.14);
+            }
+
+            .floating-button i {
+                font-size: 1.1rem;
+            }
+
+            .floating-button span {
+                white-space: nowrap;
             }
         }
 
