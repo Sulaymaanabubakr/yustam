@@ -104,6 +104,62 @@ const upsertListing = (listing) => {
   }
 };
 
+const removeListing = (listingId) => {
+  if (!listingId) return;
+  listingLookup.delete(listingId);
+  state.listings = state.listings.filter((item) => item.id !== listingId);
+};
+
+const requestListingDeletion = async (listing) => {
+  if (!listing || !listing.id) {
+    return;
+  }
+
+  const confirmed = window.confirm('Are you sure you want to delete this listing?');
+  if (!confirmed) {
+    return;
+  }
+
+  state.isLoading = true;
+  toggleLoader(true);
+
+  try {
+    const response = await fetch('vendor-listing-delete.php', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({ listingId: listing.id }),
+    });
+
+    let payload = {};
+    try {
+      payload = await response.json();
+    } catch (error) {
+      payload = {};
+    }
+
+    if (!response.ok || !payload.success) {
+      const message = payload.message || 'Unable to delete this listing right now.';
+      throw new Error(message);
+    }
+
+    removeListing(listing.id);
+    renderListings();
+
+    const message = payload.message || 'Listing deleted successfully.';
+    window.alert(message);
+  } catch (error) {
+    console.error('[vendor-listings] delete failed', error);
+    window.alert(error.message || 'Unable to delete this listing right now.');
+  } finally {
+    state.isLoading = false;
+    toggleLoader(false);
+  }
+};
+
 const renderListings = () => {
   if (!grid) return;
 
@@ -202,8 +258,17 @@ const buildListingCard = (listing) => {
     listingEditor.open(listing);
   });
 
+  const deleteButton = document.createElement('button');
+  deleteButton.type = 'button';
+  deleteButton.className = 'delete-btn';
+  deleteButton.innerHTML = '<i class="ri-delete-bin-6-line"></i> Delete';
+  deleteButton.addEventListener('click', () => {
+    requestListingDeletion(listing);
+  });
+
   actions.appendChild(viewLink);
   actions.appendChild(editButton);
+  actions.appendChild(deleteButton);
 
   card.appendChild(thumb);
   card.appendChild(info);
