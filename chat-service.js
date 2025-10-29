@@ -123,9 +123,10 @@ export function buildChatId(buyerUid, vendorUid) {
   const vendor = requireUid(vendorUid, 'vendor_uid');
   const input = `${buyer}|${vendor}`;
   let hash = FNV_OFFSET;
+  // Mirrors PHP hash('fnv164', ...) so client/server share chat IDs.
   for (let index = 0; index < input.length; index += 1) {
-    hash ^= BigInt(input.charCodeAt(index));
     hash = (hash * FNV_PRIME) & FNV_MOD;
+    hash ^= BigInt(input.charCodeAt(index));
   }
   return hash.toString(16).padStart(16, '0');
 }
