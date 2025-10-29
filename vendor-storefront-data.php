@@ -36,6 +36,8 @@ if ($identifier === '') {
 $cacheTtlSeconds = 20;
 $cacheFile = null;
 $cachePayload = null;
+$cacheServed = false;
+$refreshAfterServingCache = false;
 
 try {
     $cacheDir = __DIR__ . '/data/cache';
@@ -53,6 +55,22 @@ try {
                     exit;
                 }
                 $cachePayload = null;
+            }
+        } elseif (is_file($cacheFile)) {
+            $cachedRaw = file_get_contents($cacheFile);
+            if ($cachedRaw !== false) {
+                $stalePayload = json_decode($cachedRaw, true);
+                if (is_array($stalePayload) && ($stalePayload['success'] ?? false)) {
+                    echo json_encode($stalePayload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+                    $cacheServed = true;
+                    $refreshAfterServingCache = true;
+                    if (function_exists('fastcgi_finish_request')) {
+                        fastcgi_finish_request();
+                    } else {
+                        ignore_user_abort(true);
+                        flush();
+                    }
+                }
             }
         }
     } else {
@@ -306,6 +324,150 @@ function yustam_storefront_parse_datetime($value): ?string
         }
     }
     return null;
+}
+
+/**
+ * Retrieve listings table columns.
+ *
+ * @param mysqli $conn
+ * @return array<int,string>
+ */
+function yustam_storefront_listings_table_columns(mysqli $conn): array
+{
+    static $columns = null;
+
+    if (is_array($columns)) {
+        return $columns;
+    }
+
+    $columns = [];
+    try {
+        $result = $conn->query('SHOW COLUMNS FROM `listings`');
+        if ($result instanceof mysqli_result) {
+            while ($row = $result->fetch_assoc()) {
+                if (!empty($row['Field'])) {
+                    $columns[] = $row['Field'];
+                }
+            }
+            $result->free();
+        }
+    } catch (Throwable $exception) {
+        error_log('Unable to inspect listings table columns: ' . $exception->getMessage());
+    }
+
+    return $columns;
+}
+
+function yustam_storefront_listings_table_has_column(mysqli $conn, string $column): bool
+{
+    return in_array($column, yustam_storefront_listings_table_columns($conn), true);
+}
+
+/**
+ * Fetch listings for a vendor from MySQL.
+ *
+ * @param int $vendorId
+ * @param int $limit
+ * @return array<int,array<string,mixed>>
+ */
+function yustam_storefront_fetch_sql_listings(int $vendorId, int $limit = 36): array
+{
+    if ($vendorId <= 0) {
+        return [];
+    }
+
+    try {
+        $conn = get_db_connection();
+        if (!yustam_storefront_listings_table_has_column($conn, 'vendor_id')) {
+            return [];
+        }
+
+        $orderColumn = 'id';
+        foreach (['updated_at', 'created_at', 'id'] as $candidate) {
+            if (yustam_storefront_listings_table_has_column($conn, $candidate)) {
+                $orderColumn = $candidate;
+                break;
+            }
+        }
+
+        $sql = sprintf('SELECT * FROM `listings` WHERE `vendor_id` = ? ORDER BY `%s` DESC LIMIT ?', $orderColumn);
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            throw new RuntimeException('Unable to prepare listings query: ' . $conn->error);
+        }
+        $stmt->bind_param('ii', $vendorId, $limit);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $rows = [];
+        if ($result instanceof mysqli_result) {
+            while ($row = $result->fetch_assoc()) {
+                if (is_array($row)) {
+                    $rows[] = $row;
+                }
+            }
+            $result->free();
+        }
+        $stmt->close();
+
+        $listings = [];
+        foreach ($rows as $row) {
+            $priceValue = null;
+            foreach (['price', 'amount', 'listing_price', 'selling_price'] as $priceColumn) {
+                if (isset($row[$priceColumn]) && is_numeric($row[$priceColumn])) {
+                    $priceValue = (float) $row[$priceColumn];
+                    break;
+                }
+            }
+
+            $imageValue = yustam_storefront_first_non_empty(
+                (string) ($row['primary_image'] ?? ''),
+                (string) ($row['main_image'] ?? ''),
+                (string) ($row['image_url'] ?? ''),
+                (string) ($row['image'] ?? ''),
+                (string) ($row['thumbnail'] ?? '')
+            );
+
+            $categoryValue = yustam_storefront_first_non_empty(
+                (string) ($row['category'] ?? ''),
+                (string) ($row['category_name'] ?? '')
+            );
+
+            $subcategoryValue = yustam_storefront_first_non_empty(
+                (string) ($row['subcategory'] ?? ''),
+                (string) ($row['sub_category'] ?? '')
+            );
+
+            $locationValue = yustam_storefront_first_non_empty(
+                (string) ($row['location'] ?? ''),
+                trim((string) ($row['city'] ?? '') . ', ' . (string) ($row['state'] ?? ''))
+            );
+
+            $createdValue = $row['created_at'] ?? ($row['updated_at'] ?? null);
+            $createdIso = yustam_storefront_parse_datetime($createdValue);
+
+            $listings[] = [
+                'id' => (string) ($row['public_id'] ?? $row['uid'] ?? $row['id'] ?? ''),
+                'title' => yustam_storefront_first_non_empty(
+                    (string) ($row['title'] ?? ''),
+                    (string) ($row['name'] ?? ''),
+                    (string) ($row['product_title'] ?? ''),
+                    'Marketplace Listing'
+                ),
+                'price' => $priceValue,
+                'category' => $categoryValue,
+                'subcategory' => $subcategoryValue,
+                'status' => (string) ($row['status'] ?? ($row['listing_status'] ?? '')),
+                'image' => $imageValue,
+                'location' => $locationValue,
+                'createdAt' => $createdIso,
+            ];
+        }
+
+        return $listings;
+    } catch (Throwable $exception) {
+        error_log('Unable to fetch SQL listings: ' . $exception->getMessage());
+        return [];
+    }
 }
 
 /**
@@ -581,13 +743,20 @@ try {
 
     $vendorPayload = yustam_storefront_merge_vendor($sqlVendor, $firestoreVendor);
 
-    $listingIdentifiers = [
-        $vendorPayload['vendorUid'] ?? null,
-        $vendorPayload['firebaseUid'] ?? null,
-        $identifier,
-    ];
+    $sqlListings = [];
+    if (!empty($vendorPayload['id'])) {
+        $sqlListings = yustam_storefront_fetch_sql_listings((int) $vendorPayload['id'], 36);
+    }
 
-    $listings = yustam_storefront_fetch_listings($listingIdentifiers, 36);
+    $listings = $sqlListings;
+    if (!$listings) {
+        $listingIdentifiers = [
+            $vendorPayload['vendorUid'] ?? null,
+            $vendorPayload['firebaseUid'] ?? null,
+            $identifier,
+        ];
+        $listings = yustam_storefront_fetch_listings($listingIdentifiers, 36);
+    }
 
     $responsePayload = [
         'success' => true,
@@ -607,9 +776,10 @@ try {
         }
     }
 
-    echo json_encode($responsePayload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    if (!$cacheServed) {
+        echo json_encode($responsePayload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    }
 } catch (Throwable $exception) {
     error_log('Vendor storefront load failed: ' . $exception->getMessage());
     yustam_storefront_error(500, 'Unable to load vendor storefront.');
 }
-
