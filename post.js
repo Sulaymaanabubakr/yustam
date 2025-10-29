@@ -1770,6 +1770,59 @@ const createListingDocument = (formValues, imageUrls) => {
   };
 };
 
+const normalisePriceValue = (value) => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  const trimmed = String(value).trim();
+  if (trimmed === '') {
+    return null;
+  }
+  const cleaned = trimmed.replace(/[^0-9.\-]/g, '');
+  if (cleaned === '') {
+    return null;
+  }
+  const parsed = Number.parseFloat(cleaned);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const syncListingToSql = async (firestoreId, listingData, formValues, imageUrls) => {
+  if (!firestoreId) return;
+  try {
+    const payload = {
+      firestoreId,
+      vendorUid: listingData.vendorUid || listingData.vendorFirebaseUid || listingData.vendorID || '',
+      title: listingData.title || listingData.listingTitle || 'Marketplace Listing',
+      description: listingData.description || formValues.description || '',
+      price: normalisePriceValue(
+        formValues.price ?? listingData.price ?? listingData.amount ?? listingData.listingPrice ?? null,
+      ),
+      status: listingData.status || 'pending',
+      primaryImage: Array.isArray(imageUrls) && imageUrls.length ? imageUrls[0] : listingData.coverImage || '',
+      imageUrls: Array.isArray(imageUrls) ? imageUrls : [],
+      category: listingData.category || '',
+      subcategory: listingData.subcategory || '',
+      location:
+        listingData.vendorLocation ||
+        listingData.location ||
+        formValues.location ||
+        `${formValues.city || ''}${formValues.state ? `, ${formValues.state}` : ''}`,
+      city: formValues.city || '',
+      state: formValues.state || '',
+      country: formValues.country || 'Nigeria',
+    };
+
+    await fetch('vendor-listing-sync.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify(payload),
+    });
+  } catch (error) {
+    console.warn('[listing-sync] unable to sync listing to SQL', error);
+  }
+};
+
 const handleSubmit = async () => {
   if (!currentUser || !currentUser.uid) {
     showToast('Please log in again to post your listing.');
@@ -1791,7 +1844,8 @@ const handleSubmit = async () => {
     const formValues = collectFormValues();
     const imageUrls = await uploadListingImages(currentUser.uid);
     const listingData = createListingDocument(formValues, imageUrls);
-    await addDoc(collection(db, 'listings'), listingData);
+    const docRef = await addDoc(collection(db, 'listings'), listingData);
+    await syncListingToSql(docRef.id, listingData, formValues, imageUrls);
     showToast('Listing posted successfully!');
     setTimeout(() => {
       window.location.href = 'vendor-dashboard.php';

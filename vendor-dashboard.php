@@ -19,6 +19,8 @@ if (!isset($_SESSION['vendor_id'])) {
 $vendorId = (int)$_SESSION['vendor_id'];
 $db = get_db_connection();
 
+yustam_listings_ensure_table($db);
+
 $vendorTable = 'vendors';
 if (defined('YUSTAM_VENDORS_TABLE') && preg_match('/^[A-Za-z0-9_]+$/', YUSTAM_VENDORS_TABLE)) {
     $vendorTable = YUSTAM_VENDORS_TABLE;
@@ -92,7 +94,7 @@ $stats = [
 ];
 
 try {
-    $listingStmt = $db->prepare('SELECT id, title, price, status, created_at, views FROM listings WHERE vendor_id = ? ORDER BY created_at DESC LIMIT 25');
+    $listingStmt = $db->prepare('SELECT firestore_id, title, price, status, created_at, views, primary_image FROM listings WHERE vendor_id = ? ORDER BY created_at DESC LIMIT 25');
     $listingStmt->bind_param('i', $vendorId);
     $listingStmt->execute();
     $listingResult = $listingStmt->get_result();
@@ -103,10 +105,10 @@ try {
             'title' => $row['title'] ?? 'Untitled',
             'price' => isset($row['price']) ? (float)$row['price'] : 0.0,
             'status' => $row['status'] ?? 'Draft',
-            'added_on' => isset($row['created_at']) ? date('j M Y', strtotime($row['created_at'])) : '—',
-            'link' => 'product.php?id=' . ($row['id'] ?? ''),
+            'added_on' => isset($row['created_at']) ? date('j M Y', strtotime($row['created_at'])) : '-',
+            'link' => 'product.php?id=' . ($row['firestore_id'] ?? ''),
             'views' => (int)($row['views'] ?? 0),
-            'image' => '',
+            'image' => $row['primary_image'] ?? '',
             'image_alt' => isset($row['title']) && trim((string)$row['title']) !== '' ? trim((string)$row['title']) : 'Listing image',
         ];
         $stats['total_listings']++;
@@ -1076,6 +1078,9 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
 <script type="module" src="vendor-dashboard.js"></script>
 </body>
 </html>
+
+
+
 
 
 
