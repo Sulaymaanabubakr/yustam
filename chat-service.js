@@ -432,7 +432,7 @@ export function subscribeMessages(chatId, callback) {
   const seedWithApi = async () => {
     try {
       const data = await fetchMessagesViaApi(id);
-      if (active && Array.isArray(data.messages) && data.messages.length) {
+      if (active && Array.isArray(data.messages)) {
         callback(data.messages);
       }
     } catch (seedError) {
@@ -666,18 +666,72 @@ export async function deleteConversation(chatId) {
 function createChatsSubscription(queryRef, role, uid, callback) {
   let active = true;
   let seeded = false;
+  let seedingInFlight = false;
   let seedTimer = null;
+  let seedRetryTimer = null;
+  let pollTimer = null;
 
-  const seedWithApi = async () => {
-    if (seeded) return;
-    seeded = true;
+  const stopPolling = () => {
+    if (pollTimer) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
+  };
+
+  const pollFromApi = async () => {
     try {
       const chats = await fetchChatsViaApi(role, uid);
-      if (active && Array.isArray(chats) && chats.length) {
+      if (!active) {
+        return;
+      }
+      callback(chats);
+      chats.forEach((chat) => {
+        if (chat && chat.chat_id) {
+          fallbackChatCache.set(chat.chat_id, chat);
+        }
+      });
+    } catch (pollError) {
+      console.error('[chat] chats poll failed', pollError);
+    }
+  };
+
+  const startPolling = () => {
+    if (pollTimer || !active) {
+      return;
+    }
+    pollFromApi();
+    pollTimer = setInterval(pollFromApi, 8000);
+  };
+
+  const seedWithApi = async () => {
+    if (seeded || seedingInFlight) {
+      return;
+    }
+    seedingInFlight = true;
+    try {
+      const chats = await fetchChatsViaApi(role, uid);
+      if (active && Array.isArray(chats)) {
         callback(chats);
       }
+      seeded = true;
     } catch (seedError) {
       console.warn('[chat] seed chats via api failed', seedError);
+      seeded = false;
+      if (seedRetryTimer) {
+        clearTimeout(seedRetryTimer);
+      }
+      seedRetryTimer = setTimeout(() => {
+        seedRetryTimer = null;
+        if (active && !seeded) {
+          seedWithApi();
+        }
+      }, 4000);
+    } finally {
+      seedingInFlight = false;
+      if (!active && seedRetryTimer) {
+        clearTimeout(seedRetryTimer);
+        seedRetryTimer = null;
+      }
     }
   };
 
@@ -685,11 +739,13 @@ function createChatsSubscription(queryRef, role, uid, callback) {
     queryRef,
     (snapshot) => {
       if (!active) return;
+      stopPolling();
       const chats = orderChatsByLastTs(snapshot.docs.map(mapChatSnapshot));
       callback(chats);
       chats.forEach((chat) => fallbackChatCache.set(chat.chat_id, chat));
     },
     async (error) => {
+      seedingInFlight = false;
       console.error('[chat] subscribeChats', error);
       try {
         const chats = await fetchChatsViaApi(role, uid);
@@ -700,6 +756,7 @@ function createChatsSubscription(queryRef, role, uid, callback) {
         console.error('[chat] chats fallback failed', fallbackError);
         showToast('Unable to load chats.');
       }
+      startPolling();
     }
   );
 
@@ -707,6 +764,7 @@ function createChatsSubscription(queryRef, role, uid, callback) {
 
   return () => {
     active = false;
+    stopPolling();
     try {
       unsubscribe();
     } catch (unsubscribeError) {
@@ -716,6 +774,11 @@ function createChatsSubscription(queryRef, role, uid, callback) {
       clearTimeout(seedTimer);
       seedTimer = null;
     }
+    if (seedRetryTimer) {
+      clearTimeout(seedRetryTimer);
+      seedRetryTimer = null;
+    }
+    seedingInFlight = false;
   };
 }
 
