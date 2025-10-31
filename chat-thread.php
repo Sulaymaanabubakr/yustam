@@ -365,6 +365,101 @@ $bootstrap = [
             background: rgba(220, 65, 47, 0.18);
         }
 
+        .chat-confirm {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            background: rgba(18, 37, 35, 0.4);
+            backdrop-filter: blur(2px);
+            z-index: 999;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+        }
+
+        .chat-confirm.is-visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .chat-confirm__dialog {
+            background: var(--surface);
+            border-radius: 18px;
+            padding: clamp(20px, 4vw, 28px);
+            max-width: 420px;
+            width: min(100%, 420px);
+            box-shadow: 0 20px 36px rgba(18, 37, 35, 0.18);
+            transform: translateY(12px);
+            transition: transform 0.2s ease;
+        }
+
+        .chat-confirm.is-visible .chat-confirm__dialog {
+            transform: translateY(0);
+        }
+
+        .chat-confirm__icon {
+            width: 56px;
+            height: 56px;
+            border-radius: 16px;
+            display: grid;
+            place-items: center;
+            background: rgba(220, 65, 47, 0.12);
+            color: #dc412f;
+            font-size: 1.6rem;
+            margin-bottom: 18px;
+        }
+
+        .chat-confirm__title {
+            margin: 0 0 8px;
+            font-size: 1.15rem;
+            color: var(--emerald);
+        }
+
+        .chat-confirm__message {
+            margin: 0 0 20px;
+            color: var(--muted);
+            line-height: 1.5;
+        }
+
+        .chat-confirm__actions {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+        }
+
+        .chat-confirm__actions button {
+            border-radius: 14px;
+            padding: 10px 16px;
+            font-weight: 600;
+            cursor: pointer;
+            border: 1px solid transparent;
+            background: rgba(18, 37, 35, 0.08);
+            color: var(--emerald);
+            transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+        }
+
+        .chat-confirm__actions button.danger {
+            background: rgba(220, 65, 47, 0.12);
+            color: #dc412f;
+            border-color: rgba(220, 65, 47, 0.2);
+        }
+
+        .chat-confirm__actions button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 20px rgba(18, 37, 35, 0.12);
+        }
+
+        .chat-confirm__actions button.danger:hover {
+            box-shadow: 0 10px 20px rgba(220, 65, 47, 0.16);
+        }
+
+        body.chat-confirm-active {
+            overflow: hidden;
+        }
+
         .header-avatar {
             width: 48px;
             height: 48px;
@@ -932,6 +1027,19 @@ $bootstrap = [
             </div>
             <input type="file" accept="image/*" id="imageInput" hidden>
         </footer>
+    </div>
+    <div id="deleteConfirmModal" class="chat-confirm" role="presentation" hidden>
+        <div class="chat-confirm__dialog" role="alertdialog" aria-modal="true" aria-labelledby="deleteConfirmTitle" aria-describedby="deleteConfirmMessage">
+            <div class="chat-confirm__icon" aria-hidden="true">
+                <i class="ri-delete-bin-6-line"></i>
+            </div>
+            <h2 id="deleteConfirmTitle" class="chat-confirm__title">Delete conversation?</h2>
+            <p id="deleteConfirmMessage" class="chat-confirm__message">This will permanently remove the messages for both participants. You can't undo this action.</p>
+            <div class="chat-confirm__actions">
+                <button type="button" id="cancelDeleteBtn">Cancel</button>
+                <button type="button" id="confirmDeleteBtn" class="danger">Delete</button>
+            </div>
+        </div>
     </div>
     <script>
         window.__CHAT_THREAD__ = <?= json_encode($bootstrap, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
