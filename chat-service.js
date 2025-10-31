@@ -415,13 +415,34 @@ export function subscribeMessages(chatId, callback) {
   const q = query(messagesCollection(id), orderBy('ts', 'asc'), limit(MESSAGE_FETCH_LIMIT));
   let active = true;
   let fallbackTimer = null;
+  let lastDelivered = [];
+
+  const deliverMessages = (messages) => {
+    if (!active || !Array.isArray(messages)) {
+      return;
+    }
+    lastDelivered = messages;
+    callback(messages);
+  };
+
+  const stopFallback = () => {
+    if (fallbackTimer) {
+      clearInterval(fallbackTimer);
+      fallbackTimer = null;
+    }
+  };
 
   const unsubscribe = onSnapshot(
     q,
     (snapshot) => {
       if (!active) return;
+      stopFallback();
       const messages = snapshot.docs.map(mapMessageSnapshot);
-      callback(messages);
+      const fromCache = Boolean(snapshot.metadata && snapshot.metadata.fromCache);
+      if (!messages.length && lastDelivered.length && fromCache) {
+        return;
+      }
+      deliverMessages(messages);
     },
     (error) => {
       console.error('[chat] subscribeMessages', error);
@@ -433,7 +454,7 @@ export function subscribeMessages(chatId, callback) {
     try {
       const data = await fetchMessagesViaApi(id);
       if (active && Array.isArray(data.messages)) {
-        callback(data.messages);
+        deliverMessages(data.messages);
       }
     } catch (seedError) {
       console.warn('[chat] seed messages via api failed', seedError);
@@ -445,8 +466,8 @@ export function subscribeMessages(chatId, callback) {
     const fetchAndEmit = async () => {
       try {
         const data = await fetchMessagesViaApi(id);
-        if (active) {
-          callback(data.messages);
+        if (active && Array.isArray(data.messages)) {
+          deliverMessages(data.messages);
         }
       } catch (fallbackError) {
         console.error('[chat] messages fallback failed', fallbackError);
@@ -460,14 +481,11 @@ export function subscribeMessages(chatId, callback) {
 
   return () => {
     active = false;
+    stopFallback();
     try {
       unsubscribe();
     } catch (unsubscribeError) {
       console.warn('[chat] unsubscribe messages', unsubscribeError);
-    }
-    if (fallbackTimer) {
-      clearInterval(fallbackTimer);
-      fallbackTimer = null;
     }
   };
 }
