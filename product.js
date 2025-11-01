@@ -177,21 +177,51 @@ let currentVendorPlan = document.body?.dataset?.vendorPlan || '';
 let currentVendorVerification = document.body?.dataset?.vendorVerified || '';
 let currentVendorPhone = '';
 
+const syncVendorIdentifiers = ({ firebaseUid, legacyUid, vendorId } = {}) => {
+  if (!document.body) return;
+  const normalise = (value) => (typeof value === 'string' ? value.trim() : '');
+  const firebase = normalise(firebaseUid);
+  const legacy = normalise(legacyUid);
+  const vendor = normalise(vendorId);
+
+  if (vendor) {
+    currentVendorId = vendor;
+    document.body.dataset.vendorId = vendor;
+  }
+
+  if (legacy) {
+    document.body.dataset.vendorLegacyUid = legacy;
+  }
+
+  if (firebase) {
+    document.body.dataset.vendorFirebaseUid = firebase;
+  } else if (!document.body.dataset.vendorFirebaseUid && legacy) {
+    document.body.dataset.vendorFirebaseUid = legacy;
+  } else if (!document.body.dataset.vendorFirebaseUid && vendor) {
+    document.body.dataset.vendorFirebaseUid = vendor;
+  }
+
+  let nextUid = typeof currentVendorUid === 'string' ? currentVendorUid.trim() : '';
+  if (firebase) {
+    nextUid = firebase;
+  } else if (!nextUid && legacy) {
+    nextUid = legacy;
+  } else if (!nextUid && vendor) {
+    nextUid = vendor;
+  }
+
+  if (nextUid) {
+    currentVendorUid = nextUid;
+    document.body.dataset.vendorUid = nextUid;
+  }
+};
+
 if (document.body) {
-  if (!document.body.dataset.vendorId && currentVendorId) {
-    document.body.dataset.vendorId = currentVendorId;
-  }
-  if (!document.body.dataset.vendorUid && currentVendorUid) {
-    document.body.dataset.vendorUid = currentVendorUid;
-  }
-  if (!document.body.dataset.vendorFirebaseUid && vendorFirebaseUidDataset) {
-    document.body.dataset.vendorFirebaseUid = vendorFirebaseUidDataset;
-  } else if (!document.body.dataset.vendorFirebaseUid && currentVendorUid) {
-    document.body.dataset.vendorFirebaseUid = currentVendorUid;
-  }
-  if (!document.body.dataset.vendorLegacyUid && vendorLegacyUidDataset) {
-    document.body.dataset.vendorLegacyUid = vendorLegacyUidDataset;
-  }
+  syncVendorIdentifiers({
+    firebaseUid: vendorFirebaseUidDataset,
+    legacyUid: vendorLegacyUidDataset,
+    vendorId: currentVendorId || vendorIdParam,
+  });
   if (!document.body.dataset.vendorName && currentVendorName) {
     document.body.dataset.vendorName = currentVendorName;
   }
@@ -998,34 +1028,23 @@ const updateWhatsappLinks = () => {
 };
 
 const applyVendorData = (vendor, vendorIdValue) => {
-  if (vendorIdValue) {
-    currentVendorId = vendorIdValue;
-    document.body.dataset.vendorId = vendorIdValue;
-    if (!currentVendorUid) {
-      currentVendorUid = vendorIdValue;
-    }
-  }
+  const firebaseUidCandidate =
+    vendor?.firebaseUid || vendor?.firebase_uid || vendor?.vendorFirebaseUid || '';
+  const legacyUidCandidate = vendor?.vendorUid || vendor?.vendor_uid || '';
+  const vendorIdCandidate =
+    vendorIdValue ||
+    vendor?.vendorId ||
+    vendor?.vendor_id ||
+    vendor?.id ||
+    '';
+
+  syncVendorIdentifiers({
+    firebaseUid: firebaseUidCandidate,
+    legacyUid: legacyUidCandidate,
+    vendorId: vendorIdCandidate,
+  });
 
   if (vendor) {
-    const firebaseUidCandidate =
-      vendor.firebaseUid || vendor.firebase_uid || '';
-    const legacyUidCandidate = vendor.vendorUid || vendor.vendor_uid || '';
-
-    if (firebaseUidCandidate) {
-      currentVendorUid = firebaseUidCandidate;
-      document.body.dataset.vendorFirebaseUid = firebaseUidCandidate;
-    }
-
-    if (legacyUidCandidate) {
-      document.body.dataset.vendorLegacyUid = legacyUidCandidate;
-      if (!currentVendorUid) {
-        currentVendorUid = legacyUidCandidate;
-      }
-    }
-
-    if (currentVendorUid) {
-      document.body.dataset.vendorUid = currentVendorUid;
-    }
     currentVendorName = vendor.displayName || vendor.businessName || vendor.name || currentVendorName;
     document.body.dataset.vendorName = currentVendorName;
     if (vendorBusinessEl) {
@@ -1116,13 +1135,9 @@ const applyVendorData = (vendor, vendorIdValue) => {
 };
 
 const loadVendorProfile = async (vendorIdValue) => {
-  currentVendorId = vendorIdValue || currentVendorId;
-  if (currentVendorId) {
-    document.body.dataset.vendorId = currentVendorId;
-    if (!currentVendorUid) {
-      currentVendorUid = currentVendorId;
-      document.body.dataset.vendorUid = currentVendorUid;
-    }
+  const resolvedVendorId = vendorIdValue || currentVendorId;
+  if (resolvedVendorId) {
+    syncVendorIdentifiers({ vendorId: resolvedVendorId });
   }
 
   const serverVendorCandidates = [];
@@ -1217,15 +1232,24 @@ const applyListingData = (listing = {}) => {
   updateGallery(galleryImages);
 
   const listingVendorId = listing.vendorID || listing.vendorId || listing.vendor || currentVendorId;
-  if (listingVendorId) {
-    currentVendorId = listingVendorId;
-    document.body.dataset.vendorId = listingVendorId;
-    if (!currentVendorUid) {
-      currentVendorUid = listing.vendorUid || listing.vendorUID || listingVendorId;
-    }
-    if (currentVendorUid) {
-      document.body.dataset.vendorUid = currentVendorUid;
-    }
+  const listingVendorFirebaseUid =
+    listing.vendorFirebaseUid ||
+    listing.vendor_firebase_uid ||
+    listing.vendorUid ||
+    listing.vendorUID ||
+    '';
+  const listingVendorLegacyUid =
+    listing.vendorLegacyUid ||
+    listing.vendorLegacyUID ||
+    listing.vendorLegacyId ||
+    listing.vendorLegacyID ||
+    '';
+  if (listingVendorId || listingVendorFirebaseUid || listingVendorLegacyUid) {
+    syncVendorIdentifiers({
+      firebaseUid: listingVendorFirebaseUid,
+      legacyUid: listingVendorLegacyUid,
+      vendorId: listingVendorId,
+    });
   }
 
   if (listing.vendorPlan) currentVendorPlan = listing.vendorPlan;
