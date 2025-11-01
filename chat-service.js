@@ -417,6 +417,7 @@ export function subscribeMessages(chatId, callback) {
   let fallbackTimer = null;
   let lastDelivered = null;
   let verifyingEmptySnapshot = false;
+  let pendingEmptyConfirmation = false;
 
   const deliverMessages = (messages) => {
     if (!active || !Array.isArray(messages)) {
@@ -439,12 +440,13 @@ export function subscribeMessages(chatId, callback) {
       const apiMessages = Array.isArray(data.messages) ? data.messages : [];
       if (apiMessages.length) {
         deliverMessages(apiMessages);
-      } else if (!lastDelivered || !lastDelivered.length) {
+      } else {
         deliverMessages([]);
       }
     } catch (verifyError) {
       console.error('[chat] verify messages via api failed', verifyError);
     } finally {
+      pendingEmptyConfirmation = false;
       verifyingEmptySnapshot = false;
     }
   };
@@ -464,6 +466,16 @@ export function subscribeMessages(chatId, callback) {
       const messages = snapshot.docs.map(mapMessageSnapshot);
       const fromCache = Boolean(snapshot.metadata && snapshot.metadata.fromCache);
       const hasPendingWrites = Boolean(snapshot.metadata && snapshot.metadata.hasPendingWrites);
+      if (
+        messages.length === 0 &&
+        lastDelivered &&
+        lastDelivered.length &&
+        !pendingEmptyConfirmation
+      ) {
+        pendingEmptyConfirmation = true;
+        verifyEmptySnapshotWithApi();
+        return;
+      }
       if (
         !messages.length &&
         lastDelivered &&
