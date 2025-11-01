@@ -427,6 +427,16 @@ export function subscribeMessages(chatId, callback) {
     callback(messages);
   };
 
+  const deliverFromApi = (messages) => {
+    if (!Array.isArray(messages)) {
+      return;
+    }
+    const allowClear = !lastDelivered || !lastDelivered.length;
+    if (messages.length || allowClear) {
+      deliverMessages(messages);
+    }
+  };
+
   const verifyEmptySnapshotWithApi = async () => {
     if (verifyingEmptySnapshot || !active) {
       return;
@@ -438,11 +448,7 @@ export function subscribeMessages(chatId, callback) {
         return;
       }
       const apiMessages = Array.isArray(data.messages) ? data.messages : [];
-      if (apiMessages.length) {
-        deliverMessages(apiMessages);
-      } else {
-        deliverMessages([]);
-      }
+      deliverFromApi(apiMessages);
     } catch (verifyError) {
       console.error('[chat] verify messages via api failed', verifyError);
     } finally {
@@ -508,10 +514,7 @@ export function subscribeMessages(chatId, callback) {
     try {
       const data = await fetchMessagesViaApi(id);
       if (active && Array.isArray(data.messages)) {
-        deliverMessages(data.messages);
-        if (!data.messages.length) {
-          lastDelivered = [];
-        }
+        deliverFromApi(data.messages);
       }
     } catch (seedError) {
       console.warn('[chat] seed messages via api failed', seedError);
@@ -524,7 +527,7 @@ export function subscribeMessages(chatId, callback) {
       try {
         const data = await fetchMessagesViaApi(id);
         if (active && Array.isArray(data.messages)) {
-          deliverMessages(data.messages);
+          deliverFromApi(data.messages);
         }
       } catch (fallbackError) {
         console.error('[chat] messages fallback failed', fallbackError);
