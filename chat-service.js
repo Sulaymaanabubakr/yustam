@@ -415,7 +415,8 @@ export function subscribeMessages(chatId, callback) {
   const q = query(messagesCollection(id), orderBy('ts', 'asc'), limit(MESSAGE_FETCH_LIMIT));
   let active = true;
   let fallbackTimer = null;
-  let lastDelivered = [];
+  let lastDelivered = null;
+  let verifyingEmptySnapshot = false;
 
   const deliverMessages = (messages) => {
     if (!active || !Array.isArray(messages)) {
@@ -423,6 +424,29 @@ export function subscribeMessages(chatId, callback) {
     }
     lastDelivered = messages;
     callback(messages);
+  };
+
+  const verifyEmptySnapshotWithApi = async () => {
+    if (verifyingEmptySnapshot || !active) {
+      return;
+    }
+    verifyingEmptySnapshot = true;
+    try {
+      const data = await fetchMessagesViaApi(id);
+      if (!active) {
+        return;
+      }
+      const apiMessages = Array.isArray(data.messages) ? data.messages : [];
+      if (apiMessages.length) {
+        deliverMessages(apiMessages);
+      } else if (!lastDelivered || !lastDelivered.length) {
+        deliverMessages([]);
+      }
+    } catch (verifyError) {
+      console.error('[chat] verify messages via api failed', verifyError);
+    } finally {
+      verifyingEmptySnapshot = false;
+    }
   };
 
   const stopFallback = () => {
@@ -439,7 +463,16 @@ export function subscribeMessages(chatId, callback) {
       stopFallback();
       const messages = snapshot.docs.map(mapMessageSnapshot);
       const fromCache = Boolean(snapshot.metadata && snapshot.metadata.fromCache);
-      if (!messages.length && lastDelivered.length && fromCache) {
+      if (
+        !messages.length &&
+        lastDelivered &&
+        lastDelivered.length &&
+        (fromCache || !snapshot.metadata?.hasPendingWrites)
+      ) {
+        if (fromCache) {
+          return;
+        }
+        verifyEmptySnapshotWithApi();
         return;
       }
       deliverMessages(messages);
@@ -455,6 +488,9 @@ export function subscribeMessages(chatId, callback) {
       const data = await fetchMessagesViaApi(id);
       if (active && Array.isArray(data.messages)) {
         deliverMessages(data.messages);
+        if (!data.messages.length) {
+          lastDelivered = [];
+        }
       }
     } catch (seedError) {
       console.warn('[chat] seed messages via api failed', seedError);
