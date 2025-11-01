@@ -463,16 +463,25 @@ export function subscribeMessages(chatId, callback) {
       stopFallback();
       const messages = snapshot.docs.map(mapMessageSnapshot);
       const fromCache = Boolean(snapshot.metadata && snapshot.metadata.fromCache);
+      const hasPendingWrites = Boolean(snapshot.metadata && snapshot.metadata.hasPendingWrites);
       if (
         !messages.length &&
         lastDelivered &&
         lastDelivered.length &&
-        (fromCache || !snapshot.metadata?.hasPendingWrites)
+        (fromCache || !hasPendingWrites)
       ) {
         if (fromCache) {
           return;
         }
         verifyEmptySnapshotWithApi();
+        return;
+      }
+      if (
+        !messages.length &&
+        lastDelivered &&
+        lastDelivered.length &&
+        hasPendingWrites
+      ) {
         return;
       }
       deliverMessages(messages);
