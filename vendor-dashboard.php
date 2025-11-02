@@ -4,6 +4,7 @@ session_start();
 
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/api/chat/firebase.php';
+require_once __DIR__ . '/vendor-subscriptions.php';
 
 if (!isset($_SESSION['vendor_id'])) {
     if (isset($_GET['format']) && $_GET['format'] === 'json') {
@@ -44,6 +45,21 @@ if (!$vendor) {
 }
 
 $vendorData = is_array($vendor) ? $vendor : [];
+$subscriptionState = yustam_vendor_subscription_format_state($vendorData);
+try {
+    $expiryResult = yustam_vendor_subscription_handle_expiry($db, $vendorData);
+    if (!empty($expiryResult['changed'])) {
+        $subscriptionState = $expiryResult['subscription'] ?? $subscriptionState;
+        $vendorData = yustam_vendor_subscription_fetch_vendor($db, $vendorId) ?: $vendorData;
+    } elseif (isset($expiryResult['subscription']) && is_array($expiryResult['subscription'])) {
+        $subscriptionState = $expiryResult['subscription'];
+    }
+} catch (Throwable $subscriptionException) {
+    // ignore expiry sync errors on dashboard load
+}
+if (!empty($subscriptionState['planName'])) {
+    $_SESSION['vendor_plan_name'] = $subscriptionState['planName'];
+}
 $vendorUid = yustam_vendor_assign_uid_if_missing($db, $vendorData);
 $_SESSION['vendor_uid'] = $vendorUid;
 
@@ -472,22 +488,25 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
                 'id' => $vendorId,
                 'uid' => $vendorUid,
                 'firebaseUid' => $vendorFirebaseUid,
-                'email' => $vendorData['email'] ?? '',
-                'name' => $vendorName,
-                'businessName' => $businessName,
-                'phone' => $phone,
-                'location' => $location,
-                'plan' => $plan,
-                'joined' => $createdDisplay,
-            ],
-            'stats' => $stats,
-            'listings' => $listings,
-            'session' => [
-                'vendorId' => $vendorId,
-                'vendorUid' => $vendorUid,
-                'firebaseUid' => $vendorFirebaseUid,
-            ],
+            'email' => $vendorData['email'] ?? '',
+            'name' => $vendorName,
+            'businessName' => $businessName,
+            'phone' => $phone,
+            'location' => $location,
+            'plan' => $subscriptionState['planName'] ?? $plan,
+            'planStatus' => $subscriptionState['status'] ?? '',
+            'planRenewal' => $subscriptionState['nextBillingDisplay'] ?? '',
+            'joined' => $createdDisplay,
         ],
+        'stats' => $stats,
+        'listings' => $listings,
+        'session' => [
+            'vendorId' => $vendorId,
+            'vendorUid' => $vendorUid,
+            'firebaseUid' => $vendorFirebaseUid,
+        ],
+        'subscription' => $subscriptionState,
+    ],
     ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     exit;
 }
@@ -716,6 +735,11 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
             font-size: clamp(1.5rem, 3vw, 2.1rem);
             font-weight: 700;
             color: var(--emerald);
+        }
+        .kpi-meta {
+            margin: 0.25rem 0 0;
+            font-size: 0.85rem;
+            color: rgba(17, 17, 17, 0.6);
         }
 
         .glass-section {
@@ -1381,6 +1405,8 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
                     <i class="ri-vip-crown-line kpi-icon" aria-hidden="true"></i>
                     <p class="kpi-title">Current Plan</p>
                     <p class="kpi-value" id="currentPlan">Free</p>
+                    <p class="kpi-meta" id="currentPlanStatus">Status: --</p>
+                    <p class="kpi-meta" id="currentPlanRenewal">Renews: --</p>
                 </article>
             </div>
         </section>

@@ -3,6 +3,7 @@ require_once __DIR__ . '/session-path.php';
 session_start();
 
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/vendor-subscriptions.php';
 
 $reference = trim((string)($_GET['reference'] ?? ''));
 $planName = trim((string)($_GET['plan'] ?? ''));
@@ -26,163 +27,74 @@ $planUpdate = [
     'message' => '',
 ];
 
-$durationLabel = $durationMonths === 1 ? '1 month' : sprintf('%d months', $durationMonths);
-$amountDisplay = $amountNaira !== null ? '₦' . number_format($amountNaira, 0, '.', ',') : null;
-
-if ($planName !== '' && isset($_SESSION['vendor_id'])) {
+$planSlug = yustam_vendor_subscription_normalise_slug($planName);
+if ($reference !== '' && isset($_SESSION['vendor_id'])) {
     $planUpdate['attempted'] = true;
     try {
-        $vendorId = (int) $_SESSION['vendor_id'];
         $db = get_db_connection();
-
-        $vendorTable = defined('YUSTAM_VENDORS_TABLE') ? YUSTAM_VENDORS_TABLE : 'vendors';
-        if (!preg_match('/^[A-Za-z0-9_]+$/', $vendorTable)) {
-            throw new RuntimeException('Invalid vendor table name.');
+        $vendorId = (int) $_SESSION['vendor_id'];
+        $planSlug = $planName !== '' ? $planName : null;
+        $result = yustam_vendor_subscription_process_payment($db, $vendorId, $reference, $planSlug !== '' ? $planSlug : null, $durationMonths > 0 ? $durationMonths : null);
+        $subscription = $result['subscription'] ?? [];
+        if (!empty($subscription['planName'])) {
+            $planName = $subscription['planName'];
+            $planSlug = yustam_vendor_subscription_normalise_slug($planName);
         }
-
-        $fields = [];
-        $types = '';
-        $values = [];
-
-        if (yustam_vendor_table_has_column('plan')) {
-            $fields[] = '`plan` = ?';
-            $types .= 's';
-            $values[] = $planName;
+        if (!empty($subscription['durationMonths'])) {
+            $durationMonths = (int) $subscription['durationMonths'];
         }
-
-        $statusColumn = null;
-        foreach (['plan_status', 'subscription_status', 'plan_state', 'planstate'] as $candidate) {
-            if (yustam_vendor_table_has_column($candidate)) {
-                $statusColumn = $candidate;
-                break;
-            }
+        if (isset($result['amountKobo']) && (int) $result['amountKobo'] > 0) {
+            $amountNaira = (int) round((int) $result['amountKobo'] / 100);
         }
-        if ($statusColumn !== null) {
-            $fields[] = sprintf('`%s` = ?', $statusColumn);
-            $types .= 's';
-            $values[] = 'Active';
-        }
-
-        $timezone = new DateTimeZone(date_default_timezone_get());
-        $now = new DateTimeImmutable('now', $timezone);
-        $expiry = $now->add(new DateInterval('P' . $durationMonths . 'M'));
-        $nowFormatted = $now->format('Y-m-d H:i:s');
-        $expiryFormatted = $expiry->format('Y-m-d H:i:s');
-
-        $expiryColumn = null;
-        foreach (['plan_expires_at', 'plan_expiry', 'plan_expiration', 'subscription_expires_at', 'subscription_expiry'] as $candidate) {
-            if (yustam_vendor_table_has_column($candidate)) {
-                $expiryColumn = $candidate;
-                break;
-            }
-        }
-        if ($expiryColumn !== null) {
-            $fields[] = sprintf('`%s` = ?', $expiryColumn);
-            $types .= 's';
-            $values[] = $expiryFormatted;
-        }
-
-        $activatedColumn = null;
-        foreach (['plan_started_at', 'subscription_started_at', 'plan_activated_at', 'plan_paid_at'] as $candidate) {
-            if (yustam_vendor_table_has_column($candidate)) {
-                $activatedColumn = $candidate;
-                break;
-            }
-        }
-        if ($activatedColumn !== null) {
-            $fields[] = sprintf('`%s` = ?', $activatedColumn);
-            $types .= 's';
-            $values[] = $nowFormatted;
-        }
-
-        $renewedColumn = null;
-        foreach (['plan_renewed_at', 'plan_updated_at', 'subscription_updated_at', 'last_payment_at'] as $candidate) {
-            if (yustam_vendor_table_has_column($candidate) && $candidate !== $activatedColumn) {
-                $renewedColumn = $candidate;
-                break;
-            }
-        }
-        if ($renewedColumn !== null) {
-            $fields[] = sprintf('`%s` = ?', $renewedColumn);
-            $types .= 's';
-            $values[] = $nowFormatted;
-        }
-
-        $durationColumn = null;
-        foreach (['plan_duration_months', 'plan_duration', 'subscription_duration', 'billing_duration'] as $candidate) {
-            if (yustam_vendor_table_has_column($candidate)) {
-                $durationColumn = $candidate;
-                break;
-            }
-        }
-        if ($durationColumn !== null) {
-            $fields[] = sprintf('`%s` = ?', $durationColumn);
-            $types .= 'i';
-            $values[] = $durationMonths;
-        }
-
-        if ($amountNaira !== null) {
-            $amountColumn = null;
-            foreach (['plan_amount', 'subscription_amount', 'last_plan_amount', 'billing_amount'] as $candidate) {
-                if (yustam_vendor_table_has_column($candidate)) {
-                    $amountColumn = $candidate;
-                    break;
-                }
-            }
-            if ($amountColumn !== null) {
-                $fields[] = sprintf('`%s` = ?', $amountColumn);
-                $types .= 'd';
-                $values[] = (float) $amountNaira;
-            }
-        }
-
-        if ($reference !== '') {
-            $referenceColumn = null;
-            foreach (['plan_reference', 'payment_reference', 'subscription_reference', 'last_payment_reference'] as $candidate) {
-                if (yustam_vendor_table_has_column($candidate)) {
-                    $referenceColumn = $candidate;
-                    break;
-                }
-            }
-            if ($referenceColumn !== null) {
-                $fields[] = sprintf('`%s` = ?', $referenceColumn);
-                $types .= 's';
-                $values[] = $reference;
-            }
-        }
-
-        if (yustam_vendor_table_has_column('updated_at')) {
-            $fields[] = '`updated_at` = NOW()';
-        }
-
-        if (empty($fields)) {
-            throw new RuntimeException('No vendor plan fields available for update.');
-        }
-
-        $types .= 'i';
-        $values[] = $vendorId;
-        $sql = sprintf('UPDATE `%s` SET %s WHERE id = ?', $vendorTable, implode(', ', $fields));
-        $stmt = $db->prepare($sql);
-        if (!$stmt instanceof mysqli_stmt) {
-            throw new RuntimeException('Plan update prepare failed: ' . $db->error);
-        }
-
-        $bindArgs = [$types];
-        foreach ($values as $index => $value) {
-            $bindArgs[] = &$values[$index];
-        }
-        call_user_func_array([$stmt, 'bind_param'], $bindArgs);
-        $stmt->execute();
-        $stmt->close();
-
-        $_SESSION['vendor_plan_name'] = $planName;
         $planUpdate['success'] = true;
+        $planUpdate['subscription'] = $subscription;
     } catch (Throwable $e) {
         $planUpdate['message'] = $e->getMessage();
         error_log('Plan update failed: ' . $e->getMessage());
     }
-} elseif ($planName !== '' && !isset($_SESSION['vendor_id'])) {
-    $planUpdate['message'] = 'Sign in again so we can sync this payment with your vendor account.';
+} else {
+    try {
+        $db = get_db_connection();
+        $vendorId = isset($_SESSION['vendor_id']) ? (int) $_SESSION['vendor_id'] : 0;
+        if ($vendorId > 0) {
+            $vendorState = yustam_vendor_subscription_fetch_vendor($db, $vendorId);
+            $planUpdate['subscription'] = yustam_vendor_subscription_format_state($vendorState);
+            if (!empty($planUpdate['subscription']['planName'])) {
+                $planName = $planUpdate['subscription']['planName'];
+                $planSlug = yustam_vendor_subscription_normalise_slug($planName);
+            }
+            if (!empty($planUpdate['subscription']['durationMonths'])) {
+                $durationMonths = (int) $planUpdate['subscription']['durationMonths'];
+            }
+        }
+    } catch (Throwable $ignored) {
+        // ignored
+    }
+    if ($planName !== '' && !isset($_SESSION['vendor_id'])) {
+        $planUpdate['message'] = 'Sign in again so we can sync this payment with your vendor account.';
+    }
+}
+$normalisedDuration = $durationMonths > 0 ? $durationMonths : 1;
+$durationLabel = $normalisedDuration === 1 ? '1 month' : sprintf('%d months', $normalisedDuration);
+$planCatalog = yustam_vendor_subscription_plan_catalog();
+$planOption = null;
+if ($planSlug !== '' && isset($planCatalog[$planSlug]['durations'][$normalisedDuration])) {
+    $planOption = $planCatalog[$planSlug]['durations'][$normalisedDuration];
+    if (empty($planName)) {
+        $planName = $planCatalog[$planSlug]['name'] ?? '';
+    }
+}
+if ($planName === '') {
+    $planName = 'Selected Plan';
+}
+if ($amountNaira === null && $planOption !== null && isset($planOption['amount'])) {
+    $amountNaira = (int) $planOption['amount'];
+}
+$amountDisplay = $amountNaira !== null ? '₦' . number_format((int) $amountNaira, 0) : null;
+$subscriptionState = isset($planUpdate['subscription']) && is_array($planUpdate['subscription']) ? $planUpdate['subscription'] : [];
+$nextBillingDisplay = trim((string)($subscriptionState['nextBillingDisplay'] ?? ''));
+if ($nextBillingDisplay === '--') {
+    $nextBillingDisplay = '';
 }
 ?>
 <!DOCTYPE html>
@@ -264,6 +176,9 @@ if ($planName !== '' && isset($_SESSION['vendor_id'])) {
                     for <strong><?= htmlspecialchars($durationLabel, ENT_QUOTES, 'UTF-8'); ?></strong>.
                     <?php if ($amountDisplay !== null): ?>
                         Total paid: <strong><?= htmlspecialchars($amountDisplay, ENT_QUOTES, 'UTF-8'); ?></strong>.
+                    <?php endif; ?>
+                    <?php if ($nextBillingDisplay !== ''): ?>
+                        Next billing date: <strong><?= htmlspecialchars($nextBillingDisplay, ENT_QUOTES, 'UTF-8'); ?></strong>.
                     <?php endif; ?>
                     You are all set — head back to your dashboard to enjoy the upgraded features.
                 </p>

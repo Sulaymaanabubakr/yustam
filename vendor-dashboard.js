@@ -31,6 +31,7 @@ window.addEventListener('pageshow', (event) => {
 });
 
 let vendorData = {};
+let subscriptionData = {};
 let vendorStats = {};
 let vendorListings = [];
 let firestoreListings = [];
