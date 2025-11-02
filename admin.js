@@ -99,11 +99,10 @@ import { auth, db } from './firebase.js';
         };
 
         const formatPlanLabel = (plan) => {
-            if (!plan) return 'Free Plan';
+            if (!plan) return 'Free';
             const trimmed = String(plan).trim();
-            if (!trimmed) return 'Free Plan';
-            const lower = trimmed.toLowerCase();
-            return lower.endsWith('plan') ? trimmed : `${trimmed} Plan`;
+            if (!trimmed) return 'Free';
+            return trimmed.replace(/\s*Plan$/i, '').replace(/\s{2,}/g, ' ').trim() || 'Free';
         };
 
         const formatStatusLabel = (status) => {

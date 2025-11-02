@@ -42,6 +42,12 @@ const listingLookup = new Map();
 const qs = (selector) => document.querySelector(selector);
 const qsa = (selector) => Array.from(document.querySelectorAll(selector));
 
+const cleanPlanLabel = (value) => {
+  const label = typeof value === 'string' ? value.trim() : '';
+  if (!label) return '';
+  return label.replace(/\s*Plan$/i, '').replace(/\s{2,}/g, ' ').trim();
+};
+
 const loader = qs('#loader');
 const loaderMessages = loader ? loader.querySelectorAll('p') : [];
 const header = qs('#dashboardHeader');
@@ -200,7 +206,9 @@ const hydrateProfile = () => {
   }
 
   if (currentPlan) {
-    currentPlan.textContent = vendorData.plan || 'Free';
+    const planDisplay = cleanPlanLabel(vendorData.plan || vendorData.planRaw || 'Free');
+    currentPlan.textContent = planDisplay || 'Free';
+    vendorData.plan = planDisplay;
   }
 };
 

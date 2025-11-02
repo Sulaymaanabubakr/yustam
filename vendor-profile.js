@@ -128,9 +128,9 @@ const applyProfile = (profile) => {
   const planLabel = safeText(plan);
   let planDisplay = planLabel;
   if (planDisplay !== '-') {
-    const normalised = planDisplay.replace(/\s+/g, ' ').trim().toLowerCase();
-    if (!normalised.endsWith('plan')) {
-      planDisplay = `${planDisplay} Plan`.trim();
+    planDisplay = planDisplay.replace(/\s*Plan$/i, '').replace(/\s{2,}/g, ' ').trim();
+    if (!planDisplay) {
+      planDisplay = 'Free';
     }
   }
   if (planBadge) {

@@ -27,6 +27,14 @@ document.addEventListener('DOMContentLoaded', () => {
     maximumFractionDigits: 0,
   });
 
+  const cleanPlanLabel = (value) => {
+    const label = String(value ?? '').trim();
+    if (!label) {
+      return '';
+    }
+    return label.replace(/\s*Plan$/i, '').replace(/\s{2,}/g, ' ').trim();
+  };
+
   planCards.forEach((card) => {
     const slug = resolvePlanSlug(card);
     if (!slug || slug === 'free') {
@@ -137,7 +145,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       catalog[slug] = {
         slug,
-        name: plan.name || plan.title || plan.planName || toTitleCase(slug),
+        name: cleanPlanLabel(plan.displayName || plan.name || plan.title || plan.planName || toTitleCase(slug)),
         monthlyPrice: Number(plan.monthlyPrice ?? plan.monthlyFee ?? 0),
         durations,
       };
@@ -308,10 +316,26 @@ document.addEventListener('DOMContentLoaded', () => {
       data.expiryDisplay ||
       (nextBillingIso ? formatDateLabel(nextBillingIso) : '');
 
+    const rawPlanName = (() => {
+      if (typeof data.planName === 'string' && data.planName.trim() !== '') {
+        return data.planName.trim();
+      }
+      if (typeof data.name === 'string' && data.name.trim() !== '') {
+        return data.name.trim();
+      }
+      if (typeof data.plan === 'string' && data.plan.trim() !== '') {
+        return data.plan.trim();
+      }
+      return '';
+    })();
+    const displayName = cleanPlanLabel(
+      data.displayName || data.planDisplay || rawPlanName || toTitleCase(slug || 'Free')
+    );
+
     return {
       slug,
-      planName: data.planName || data.name || toTitleCase(slug || 'Free Plan'),
-      displayName: data.displayName || data.planDisplay || data.planName || data.name || toTitleCase(slug || 'Free Plan'),
+      planName: rawPlanName || toTitleCase(slug || 'Free'),
+      displayName: displayName || 'Free',
       status: statusRaw,
       statusLabel: data.statusLabel || toTitleCase(statusRaw),
       nextBillingIso,
@@ -329,7 +353,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function hydrateCurrentPlan(subscription) {
-    const name = subscription.displayName || subscription.planName || 'Free Plan';
+    const name = cleanPlanLabel(subscription.displayName || subscription.planName || 'Free');
     if (currentPlanNameEl) {
       currentPlanNameEl.textContent = name;
     }

@@ -655,7 +655,7 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
           <div class="identity-meta">
             <h1 class="vendor-name" id="profileTitle">Vendor Name</h1>
             <p class="business-name" id="businessName">Business Name</p>
-            <span class="plan-chip" id="planBadge" data-plan="Free">Free Plan</span>
+            <span class="plan-chip" id="planBadge" data-plan="Free">Free</span>
           </div>
         </div>
         <div class="upgrade-banner" id="upgradeBanner" role="status">

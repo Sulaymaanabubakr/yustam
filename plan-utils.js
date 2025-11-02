@@ -10,6 +10,20 @@ const PLAN_LABEL_MAP = {
   platinum: 'Power Vendor',
 };
 
+export function stripPlanSuffix(plan) {
+  const label = String(plan ?? '').trim();
+  if (!label) return '';
+  return label.replace(/\s*Plan$/i, '').replace(/\s{2,}/g, ' ').trim();
+}
+
+export function displayPlanLabel(plan) {
+  const cleaned = stripPlanSuffix(plan);
+  if (cleaned) {
+    return cleaned;
+  }
+  return 'Free';
+}
+
 export function normalisePlanSlug(plan) {
   const raw = String(plan ?? '').trim().toLowerCase();
   if (!raw) return 'free';
