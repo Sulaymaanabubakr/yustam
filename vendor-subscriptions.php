@@ -3,6 +3,49 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/db.php';
 
+function yustam_paystack_load_env(): void {
+    static $loaded = false;
+    if ($loaded) {
+        return;
+    }
+    $loaded = true;
+
+    $envPath = __DIR__ . '/.env';
+    if (!is_file($envPath) || !is_readable($envPath)) {
+        return;
+    }
+
+    $lines = file($envPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    if (!is_array($lines)) {
+        return;
+    }
+
+    foreach ($lines as $line) {
+        $trimmed = ltrim($line);
+        if ($trimmed === '' || $trimmed[0] === '#') {
+            continue;
+        }
+        if (!str_contains($line, '=')) {
+            continue;
+        }
+        [$key, $value] = explode('=', $line, 2);
+        $key = trim($key);
+        if ($key === '') {
+            continue;
+        }
+        $value = trim($value);
+        $existing = getenv($key);
+        if ($existing !== false && trim((string) $existing) !== '') {
+            continue;
+        }
+        putenv($key . '=' . $value);
+        $_ENV[$key] = $value;
+        if (!array_key_exists($key, $_SERVER)) {
+            $_SERVER[$key] = $value;
+        }
+    }
+}
+
 function yustam_vendor_subscription_plan_catalog(): array {
     return [
         'starter' => [
@@ -94,20 +137,33 @@ function yustam_vendor_subscription_plan_lookup_by_code(string $planCode): ?arra
     }
     return null;
 }
+function yustam_paystack_filter_key(?string $candidate): string {
+    $value = trim((string) $candidate);
+    if ($value === '') {
+        return '';
+    }
+    if (preg_match('/(replace|your[_-]?key|example|pk_live_xxx|sk_live_xxx)/i', $value)) {
+        return '';
+    }
+    return $value;
+}
+
 function yustam_paystack_public_key(): string {
+    yustam_paystack_load_env();
     $key = getenv('PAYSTACK_PUBLIC_KEY');
     if ($key === false || trim($key) === '') {
         $key = defined('PAYSTACK_PUBLIC_KEY') ? PAYSTACK_PUBLIC_KEY : '';
     }
-    return trim((string) $key);
+    return yustam_paystack_filter_key($key);
 }
 
 function yustam_paystack_secret_key(): string {
+    yustam_paystack_load_env();
     $key = getenv('PAYSTACK_SECRET_KEY');
     if ($key === false || trim($key) === '') {
         $key = defined('PAYSTACK_SECRET_KEY') ? PAYSTACK_SECRET_KEY : '';
     }
-    return trim((string) $key);
+    return yustam_paystack_filter_key($key);
 }
 
 function yustam_paystack_request(string $method, string $path, ?array $payload = null): array {
