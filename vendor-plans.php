@@ -102,6 +102,7 @@ $planExpiryDisplay = $planExpiryIso ? date('j M Y', strtotime($planExpiryIso)) :
 
 $currentPlanPayload = [
   'name' => $subscriptionState['planName'] ?? $planName,
+  'displayName' => $subscriptionState['displayName'] ?? yustam_vendor_subscription_display_label($planName),
   'status' => $subscriptionState['status'] ?? $planStatus,
   'expiryIso' => $subscriptionState['nextBillingIso'] ?? $planExpiryIso,
   'expiryDisplay' => $subscriptionState['nextBillingDisplay'] ?? $planExpiryDisplay,
@@ -769,7 +770,7 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
             Your Current Plan
           </h3>
           <div class="plan-meta">
-            <span class="plan-pill" id="currentPlanName"><?php echo htmlspecialchars($currentPlanPayload['name'] ?? 'Free', ENT_QUOTES, 'UTF-8'); ?></span>
+            <span class="plan-pill" id="currentPlanName"><?php echo htmlspecialchars($currentPlanPayload['displayName'] ?? yustam_vendor_subscription_display_label($currentPlanPayload['name'] ?? 'Free'), ENT_QUOTES, 'UTF-8'); ?></span>
             <span class="plan-pill" id="currentPlanStatus"><?php echo htmlspecialchars($currentPlanPayload['status'] ?? 'Active', ENT_QUOTES, 'UTF-8'); ?></span>
             <span class="plan-pill" id="currentPlanRenewal"><?php echo htmlspecialchars($currentPlanPayload['expiryDisplay'] ?? '--', ENT_QUOTES, 'UTF-8'); ?></span>
           </div>
@@ -794,7 +795,7 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
         <div class="plans-grid">
           <article class="glass-card plan-card" data-plan="Free Plan" data-plan-slug="free" data-price="0">
             <div class="plan-heading">
-              <h3 class="plan-name">Free Plan</h3>
+              <h3 class="plan-name">Free</h3>
               <span class="plan-price">₦0<span style="font-size:0.82rem; font-weight:500;">/month</span></span>
             </div>
             <p class="plan-summary">Perfect for new sellers testing the waters.</p>
@@ -815,7 +816,7 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
 
           <article class="glass-card plan-card" data-plan="Starter Plan" data-plan-slug="starter" data-price="3000">
             <div class="plan-heading">
-              <h3 class="plan-name">Starter Plan</h3>
+              <h3 class="plan-name">Starter</h3>
               <span class="plan-price">₦3,000<span style="font-size:0.82rem; font-weight:500;">/month</span></span>
             </div>
             <p class="plan-summary">Ideal for small business owners ready to build trust and visibility.</p>
@@ -850,7 +851,7 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
 
           <article class="glass-card plan-card" data-plan="Pro Seller Plan" data-plan-slug="pro" data-price="5000">
             <div class="plan-heading">
-              <h3 class="plan-name">Pro Seller Plan</h3>
+              <h3 class="plan-name">Pro Seller</h3>
               <span class="plan-price">₦5,000<span style="font-size:0.82rem; font-weight:500;">/month</span></span>
             </div>
             <p class="plan-summary">Best for fast-growing vendors who want deeper insights and more visibility.</p>
@@ -885,7 +886,7 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
 
           <article class="glass-card plan-card" data-plan="Elite Seller Plan" data-plan-slug="elite" data-price="8000">
             <div class="plan-heading">
-              <h3 class="plan-name">Elite Seller Plan</h3>
+              <h3 class="plan-name">Elite Seller</h3>
               <span class="plan-price">₦8,000<span style="font-size:0.82rem; font-weight:500;">/month</span></span>
             </div>
             <p class="plan-summary">Tailored for professional vendors ready for scale and premium visibility.</p>
@@ -920,7 +921,7 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
 
           <article class="glass-card plan-card" data-plan="Power Vendor Plan" data-plan-slug="power" data-price="15000">
             <div class="plan-heading">
-              <h3 class="plan-name">Power Vendor Plan</h3>
+              <h3 class="plan-name">Power Vendor</h3>
               <span class="plan-price">₦15,000<span style="font-size:0.82rem; font-weight:500;">/month</span></span>
             </div>
             <p class="plan-summary">The ultimate plan for established businesses dominating their niche.</p>

@@ -46,10 +46,21 @@ function yustam_paystack_load_env(): void {
     }
 }
 
+function yustam_vendor_subscription_display_label(?string $value): string {
+    $label = trim((string) $value);
+    if ($label === '') {
+        return '';
+    }
+    $label = preg_replace('/\s*Plan$/i', '', $label);
+    $label = preg_replace('/\s{2,}/', ' ', $label);
+    return trim($label);
+}
+
 function yustam_vendor_subscription_plan_catalog(): array {
     return [
         'starter' => [
             'name' => 'Starter Plan',
+            'displayName' => yustam_vendor_subscription_display_label('Starter Plan'),
             'monthlyPrice' => 3000,
             'durations' => [
                 1 => ['amount' => 3000, 'intervalLabel' => 'Monthly', 'planCode' => 'PLN_j1nrwlimkmfcg5q'],
@@ -60,6 +71,7 @@ function yustam_vendor_subscription_plan_catalog(): array {
         ],
         'pro' => [
             'name' => 'Pro Seller Plan',
+            'displayName' => yustam_vendor_subscription_display_label('Pro Seller Plan'),
             'monthlyPrice' => 5000,
             'durations' => [
                 1 => ['amount' => 5000, 'intervalLabel' => 'Monthly', 'planCode' => 'PLN_9paomaa1bl6ikft'],
@@ -70,6 +82,7 @@ function yustam_vendor_subscription_plan_catalog(): array {
         ],
         'elite' => [
             'name' => 'Elite Seller Plan',
+            'displayName' => yustam_vendor_subscription_display_label('Elite Seller Plan'),
             'monthlyPrice' => 8000,
             'durations' => [
                 1 => ['amount' => 8000, 'intervalLabel' => 'Monthly', 'planCode' => 'PLN_7fu939t6pelwv3s'],
@@ -80,6 +93,7 @@ function yustam_vendor_subscription_plan_catalog(): array {
         ],
         'power' => [
             'name' => 'Power Vendor Plan',
+            'displayName' => yustam_vendor_subscription_display_label('Power Vendor Plan'),
             'monthlyPrice' => 15000,
             'durations' => [
                 1 => ['amount' => 15000, 'intervalLabel' => 'Monthly', 'planCode' => 'PLN_m0mn0nw12o584dl'],
@@ -112,6 +126,7 @@ function yustam_vendor_subscription_plan_lookup(string $slug, int $months): ?arr
     $entry = $catalog[$slug]['durations'][$months];
     $entry['slug'] = $slug;
     $entry['planName'] = $catalog[$slug]['name'];
+    $entry['displayName'] = $catalog[$slug]['displayName'] ?? yustam_vendor_subscription_display_label($catalog[$slug]['name']);
     $entry['durationMonths'] = $months;
     return $entry;
 }
@@ -127,6 +142,7 @@ function yustam_vendor_subscription_plan_lookup_by_code(string $planCode): ?arra
                 return [
                     'slug' => $slug,
                     'planName' => $plan['name'],
+                    'displayName' => $plan['displayName'] ?? yustam_vendor_subscription_display_label($plan['name']),
                     'durationMonths' => (int) $months,
                     'amount' => (int) $option['amount'],
                     'planCode' => $option['planCode'],
@@ -262,7 +278,8 @@ function yustam_vendor_subscription_pick_column(array $candidates): ?string {
     return null;
 }
 function yustam_vendor_subscription_format_state(array $vendor): array {
-    $slug = yustam_vendor_subscription_normalise_slug($vendor['plan'] ?? '');
+    $rawPlanName = (string) ($vendor['plan'] ?? '');
+    $slug = yustam_vendor_subscription_normalise_slug($rawPlanName);
     $status = $vendor['plan_status'] ?? ($vendor['subscription_status'] ?? 'Active');
     $expiry = $vendor['plan_expires_at'] ?? ($vendor['plan_expiry'] ?? ($vendor['subscription_expires_at'] ?? ''));
     $expiryIso = '';
@@ -282,10 +299,13 @@ function yustam_vendor_subscription_format_state(array $vendor): array {
         : '';
     $canCancel = !$cancelled && $slug !== '' && $slug !== 'free'
         && !empty($vendor['paystack_subscription_code']) && !empty($vendor['paystack_email_token']);
+    $displayName = yustam_vendor_subscription_display_label($rawPlanName !== '' ? $rawPlanName : 'Free Plan');
+    $planName = $rawPlanName !== '' ? $rawPlanName : 'Free Plan';
+
     return [
         'slug' => $slug,
-        'planName' => $vendor['plan'] ?? 'Free Plan',
-        'displayName' => $vendor['plan'] ?? 'Free Plan',
+        'planName' => $planName,
+        'displayName' => $displayName,
         'status' => $status ?: 'Active',
         'statusLabel' => ucwords(strtolower($status ?: 'Active')),
         'nextBillingIso' => $expiryIso,

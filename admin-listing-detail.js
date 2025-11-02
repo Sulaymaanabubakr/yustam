@@ -209,13 +209,12 @@ const resolveListingDescription = (listing = {}) => {
 
 const prettifyPlan = (plan = '') => {
   const value = String(plan || '').trim();
-  if (!value) return 'Free Plan';
-  const normalised = value.toLowerCase();
-  if (['free', 'gratis'].includes(normalised)) return 'Free Plan';
-  if (value.toLowerCase().endsWith('plan')) {
-    return value.replace(/^\w/, (char) => char.toUpperCase());
-  }
-  return value.replace(/^\w/, (char) => char.toUpperCase()) + ' Plan';
+  if (!value) return 'Free';
+  const cleaned = value.replace(/\s*Plan$/i, '').trim();
+  if (!cleaned) return 'Free';
+  const normalized = cleaned.toLowerCase();
+  if (['free', 'gratis'].includes(normalized)) return 'Free';
+  return cleaned.replace(/^\w/, (char) => char.toUpperCase());
 };
 
 const planSlug = (plan = '') => {

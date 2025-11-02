@@ -27,6 +27,12 @@ document.addEventListener('DOMContentLoaded', () => {
     return `₦${Number(amount).toLocaleString('en-NG')}`;
   };
 
+  const cleanPlanLabel = (value) => {
+    const label = typeof value === 'string' ? value.trim() : '';
+    if (!label) return '';
+    return label.replace(/\s*Plan$/i, '').replace(/\s{2,}/g, ' ').trim();
+  };
+
   const createCell = (tagName, value, label) => {
     const element = document.createElement(tagName);
     element.textContent = value ?? '—';
@@ -77,7 +83,7 @@ document.addEventListener('DOMContentLoaded', () => {
       row.className = 'billing-row';
 
       const dateCell = createCell('span', record.datePaid, 'Date Paid');
-      const planCell = createCell('span', record.plan, 'Plan');
+      const planCell = createCell('span', cleanPlanLabel(record.plan) || 'Free', 'Plan');
       const durationCell = createCell('span', record.duration, 'Duration');
       const amountCell = createCell('span', formatCurrency(record.amount), 'Amount (₦)');
       amountCell.classList.add('amount-text');

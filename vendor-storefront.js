@@ -81,9 +81,9 @@ const slugify = (value, fallback = 'free') => {
 };
 
 const formatPlanLabel = (plan) => {
-  if (!plan) return 'Free Plan';
-  const label = String(plan).trim();
-  return /plan$/i.test(label) ? label : `${label} Plan`;
+  const label = String(plan ?? '').trim();
+  if (!label) return 'Free';
+  return label.replace(/\s*Plan$/i, '').replace(/\s{2,}/g, ' ').trim() || 'Free';
 };
 
 const normaliseVerification = (value) => {

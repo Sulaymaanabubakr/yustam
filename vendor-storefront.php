@@ -401,7 +401,7 @@ if ($vendorId !== '') {
         <h1 id="storefrontName">Vendor</h1>
         <p id="storefrontBusiness">Business Name</p>
         <div class="storefront-badges">
-          <span class="badge plan" id="storefrontPlan">Free Plan</span>
+          <span class="badge plan" id="storefrontPlan">Free</span>
           <span class="badge verification-unverified" id="storefrontVerification">Not Verified</span>
         </div>
         <p class="storefront-location" id="storefrontLocation"></p>

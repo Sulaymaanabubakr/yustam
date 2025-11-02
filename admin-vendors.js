@@ -137,8 +137,8 @@ const computeInitials = (value, fallback = 'Vendor') => {
 
 const ensurePlanLabel = (label, fallback = 'Free') => {
   const base = String(label || fallback || '').trim();
-  if (base === '') return 'Free Plan';
-  return /plan$/i.test(base) ? base : `${base} Plan`;
+  if (base === '') return 'Free';
+  return base.replace(/\s*Plan$/i, '').replace(/\s{2,}/g, ' ').trim() || 'Free';
 };
 
 const storefrontUrl = (vendorId) =>

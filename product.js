@@ -1,7 +1,11 @@
 import { db, firebaseConfig } from './firebase.js';
 import { buildChatId as computeChatId, ensureChat } from './chat-service.js';
 import { deleteDoc, doc, getDoc, setDoc } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
-import { normalisePlanSlug, verificationPlanLabel } from './plan-utils.js';
+import {
+  displayPlanLabel,
+  normalisePlanSlug,
+  verificationPlanLabel,
+} from './plan-utils.js';
 
 const urlParams = new URLSearchParams(window.location.search);
 
@@ -244,13 +248,7 @@ function setSaveState(isSaved) {
 
 const slugifyPlan = (plan) => normalisePlanSlug(plan);
 
-const formatPlanLabel = (plan) => {
-  if (!plan) return 'Free Plan';
-  const trimmed = String(plan).trim();
-  if (!trimmed) return 'Free Plan';
-  const lower = trimmed.toLowerCase();
-  return lower.endsWith('plan') ? trimmed : `${trimmed} Plan`;
-};
+const formatPlanLabel = (plan) => displayPlanLabel(plan);
 
 const normaliseVerificationState = (value) => {
   if (value === true || value === 1) return 'verified';
@@ -310,7 +308,8 @@ const applyVendorBadges = (planOverride, verificationOverride) => {
 
   if (document.body) {
     document.body.dataset.vendorPlan = planValue || '';
-    document.body.dataset.vendorPlanLabel = planRoleLabel || '';
+    document.body.dataset.vendorPlanLabel = planLabel || '';
+    document.body.dataset.vendorPlanRoleLabel = planRoleLabel || '';
     document.body.dataset.vendorPlanSlug = planSlug;
     document.body.dataset.vendorVerified = verificationState;
   }
@@ -512,7 +511,7 @@ function resolveChatMetadata() {
     return null;
   }
   const planValue = currentVendorPlan || document.body?.dataset?.vendorPlan || '';
-  const planLabel = document.body?.dataset?.vendorPlanLabel || verificationPlanLabel(planValue);
+  const planLabel = document.body?.dataset?.vendorPlanLabel || displayPlanLabel(planValue);
   const verificationState = currentVendorVerification || document.body?.dataset?.vendorVerified || '';
   const vendorBusinessName =
     document.body?.dataset?.vendorBusinessName ||
@@ -781,7 +780,7 @@ const updateQuickChatDataset = () => {
   const datasetPlanLabel =
     metadata?.vendorPlanLabel ||
     document.body?.dataset?.vendorPlanLabel ||
-    verificationPlanLabel(datasetPlan);
+    displayPlanLabel(datasetPlan);
   const datasetPlanSlug = normalisePlanSlug(datasetPlan);
   const datasetVerification =
     metadata?.vendorVerification || currentVendorVerification || document.body?.dataset?.vendorVerified || '';

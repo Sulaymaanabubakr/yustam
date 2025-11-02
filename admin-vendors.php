@@ -1011,7 +1011,7 @@ require_admin_auth();
             <h3 id="vendorPreviewTitle">Vendor Name</h3>
             <p id="vendorPreviewBusiness">Business Name</p>
             <div class="vendor-badge-row">
-              <span class="vendor-chip plan" id="vendorPreviewPlan">Free Plan</span>
+              <span class="vendor-chip plan" id="vendorPreviewPlan">Free</span>
               <span class="vendor-chip status-active" id="vendorPreviewStatus">Active</span>
               <span class="vendor-chip verification-unverified" id="vendorPreviewVerification">Not Verified</span>
             </div>

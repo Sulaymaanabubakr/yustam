@@ -260,9 +260,12 @@ function yustam_storefront_plan_label(?string $plan): string
 {
     $plan = trim((string) $plan);
     if ($plan === '') {
-        return 'Free Plan';
+        return 'Free';
     }
-    return preg_match('/plan$/i', $plan) ? $plan : ($plan . ' Plan');
+    $label = preg_replace('/\s*Plan$/i', '', $plan);
+    $label = preg_replace('/\s{2,}/', ' ', $label);
+    $label = trim($label);
+    return $label !== '' ? $label : 'Free';
 }
 
 function yustam_storefront_plan_slug(?string $plan): string

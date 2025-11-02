@@ -5,7 +5,7 @@ import {
   orderBy,
   query,
 } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
-import { verificationPlanLabel } from './plan-utils.js';
+import { displayPlanLabel, normalisePlanSlug, verificationPlanLabel } from './plan-utils.js';
 
 const productGrid = document.getElementById('productGrid');
 const emptyState = document.getElementById('emptyState');
@@ -150,25 +150,9 @@ const formatCurrency = (value) =>
     maximumFractionDigits: 0,
   }).format(Number.isFinite(Number(value)) ? Number(value) : 0);
 
-const slugifyPlan = (plan) => {
-  if (!plan) return 'free';
-  return String(plan)
-    .toLowerCase()
-    .replace(/plan/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-+|-+$)/g, '') || 'free';
-};
+const slugifyPlan = (plan) => normalisePlanSlug(plan);
 
-const formatPlanLabel = (plan) => {
-  if (!plan) return '';
-  const trimmed = String(plan).trim();
-  if (!trimmed) return '';
-  const lower = trimmed.toLowerCase();
-  if (lower.endsWith('plan') || /seller|vendor/.test(lower)) {
-    return trimmed;
-  }
-  return `${trimmed} Plan`;
-};
+const formatPlanLabel = (plan) => displayPlanLabel(plan);
 
 const normaliseVerificationState = (value) => {
   if (value === true || value === 1) return 'verified';
@@ -733,7 +717,7 @@ const renderProducts = () => {
   itemsToRender.forEach((item, index) => {
     const verificationState = normaliseVerificationState(item.vendorVerified);
     const statusBadge = createVendorStatusBadge(verificationState);
-    const planBadge = createPlanBadge(item.vendorPlan || item.vendorPlanLabel || 'Free Plan');
+    const planBadge = createPlanBadge(item.vendorPlan || item.vendorPlanLabel || 'Free');
     const vendorNameMarkup =
       item.vendorId
         ? `<a class="vendor-badge vendor-name vendor-link vendor-name-text" href="vendor-storefront.php?vendorId=${encodeURIComponent(item.vendorId)}">${escapeHtml(item.vendor)}</a>`
@@ -750,7 +734,7 @@ const renderProducts = () => {
     card.dataset.location = item.locationFilterValue || '';
     card.dataset.plan = item.vendorPlan || '';
     card.dataset.verified = verificationState;
-    card.dataset.planLabel = item.vendorPlanLabel || (item.vendorPlan ? verificationPlanLabel(item.vendorPlan) : '');
+    card.dataset.planLabel = item.vendorPlanLabel || displayPlanLabel(item.vendorPlan);
 
     card.innerHTML = `
       <img src="${escapeHtml(item.image)}" alt="${escapeHtml(item.title)}" loading="lazy" />

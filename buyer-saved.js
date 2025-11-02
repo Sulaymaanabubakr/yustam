@@ -1,6 +1,6 @@
 import { db } from './firebase.js';
 import { collection, onSnapshot, deleteDoc, doc, orderBy, query } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
-import { normalisePlanSlug } from './plan-utils.js';
+import { displayPlanLabel, normalisePlanSlug } from './plan-utils.js';
 
 const buyerUid = document.body?.dataset?.buyerUid || '';
 const buyerNumericId = document.body?.dataset?.buyerId || '';
@@ -17,13 +17,7 @@ const escapeHtml = (value) => String(value ?? '')
 
 const slugifyPlan = (plan) => normalisePlanSlug(plan);
 
-const formatPlanLabel = (plan) => {
-  if (!plan) return 'Free Plan';
-  const trimmed = String(plan).trim();
-  if (!trimmed) return 'Free Plan';
-  const lower = trimmed.toLowerCase();
-  return lower.endsWith('plan') ? trimmed : `${trimmed} Plan`;
-};
+const formatPlanLabel = (plan) => displayPlanLabel(plan);
 
 const normaliseVerificationState = (value) => {
   if (value === true || value === 1) return 'verified';

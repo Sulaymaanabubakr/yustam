@@ -83,6 +83,7 @@ if ($location === '' && yustam_vendor_table_has_column('category')) {
     $location = $vendorData['category'] ?? '';
 }
 $plan = yustam_vendor_table_has_column('plan') ? ($vendorData['plan'] ?? 'Free') : 'Free';
+$planDisplay = yustam_vendor_subscription_display_label($plan);
 $createdAt = yustam_vendor_table_has_column('created_at') ? ($vendorData['created_at'] ?? '') : '';
 $createdDisplay = $createdAt ? date('j M Y', strtotime($createdAt)) : '-';
 $profilePhoto = '';
@@ -493,7 +494,8 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
             'businessName' => $businessName,
             'phone' => $phone,
             'location' => $location,
-            'plan' => $subscriptionState['planName'] ?? $plan,
+            'plan' => $subscriptionState['displayName'] ?? $planDisplay,
+            'planRaw' => $subscriptionState['planName'] ?? $plan,
             'planStatus' => $subscriptionState['status'] ?? '',
             'planRenewal' => $subscriptionState['nextBillingDisplay'] ?? '',
             'joined' => $createdDisplay,
