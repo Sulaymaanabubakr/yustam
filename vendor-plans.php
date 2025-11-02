@@ -3,6 +3,7 @@ require_once __DIR__ . '/session-path.php';
 session_start();
 
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/vendor-subscriptions.php';
 
 if (!isset($_SESSION['vendor_id'])) {
   if (isset($_GET['format']) && $_GET['format'] === 'json') {
@@ -47,6 +48,19 @@ if (!$vendor) {
 }
 
 $vendorData = is_array($vendor) ? $vendor : [];
+$subscriptionState = yustam_vendor_subscription_format_state($vendorData);
+try {
+  $expiryCheck = yustam_vendor_subscription_handle_expiry($db, $vendorData);
+  if (!empty($expiryCheck['changed'])) {
+    $subscriptionState = $expiryCheck['subscription'] ?? $subscriptionState;
+    $vendorData = yustam_vendor_subscription_fetch_vendor($db, $vendorId) ?: $vendorData;
+  } elseif (isset($expiryCheck['subscription']) && is_array($expiryCheck['subscription'])) {
+    $subscriptionState = $expiryCheck['subscription'];
+  }
+} catch (Throwable $subscriptionSyncException) {
+  // keep previous subscription state if expiry check fails
+}
+
 $nameColumn = yustam_vendor_name_column();
 $vendorName = $vendorData[$nameColumn] ?? '';
 $businessName = yustam_vendor_table_has_column('business_name') ? ($vendorData['business_name'] ?? '') : '';
@@ -87,10 +101,11 @@ if ($planExpiryColumn && !empty($vendorData[$planExpiryColumn])) {
 $planExpiryDisplay = $planExpiryIso ? date('j M Y', strtotime($planExpiryIso)) : '--';
 
 $currentPlanPayload = [
-  'name' => $planName,
-  'status' => $planStatus,
-  'expiryIso' => $planExpiryIso,
-  'expiryDisplay' => $planExpiryDisplay,
+  'name' => $subscriptionState['planName'] ?? $planName,
+  'status' => $subscriptionState['status'] ?? $planStatus,
+  'expiryIso' => $subscriptionState['nextBillingIso'] ?? $planExpiryIso,
+  'expiryDisplay' => $subscriptionState['nextBillingDisplay'] ?? $planExpiryDisplay,
+  'notice' => $subscriptionState['notice'] ?? '',
 ];
 
 $vendorPayload = [
@@ -100,7 +115,7 @@ $vendorPayload = [
   'email' => $vendorEmail,
 ];
 
-$paystackKey = 'pk_live_21106eb17dafe8fbdca6708b57cef484d8a125ef';
+$paystackKey = yustam_paystack_public_key();
 $discounts = [
   '1' => 0,
   '3' => 0.07,
@@ -113,6 +128,16 @@ $pagePayload = [
   'vendor' => $vendorPayload,
   'discounts' => $discounts,
   'paystackKey' => $paystackKey,
+  'subscription' => $subscriptionState,
+  'plans' => yustam_vendor_subscription_plan_catalog(),
+  'endpoints' => [
+    'activate' => 'vendor-subscription-action.php',
+    'cancel' => 'vendor-subscription-action.php',
+  ],
+  'redirects' => [
+    'success' => 'plan-success.php',
+    'failure' => 'plan-failed.php',
+  ],
 ];
 
 if (isset($_GET['format']) && $_GET['format'] === 'json') {
@@ -328,6 +353,68 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
         line-height: 1.6;
       }
 
+      .plan-notice {
+        margin-top: 14px;
+        font-size: 0.95rem;
+        color: rgba(17, 17, 17, 0.72);
+      }
+
+      .plan-message {
+        margin-top: 16px;
+        padding: 12px 16px;
+        border-radius: 12px;
+        font-size: 0.95rem;
+        font-weight: 600;
+        display: block;
+      }
+
+      .plan-message[hidden] {
+        display: none;
+      }
+
+      .plan-message--info {
+        background: rgba(15, 106, 83, 0.12);
+        color: #0f6a53;
+      }
+
+      .plan-message--success {
+        background: rgba(15, 106, 83, 0.16);
+        color: #0b4f3c;
+      }
+
+      .plan-message--error {
+        background: rgba(176, 0, 32, 0.12);
+        color: #b00020;
+      }
+
+      .plan-message--warning {
+        background: rgba(243, 115, 30, 0.12);
+        color: #f3731e;
+      }
+
+      .plan-cancel-btn {
+        margin-top: 18px;
+        padding: 10px 18px;
+        border-radius: 999px;
+        border: 1px solid rgba(243, 115, 30, 0.65);
+        background: rgba(243, 115, 30, 0.08);
+        color: var(--orange);
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 160ms ease, transform 160ms ease;
+      }
+
+      .plan-cancel-btn:hover,
+      .plan-cancel-btn:focus-visible {
+        background: rgba(243, 115, 30, 0.18);
+        transform: translateY(-1px);
+      }
+
+      .plan-cancel-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
       /* Plans Grid */
       .plans-grid {
         display: grid;
@@ -344,6 +431,20 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
         gap: 18px;
         transition: transform 220ms ease, box-shadow 220ms ease, border 200ms ease;
         animation: fadeInUp 600ms ease both;
+      }
+
+      .plan-card--loading {
+        opacity: 0.72;
+        pointer-events: none;
+      }
+
+      .plan-card--current {
+        border: 2px solid rgba(15, 106, 83, 0.32);
+        box-shadow: 0 18px 36px rgba(15, 106, 83, 0.18);
+      }
+
+      .plan-card--pulse {
+        animation: plan-card-pulse 1s ease;
       }
 
       .plan-card:nth-child(1) {
@@ -558,6 +659,21 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
         }
       }
 
+      @keyframes plan-card-pulse {
+        0% {
+          transform: scale(1);
+          box-shadow: none;
+        }
+        40% {
+          transform: scale(1.03);
+          box-shadow: 0 16px 32px rgba(243, 115, 30, 0.24);
+        }
+        100% {
+          transform: scale(1);
+          box-shadow: none;
+        }
+      }
+
       @media (min-width: 640px) {
         main {
           gap: 48px;
@@ -655,12 +771,20 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
           <div class="plan-meta">
             <span class="plan-pill" id="currentPlanName"><?php echo htmlspecialchars($currentPlanPayload['name'] ?? 'Free', ENT_QUOTES, 'UTF-8'); ?></span>
             <span class="plan-pill" id="currentPlanStatus"><?php echo htmlspecialchars($currentPlanPayload['status'] ?? 'Active', ENT_QUOTES, 'UTF-8'); ?></span>
-            <span class="plan-pill" id="currentPlanExpiry"><?php echo htmlspecialchars($currentPlanPayload['expiryDisplay'] ?? '--', ENT_QUOTES, 'UTF-8'); ?></span>
+            <span class="plan-pill" id="currentPlanRenewal"><?php echo htmlspecialchars($currentPlanPayload['expiryDisplay'] ?? '--', ENT_QUOTES, 'UTF-8'); ?></span>
           </div>
           <p class="plan-description">
             Enjoy dependable tools crafted for thriving merchants. Upgrade anytime for more
             exposure, advanced analytics, and premium support.
           </p>
+          <?php $planNotice = trim((string)($currentPlanPayload['notice'] ?? '')); ?>
+          <p class="plan-notice" id="planNotice" <?php echo $planNotice === '' ? 'hidden' : ''; ?> aria-live="polite">
+            <?php echo htmlspecialchars($planNotice, ENT_QUOTES, 'UTF-8'); ?>
+          </p>
+          <div class="plan-message" id="planMessage" role="status" hidden></div>
+          <button class="plan-cancel-btn" id="cancelPlanBtn" type="button" hidden>
+            Cancel auto-renewal
+          </button>
         </article>
       </section>
 
