@@ -121,6 +121,8 @@ class ChatController {
     this.noticeIcon = document.getElementById('chatNoticeIcon');
     this.noticeText = document.getElementById('chatNoticeText');
     this.pendingScrollFrame = null;
+    this.pendingManualScrollTimer = null;
+    this.viewportCleanups = [];
   }
 
   async init() {
@@ -139,7 +141,8 @@ class ChatController {
     this.loadPrefill();
     this.startSubscriptions();
     this.loadChatSummary();
-    this.scrollToBottom(true);
+    this.setupViewportSync();
+    this.deferScrollToBottom(true);
   }
 
   destroy() {
@@ -155,6 +158,11 @@ class ChatController {
       cancelAnimationFrame(this.pendingScrollFrame);
       this.pendingScrollFrame = null;
     }
+    if (this.pendingManualScrollTimer !== null) {
+      window.clearTimeout(this.pendingManualScrollTimer);
+      this.pendingManualScrollTimer = null;
+    }
+    this.teardownViewportSync();
     this.hideNotice();
     this.stopTyping();
     this.cancelVoiceRecording();
@@ -164,6 +172,120 @@ class ChatController {
       }
     });
     this.optimisticMessages = [];
+  }
+
+  registerViewportCleanup(cleanup) {
+    if (typeof cleanup !== 'function') {
+      return;
+    }
+    if (!Array.isArray(this.viewportCleanups)) {
+      this.viewportCleanups = [];
+    }
+    this.viewportCleanups.push(cleanup);
+  }
+
+  teardownViewportSync() {
+    if (Array.isArray(this.viewportCleanups)) {
+      while (this.viewportCleanups.length) {
+        const cleanup = this.viewportCleanups.pop();
+        try {
+          cleanup();
+        } catch (error) {
+          console.warn('[chat] viewport cleanup failed', error);
+        }
+      }
+    } else {
+      this.viewportCleanups = [];
+    }
+    if (this.scrollContainer) {
+      this.scrollContainer.style.removeProperty('padding-bottom');
+    }
+  }
+
+  setupViewportSync() {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    const container = this.scrollContainer;
+    if (!container) {
+      return;
+    }
+    this.teardownViewportSync();
+
+    const adjustForViewport = () => {
+      const viewport = window.visualViewport;
+      if (viewport) {
+        const offset = Math.max(0, Math.round(window.innerHeight - viewport.height));
+        if (offset > 0) {
+          container.style.paddingBottom = `${offset}px`;
+        } else {
+          container.style.removeProperty('padding-bottom');
+        }
+        if (offset > 0) {
+          this.deferScrollToBottom(true);
+        }
+      } else {
+        container.style.removeProperty('padding-bottom');
+      }
+    };
+
+    const viewport = window.visualViewport;
+    if (viewport) {
+      const viewportHandler = () => adjustForViewport();
+      viewport.addEventListener('resize', viewportHandler);
+      viewport.addEventListener('scroll', viewportHandler);
+      this.registerViewportCleanup(() => {
+        viewport.removeEventListener('resize', viewportHandler);
+        viewport.removeEventListener('scroll', viewportHandler);
+      });
+    } else {
+      const resizeHandler = () => adjustForViewport();
+      window.addEventListener('resize', resizeHandler);
+      this.registerViewportCleanup(() => {
+        window.removeEventListener('resize', resizeHandler);
+      });
+    }
+
+    const orientationHandler = () => {
+      window.setTimeout(() => {
+        adjustForViewport();
+        this.deferScrollToBottom(true);
+      }, 90);
+    };
+    window.addEventListener('orientationchange', orientationHandler);
+    this.registerViewportCleanup(() => window.removeEventListener('orientationchange', orientationHandler));
+
+    if (this.messageInput) {
+      const focusHandler = () => {
+        adjustForViewport();
+        this.deferScrollToBottom(true);
+      };
+      const blurHandler = () => {
+        adjustForViewport();
+      };
+      this.messageInput.addEventListener('focus', focusHandler);
+      this.messageInput.addEventListener('blur', blurHandler);
+      this.registerViewportCleanup(() => {
+        this.messageInput.removeEventListener('focus', focusHandler);
+        this.messageInput.removeEventListener('blur', blurHandler);
+      });
+    }
+
+    adjustForViewport();
+  }
+
+  deferScrollToBottom(force = false) {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    if (this.pendingManualScrollTimer !== null) {
+      window.clearTimeout(this.pendingManualScrollTimer);
+      this.pendingManualScrollTimer = null;
+    }
+    this.pendingManualScrollTimer = window.setTimeout(() => {
+      this.pendingManualScrollTimer = null;
+      this.scrollToBottom(force);
+    }, 24);
   }
 
   hideLoadingOverlay() {
@@ -878,6 +1000,7 @@ class ChatController {
     });
     this.messageList.appendChild(fragment);
     this.scrollToBottom(true);
+    this.deferScrollToBottom(true);
   }
 
   renderMessage(message) {
