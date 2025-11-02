@@ -514,6 +514,16 @@ function resolveChatMetadata() {
   const planValue = currentVendorPlan || document.body?.dataset?.vendorPlan || '';
   const planLabel = document.body?.dataset?.vendorPlanLabel || verificationPlanLabel(planValue);
   const verificationState = currentVendorVerification || document.body?.dataset?.vendorVerified || '';
+  const vendorBusinessName =
+    document.body?.dataset?.vendorBusinessName ||
+    currentVendorName ||
+    document.body?.dataset?.vendorName ||
+    '';
+  const vendorDisplayName =
+    vendorBusinessName ||
+    document.body?.dataset?.vendorName ||
+    currentVendorName ||
+    'Vendor';
 
   return {
     chatId: computeChatId(buyerChatUid, vendorChatUid),
@@ -524,7 +534,8 @@ function resolveChatMetadata() {
     productId: listingId,
     productTitle: currentProductName || productNameEl?.textContent?.trim?.() || 'Marketplace Listing',
     productImage: currentProductImage || productImageEl?.src || PLACEHOLDER_IMAGE,
-    vendorName: currentVendorName || document.body?.dataset?.vendorName || 'Vendor',
+    vendorName: vendorDisplayName,
+    vendorBusinessName,
     vendorPlan: planValue,
     vendorPlanLabel: planLabel,
     vendorPlanSlug: normalisePlanSlug(planValue),
@@ -539,6 +550,7 @@ async function ensureQuickConversation(metadata) {
     buyer_uid: metadata.buyerUid,
     buyer_name: metadata.buyerName,
     vendor_uid: metadata.vendorUid,
+    vendor_business_name: metadata.vendorBusinessName || metadata.vendorName,
     vendor_name: metadata.vendorName,
     vendor_plan: metadata.vendorPlan,
     vendor_plan_label: metadata.vendorPlanLabel,
@@ -556,6 +568,10 @@ async function ensureQuickConversation(metadata) {
     if (result.vendor_uid) {
       metadata.vendorUid = result.vendor_uid;
       metadata.vendorFirebaseUid = result.vendor_uid;
+    }
+    if (result.vendor_business_name) {
+      metadata.vendorBusinessName = result.vendor_business_name;
+      metadata.vendorName = result.vendor_business_name;
     }
   }
   return result;
@@ -580,6 +596,7 @@ async function sendQuickMessage(metadata, text) {
       buyer_uid: metadata.buyerUid,
       buyer_name: metadata.buyerName,
       vendor_uid: metadata.vendorUid,
+      vendor_business_name: metadata.vendorBusinessName || metadata.vendorName,
       vendor_name: metadata.vendorName,
       vendor_plan: metadata.vendorPlan,
       vendor_plan_label: metadata.vendorPlanLabel,
@@ -755,6 +772,11 @@ const updateQuickChatDataset = () => {
   quickChatCard.dataset.vendorLegacyUid = metadata?.vendorLegacyUid || document.body?.dataset?.vendorLegacyUid || '';
   quickChatCard.dataset.vendorId = currentVendorId || '';
   quickChatCard.dataset.vendorName = metadata?.vendorName || currentVendorName || 'Vendor';
+  quickChatCard.dataset.vendorBusinessName =
+    metadata?.vendorBusinessName ||
+    document.body?.dataset?.vendorBusinessName ||
+    quickChatCard.dataset.vendorName ||
+    '';
   const datasetPlan = metadata?.vendorPlan || currentVendorPlan || document.body?.dataset?.vendorPlan || '';
   const datasetPlanLabel =
     metadata?.vendorPlanLabel ||
@@ -777,7 +799,13 @@ const updateQuickChatDataset = () => {
     quickChatCard.dataset.chatId = metadata.chatId;
   }
   if (quickChatHeading) {
-    quickChatHeading.textContent = `Chat with ${currentVendorName || 'Vendor'}`;
+    const headingName =
+      metadata?.vendorBusinessName ||
+      quickChatCard.dataset.vendorBusinessName ||
+      metadata?.vendorName ||
+      currentVendorName ||
+      'Vendor';
+    quickChatHeading.textContent = `Chat with ${headingName}`;
     quickChatHeading.dataset.vendorVerified = datasetVerification;
     quickChatHeading.dataset.vendorPlan = datasetPlan;
   }
@@ -1045,10 +1073,24 @@ const applyVendorData = (vendor, vendorIdValue) => {
   });
 
   if (vendor) {
-    currentVendorName = vendor.displayName || vendor.businessName || vendor.name || currentVendorName;
+    const businessNameCandidate =
+      vendor.businessName ||
+      vendor.business_name ||
+      vendor.storeName ||
+      vendor.store_name ||
+      vendor.companyName ||
+      vendor.company_name ||
+      '';
+    const displayNameCandidate =
+      vendor.displayName || vendor.name || vendor.full_name || vendor.fullName || '';
+    const resolvedName = businessNameCandidate || displayNameCandidate || currentVendorName;
+    currentVendorName = resolvedName;
     document.body.dataset.vendorName = currentVendorName;
+    if (businessNameCandidate) {
+      document.body.dataset.vendorBusinessName = businessNameCandidate;
+    }
     if (vendorBusinessEl) {
-      const businessName = vendor.businessName || '';
+      const businessName = businessNameCandidate || '';
       vendorBusinessEl.textContent = businessName;
       vendorBusinessEl.hidden = !businessName;
     }
@@ -1127,6 +1169,7 @@ const applyVendorData = (vendor, vendorIdValue) => {
     if (vendorSinceRow) vendorSinceRow.hidden = true;
     if (vendorAvatarEl) vendorAvatarEl.src = PLACEHOLDER_IMAGE;
     document.body.dataset.vendorName = currentVendorName;
+    document.body.dataset.vendorBusinessName = '';
   }
 
   if (vendorNameEl) vendorNameEl.textContent = currentVendorName;

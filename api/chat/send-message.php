@@ -28,11 +28,16 @@ $duration = isset($input['duration']) ? (float)$input['duration'] : null;
 $buyerUid = trim((string)($input['buyer_uid'] ?? $input['buyerUid'] ?? ($_SESSION['buyer_firebase_uid'] ?? '')));
 $vendorUid = trim((string)($input['vendor_uid'] ?? $input['vendorUid'] ?? ($_SESSION['vendor_firebase_uid'] ?? '')));
 $buyerName = trim((string)($input['buyer_name'] ?? $input['buyerName'] ?? ($_SESSION['buyer_name'] ?? 'Buyer')));
+$vendorBusinessNameInput = trim((string)($input['vendor_business_name'] ?? $input['vendorBusinessName'] ?? ''));
 $vendorName = trim((string)($input['vendor_name'] ?? $input['vendorName'] ?? ($_SESSION['vendor_name'] ?? 'Vendor')));
 $listingId = trim((string)($input['listing_id'] ?? $input['listingId'] ?? ''));
 $listingTitle = trim((string)($input['listing_title'] ?? $input['listingTitle'] ?? ''));
 $listingImage = trim((string)($input['listing_image'] ?? $input['listingImage'] ?? ''));
 $clientTag = trim((string)($input['client_tag'] ?? $input['clientTag'] ?? ''));
+
+if ($vendorBusinessNameInput !== '') {
+    $vendorName = $vendorBusinessNameInput;
+}
 
 if (!in_array($role, ['buyer', 'vendor'], true)) {
     if (isset($_SESSION['buyer_firebase_uid'])) {
@@ -86,6 +91,25 @@ if ($buyerUid === '' || $vendorUid === '') {
     http_response_code(400);
     echo json_encode(['success' => false, 'message' => 'Chat participants required']);
     exit;
+}
+
+$vendorBusinessName = $vendorBusinessNameInput;
+if ($vendorUid !== '') {
+    try {
+        $vendorRecord = yustam_vendor_find_by_uid($vendorUid);
+        if (is_array($vendorRecord)) {
+            $computedBusinessName = yustam_vendor_business_name($vendorRecord);
+            if ($computedBusinessName !== '') {
+                $vendorBusinessName = $computedBusinessName;
+            }
+        }
+    } catch (Throwable $vendorLookupError) {
+        error_log('chat-send vendor lookup failed: ' . $vendorLookupError->getMessage());
+    }
+}
+if ($vendorBusinessName !== '') {
+    $vendorName = $vendorBusinessName;
+    $_SESSION['vendor_name'] = $vendorBusinessName;
 }
 
 $chatId = yustam_chat_build_id($buyerUid, $vendorUid);
@@ -159,6 +183,7 @@ try {
         'buyer_name' => yustam_firestore_string($buyerName),
         'vendor_uid' => yustam_firestore_string($vendorUid),
         'vendor_name' => yustam_firestore_string($vendorName),
+        'vendor_business_name' => yustam_firestore_string($vendorBusinessName !== '' ? $vendorBusinessName : $vendorName),
         'listing_id' => yustam_firestore_string($listingId),
         'listing_title' => yustam_firestore_string($listingTitle),
         'listing_image' => yustam_firestore_string($listingImage),

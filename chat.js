@@ -64,6 +64,14 @@ class ChatController {
     this.buyer = context.buyer || {};
     this.vendor = context.vendor || {};
     this.canSend = Boolean(context.canSend);
+    if (this.role === 'buyer') {
+      if (this.vendor && this.vendor.business_name && !this.counterparty.business_name) {
+        this.counterparty.business_name = this.vendor.business_name;
+      }
+      if (this.counterparty.business_name && !this.counterparty.name) {
+        this.counterparty.name = this.counterparty.business_name;
+      }
+    }
     this.messages = [];
     this.optimisticMessages = [];
     this.pendingImageFile = null;
@@ -251,9 +259,26 @@ class ChatController {
 
   getVendorName() {
     if (this.role === 'vendor') {
-      return this.viewer.name || 'Vendor';
+      return this.viewer.business_name || this.viewer.name || 'Vendor';
     }
-    return this.counterparty.name || 'Vendor';
+    return (
+      this.counterparty.business_name ||
+      this.vendor.business_name ||
+      this.counterparty.name ||
+      'Vendor'
+    );
+  }
+
+  getVendorBusinessName() {
+    if (this.role === 'buyer') {
+      return (
+        this.counterparty.business_name ||
+        this.vendor.business_name ||
+        this.counterparty.name ||
+        'Vendor'
+      );
+    }
+    return this.viewer.business_name || this.viewer.name || 'Vendor';
   }
 
   persistViewerUid() {
@@ -352,6 +377,7 @@ class ChatController {
         buyer_uid: this.getBuyerUid(),
         buyer_name: this.getBuyerName(),
         vendor_uid: this.getVendorUid(),
+        vendor_business_name: this.getVendorBusinessName(),
         vendor_name: this.getVendorName(),
         listing_id: this.listing.id || '',
         listing_title: this.listing.title || '',
@@ -380,6 +406,19 @@ class ChatController {
     try {
       const summary = await fetchChatSummary(this.context.chatId);
       if (!summary) return;
+      if (this.role === 'buyer') {
+        const businessName =
+          summary.vendor_business_name ||
+          summary.business_name ||
+          summary.vendor_display_name ||
+          summary.vendor_name ||
+          '';
+        if (businessName) {
+          this.counterparty.business_name = businessName;
+          this.vendor.business_name = this.vendor.business_name || businessName;
+          this.counterparty.name = businessName;
+        }
+      }
       if (!this.counterparty.name) {
         if (this.role === 'buyer' && summary.vendor_name) {
           this.counterparty.name = summary.vendor_name;
@@ -602,6 +641,7 @@ class ChatController {
         buyer_uid: this.getBuyerUid(),
         buyer_name: this.getBuyerName(),
         vendor_uid: this.getVendorUid(),
+        vendor_business_name: this.getVendorBusinessName(),
         vendor_name: this.getVendorName(),
         listing_id: this.listing.id || '',
         listing_title: this.listing.title || '',
@@ -737,6 +777,7 @@ class ChatController {
         buyer_uid: this.getBuyerUid(),
         buyer_name: this.getBuyerName(),
         vendor_uid: this.getVendorUid(),
+        vendor_business_name: this.getVendorBusinessName(),
         vendor_name: this.getVendorName(),
         listing_id: this.listing.id || '',
         listing_title: this.listing.title || '',
@@ -968,7 +1009,18 @@ class ChatController {
 
   updateHeader() {
     if (this.chatTitle) {
-      const name = this.counterparty.name || (this.role === 'buyer' ? 'Vendor' : 'Buyer');
+      let name;
+      if (this.role === 'buyer') {
+        name =
+          this.counterparty.business_name ||
+          this.vendor.business_name ||
+          this.counterparty.name ||
+          'Vendor';
+        this.counterparty.business_name = this.counterparty.business_name || name;
+      } else {
+        name = this.counterparty.name || 'Buyer';
+      }
+      this.counterparty.name = name;
       this.chatTitle.textContent = '';
       const nameSpan = document.createElement('span');
       nameSpan.textContent = name;

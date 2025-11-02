@@ -200,11 +200,51 @@ function mapMessageRecord(record) {
   };
 }
 
+function extractVendorBusinessName(source) {
+  const candidates = [
+    source.vendor_business_name,
+    source.vendorBusinessName,
+    source.business_name,
+    source.businessName,
+    source.store_name,
+    source.storeName,
+    source.company_name,
+    source.companyName,
+    source.brand_name,
+    source.brandName,
+    source.trading_name,
+    source.tradingName,
+  ];
+  for (let index = 0; index < candidates.length; index += 1) {
+    const value = normaliseString(candidates[index]);
+    if (value) {
+      return value;
+    }
+  }
+  return '';
+}
+
+function resolveVendorIdentity(source) {
+  if (!source || typeof source !== 'object') {
+    return { business: '', name: '' };
+  }
+  const businessName = extractVendorBusinessName(source);
+  const displayName = normaliseString(source.vendor_display_name || source.vendorDisplayName);
+  const storedName = normaliseString(source.vendor_name || source.vendorName);
+  const fallbackName = normaliseString(source.vendor || source.name);
+  const resolvedName = businessName || displayName || storedName || fallbackName;
+  return {
+    business: businessName,
+    name: resolvedName || businessName || storedName || fallbackName,
+  };
+}
+
 function mapChatSnapshot(docSnap) {
   const data = docSnap.data() || {};
   const vendorPlan = data.vendor_plan || data.vendorPlan || '';
   const vendorPlanLabel =
     data.vendor_plan_label || data.vendorPlanLabel || (vendorPlan ? verificationPlanLabel(vendorPlan) : '');
+  const vendorIdentity = resolveVendorIdentity(data);
   return {
     id: docSnap.id,
     chat_id: data.chat_id || docSnap.id,
@@ -212,7 +252,9 @@ function mapChatSnapshot(docSnap) {
     buyer_name: data.buyer_name || data.buyerName || '',
     buyer_avatar: data.buyer_avatar || data.buyerAvatar || '',
     vendor_uid: data.vendor_uid || data.vendorUid || '',
-    vendor_name: data.vendor_name || data.vendorName || '',
+    vendor_name: vendorIdentity.name,
+    vendor_business_name: vendorIdentity.business || vendorIdentity.name,
+    vendor_display_name: vendorIdentity.name,
     vendor_avatar: data.vendor_avatar || data.vendorAvatar || '',
     vendor_plan: vendorPlan,
     vendor_plan_label: vendorPlanLabel,
@@ -236,6 +278,7 @@ function mapChatRecord(record) {
   const vendorPlan = record.vendor_plan || record.vendorPlan || '';
   const vendorPlanLabel =
     record.vendor_plan_label || record.vendorPlanLabel || (vendorPlan ? verificationPlanLabel(vendorPlan) : '');
+  const vendorIdentity = resolveVendorIdentity(record);
   return {
     id: record.id || record.chat_id || '',
     chat_id: record.chat_id || record.chatId || '',
@@ -243,7 +286,9 @@ function mapChatRecord(record) {
     buyer_name: record.buyer_name || record.buyerName || '',
     buyer_avatar: record.buyer_avatar || record.buyerAvatar || '',
     vendor_uid: record.vendor_uid || record.vendorUid || '',
-    vendor_name: record.vendor_name || record.vendorName || '',
+    vendor_name: vendorIdentity.name,
+    vendor_business_name: vendorIdentity.business || vendorIdentity.name,
+    vendor_display_name: vendorIdentity.name,
     vendor_avatar: record.vendor_avatar || record.vendorAvatar || '',
     vendor_plan: vendorPlan,
     vendor_plan_label: vendorPlanLabel,
@@ -318,6 +363,7 @@ async function ensureChatViaApi(payload) {
       buyer_uid: payload.buyer_uid,
       buyer_name: payload.buyer_name,
       vendor_uid: payload.vendor_uid,
+      vendor_business_name: payload.vendor_business_name,
       vendor_name: payload.vendor_name,
       vendor_plan: payload.vendor_plan,
       vendor_plan_label: payload.vendor_plan_label,
@@ -347,6 +393,15 @@ export async function ensureChat(meta) {
     buyer_name: normaliseString(meta?.buyer_name || meta?.buyerName || 'Buyer'),
     buyer_avatar: normaliseString(meta?.buyer_avatar || meta?.buyerAvatar || ''),
     vendor_uid: vendorUid,
+    vendor_business_name: normaliseString(
+      meta?.vendor_business_name ||
+        meta?.vendorBusinessName ||
+        meta?.business_name ||
+        meta?.businessName ||
+        meta?.vendor_name ||
+        meta?.vendorName ||
+        'Vendor'
+    ),
     vendor_name: normaliseString(meta?.vendor_name || meta?.vendorName || 'Vendor'),
     vendor_avatar: normaliseString(meta?.vendor_avatar || meta?.vendorAvatar || ''),
     vendor_plan: vendorPlanValue,
@@ -357,6 +412,11 @@ export async function ensureChat(meta) {
     listing_title: normaliseString(meta?.listing_title || meta?.listingTitle || ''),
     listing_image: normaliseString(meta?.listing_image || meta?.listingImage || ''),
   };
+  if (payload.vendor_business_name) {
+    payload.vendor_name = payload.vendor_business_name;
+  } else {
+    payload.vendor_business_name = payload.vendor_name;
+  }
 
   try {
     const docRef = chatDoc(chatId);
@@ -369,6 +429,7 @@ export async function ensureChat(meta) {
         buyer_avatar: payload.buyer_avatar,
         vendor_uid: payload.vendor_uid,
         vendor_name: payload.vendor_name,
+        vendor_business_name: payload.vendor_business_name,
         vendor_avatar: payload.vendor_avatar,
         vendor_plan: payload.vendor_plan,
         vendor_plan_label: payload.vendor_plan_label,
@@ -390,6 +451,7 @@ export async function ensureChat(meta) {
         buyer_avatar: payload.buyer_avatar,
         vendor_uid: payload.vendor_uid,
         vendor_name: payload.vendor_name,
+        vendor_business_name: payload.vendor_business_name,
         vendor_avatar: payload.vendor_avatar,
         vendor_plan: payload.vendor_plan,
         vendor_plan_label: payload.vendor_plan_label,
@@ -612,6 +674,7 @@ export async function sendMessage(payload) {
     buyer_uid: payload.buyer_uid,
     buyer_name: payload.buyer_name,
     vendor_uid: payload.vendor_uid,
+    vendor_business_name: payload.vendor_business_name || payload.vendor_name,
     vendor_name: payload.vendor_name,
     listing_id: payload.listing_id,
     listing_title: payload.listing_title,
@@ -749,6 +812,34 @@ function createChatsSubscription(queryRef, role, uid, callback) {
   let seedRetryTimer = null;
   let pollTimer = null;
 
+  const mergeVendorIdentity = (chat) => {
+    if (!chat || !chat.chat_id) {
+      return chat;
+    }
+    const cached = fallbackChatCache.get(chat.chat_id);
+    const cachedBusiness = normaliseString(
+      (cached && (cached.vendor_business_name || cached.vendor_name)) || ''
+    );
+    const currentBusiness = normaliseString(chat.vendor_business_name || '');
+    const currentName = normaliseString(chat.vendor_name || '');
+    if (cachedBusiness) {
+      if (!currentBusiness || currentBusiness !== cachedBusiness) {
+        chat.vendor_business_name = cachedBusiness;
+      }
+      if (!currentName || currentName !== cachedBusiness) {
+        chat.vendor_name = cachedBusiness;
+      }
+      chat.vendor_display_name = cachedBusiness;
+    } else if (currentBusiness) {
+      chat.vendor_name = currentBusiness;
+      chat.vendor_display_name = currentBusiness;
+    } else if (currentName) {
+      chat.vendor_business_name = currentName;
+      chat.vendor_display_name = currentName;
+    }
+    return chat;
+  };
+
   const stopPolling = () => {
     if (pollTimer) {
       clearInterval(pollTimer);
@@ -762,8 +853,9 @@ function createChatsSubscription(queryRef, role, uid, callback) {
       if (!active) {
         return;
       }
-      callback(chats);
-      chats.forEach((chat) => {
+      const normalized = Array.isArray(chats) ? chats.map(mergeVendorIdentity) : [];
+      callback(normalized);
+      normalized.forEach((chat) => {
         if (chat && chat.chat_id) {
           fallbackChatCache.set(chat.chat_id, chat);
         }
@@ -789,7 +881,13 @@ function createChatsSubscription(queryRef, role, uid, callback) {
     try {
       const chats = await fetchChatsViaApi(role, uid);
       if (active && Array.isArray(chats)) {
-        callback(chats);
+        const normalized = chats.map(mergeVendorIdentity);
+        callback(normalized);
+        normalized.forEach((chat) => {
+          if (chat && chat.chat_id) {
+            fallbackChatCache.set(chat.chat_id, chat);
+          }
+        });
       }
       seeded = true;
     } catch (seedError) {
@@ -818,7 +916,7 @@ function createChatsSubscription(queryRef, role, uid, callback) {
     (snapshot) => {
       if (!active) return;
       stopPolling();
-      const chats = orderChatsByLastTs(snapshot.docs.map(mapChatSnapshot));
+      const chats = orderChatsByLastTs(snapshot.docs.map(mapChatSnapshot)).map(mergeVendorIdentity);
       callback(chats);
       chats.forEach((chat) => fallbackChatCache.set(chat.chat_id, chat));
     },
@@ -828,7 +926,13 @@ function createChatsSubscription(queryRef, role, uid, callback) {
       try {
         const chats = await fetchChatsViaApi(role, uid);
         if (active) {
-          callback(chats);
+          const normalized = Array.isArray(chats) ? chats.map(mergeVendorIdentity) : [];
+          callback(normalized);
+          normalized.forEach((chat) => {
+            if (chat && chat.chat_id) {
+              fallbackChatCache.set(chat.chat_id, chat);
+            }
+          });
         }
       } catch (fallbackError) {
         console.error('[chat] chats fallback failed', fallbackError);

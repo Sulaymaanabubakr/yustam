@@ -115,6 +115,59 @@ function yustam_vendor_name_column(): string
     return 'full_name';
 }
 
+function yustam_vendor_business_name(array $vendor): string
+{
+    $candidates = [
+        'business_name',
+        'businessName',
+        'store_name',
+        'storeName',
+        'company_name',
+        'companyName',
+        'brand_name',
+        'brandName',
+        'trading_name',
+        'tradingName',
+    ];
+
+    foreach ($candidates as $candidate) {
+        if (array_key_exists($candidate, $vendor)) {
+            $value = trim((string) $vendor[$candidate]);
+            if ($value !== '') {
+                return $value;
+            }
+        }
+    }
+
+    foreach (['display_name', 'displayName', 'profile_name', 'profileName'] as $displayKey) {
+        if (array_key_exists($displayKey, $vendor)) {
+            $value = trim((string) $vendor[$displayKey]);
+            if ($value !== '') {
+                return $value;
+            }
+        }
+    }
+
+    $nameColumn = yustam_vendor_name_column();
+    if (array_key_exists($nameColumn, $vendor)) {
+        $value = trim((string) $vendor[$nameColumn]);
+        if ($value !== '') {
+            return $value;
+        }
+    }
+
+    foreach (['name', 'full_name', 'fullName'] as $fallback) {
+        if (array_key_exists($fallback, $vendor)) {
+            $value = trim((string) $vendor[$fallback]);
+            if ($value !== '') {
+                return $value;
+            }
+        }
+    }
+
+    return '';
+}
+
 // Backwards-compatible helpers
 function yustam_users_column($name) {
     if ($name === 'name') {
