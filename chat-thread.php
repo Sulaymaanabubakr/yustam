@@ -34,6 +34,7 @@ $counterparty = [
     'name' => '',
     'email' => '',
     'avatar' => '',
+    'business_name' => '',
 ];
 $listing = [
     'id' => '',
@@ -113,6 +114,7 @@ if ($role === 'buyer') {
     }
     $nameColumn = yustam_vendor_name_column();
     $viewer['name'] = trim((string)($vendor[$nameColumn] ?? ($_SESSION['vendor_name'] ?? 'Vendor')));
+    $viewer['business_name'] = yustam_vendor_business_name($vendor);
     $viewer['email'] = trim((string)($vendor['email'] ?? ($_SESSION['vendor_email'] ?? '')));
     if (yustam_vendor_table_has_column('profile_photo')) {
         $viewer['avatar'] = trim((string)($vendor['profile_photo'] ?? ''));
@@ -173,6 +175,15 @@ if ($chatId !== '') {
                     ? trim((string)($fields['vendor_name'] ?? ''))
                     : trim((string)($fields['buyer_name'] ?? ''));
             }
+            if ($role === 'buyer') {
+                $vendorBusinessField = trim((string)($fields['vendor_business_name'] ?? ''));
+                if ($vendorBusinessField !== '') {
+                    $counterparty['business_name'] = $vendorBusinessField;
+                    if ($counterparty['name'] === '' || $counterparty['name'] === 'Vendor') {
+                        $counterparty['name'] = $vendorBusinessField;
+                    }
+                }
+            }
         }
     } catch (Throwable $fireError) {
         error_log('chat-thread Firestore summary lookup failed: ' . $fireError->getMessage());
@@ -199,6 +210,13 @@ if ($vendorUid !== '') {
 }
 $counterpartyMeta = null;
 if ($vendorRecord) {
+    $vendorBusinessName = yustam_vendor_business_name($vendorRecord);
+    if ($vendorBusinessName !== '') {
+        $counterparty['business_name'] = $vendorBusinessName;
+        if ($role === 'buyer') {
+            $counterparty['name'] = $vendorBusinessName;
+        }
+    }
     $counterpartyMeta = yustam_vendor_plan_meta($vendorRecord);
     if ($role === 'buyer') {
         $counterparty['plan'] = $counterpartyMeta['value'];
@@ -259,6 +277,7 @@ $bootstrap = [
         'verified' => $vendorVerifiedFlag,
         'verification_state' => $vendorVerificationState,
         'verification_badge' => $vendorBadgeHtml,
+        'business_name' => $counterparty['business_name'] ?? '',
     ],
     'listing' => $listing,
     'prefill' => trim((string)($_GET['prefill'] ?? '')),

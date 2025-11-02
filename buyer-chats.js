@@ -156,10 +156,11 @@ function renderChats(chats) {
     const avatar = document.createElement('div');
     avatar.className = 'chat-avatar';
     const avatarImg = document.createElement('img');
+    const vendorDisplayName = chat.vendor_business_name || chat.vendor_name || chat.vendorDisplayName || 'Vendor';
     const listingAlt =
       chat.listing_title && chat.listing_title.trim()
         ? `${chat.listing_title.trim()} image`
-        : `${chat.vendor_name || 'Vendor'} avatar`;
+        : `${vendorDisplayName} avatar`;
     avatarImg.alt = listingAlt;
     avatarImg.src =
       chat.listing_image ||
@@ -174,7 +175,7 @@ function renderChats(chats) {
     headerRow.className = 'chat-header';
 
     const title = document.createElement('strong');
-    title.textContent = chat.vendor_name || 'Vendor';
+    title.textContent = vendorDisplayName;
     headerRow.appendChild(title);
     const vendorVerificationState = String(chat.vendor_verified || chat.vendor_verification || '').toLowerCase();
     title.dataset.vendorVerified = vendorVerificationState;

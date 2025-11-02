@@ -57,6 +57,8 @@ if ($uid === '') {
 $fieldPath = $role === 'vendor' ? 'vendor_uid' : 'buyer_uid';
 
 $chats = [];
+$vendorDirectory = [];
+$vendorConnection = null;
 
 try {
     $query = [
@@ -83,6 +85,30 @@ try {
             $fields[$key] = yustam_firestore_decode($value);
         }
         $fields['chat_id'] = $fields['chat_id'] ?? basename($result['document']['name']);
+
+        if ($role === 'buyer') {
+            $vendorUid = trim((string)($fields['vendor_uid'] ?? ''));
+            if ($vendorUid !== '') {
+                if (!array_key_exists($vendorUid, $vendorDirectory)) {
+                    try {
+                        $vendorConnection = $vendorConnection ?: get_db_connection();
+                        $vendorDirectory[$vendorUid] = yustam_vendor_find_by_uid($vendorUid, $vendorConnection);
+                    } catch (Throwable $vendorLookupError) {
+                        error_log('list-chats vendor lookup failed: ' . $vendorLookupError->getMessage());
+                        $vendorDirectory[$vendorUid] = null;
+                    }
+                }
+                $vendorRecord = $vendorDirectory[$vendorUid];
+                if (is_array($vendorRecord)) {
+                    $businessName = yustam_vendor_business_name($vendorRecord);
+                    if ($businessName !== '') {
+                        $fields['vendor_business_name'] = $businessName;
+                        $fields['vendor_name'] = $businessName;
+                    }
+                }
+            }
+        }
+
         $chats[] = $fields;
     }
 

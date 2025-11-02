@@ -5,6 +5,7 @@ require_once __DIR__ . '/../../session-path.php';
 session_start();
 
 require_once __DIR__ . '/firebase.php';
+require_once __DIR__ . '/../../db.php';
 
 header('Content-Type: application/json');
 
@@ -40,6 +41,21 @@ try {
             $chatData[$key] = yustam_firestore_decode($value);
         }
         $chatData['chat_id'] = $chatData['chat_id'] ?? $chatId;
+        $vendorUid = isset($chatData['vendor_uid']) ? trim((string)$chatData['vendor_uid']) : '';
+        if ($vendorUid !== '') {
+            try {
+                $vendorRecord = yustam_vendor_find_by_uid($vendorUid);
+                if (is_array($vendorRecord)) {
+                    $businessName = yustam_vendor_business_name($vendorRecord);
+                    if ($businessName !== '') {
+                        $chatData['vendor_business_name'] = $businessName;
+                        $chatData['vendor_name'] = $businessName;
+                    }
+                }
+            } catch (Throwable $vendorLookupError) {
+                error_log('list-messages vendor lookup failed: ' . $vendorLookupError->getMessage());
+            }
+        }
     }
 
     $parent = yustam_firestore_document_path('chats', $chatId);

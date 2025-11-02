@@ -106,7 +106,12 @@ if ($method !== 'POST') {
 $buyerUid = trim((string)($input['buyer_uid'] ?? $input['buyerUid'] ?? ($_SESSION['buyer_firebase_uid'] ?? ($_SESSION['firebase_uid'] ?? ''))));
 $buyerName = trim((string)($input['buyer_name'] ?? $input['buyerName'] ?? ($_SESSION['buyer_name'] ?? 'Buyer')));
 $vendorUid = trim((string)($input['vendor_uid'] ?? $input['vendorUid'] ?? ($_SESSION['vendor_firebase_uid'] ?? ($_SESSION['firebase_uid'] ?? ''))));
+$vendorBusinessNameInput = trim((string)($input['vendor_business_name'] ?? $input['vendorBusinessName'] ?? ''));
 $vendorName = trim((string)($input['vendor_name'] ?? $input['vendorName'] ?? ($_SESSION['vendor_name'] ?? 'Vendor')));
+$vendorBusinessName = $vendorBusinessNameInput;
+if ($vendorBusinessName !== '') {
+    $vendorName = $vendorBusinessName;
+}
 $vendorPlanValue = 'Free';
 $vendorPlanSlug = yustam_verification_plan_slug($vendorPlanValue);
 $vendorPlanLabel = yustam_verification_plan_label($vendorPlanValue);
@@ -115,6 +120,11 @@ if ($vendorUid !== '') {
     try {
         $vendorRecord = yustam_vendor_find_by_uid($vendorUid);
         if (is_array($vendorRecord)) {
+            $computedBusinessName = yustam_vendor_business_name($vendorRecord);
+            if ($computedBusinessName !== '') {
+                $vendorBusinessName = $computedBusinessName;
+                $vendorName = $computedBusinessName;
+            }
             foreach (['plan', 'subscription_plan', 'current_plan', 'plan_name', 'package'] as $planColumn) {
                 if (isset($vendorRecord[$planColumn]) && trim((string)$vendorRecord[$planColumn]) !== '') {
                     $vendorPlanValue = (string)$vendorRecord[$planColumn];
@@ -141,6 +151,9 @@ if (trim($vendorPlanValue) === '') {
 }
 if (trim($vendorVerificationState) === '') {
     $vendorVerificationState = 'unverified';
+}
+if ($vendorBusinessName !== '') {
+    $_SESSION['vendor_name'] = $vendorBusinessName;
 }
 $listingId = trim((string)($input['listing_id'] ?? $input['listingId'] ?? ''));
 $listingTitle = trim((string)($input['listing_title'] ?? $input['listingTitle'] ?? ''));
@@ -169,6 +182,7 @@ try {
             'buyer_name' => yustam_firestore_string($buyerName),
             'vendor_uid' => yustam_firestore_string($vendorUid),
             'vendor_name' => yustam_firestore_string($vendorName),
+            'vendor_business_name' => yustam_firestore_string($vendorBusinessName !== '' ? $vendorBusinessName : $vendorName),
             'vendor_plan' => yustam_firestore_string($vendorPlanValue),
             'vendor_plan_label' => yustam_firestore_string($vendorPlanLabel),
             'vendor_plan_slug' => yustam_firestore_string($vendorPlanSlug),
@@ -205,6 +219,7 @@ try {
             'buyer_name' => yustam_firestore_string($buyerName),
             'vendor_uid' => yustam_firestore_string($vendorUid),
             'vendor_name' => yustam_firestore_string($vendorName),
+            'vendor_business_name' => yustam_firestore_string($vendorBusinessName !== '' ? $vendorBusinessName : $vendorName),
             'vendor_plan' => yustam_firestore_string($vendorPlanValue),
             'vendor_plan_label' => yustam_firestore_string($vendorPlanLabel),
             'vendor_plan_slug' => yustam_firestore_string($vendorPlanSlug),
@@ -234,6 +249,10 @@ try {
         $documentData['vendor_plan_label'] = $vendorPlanLabel;
         $documentData['vendor_plan_slug'] = $vendorPlanSlug;
         $documentData['vendor_verified'] = $vendorVerificationState;
+        if ($vendorBusinessName !== '') {
+            $documentData['vendor_business_name'] = $vendorBusinessName;
+            $documentData['vendor_name'] = $vendorBusinessName;
+        }
     }
 } catch (Throwable $exception) {
     $firestoreSynced = false;
