@@ -792,7 +792,7 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
       <section>
         <h2 class="section-title">Upgrade to unlock more reach</h2>
         <div class="plans-grid">
-          <article class="glass-card plan-card" data-plan="Free Plan" data-price="0">
+          <article class="glass-card plan-card" data-plan="Free Plan" data-plan-slug="free" data-price="0">
             <div class="plan-heading">
               <h3 class="plan-name">Free Plan</h3>
               <span class="plan-price">₦0<span style="font-size:0.82rem; font-weight:500;">/month</span></span>
@@ -813,7 +813,7 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
             </ul>
           </article>
 
-          <article class="glass-card plan-card" data-plan="Starter Plan" data-price="3000">
+          <article class="glass-card plan-card" data-plan="Starter Plan" data-plan-slug="starter" data-price="3000">
             <div class="plan-heading">
               <h3 class="plan-name">Starter Plan</h3>
               <span class="plan-price">₦3,000<span style="font-size:0.82rem; font-weight:500;">/month</span></span>
@@ -848,7 +848,7 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
             </div>
           </article>
 
-          <article class="glass-card plan-card" data-plan="Pro Seller Plan" data-price="5000">
+          <article class="glass-card plan-card" data-plan="Pro Seller Plan" data-plan-slug="pro" data-price="5000">
             <div class="plan-heading">
               <h3 class="plan-name">Pro Seller Plan</h3>
               <span class="plan-price">₦5,000<span style="font-size:0.82rem; font-weight:500;">/month</span></span>
@@ -883,7 +883,7 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
             </div>
           </article>
 
-          <article class="glass-card plan-card" data-plan="Elite Seller Plan" data-price="8000">
+          <article class="glass-card plan-card" data-plan="Elite Seller Plan" data-plan-slug="elite" data-price="8000">
             <div class="plan-heading">
               <h3 class="plan-name">Elite Seller Plan</h3>
               <span class="plan-price">₦8,000<span style="font-size:0.82rem; font-weight:500;">/month</span></span>
@@ -918,7 +918,7 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
             </div>
           </article>
 
-          <article class="glass-card plan-card" data-plan="Power Vendor Plan" data-price="15000">
+          <article class="glass-card plan-card" data-plan="Power Vendor Plan" data-plan-slug="power" data-price="15000">
             <div class="plan-heading">
               <h3 class="plan-name">Power Vendor Plan</h3>
               <span class="plan-price">₦15,000<span style="font-size:0.82rem; font-weight:500;">/month</span></span>
