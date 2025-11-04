@@ -10,7 +10,7 @@ import {
   signInWithCredential,
   User,
 } from 'firebase/auth';
-import { initializeAuth, getReactNativePersistence } from 'firebase/auth/react-native';
+import type { Persistence } from 'firebase/auth';
 
 // Firebase configuration (replace with your actual config)
 const firebaseConfig = {
@@ -30,11 +30,15 @@ let auth = getAuth(app);
 
 if (Platform.OS !== 'web') {
   try {
-    auth = initializeAuth(app, {
-      persistence: getReactNativePersistence(ReactNativeAsyncStorage),
+    const nativeAuth = require('@firebase/auth/dist/rn/index.js') as {
+      initializeAuth: typeof import('firebase/auth').initializeAuth;
+      getReactNativePersistence: (storage: typeof ReactNativeAsyncStorage) => Persistence;
+    };
+
+    auth = nativeAuth.initializeAuth(app, {
+      persistence: nativeAuth.getReactNativePersistence(ReactNativeAsyncStorage),
     });
   } catch (error) {
-    // initializeAuth throws if it has already been called; fall back to default instance.
     auth = getAuth(app);
   }
 }
