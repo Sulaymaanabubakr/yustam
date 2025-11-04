@@ -1,13 +1,16 @@
-import { initializeApp } from 'firebase/app';
-import { 
+import { Platform } from 'react-native';
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
+import {
   getAuth,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut,
   GoogleAuthProvider,
   signInWithCredential,
-  User
+  User,
 } from 'firebase/auth';
+import { initializeAuth, getReactNativePersistence } from 'firebase/auth/react-native';
 
 // Firebase configuration (replace with your actual config)
 const firebaseConfig = {
@@ -21,10 +24,20 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-const app = initializeApp(firebaseConfig);
+const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
-// Initialize Auth
-const auth = getAuth(app);
+let auth = getAuth(app);
+
+if (Platform.OS !== 'web') {
+  try {
+    auth = initializeAuth(app, {
+      persistence: getReactNativePersistence(ReactNativeAsyncStorage),
+    });
+  } catch (error) {
+    // initializeAuth throws if it has already been called; fall back to default instance.
+    auth = getAuth(app);
+  }
+}
 
 export { auth, GoogleAuthProvider, signInWithCredential };
 
