@@ -153,9 +153,20 @@ if ($search !== '' && $searchableColumns) {
 }
 
 if ($planFilter !== '' && $hasPlanColumn) {
-    $conditions[] = '`plan` = ?';
-    $params[] = $planFilter;
-    $types .= 's';
+    $planFilterSlug = yustam_canonical_plan_slug($planFilter);
+    $planCandidates = yustam_plan_filter_candidates($planFilterSlug);
+    if ($planCandidates) {
+        $placeholders = implode(', ', array_fill(0, count($planCandidates), '?'));
+        $planCondition = 'LOWER(`plan`) IN (' . $placeholders . ')';
+        if ($planFilterSlug === 'free') {
+            $planCondition = '(' . $planCondition . ' OR `plan` IS NULL OR TRIM(`plan`) = \'\')';
+        }
+        $conditions[] = $planCondition;
+        foreach ($planCandidates as $candidate) {
+            $params[] = $candidate;
+            $types .= 's';
+        }
+    }
 }
 
 if ($statusFilter !== '' && $hasStatusColumn) {
@@ -205,8 +216,8 @@ $nameColumn = yustam_vendor_name_column();
 
 while ($row = $listResult->fetch_assoc()) {
     $planValue = $hasPlanColumn ? ($row['plan'] ?? '') : '';
-    $planLabel = yustam_format_plan_label($planValue);
     $planSlug = yustam_slugify_plan($planValue);
+    $planLabel = yustam_format_plan_label($planValue);
 
     $statusRaw = $hasStatusColumn ? ($row['status'] ?? '') : '';
     $statusState = yustam_normalise_account_status($statusRaw);
@@ -247,7 +258,8 @@ while ($row = $listResult->fetch_assoc()) {
         'businessName' => $hasBusinessNameColumn ? ($row['business_name'] ?? '') : '',
         'email' => $hasEmailColumn ? ($row['email'] ?? '') : '',
         'phone' => $hasPhoneColumn ? ($row['phone'] ?? '') : '',
-        'plan' => $planValue,
+        'planRaw' => $planValue,
+        'plan' => $planSlug,
         'planLabel' => $planLabel,
         'planSlug' => $planSlug,
         'status' => $statusState,
@@ -272,9 +284,10 @@ $counts = [
     'activeWeek' => 0,
     'plan' => [
         'free' => 0,
-        'plus' => 0,
+        'starter' => 0,
         'pro' => 0,
-        'premium' => 0,
+        'elite' => 0,
+        'power' => 0,
     ],
 ];
 
@@ -292,7 +305,10 @@ if ($hasPlanColumn) {
     if ($planResult instanceof mysqli_result) {
         while ($planRow = $planResult->fetch_assoc()) {
             $bucket = yustam_normalise_plan_bucket($planRow['plan'] ?? '');
-            $counts['plan'][$bucket] = ($counts['plan'][$bucket] ?? 0) + (int) ($planRow['total'] ?? 0);
+            if (!array_key_exists($bucket, $counts['plan'])) {
+                $counts['plan'][$bucket] = 0;
+            }
+            $counts['plan'][$bucket] += (int) ($planRow['total'] ?? 0);
         }
         $planResult->free();
     }
@@ -338,45 +354,124 @@ respond_admin_vendors([
     ],
 ]);
 
-function yustam_normalise_plan_bucket($value): string
+function yustam_canonical_plan_slug($value): string
 {
-    $value = strtolower(trim((string) $value));
-    if ($value === '' || $value === 'free' || strpos($value, 'starter') !== false) {
+    $raw = strtolower(trim((string) $value));
+    if ($raw === '') {
         return 'free';
     }
-    if (strpos($value, 'plus') !== false) {
-        return 'plus';
+
+    $raw = preg_replace('/plan$/', '', $raw);
+    $raw = preg_replace('/[^a-z0-9]+/', '-', $raw);
+    $raw = trim((string) $raw, '-');
+
+    if ($raw === '') {
+        return 'free';
     }
-    if (strpos($value, 'pro') !== false) {
-        return 'pro';
+
+    static $aliasMap = [
+        'free' => 'free',
+        'free-seller' => 'free',
+        'free-vendor' => 'free',
+        'starter' => 'starter',
+        'starter-plan' => 'starter',
+        'starter-seller' => 'starter',
+        'starter-vendor' => 'starter',
+        'plus' => 'starter',
+        'plus-plan' => 'starter',
+        'plus-seller' => 'starter',
+        'basic' => 'starter',
+        'basic-plan' => 'starter',
+        'basic-seller' => 'starter',
+        'pro' => 'pro',
+        'pro-plan' => 'pro',
+        'pro-seller' => 'pro',
+        'elite' => 'elite',
+        'elite-plan' => 'elite',
+        'elite-seller' => 'elite',
+        'premium' => 'elite',
+        'premium-plan' => 'elite',
+        'power' => 'power',
+        'power-plan' => 'power',
+        'power-vendor' => 'power',
+        'platinum' => 'power',
+        'platinum-plan' => 'power',
+        'platinum-vendor' => 'power',
+    ];
+
+    if (isset($aliasMap[$raw])) {
+        return $aliasMap[$raw];
     }
-    if (strpos($value, 'premium') !== false || strpos($value, 'elite') !== false) {
-        return 'premium';
+
+    $needles = [
+        'starter' => ['starter', 'plus', 'basic'],
+        'pro' => ['pro'],
+        'elite' => ['elite', 'premium'],
+        'power' => ['power', 'platinum'],
+    ];
+
+    foreach ($needles as $slug => $patterns) {
+        foreach ($patterns as $pattern) {
+            if (str_contains($raw, $pattern)) {
+                return $slug;
+            }
+        }
     }
+
     return 'free';
+}
+
+function yustam_plan_filter_candidates(string $slug): array
+{
+    static $map = [
+        'free' => ['free', 'free plan', 'free seller', 'free vendor', ''],
+        'starter' => ['starter', 'starter plan', 'starter seller', 'starter seller plan', 'starter vendor', 'plus', 'plus plan', 'plus seller', 'plus seller plan', 'basic', 'basic plan', 'basic seller', 'basic seller plan'],
+        'pro' => ['pro', 'pro seller', 'pro seller plan', 'pro plan'],
+        'elite' => ['elite', 'elite seller', 'elite seller plan', 'elite plan', 'premium', 'premium plan', 'premium seller', 'premium seller plan'],
+        'power' => ['power', 'power vendor', 'power vendor plan', 'power plan', 'platinum', 'platinum plan', 'platinum vendor'],
+    ];
+
+    $candidates = $map[$slug] ?? [];
+    $normalised = [];
+    foreach ($candidates as $candidate) {
+        $value = strtolower(trim((string) $candidate));
+        if ($value === '') {
+            $normalised[] = '';
+            continue;
+        }
+        $normalised[] = $value;
+    }
+
+    return array_values(array_unique($normalised));
+}
+
+function yustam_normalise_plan_bucket($value): string
+{
+    return yustam_canonical_plan_slug($value);
+}
+
+function yustam_plan_label_from_slug(string $slug): string
+{
+    static $labels = [
+        'free' => 'Free',
+        'starter' => 'Starter Seller',
+        'pro' => 'Pro Seller',
+        'elite' => 'Elite Seller',
+        'power' => 'Power Vendor',
+    ];
+
+    return $labels[$slug] ?? 'Free';
 }
 
 function yustam_format_plan_label(?string $plan): string
 {
-    $plan = trim((string) $plan);
-    if ($plan === '') {
-        return 'Free';
-    }
-
-    $plan = preg_replace('/\s*Plan$/i', '', $plan);
-    $plan = preg_replace('/\s{2,}/', ' ', $plan);
-
-    return trim($plan) !== '' ? trim($plan) : 'Free';
+    $slug = yustam_canonical_plan_slug($plan);
+    return yustam_plan_label_from_slug($slug);
 }
 
 function yustam_slugify_plan(?string $plan): string
 {
-    $plan = strtolower(trim((string) $plan));
-    $plan = preg_replace('/plan$/', '', $plan);
-    $plan = preg_replace('/[^a-z0-9]+/', '-', $plan);
-    $plan = trim((string) $plan, '-');
-
-    return $plan !== '' ? $plan : 'free';
+    return yustam_canonical_plan_slug($plan);
 }
 
 function yustam_normalise_account_status($value): string

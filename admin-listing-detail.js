@@ -1,3 +1,5 @@
+import { displayPlanLabel, normalisePlanSlug } from './plan-utils.js';
+
 const authLoader = document.getElementById('authLoader');
 const logoutBtn = document.getElementById('logoutBtn');
 const listingTitle = document.getElementById('listingTitle');
@@ -208,19 +210,11 @@ const resolveListingDescription = (listing = {}) => {
 };
 
 const prettifyPlan = (plan = '') => {
-  const value = String(plan || '').trim();
-  if (!value) return 'Free';
-  const cleaned = value.replace(/\s*Plan$/i, '').trim();
-  if (!cleaned) return 'Free';
-  const normalized = cleaned.toLowerCase();
-  if (['free', 'gratis'].includes(normalized)) return 'Free';
-  return cleaned.replace(/^\w/, (char) => char.toUpperCase());
+  const label = displayPlanLabel(plan);
+  return label.toLowerCase().startsWith('free') ? 'Free' : label;
 };
 
-const planSlug = (plan = '') => {
-  const value = String(plan || '').trim().toLowerCase();
-  return value ? value.replace(/plan$/i, '').replace(/[^a-z0-9]+/g, '-').replace(/(^-+|-+$)/g, '') || 'free' : 'free';
-};
+const planSlug = (plan = '') => normalisePlanSlug(plan);
 
 const statusSlug = (status = '') => {
   const value = String(status || '').trim().toLowerCase();
@@ -633,5 +627,3 @@ if (document.readyState === 'loading') {
 } else {
   init();
 }
-
-

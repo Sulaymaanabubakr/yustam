@@ -316,9 +316,14 @@ require_admin_auth();
     }
 
     .plan-free { background: rgba(0, 0, 0, 0.05); }
-    .plan-plus { background: rgba(243, 115, 30, 0.14); color: #c8500d; }
+    .plan-starter,
+    .plan-plus,
+    .plan-basic { background: rgba(243, 115, 30, 0.14); color: #c8500d; }
     .plan-pro { background: rgba(0, 77, 64, 0.16); color: var(--emerald); }
+    .plan-elite,
     .plan-premium { background: linear-gradient(120deg, rgba(243, 115, 30, 0.18), rgba(0, 77, 64, 0.16)); color: var(--emerald); }
+    .plan-power,
+    .plan-platinum { background: linear-gradient(120deg, rgba(15, 138, 113, 0.18), rgba(243, 115, 30, 0.16)); color: #0f8a71; }
 
     .status-active { color: var(--emerald); background: rgba(0, 77, 64, 0.15); }
     .status-suspended { color: #d84315; background: rgba(216, 67, 21, 0.16); }

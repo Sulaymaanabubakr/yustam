@@ -1,3 +1,5 @@
+import { displayPlanLabel, normalisePlanSlug } from './plan-utils.js';
+
 const authLoader = document.getElementById('authLoader');
 const mainContent = document.getElementById('mainContent');
 const toast = document.getElementById('toast');
@@ -46,9 +48,10 @@ const vendorPreviewStorefront = document.getElementById('vendorPreviewStorefront
 
 const totalVendorsEl = document.getElementById('totalVendors');
 const freeCountEl = document.getElementById('freeCount');
-const plusCountEl = document.getElementById('plusCount');
+const starterCountEl = document.getElementById('starterCount');
 const proCountEl = document.getElementById('proCount');
-const premiumCountEl = document.getElementById('premiumCount');
+const eliteCountEl = document.getElementById('eliteCount');
+const powerCountEl = document.getElementById('powerCount');
 const suspendedCountEl = document.getElementById('suspendedCount');
 const activeWeekEl = document.getElementById('activeWeek');
 
@@ -136,9 +139,8 @@ const computeInitials = (value, fallback = 'Vendor') => {
 };
 
 const ensurePlanLabel = (label, fallback = 'Free') => {
-  const base = String(label || fallback || '').trim();
-  if (base === '') return 'Free';
-  return base.replace(/\s*Plan$/i, '').replace(/\s{2,}/g, ' ').trim() || 'Free';
+  const resolved = displayPlanLabel(label || fallback || 'Free');
+  return resolved.toLowerCase().startsWith('free') ? 'Free' : resolved;
 };
 
 const storefrontUrl = (vendorId) =>
@@ -146,10 +148,12 @@ const storefrontUrl = (vendorId) =>
 
 const applyChipState = (chip, baseClass, state, label) => {
   if (!chip) return;
-  const normalisedState = String(state || 'default')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '') || 'default';
+  let normalisedState = String(state || 'default').toLowerCase();
+  if (baseClass === 'plan') {
+    normalisedState = normalisePlanSlug(normalisedState);
+  } else {
+    normalisedState = normalisedState.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'default';
+  }
   chip.className = `vendor-chip ${baseClass} ${baseClass}-${normalisedState}`;
   chip.textContent = label || '';
 };
@@ -170,6 +174,7 @@ const openVendorPreview = (vendor) => {
   const statusState = (vendor.status || 'active').toLowerCase();
   const verificationState = (vendor.verificationState || 'unverified').toLowerCase();
   const verificationLabel = vendor.verificationLabel || titleCase(verificationState.replace('-', ' '));
+  const planSlug = normalisePlanSlug(vendor.planSlug || vendor.plan || planLabel);
 
   if (vendorPreviewAvatar) {
     if (photo) {
@@ -185,7 +190,7 @@ const openVendorPreview = (vendor) => {
     vendorPreviewBusiness.hidden = businessName.trim() === '';
   }
 
-  applyChipState(vendorPreviewPlanChip, 'plan', vendor.planSlug || vendor.plan || 'free', planLabel);
+  applyChipState(vendorPreviewPlanChip, 'plan', planSlug, planLabel);
   applyChipState(vendorPreviewStatusChip, 'status', statusState, statusLabel);
   applyChipState(vendorPreviewVerificationChip, 'verification', verificationState, verificationLabel);
 
@@ -207,12 +212,20 @@ const openVendorPreview = (vendor) => {
 };
 
 const renderCounts = (counts = {}) => {
-  const planCounts = counts.plan || {};
+  const planCounts = {
+    free: 0,
+    starter: 0,
+    pro: 0,
+    elite: 0,
+    power: 0,
+    ...(counts.plan || {}),
+  };
   if (totalVendorsEl) totalVendorsEl.textContent = counts.total ?? 0;
   if (freeCountEl) freeCountEl.textContent = planCounts.free ?? 0;
-  if (plusCountEl) plusCountEl.textContent = planCounts.plus ?? 0;
+  if (starterCountEl) starterCountEl.textContent = planCounts.starter ?? 0;
   if (proCountEl) proCountEl.textContent = planCounts.pro ?? 0;
-  if (premiumCountEl) premiumCountEl.textContent = planCounts.premium ?? 0;
+  if (eliteCountEl) eliteCountEl.textContent = planCounts.elite ?? 0;
+  if (powerCountEl) powerCountEl.textContent = planCounts.power ?? 0;
   if (suspendedCountEl) suspendedCountEl.textContent = counts.suspended ?? 0;
   if (activeWeekEl) activeWeekEl.textContent = counts.activeWeek ?? 0;
 };
@@ -229,7 +242,9 @@ const showEmptyState = (message) => {
 
 const buildVendorRow = (vendor) => {
   const tr = document.createElement('tr');
-  const planClass = `chip ${vendor.planSlug || vendor.plan || 'free'}`;
+  const planSlug = normalisePlanSlug(vendor.planSlug || vendor.plan || vendor.planLabel || 'free');
+  const planLabel = ensurePlanLabel(vendor.planLabel || vendor.plan || 'Free');
+  const planClass = `chip ${planSlug}`;
   const statusClass = `status-badge status-${vendor.status || 'active'}`;
 
   tr.innerHTML = `
@@ -244,7 +259,7 @@ const buildVendorRow = (vendor) => {
     </td>
     <td>${escapeHtml(vendor.email || '-')}</td>
     <td>${escapeHtml(vendor.phone || '-')}</td>
-    <td><span class="${planClass}">${escapeHtml((vendor.planLabel || vendor.plan || 'Free').toUpperCase())}</span></td>
+    <td><span class="${planClass}">${escapeHtml(planLabel.toUpperCase())}</span></td>
     <td><span class="${statusClass}"><i class="ri-shield-check-line"></i>${escapeHtml(vendor.statusLabel || titleCase(vendor.status || 'active'))}</span></td>
     <td>${escapeHtml(vendor.createdAtFormatted || '-')}</td>
     <td>
@@ -263,7 +278,9 @@ const buildVendorRow = (vendor) => {
 const buildVendorCard = (vendor) => {
   const card = document.createElement('article');
   card.className = 'vendor-card';
-  const planClass = `chip ${vendor.planSlug || vendor.plan || 'free'}`;
+  const planSlug = normalisePlanSlug(vendor.planSlug || vendor.plan || vendor.planLabel || 'free');
+  const planLabel = ensurePlanLabel(vendor.planLabel || vendor.plan || 'Free');
+  const planClass = `chip ${planSlug}`;
   const statusClass = `status-badge status-${vendor.status || 'active'}`;
 
   card.innerHTML = `
@@ -277,7 +294,7 @@ const buildVendorCard = (vendor) => {
     <div class="vendor-card-info">
       <div><strong>Email:</strong> ${escapeHtml(vendor.email || '-')}</div>
       <div><strong>Phone:</strong> ${escapeHtml(vendor.phone || '-')}</div>
-      <div><strong>Plan:</strong> <span class="${planClass}">${escapeHtml((vendor.planLabel || vendor.plan || 'Free').toUpperCase())}</span></div>
+      <div><strong>Plan:</strong> <span class="${planClass}">${escapeHtml(planLabel.toUpperCase())}</span></div>
       <div><strong>Status:</strong> <span class="${statusClass}">${escapeHtml(vendor.statusLabel || titleCase(vendor.status || 'active'))}</span></div>
       <div><strong>Joined:</strong> ${escapeHtml(vendor.createdAtFormatted || '-')}</div>
     </div>
@@ -305,9 +322,12 @@ const renderVendors = (vendors = []) => {
   if (emptyState) emptyState.hidden = true;
 
   vendors.forEach((vendor) => {
-    vendorCache.set(String(vendor.id), vendor);
-    vendorTableBody?.appendChild(buildVendorRow(vendor));
-    vendorCardList?.appendChild(buildVendorCard(vendor));
+    const planSlug = normalisePlanSlug(vendor.planSlug || vendor.plan || vendor.planLabel || 'free');
+    const planLabel = ensurePlanLabel(vendor.planLabel || vendor.plan || 'Free');
+    const enrichedVendor = { ...vendor, planSlug, planLabel };
+    vendorCache.set(String(enrichedVendor.id), enrichedVendor);
+    vendorTableBody?.appendChild(buildVendorRow(enrichedVendor));
+    vendorCardList?.appendChild(buildVendorCard(enrichedVendor));
   });
 };
 

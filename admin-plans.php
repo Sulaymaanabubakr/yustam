@@ -205,18 +205,34 @@ require_admin_auth();
     }
 
     .plan-free {border-left:5px solid rgba(17,17,17,0.35);} 
-    .plan-plus {border-left:5px solid rgba(243,115,30,0.75);} 
+    .plan-starter,
+    .plan-plus,
+    .plan-basic {border-left:5px solid rgba(243,115,30,0.75);} 
     .plan-pro {border-left:5px solid rgba(0,77,64,0.75);} 
+    .plan-elite,
     .plan-premium {border-left:5px solid rgba(243,115,30,0.9); background:rgba(255,255,255,0.92);} 
+    .plan-power,
+    .plan-platinum {border-left:5px solid rgba(17,129,101,0.85); background:linear-gradient(135deg,rgba(243,115,30,0.12),rgba(17,129,101,0.12));}
 
+    .plan-elite .metric-value,
     .plan-premium .metric-value {
       color:var(--orange);
     }
 
+    .plan-power .metric-value,
+    .plan-platinum .metric-value {
+      color:var(--emerald);
+    }
+
     .plan-badge.free {background:rgba(17,17,17,0.08); color:#333;}
-    .plan-badge.plus {background:rgba(243,115,30,0.15); color:var(--orange);}
+    .plan-badge.starter,
+    .plan-badge.plus,
+    .plan-badge.basic {background:rgba(243,115,30,0.15); color:var(--orange);}
     .plan-badge.pro {background:rgba(0,77,64,0.15); color:var(--emerald);}
+    .plan-badge.elite,
     .plan-badge.premium {background:linear-gradient(135deg,#F3731E,#FF8A3C); color:#fff;}
+    .plan-badge.power,
+    .plan-badge.platinum {background:linear-gradient(135deg,#0F8A71,#1EBF9E); color:#fff;}
 
     .revenue-card {
       cursor:default;
@@ -368,9 +384,14 @@ require_admin_auth();
     }
 
     .chip-free {background:rgba(17,17,17,0.08); color:#333;}
-    .chip-plus {background:rgba(243,115,30,0.15); color:var(--orange);} 
+    .chip-starter,
+    .chip-plus,
+    .chip-basic {background:rgba(243,115,30,0.15); color:var(--orange);} 
     .chip-pro {background:rgba(0,77,64,0.15); color:var(--emerald);} 
+    .chip-elite,
     .chip-premium {background:linear-gradient(135deg,#F3731E,#FF8A3C); color:#fff;} 
+    .chip-power,
+    .chip-platinum {background:linear-gradient(135deg,#0F8A71,#1EBF9E); color:#fff;} 
 
     .actions {
       display:flex;
@@ -675,9 +696,10 @@ require_admin_auth();
       <label for="newPlanSelect" style="font-weight:600;">Select new plan</label>
       <select id="newPlanSelect">
         <option value="free">Free</option>
-        <option value="plus">Plus</option>
+        <option value="starter">Starter</option>
         <option value="pro">Pro</option>
-        <option value="premium">Premium</option>
+        <option value="elite">Elite</option>
+        <option value="power">Power</option>
       </select>
       <div class="modal-actions">
         <button class="btn btn-outline" type="button" id="cancelPlanChange">Cancel</button>
