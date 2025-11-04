@@ -6,16 +6,18 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
-  Image,
   FlatList,
 } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, SHADOWS } from '../../constants/theme';
+
+type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
 interface Category {
   id: string;
   name: string;
-  icon: string;
+  icon: IoniconName;
 }
 
 interface Product {
@@ -24,69 +26,92 @@ interface Product {
   price: string;
   rating: number;
   reviews: number;
-  image: string;
+  icon: IoniconName;
+}
+
+interface Vendor {
+  id: string;
+  name: string;
+  category: string;
+  deliveryTime: string;
+  icon: IoniconName;
 }
 
 const categories: Category[] = [
-  { id: '1', name: 'Phones', icon: '📱' },
-  { id: '2', name: 'Laptops', icon: '💻' },
-  { id: '3', name: 'TVs', icon: '📺' },
-  { id: '4', name: 'Headset', icon: '🎧' },
-  { id: '5', name: 'Fashion', icon: '👕' },
-  { id: '6', name: 'Beauty', icon: '💄' },
+  { id: 'phones', name: 'Phones', icon: 'phone-portrait' },
+  { id: 'laptops', name: 'Laptops', icon: 'laptop-outline' },
+  { id: 'tvs', name: 'TV & Audio', icon: 'tv-outline' },
+  { id: 'gaming', name: 'Gaming', icon: 'game-controller-outline' },
+  { id: 'fashion', name: 'Fashion', icon: 'shirt-outline' },
+  { id: 'beauty', name: 'Beauty', icon: 'color-palette-outline' },
 ];
 
 const popularProducts: Product[] = [
   {
-    id: '1',
+    id: 'iphone-15-pro',
     name: 'iPhone 15 Pro',
-    price: '₦1,250,000',
+    price: 'NGN 1,250,000',
     rating: 4.8,
     reviews: 234,
-    image: '📱',
+    icon: 'phone-portrait-outline',
   },
   {
-    id: '2',
+    id: 'galaxy-s24',
     name: 'Samsung Galaxy S24',
-    price: '₦950,000',
+    price: 'NGN 950,000',
     rating: 4.7,
     reviews: 189,
-    image: '📱',
+    icon: 'hardware-chip-outline',
   },
   {
-    id: '3',
-    name: 'MacBook Pro',
-    price: '₦2,100,000',
+    id: 'macbook-pro',
+    name: 'MacBook Pro 14"',
+    price: 'NGN 2,100,000',
     rating: 4.9,
     reviews: 345,
-    image: '💻',
+    icon: 'laptop-outline',
+  },
+];
+
+const featuredVendors: Vendor[] = [
+  {
+    id: 'bright-electronics',
+    name: 'Bright Electronics',
+    category: 'Verified Vendor - Electronics',
+    deliveryTime: 'Same day delivery',
+    icon: 'briefcase-outline',
+  },
+  {
+    id: 'city-fashion',
+    name: 'City Fashion Hub',
+    category: 'Verified Vendor - Fashion',
+    deliveryTime: 'Delivers in 24 hrs',
+    icon: 'bag-handle-outline',
   },
 ];
 
 const BuyerHomeScreen: React.FC = () => {
   const renderCategory = ({ item }: { item: Category }) => (
     <TouchableOpacity style={styles.categoryCard}>
-      <Text style={styles.categoryIcon}>{item.icon}</Text>
+      <Ionicons name={item.icon} size={28} color={COLORS.orange} />
       <Text style={styles.categoryName}>{item.name}</Text>
     </TouchableOpacity>
   );
 
   const renderProduct = ({ item }: { item: Product }) => (
     <View style={styles.productCard}>
-      <View style={styles.productImageContainer}>
-        <Text style={styles.productEmoji}>{item.image}</Text>
+      <View style={styles.productIconContainer}>
+        <Ionicons name={item.icon} size={40} color={COLORS.emerald} />
       </View>
-      <View style={styles.productInfo}>
-        <Text style={styles.productName} numberOfLines={2}>
-          {item.name}
+      <Text style={styles.productName} numberOfLines={2}>
+        {item.name}
+      </Text>
+      <Text style={styles.productPrice}>{item.price}</Text>
+      <View style={styles.ratingContainer}>
+        <Ionicons name="star" size={16} color={COLORS.orange} />
+        <Text style={styles.ratingText}>
+          {item.rating.toFixed(1)} ({item.reviews})
         </Text>
-        <Text style={styles.productPrice}>{item.price}</Text>
-        <View style={styles.ratingContainer}>
-          <Text style={styles.ratingStar}>⭐</Text>
-          <Text style={styles.ratingText}>
-            {item.rating} ({item.reviews})
-          </Text>
-        </View>
       </View>
       <TouchableOpacity style={styles.orderButton}>
         <Text style={styles.orderButtonText}>Order Now</Text>
@@ -94,63 +119,79 @@ const BuyerHomeScreen: React.FC = () => {
     </View>
   );
 
+  const renderVendor = ({ item }: { item: Vendor }) => (
+    <View style={styles.vendorCard}>
+      <View style={styles.vendorIcon}>
+        <Ionicons name={item.icon} size={22} color={COLORS.white} />
+      </View>
+      <View style={styles.vendorDetails}>
+        <Text style={styles.vendorName}>{item.name}</Text>
+        <Text style={styles.vendorCategory}>{item.category}</Text>
+        <View style={styles.vendorMeta}>
+          <Ionicons name="time-outline" size={14} color={COLORS.emerald} />
+          <Text style={styles.vendorMetaText}>{item.deliveryTime}</Text>
+        </View>
+      </View>
+      <Ionicons name="chevron-forward" size={20} color={COLORS.gray400} />
+    </View>
+  );
+
   return (
     <View style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
-        <View style={styles.locationContainer}>
-          <Text style={styles.locationIcon}>📍</Text>
-          <Text style={styles.locationText}>Lagos, Nigeria</Text>
+        <View>
+          <Text style={styles.welcomeText}>Welcome to YUSTAM</Text>
+          <View style={styles.locationContainer}>
+            <Ionicons name="location-sharp" size={16} color={COLORS.orange} />
+            <Text style={styles.locationText}>Lagos, Nigeria</Text>
+          </View>
         </View>
         <TouchableOpacity style={styles.notificationButton}>
-          <Text style={styles.notificationIcon}>🔔</Text>
+          <Ionicons name="notifications-outline" size={22} color={COLORS.ink} />
         </TouchableOpacity>
       </View>
 
-      {/* Search Bar */}
       <View style={styles.searchContainer}>
-        <Text style={styles.searchIcon}>🔍</Text>
+        <Ionicons name="search" size={18} color={COLORS.gray500} />
         <TextInput
           style={styles.searchInput}
-          placeholder="Search products, vendors..."
+          placeholder="Search products, vendors, categories"
           placeholderTextColor={COLORS.gray500}
         />
+        <TouchableOpacity style={styles.filterButton}>
+          <Ionicons name="options-outline" size={18} color={COLORS.white} />
+        </TouchableOpacity>
       </View>
 
       <ScrollView
-        style={styles.scrollView}
-        showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
       >
-        {/* Promotional Banner */}
         <LinearGradient
           colors={[COLORS.orange, COLORS.orangeDeep]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.banner}
         >
-          <View style={styles.bannerContent}>
-            <View style={styles.bannerTextContainer}>
-              <Text style={styles.bannerTitle}>New Collection</Text>
-              <Text style={styles.bannerSubtitle}>
-                Flash Sale up to 40% off this weekend
-              </Text>
-              <TouchableOpacity style={styles.shopNowButton}>
-                <Text style={styles.shopNowText}>Shop Now</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={styles.bannerImageContainer}>
-              <Text style={styles.bannerEmoji}>🎁</Text>
-            </View>
+          <View style={styles.bannerTextContainer}>
+            <Text style={styles.bannerTitle}>Mega Gadget Deals</Text>
+            <Text style={styles.bannerSubtitle}>
+              Shop verified vendors and enjoy secure delivery to your doorstep.
+            </Text>
+            <TouchableOpacity style={styles.shopNowButton}>
+              <Text style={styles.shopNowText}>Shop now</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.bannerIconContainer}>
+            <Ionicons name="bag-handle" size={72} color={COLORS.white} />
           </View>
         </LinearGradient>
 
-        {/* Categories Section */}
-        <View style={styles.sectionContainer}>
+        <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Category</Text>
+            <Text style={styles.sectionTitle}>Popular Categories</Text>
             <TouchableOpacity>
-              <Text style={styles.seeAllText}>See All →</Text>
+              <Text style={styles.seeAllText}>See all</Text>
             </TouchableOpacity>
           </View>
           <FlatList
@@ -163,12 +204,11 @@ const BuyerHomeScreen: React.FC = () => {
           />
         </View>
 
-        {/* Popular Products Section */}
-        <View style={styles.sectionContainer}>
+        <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Popular Now</Text>
+            <Text style={styles.sectionTitle}>Trending Products</Text>
             <TouchableOpacity>
-              <Text style={styles.seeAllText}>See All →</Text>
+              <Text style={styles.seeAllText}>View more</Text>
             </TouchableOpacity>
           </View>
           <FlatList
@@ -179,6 +219,20 @@ const BuyerHomeScreen: React.FC = () => {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.productList}
           />
+        </View>
+
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Featured Vendors</Text>
+            <TouchableOpacity>
+              <Text style={styles.seeAllText}>Discover all</Text>
+            </TouchableOpacity>
+          </View>
+          {featuredVendors.map((vendor) => (
+            <View key={vendor.id} style={styles.vendorWrapper}>
+              {renderVendor({ item: vendor })}
+            </View>
+          ))}
         </View>
       </ScrollView>
     </View>
@@ -195,81 +249,80 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: SPACING.lg,
-    paddingTop: SPACING.xxl + 10,
+    paddingTop: SPACING.xl,
     paddingBottom: SPACING.md,
+  },
+  welcomeText: {
+    fontSize: FONT_SIZES.md,
+    color: COLORS.gray600,
+    marginBottom: SPACING.xs,
   },
   locationContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  locationIcon: {
-    fontSize: 16,
-    marginRight: SPACING.xs,
+    gap: SPACING.xs,
   },
   locationText: {
-    fontSize: FONT_SIZES.md,
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.gray600,
     fontWeight: '600',
-    color: COLORS.ink,
   },
   notificationButton: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     borderRadius: BORDER_RADIUS.full,
-    backgroundColor: COLORS.beige,
+    backgroundColor: COLORS.gray100,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  notificationIcon: {
-    fontSize: 20,
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.gray100,
     marginHorizontal: SPACING.lg,
-    marginBottom: SPACING.lg,
+    borderRadius: BORDER_RADIUS.lg,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
-    borderRadius: BORDER_RADIUS.lg,
-  },
-  searchIcon: {
-    fontSize: 20,
-    marginRight: SPACING.sm,
+    gap: SPACING.sm,
   },
   searchInput: {
     flex: 1,
     fontSize: FONT_SIZES.md,
     color: COLORS.ink,
   },
-  scrollView: {
-    flex: 1,
+  filterButton: {
+    width: 40,
+    height: 40,
+    borderRadius: BORDER_RADIUS.md,
+    backgroundColor: COLORS.emerald,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   scrollContent: {
     paddingBottom: SPACING.xxl,
   },
   banner: {
     marginHorizontal: SPACING.lg,
+    marginTop: SPACING.lg,
     borderRadius: BORDER_RADIUS.xl,
     padding: SPACING.lg,
-    marginBottom: SPACING.xl,
-    ...SHADOWS.large,
-  },
-  bannerContent: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    alignItems: 'center',
+    ...SHADOWS.large,
   },
   bannerTextContainer: {
     flex: 1,
   },
   bannerTitle: {
-    fontSize: FONT_SIZES.xl,
+    fontSize: FONT_SIZES.xxl,
     fontWeight: 'bold',
     color: COLORS.white,
-    marginBottom: SPACING.xs,
+    marginBottom: SPACING.sm,
   },
   bannerSubtitle: {
     fontSize: FONT_SIZES.sm,
     color: COLORS.white,
+    opacity: 0.9,
     marginBottom: SPACING.md,
     lineHeight: 18,
   },
@@ -285,15 +338,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.orange,
   },
-  bannerImageContainer: {
-    justifyContent: 'center',
-    alignItems: 'center',
+  bannerIconContainer: {
+    marginLeft: SPACING.lg,
   },
-  bannerEmoji: {
-    fontSize: 60,
-  },
-  sectionContainer: {
-    marginBottom: SPACING.xl,
+  section: {
+    marginTop: SPACING.xl,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -314,47 +363,36 @@ const styles = StyleSheet.create({
   },
   categoryList: {
     paddingHorizontal: SPACING.lg,
+    gap: SPACING.md,
   },
   categoryCard: {
     backgroundColor: COLORS.white,
     borderRadius: BORDER_RADIUS.lg,
-    padding: SPACING.md,
-    marginRight: SPACING.md,
+    paddingVertical: SPACING.lg,
+    paddingHorizontal: SPACING.xl,
     alignItems: 'center',
-    width: 100,
+    justifyContent: 'center',
     ...SHADOWS.small,
   },
-  categoryIcon: {
-    fontSize: 32,
-    marginBottom: SPACING.xs,
-  },
   categoryName: {
+    marginTop: SPACING.sm,
     fontSize: FONT_SIZES.sm,
     fontWeight: '600',
     color: COLORS.ink,
   },
   productList: {
     paddingHorizontal: SPACING.lg,
+    gap: SPACING.md,
   },
   productCard: {
+    width: 200,
     backgroundColor: COLORS.white,
-    borderRadius: BORDER_RADIUS.lg,
-    padding: SPACING.md,
-    marginRight: SPACING.md,
-    width: 180,
+    borderRadius: BORDER_RADIUS.xl,
+    padding: SPACING.lg,
     ...SHADOWS.medium,
   },
-  productImageContainer: {
-    backgroundColor: COLORS.gray100,
-    borderRadius: BORDER_RADIUS.md,
-    padding: SPACING.lg,
-    alignItems: 'center',
-    marginBottom: SPACING.sm,
-  },
-  productEmoji: {
-    fontSize: 48,
-  },
-  productInfo: {
+  productIconContainer: {
+    alignSelf: 'flex-start',
     marginBottom: SPACING.sm,
   },
   productName: {
@@ -365,23 +403,23 @@ const styles = StyleSheet.create({
   },
   productPrice: {
     fontSize: FONT_SIZES.lg,
-    fontWeight: 'bold',
+    fontWeight: '700',
     color: COLORS.orange,
-    marginBottom: SPACING.xs,
+    marginBottom: SPACING.sm,
   },
   ratingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  ratingStar: {
-    fontSize: 12,
-    marginRight: SPACING.xs,
+    gap: SPACING.xs,
+    marginBottom: SPACING.sm,
   },
   ratingText: {
     fontSize: FONT_SIZES.xs,
     color: COLORS.gray600,
+    fontWeight: '500',
   },
   orderButton: {
+    marginTop: SPACING.sm,
     backgroundColor: COLORS.emerald,
     paddingVertical: SPACING.sm,
     borderRadius: BORDER_RADIUS.md,
@@ -391,6 +429,51 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.sm,
     fontWeight: '700',
     color: COLORS.white,
+  },
+  vendorWrapper: {
+    paddingHorizontal: SPACING.lg,
+    marginBottom: SPACING.md,
+  },
+  vendorCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.white,
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING.md,
+    ...SHADOWS.small,
+  },
+  vendorIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: BORDER_RADIUS.full,
+    backgroundColor: COLORS.emerald,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: SPACING.md,
+  },
+  vendorDetails: {
+    flex: 1,
+  },
+  vendorName: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: '600',
+    color: COLORS.ink,
+  },
+  vendorCategory: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.gray600,
+    marginTop: SPACING.xs,
+  },
+  vendorMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+    marginTop: SPACING.xs,
+  },
+  vendorMetaText: {
+    fontSize: FONT_SIZES.xs,
+    color: COLORS.emerald,
+    fontWeight: '600',
   },
 });
 

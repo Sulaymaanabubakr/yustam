@@ -1,6 +1,7 @@
 import React from 'react';
-import { View, TouchableOpacity, StyleSheet, Text } from 'react-native';
+import { View, TouchableOpacity, StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { COLORS, FONT_SIZES, BORDER_RADIUS, SHADOWS } from '../constants/theme';
 import VendorHomeScreen from '../screens/vendor/VendorHomeScreen';
 import ChatScreen from '../screens/buyer/ChatScreen';
@@ -16,7 +17,7 @@ interface VendorTabNavigatorProps {
 
 const VendorTabNavigator: React.FC<VendorTabNavigatorProps> = ({ onLogout }) => {
   return (
-    <View style={{ flex: 1 }}>
+    <View style={styles.container}>
       <Tab.Navigator
         screenOptions={{
           tabBarActiveTintColor: COLORS.orange,
@@ -37,27 +38,35 @@ const VendorTabNavigator: React.FC<VendorTabNavigatorProps> = ({ onLogout }) => 
           name="Home"
           component={VendorHomeScreen}
           options={{
-            tabBarIcon: ({ color }) => <TabIcon icon="🏠" color={color} />,
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="home" size={size} color={color} />
+            ),
           }}
         />
         <Tab.Screen
           name="Chats"
           component={ChatScreen}
           options={{
-            tabBarIcon: ({ color }) => <TabIcon icon="💬" color={color} />,
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="chatbubble-outline" size={size} color={color} />
+            ),
           }}
         />
         <Tab.Screen
           name="Listings"
           component={VendorListingsScreen}
           options={{
-            tabBarIcon: ({ color }) => <TabIcon icon="📦" color={color} />,
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="pricetag" size={size} color={color} />
+            ),
           }}
         />
         <Tab.Screen
           name="Profile"
           options={{
-            tabBarIcon: ({ color }) => <TabIcon icon="👤" color={color} />,
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="person" size={size} color={color} />
+            ),
           }}
         >
           {() => <ProfileScreen onLogout={onLogout} />}
@@ -65,26 +74,30 @@ const VendorTabNavigator: React.FC<VendorTabNavigatorProps> = ({ onLogout }) => 
         <Tab.Screen
           name="Settings"
           options={{
-            tabBarIcon: ({ color }) => <TabIcon icon="⚙️" color={color} />,
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="settings" size={size} color={color} />
+            ),
           }}
         >
           {() => <VendorSettingsScreen onLogout={onLogout} />}
         </Tab.Screen>
       </Tab.Navigator>
 
-      {/* Floating Add Button */}
-      <TouchableOpacity style={styles.floatingButton}>
-        <Text style={styles.floatingButtonText}>+</Text>
+      <TouchableOpacity
+        style={styles.floatingButton}
+        accessibilityRole="button"
+        accessibilityLabel="Create listing"
+      >
+        <Ionicons name="add" size={32} color={COLORS.white} />
       </TouchableOpacity>
     </View>
   );
 };
 
-const TabIcon: React.FC<{ icon: string; color: string }> = ({ icon }) => {
-  return <Text style={{ fontSize: 24 }}>{icon}</Text>;
-};
-
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
   floatingButton: {
     position: 'absolute',
     bottom: 80,
@@ -96,11 +109,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     ...SHADOWS.large,
-  },
-  floatingButtonText: {
-    fontSize: 32,
-    color: COLORS.white,
-    fontWeight: 'bold',
   },
 });
 

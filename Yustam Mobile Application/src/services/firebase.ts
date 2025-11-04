@@ -11,12 +11,13 @@ import {
 
 // Firebase configuration (replace with your actual config)
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_AUTH_DOMAIN",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_STORAGE_BUCKET",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyBQ74sMmOiYEvkxa26Movh0DAnmc0Jz60g",
+  authDomain: "yustam-50819.firebaseapp.com",
+  projectId: "yustam-50819",
+  storageBucket: "yustam-50819.firebasestorage.app",
+  messagingSenderId: "472601563195",
+  appId: "1:472601563195:web:4de5b5208650251ea20c1e",
+  measurementId: "G-G9ZXVBPFYM"
 };
 
 // Initialize Firebase

@@ -10,6 +10,7 @@ import {
   Alert,
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, SHADOWS } from '../../constants/theme';
 import { signUp } from '../../services/firebase';
 import { saveUserData, UserData } from '../../services/storage';
@@ -18,7 +19,6 @@ interface RegisterFormProps {
   userRole: 'buyer' | 'vendor';
   onSuccess: () => void;
 }
-
 const CATEGORIES = [
   'Phones & Tablets',
   'Electronics',
@@ -33,7 +33,6 @@ const CATEGORIES = [
   'Services',
   'Others',
 ];
-
 const RegisterForm: React.FC<RegisterFormProps> = ({ userRole, onSuccess }) => {
   // Common fields
   const [fullName, setFullName] = useState('');
@@ -41,65 +40,51 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ userRole, onSuccess }) => {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-
   // Vendor-specific fields
   const [businessName, setBusinessName] = useState('');
   const [category, setCategory] = useState('');
   const [description, setDescription] = useState('');
   const [address, setAddress] = useState('');
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [agreedToTerms, setAgreedToTerms] = useState(false);
-
   const validateForm = (): boolean => {
     if (!fullName.trim() || !email.trim() || !phone.trim() || !password || !confirmPassword) {
       setError('Please fill in all required fields');
       return false;
     }
-
     if (!email.includes('@')) {
       setError('Please enter a valid email address');
       return false;
     }
-
     if (password.length < 6) {
       setError('Password must be at least 6 characters');
       return false;
     }
-
     if (password !== confirmPassword) {
       setError('Passwords do not match');
       return false;
     }
-
     if (userRole === 'vendor') {
       if (!businessName.trim() || !category) {
         setError('Please complete all vendor fields');
         return false;
       }
     }
-
     if (!agreedToTerms) {
       setError('Please agree to the terms and conditions');
       return false;
     }
-
     return true;
   };
-
   const handleRegister = async () => {
     setError('');
-
     if (!validateForm()) {
       return;
     }
-
     setLoading(true);
-
     try {
       const result = await signUp(email, password);
-
       if (result.success && result.user) {
         // Save user data
         const userData: UserData = {
@@ -124,11 +109,9 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ userRole, onSuccess }) => {
       setLoading(false);
     }
   };
-
   const handleGoogleSignUp = async () => {
     Alert.alert('Google Sign-Up', 'Google Sign-Up will be configured with your Firebase project.');
   };
-
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       {/* Full Name */}
@@ -142,7 +125,6 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ userRole, onSuccess }) => {
           autoCapitalize="words"
         />
       </View>
-
       {/* Email */}
       <View style={styles.inputGroup}>
         <Text style={styles.label}>Email Address *</Text>
@@ -156,7 +138,6 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ userRole, onSuccess }) => {
           autoCorrect={false}
         />
       </View>
-
       {/* Phone */}
       <View style={styles.inputGroup}>
         <Text style={styles.label}>Phone Number *</Text>
@@ -168,7 +149,6 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ userRole, onSuccess }) => {
           keyboardType="phone-pad"
         />
       </View>
-
       {/* Password */}
       <View style={styles.inputGroup}>
         <Text style={styles.label}>Password *</Text>
@@ -181,7 +161,6 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ userRole, onSuccess }) => {
           autoCapitalize="none"
         />
       </View>
-
       {/* Confirm Password */}
       <View style={styles.inputGroup}>
         <Text style={styles.label}>Confirm Password *</Text>
@@ -194,7 +173,6 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ userRole, onSuccess }) => {
           autoCapitalize="none"
         />
       </View>
-
       {/* Vendor-specific fields */}
       {userRole === 'vendor' && (
         <>
@@ -207,7 +185,6 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ userRole, onSuccess }) => {
               onChangeText={setBusinessName}
             />
           </View>
-
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Main Category *</Text>
             <View style={styles.pickerContainer}>
@@ -223,7 +200,6 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ userRole, onSuccess }) => {
               </Picker>
             </View>
           </View>
-
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Business Description (Optional)</Text>
             <TextInput
@@ -235,7 +211,6 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ userRole, onSuccess }) => {
               numberOfLines={4}
             />
           </View>
-
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Business Address (Optional)</Text>
             <TextInput
@@ -247,14 +222,15 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ userRole, onSuccess }) => {
           </View>
         </>
       )}
-
       {/* Terms and Conditions */}
       <TouchableOpacity
         style={styles.checkboxContainer}
         onPress={() => setAgreedToTerms(!agreedToTerms)}
       >
         <View style={[styles.checkbox, agreedToTerms && styles.checkboxChecked]}>
-          {agreedToTerms && <Text style={styles.checkmark}>✓</Text>}
+          {agreedToTerms && (
+            <Ionicons name="checkmark" size={16} color={COLORS.white} />
+          )}
         </View>
         <Text style={styles.checkboxLabel}>
           I agree to YUSTAM's{' '}
@@ -262,9 +238,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ userRole, onSuccess }) => {
           <Text style={styles.link}>Privacy Policy</Text>
         </Text>
       </TouchableOpacity>
-
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
-
       <TouchableOpacity
         style={[styles.registerButton, loading && styles.disabledButton]}
         onPress={handleRegister}
@@ -276,23 +250,28 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ userRole, onSuccess }) => {
           <Text style={styles.registerButtonText}>Create Account</Text>
         )}
       </TouchableOpacity>
-
       <View style={styles.divider}>
         <View style={styles.dividerLine} />
         <Text style={styles.dividerText}>or</Text>
         <View style={styles.dividerLine} />
       </View>
-
-      <TouchableOpacity style={styles.googleButton} onPress={handleGoogleSignUp}>
-        <Text style={styles.googleIcon}>🔐</Text>
+      <TouchableOpacity
+        style={styles.googleButton}
+        onPress={handleGoogleSignUp}
+        accessibilityRole="button"
+      >
+        <Ionicons
+          name="logo-google"
+          size={20}
+          color={COLORS.orange}
+          style={styles.googleIcon}
+        />
         <Text style={styles.googleButtonText}>Sign up with Google</Text>
       </TouchableOpacity>
-
       <View style={styles.spacer} />
     </ScrollView>
   );
 };
-
 const styles = StyleSheet.create({
   container: {
     width: '100%',
@@ -347,11 +326,6 @@ const styles = StyleSheet.create({
   checkboxChecked: {
     backgroundColor: COLORS.orange,
     borderColor: COLORS.orange,
-  },
-  checkmark: {
-    color: COLORS.white,
-    fontSize: FONT_SIZES.md,
-    fontWeight: 'bold',
   },
   checkboxLabel: {
     flex: 1,
@@ -411,7 +385,6 @@ const styles = StyleSheet.create({
     ...SHADOWS.small,
   },
   googleIcon: {
-    fontSize: FONT_SIZES.xl,
     marginRight: SPACING.sm,
   },
   googleButtonText: {
@@ -423,5 +396,4 @@ const styles = StyleSheet.create({
     height: SPACING.xxl,
   },
 });
-
 export default RegisterForm;

@@ -6,20 +6,39 @@ import {
   ScrollView,
   TouchableOpacity,
 } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, SHADOWS } from '../../constants/theme';
-import { getUserData } from '../../services/storage';
+import { getUserData, type UserData } from '../../services/storage';
+
+const quickActions = [
+  {
+    id: 'add-product',
+    label: 'Add New Product',
+    icon: 'add-circle-outline' as const,
+  },
+  {
+    id: 'view-analytics',
+    label: 'View Analytics',
+    icon: 'analytics-outline' as const,
+  },
+  {
+    id: 'customer-messages',
+    label: 'Customer Messages',
+    icon: 'chatbubble-ellipses-outline' as const,
+  },
+];
 
 const VendorHomeScreen: React.FC = () => {
-  const [userData, setUserData] = React.useState<any>(null);
+  const [userData, setUserData] = React.useState<UserData | null>(null);
 
   React.useEffect(() => {
+    const loadUserData = async () => {
+      const data = await getUserData();
+      setUserData(data);
+    };
+
     loadUserData();
   }, []);
-
-  const loadUserData = async () => {
-    const data = await getUserData();
-    setUserData(data);
-  };
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -28,12 +47,12 @@ const VendorHomeScreen: React.FC = () => {
         <Text style={styles.businessName}>{userData?.businessName || 'Vendor'}</Text>
         {userData?.verified && (
           <View style={styles.verificationBadge}>
-            <Text style={styles.badgeText}>✓ Verified</Text>
+            <Ionicons name='shield-checkmark' size={16} color={COLORS.white} />
+            <Text style={styles.badgeText}>Verified</Text>
           </View>
         )}
       </View>
 
-      {/* Stats Cards */}
       <View style={styles.statsContainer}>
         <View style={styles.statCard}>
           <Text style={styles.statNumber}>0</Text>
@@ -45,30 +64,26 @@ const VendorHomeScreen: React.FC = () => {
         </View>
       </View>
 
-      {/* Plan Info */}
       <View style={styles.planCard}>
-        <Text style={styles.planTitle}>Current Plan</Text>
-        <Text style={styles.planName}>{userData?.plan || 'Free Plan'}</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.planTitle}>Current Plan</Text>
+          <Text style={styles.planName}>{userData?.plan || 'Free Plan'}</Text>
+          <Text style={styles.planSubtitle}>Unlock more visibility with premium plans.</Text>
+        </View>
         <TouchableOpacity style={styles.upgradeButton}>
           <Text style={styles.upgradeText}>Upgrade Plan</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Quick Actions */}
       <View style={styles.actionsContainer}>
         <Text style={styles.sectionTitle}>Quick Actions</Text>
-        <TouchableOpacity style={styles.actionButton}>
-          <Text style={styles.actionIcon}>📦</Text>
-          <Text style={styles.actionText}>Add New Product</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.actionButton}>
-          <Text style={styles.actionIcon}>📊</Text>
-          <Text style={styles.actionText}>View Analytics</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.actionButton}>
-          <Text style={styles.actionIcon}>💬</Text>
-          <Text style={styles.actionText}>Customer Messages</Text>
-        </TouchableOpacity>
+        {quickActions.map((action) => (
+          <TouchableOpacity key={action.id} style={styles.actionButton}>
+            <Ionicons name={action.icon} size={22} color={COLORS.emerald} />
+            <Text style={styles.actionText}>{action.label}</Text>
+            <Ionicons name='chevron-forward' size={18} color={COLORS.gray400} />
+          </TouchableOpacity>
+        ))}
       </View>
     </ScrollView>
   );
@@ -81,28 +96,31 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: SPACING.lg,
-    paddingTop: SPACING.xxl + 10,
+    paddingTop: SPACING.xxl,
+    paddingBottom: SPACING.xxl,
+    gap: SPACING.xl,
   },
   header: {
-    marginBottom: SPACING.xl,
+    gap: SPACING.xs,
   },
   greeting: {
-    fontSize: FONT_SIZES.lg,
+    fontSize: FONT_SIZES.md,
     color: COLORS.gray600,
   },
   businessName: {
     fontSize: FONT_SIZES.xxxl,
     fontWeight: 'bold',
     color: COLORS.emerald,
-    marginTop: SPACING.xs,
   },
   verificationBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
     backgroundColor: COLORS.success,
     alignSelf: 'flex-start',
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.xs,
     borderRadius: BORDER_RADIUS.full,
-    marginTop: SPACING.sm,
   },
   badgeText: {
     color: COLORS.white,
@@ -112,7 +130,6 @@ const styles = StyleSheet.create({
   statsContainer: {
     flexDirection: 'row',
     gap: SPACING.md,
-    marginBottom: SPACING.xl,
   },
   statCard: {
     flex: 1,
@@ -132,30 +149,35 @@ const styles = StyleSheet.create({
     color: COLORS.gray600,
   },
   planCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.lg,
     backgroundColor: COLORS.emerald,
     borderRadius: BORDER_RADIUS.xl,
     padding: SPACING.lg,
-    marginBottom: SPACING.xl,
     ...SHADOWS.large,
   },
   planTitle: {
     fontSize: FONT_SIZES.sm,
     color: COLORS.white,
-    opacity: 0.8,
-    marginBottom: SPACING.xs,
+    opacity: 0.85,
   },
   planName: {
     fontSize: FONT_SIZES.xxl,
-    fontWeight: 'bold',
+    fontWeight: '700',
     color: COLORS.white,
-    marginBottom: SPACING.md,
+    marginVertical: SPACING.xs,
+  },
+  planSubtitle: {
+    fontSize: FONT_SIZES.sm,
+    color: COLORS.white,
+    opacity: 0.9,
   },
   upgradeButton: {
     backgroundColor: COLORS.orange,
-    paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.sm,
     borderRadius: BORDER_RADIUS.md,
-    alignSelf: 'flex-start',
   },
   upgradeText: {
     color: COLORS.white,
@@ -163,28 +185,24 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   actionsContainer: {
-    marginBottom: SPACING.xl,
+    gap: SPACING.md,
   },
   sectionTitle: {
     fontSize: FONT_SIZES.xl,
     fontWeight: 'bold',
     color: COLORS.ink,
-    marginBottom: SPACING.md,
   },
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: SPACING.md,
     backgroundColor: COLORS.white,
     borderRadius: BORDER_RADIUS.lg,
     padding: SPACING.md,
-    marginBottom: SPACING.md,
     ...SHADOWS.small,
   },
-  actionIcon: {
-    fontSize: 24,
-    marginRight: SPACING.md,
-  },
   actionText: {
+    flex: 1,
     fontSize: FONT_SIZES.md,
     fontWeight: '600',
     color: COLORS.ink,

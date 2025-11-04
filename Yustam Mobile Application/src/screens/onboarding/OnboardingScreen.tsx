@@ -8,36 +8,39 @@ import {
   TouchableOpacity,
   Animated,
 } from 'react-native';
-import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS } from '../../constants/theme';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, SHADOWS } from '../../constants/theme';
 import { setOnboardingComplete, saveUserRole } from '../../services/storage';
 
 const { width } = Dimensions.get('window');
+
+type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
 interface OnboardingSlide {
   id: string;
   title: string;
   description: string;
-  emoji: string;
+  icon: IoniconName;
 }
 
 const slides: OnboardingSlide[] = [
   {
-    id: '1',
+    id: 'buyers',
     title: 'Buy from Verified Vendors',
     description: 'Shop with confidence from trusted sellers across Nigeria.',
-    emoji: '🛍️',
+    icon: 'shield-checkmark',
   },
   {
-    id: '2',
+    id: 'sellers',
     title: 'Sell Smarter & Grow',
     description: 'Reach thousands of buyers and grow your business faster.',
-    emoji: '📈',
+    icon: 'trending-up',
   },
   {
-    id: '3',
+    id: 'community',
     title: 'Join the Community',
     description: "Nigeria's most trusted marketplace. Let's get started!",
-    emoji: '🤝',
+    icon: 'people-circle',
   },
 ];
 
@@ -47,20 +50,17 @@ interface OnboardingScreenProps {
 
 const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
-  const flatListRef = useRef<FlatList>(null);
+  const flatListRef = useRef<FlatList<OnboardingSlide>>(null);
   const scrollX = useRef(new Animated.Value(0)).current;
 
   const handleNext = () => {
     if (currentIndex < slides.length - 1) {
-      flatListRef.current?.scrollToIndex({
-        index: currentIndex + 1,
-      });
+      flatListRef.current?.scrollToIndex({ index: currentIndex + 1 });
     }
   };
 
   const handleSkip = async () => {
     await setOnboardingComplete();
-    // Default to buyer if skipped
     await saveUserRole('buyer');
     onComplete('buyer');
   };
@@ -73,7 +73,9 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }) => {
 
   const renderItem = ({ item }: { item: OnboardingSlide }) => (
     <View style={styles.slide}>
-      <Text style={styles.emoji}>{item.emoji}</Text>
+      <View style={styles.iconBadge}>
+        <Ionicons name={item.icon} size={72} color={COLORS.orange} />
+      </View>
       <Text style={styles.title}>{item.title}</Text>
       <Text style={styles.description}>{item.description}</Text>
     </View>
@@ -110,6 +112,8 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }) => {
     </View>
   );
 
+  const isLastSlide = currentIndex === slides.length - 1;
+
   return (
     <View style={styles.container}>
       <FlatList
@@ -119,6 +123,7 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }) => {
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
+        keyExtractor={(item) => item.id}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { x: scrollX } } }],
           { useNativeDriver: false }
@@ -127,36 +132,41 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }) => {
           const index = Math.round(event.nativeEvent.contentOffset.x / width);
           setCurrentIndex(index);
         }}
-        keyExtractor={(item) => item.id}
       />
 
       {renderPagination()}
 
-      {currentIndex < slides.length - 1 ? (
+      {isLastSlide ? (
+        <View style={styles.roleSelectionContainer}>
+          <Text style={styles.roleTitle}>How would you like to use YUSTAM?</Text>
+          <TouchableOpacity
+            style={[styles.roleButton, styles.buyerButton]}
+            onPress={() => handleRoleSelection('buyer')}
+          >
+            <Ionicons name="cart" size={24} color={COLORS.white} />
+            <View style={styles.roleTextWrapper}>
+              <Text style={styles.roleButtonText}>I am a Buyer</Text>
+              <Text style={styles.roleButtonSubtext}>Shop from verified vendors</Text>
+            </View>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.roleButton, styles.vendorButton]}
+            onPress={() => handleRoleSelection('vendor')}
+          >
+            <Ionicons name="storefront" size={24} color={COLORS.white} />
+            <View style={styles.roleTextWrapper}>
+              <Text style={styles.roleButtonText}>I am a Vendor</Text>
+              <Text style={styles.roleButtonSubtext}>Sell and grow your business</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+      ) : (
         <View style={styles.navigationContainer}>
           <TouchableOpacity onPress={handleSkip} style={styles.skipButton}>
             <Text style={styles.skipText}>Skip</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={handleNext} style={styles.nextButton}>
             <Text style={styles.nextText}>Next</Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <View style={styles.roleSelectionContainer}>
-          <Text style={styles.roleTitle}>Continue as:</Text>
-          <TouchableOpacity
-            onPress={() => handleRoleSelection('buyer')}
-            style={[styles.roleButton, styles.buyerButton]}
-          >
-            <Text style={styles.roleButtonText}>🛒 Buyer</Text>
-            <Text style={styles.roleButtonSubtext}>Shop from verified vendors</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => handleRoleSelection('vendor')}
-            style={[styles.roleButton, styles.vendorButton]}
-          >
-            <Text style={styles.roleButtonText}>🏪 Vendor</Text>
-            <Text style={styles.roleButtonSubtext}>Sell and grow your business</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -176,8 +186,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: SPACING.xl,
   },
-  emoji: {
-    fontSize: 100,
+  iconBadge: {
+    width: 120,
+    height: 120,
+    borderRadius: BORDER_RADIUS.full,
+    backgroundColor: COLORS.gray100,
+    justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: SPACING.xl,
   },
   title: {
@@ -198,12 +213,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginVertical: SPACING.lg,
+    gap: SPACING.xs,
   },
   dot: {
     height: 10,
     borderRadius: BORDER_RADIUS.full,
     backgroundColor: COLORS.orange,
-    marginHorizontal: 4,
   },
   navigationContainer: {
     flexDirection: 'row',
@@ -234,23 +249,25 @@ const styles = StyleSheet.create({
   roleSelectionContainer: {
     paddingHorizontal: SPACING.xl,
     paddingBottom: SPACING.xxl,
+    gap: SPACING.md,
   },
   roleTitle: {
     fontSize: FONT_SIZES.xxl,
     fontWeight: 'bold',
     color: COLORS.emerald,
     textAlign: 'center',
-    marginBottom: SPACING.lg,
+    marginBottom: SPACING.md,
   },
   roleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.md,
     padding: SPACING.lg,
     borderRadius: BORDER_RADIUS.xl,
-    marginBottom: SPACING.md,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 4,
+    ...SHADOWS.medium,
+  },
+  roleTextWrapper: {
+    flex: 1,
   },
   buyerButton: {
     backgroundColor: COLORS.emerald,
@@ -259,17 +276,15 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.orange,
   },
   roleButtonText: {
-    fontSize: FONT_SIZES.xl,
+    fontSize: FONT_SIZES.lg,
     fontWeight: 'bold',
     color: COLORS.white,
-    textAlign: 'center',
-    marginBottom: SPACING.xs,
   },
   roleButtonSubtext: {
     fontSize: FONT_SIZES.sm,
     color: COLORS.white,
-    textAlign: 'center',
     opacity: 0.9,
+    marginTop: SPACING.xs,
   },
 });
 

@@ -1,6 +1,6 @@
 import React from 'react';
-import { Text } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { COLORS, FONT_SIZES } from '../constants/theme';
 import BuyerHomeScreen from '../screens/buyer/BuyerHomeScreen';
 import SearchScreen from '../screens/buyer/SearchScreen';
@@ -36,44 +36,50 @@ const BuyerTabNavigator: React.FC<BuyerTabNavigatorProps> = ({ onLogout }) => {
         name="Home"
         component={BuyerHomeScreen}
         options={{
-          tabBarIcon: ({ color }) => <TabIcon icon="🏠" color={color} />,
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="home" size={size} color={color} />
+          ),
         }}
       />
       <Tab.Screen
         name="Search"
         component={SearchScreen}
         options={{
-          tabBarIcon: ({ color }) => <TabIcon icon="🔍" color={color} />,
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="search" size={size} color={color} />
+          ),
         }}
       />
       <Tab.Screen
         name="Chat"
         component={ChatScreen}
         options={{
-          tabBarIcon: ({ color }) => <TabIcon icon="💬" color={color} />,
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="chatbubble-ellipses" size={size} color={color} />
+          ),
         }}
       />
       <Tab.Screen
         name="Notifications"
         component={NotificationsScreen}
         options={{
-          tabBarIcon: ({ color }) => <TabIcon icon="🔔" color={color} />,
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="notifications" size={size} color={color} />
+          ),
         }}
       />
       <Tab.Screen
         name="Profile"
         options={{
-          tabBarIcon: ({ color }) => <TabIcon icon="👤" color={color} />,
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="person" size={size} color={color} />
+          ),
         }}
       >
         {() => <ProfileScreen onLogout={onLogout} />}
       </Tab.Screen>
     </Tab.Navigator>
   );
-};
-
-const TabIcon: React.FC<{ icon: string; color: string }> = ({ icon }) => {
-  return <Text style={{ fontSize: 24 }}>{icon}</Text>;
 };
 
 export default BuyerTabNavigator;
