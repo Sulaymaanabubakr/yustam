@@ -27,14 +27,6 @@
     },
     "web": {
       "favicon": "./assets/logo.jpeg"
-    },
-    "plugins": [
-      [
-        "react-native-reanimated",
-        {
-          "relativeSourcePath": true
-        }
-      ]
-    ]
+    }
   }
 }
