@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { COLORS, SPACING, FONT_SIZES, BORDER_RADIUS, SHADOWS } from '../../constants/theme';
 import { signIn } from '../../services/firebase';
 import { saveUserData, UserData } from '../../services/storage';
@@ -26,7 +27,6 @@ const LoginForm: React.FC<LoginFormProps> = ({ userRole, onSuccess }) => {
   const handleLogin = async () => {
     setError('');
 
-    // Validation
     if (!email.trim() || !password.trim()) {
       setError('Please fill in all fields');
       return;
@@ -43,7 +43,6 @@ const LoginForm: React.FC<LoginFormProps> = ({ userRole, onSuccess }) => {
       const result = await signIn(email, password);
 
       if (result.success && result.user) {
-        // Save user data
         const userData: UserData = {
           uid: result.user.uid,
           email: result.user.email || '',
@@ -117,8 +116,17 @@ const LoginForm: React.FC<LoginFormProps> = ({ userRole, onSuccess }) => {
         <View style={styles.dividerLine} />
       </View>
 
-      <TouchableOpacity style={styles.googleButton} onPress={handleGoogleSignIn}>
-        <Text style={styles.googleIcon}>🔐</Text>
+      <TouchableOpacity
+        style={styles.googleButton}
+        onPress={handleGoogleSignIn}
+        accessibilityRole="button"
+      >
+        <Ionicons
+          name="logo-google"
+          size={20}
+          color={COLORS.orange}
+          style={styles.googleIcon}
+        />
         <Text style={styles.googleButtonText}>Sign in with Google</Text>
       </TouchableOpacity>
     </View>
@@ -204,7 +212,6 @@ const styles = StyleSheet.create({
     ...SHADOWS.small,
   },
   googleIcon: {
-    fontSize: FONT_SIZES.xl,
     marginRight: SPACING.sm,
   },
   googleButtonText: {

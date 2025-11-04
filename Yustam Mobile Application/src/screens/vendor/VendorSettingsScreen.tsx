@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { COLORS, FONT_SIZES, SPACING, BORDER_RADIUS, SHADOWS } from '../../constants/theme';
 import { logOut } from '../../services/firebase';
 import { clearAllData } from '../../services/storage';
@@ -7,6 +8,29 @@ import { clearAllData } from '../../services/storage';
 interface VendorSettingsScreenProps {
   onLogout: () => void;
 }
+
+const SETTINGS_OPTIONS = [
+  {
+    id: 'notifications',
+    label: 'Notifications',
+    icon: 'notifications-outline' as const,
+  },
+  {
+    id: 'password',
+    label: 'Change Password',
+    icon: 'key-outline' as const,
+  },
+  {
+    id: 'terms',
+    label: 'Terms & Conditions',
+    icon: 'document-text-outline' as const,
+  },
+  {
+    id: 'privacy',
+    label: 'Privacy Policy',
+    icon: 'shield-checkmark-outline' as const,
+  },
+];
 
 const VendorSettingsScreen: React.FC<VendorSettingsScreenProps> = ({ onLogout }) => {
   const handleLogout = async () => {
@@ -18,34 +42,19 @@ const VendorSettingsScreen: React.FC<VendorSettingsScreenProps> = ({ onLogout })
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Settings</Text>
-      
+
       <View style={styles.settingsGroup}>
-        <TouchableOpacity style={styles.settingItem}>
-          <Text style={styles.settingIcon}>🔔</Text>
-          <Text style={styles.settingText}>Notifications</Text>
-          <Text style={styles.arrow}>→</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity style={styles.settingItem}>
-          <Text style={styles.settingIcon}>🔒</Text>
-          <Text style={styles.settingText}>Change Password</Text>
-          <Text style={styles.arrow}>→</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity style={styles.settingItem}>
-          <Text style={styles.settingIcon}>📄</Text>
-          <Text style={styles.settingText}>Terms & Conditions</Text>
-          <Text style={styles.arrow}>→</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity style={styles.settingItem}>
-          <Text style={styles.settingIcon}>🔐</Text>
-          <Text style={styles.settingText}>Privacy Policy</Text>
-          <Text style={styles.arrow}>→</Text>
-        </TouchableOpacity>
+        {SETTINGS_OPTIONS.map((option) => (
+          <TouchableOpacity key={option.id} style={styles.settingItem}>
+            <Ionicons name={option.icon} size={20} color={COLORS.emerald} />
+            <Text style={styles.settingText}>{option.label}</Text>
+            <Ionicons name="chevron-forward" size={18} color={COLORS.gray400} />
+          </TouchableOpacity>
+        ))}
       </View>
-      
+
       <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+        <Ionicons name="log-out-outline" size={20} color={COLORS.white} />
         <Text style={styles.logoutText}>Logout</Text>
       </TouchableOpacity>
     </View>
@@ -74,13 +83,11 @@ const styles = StyleSheet.create({
   settingItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: SPACING.lg,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.gray200,
-  },
-  settingIcon: {
-    fontSize: 24,
-    marginRight: SPACING.md,
+    gap: SPACING.md,
   },
   settingText: {
     flex: 1,
@@ -88,16 +95,15 @@ const styles = StyleSheet.create({
     color: COLORS.ink,
     fontWeight: '600',
   },
-  arrow: {
-    fontSize: FONT_SIZES.xl,
-    color: COLORS.gray400,
-  },
   logoutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.sm,
     backgroundColor: COLORS.error,
     borderRadius: BORDER_RADIUS.lg,
     padding: SPACING.md,
     marginTop: SPACING.xl,
-    alignItems: 'center',
     ...SHADOWS.medium,
   },
   logoutText: {

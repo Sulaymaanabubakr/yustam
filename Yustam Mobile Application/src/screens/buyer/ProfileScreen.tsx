@@ -3,13 +3,14 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { COLORS, FONT_SIZES, SPACING, BORDER_RADIUS, SHADOWS } from '../../constants/theme';
 import { logOut } from '../../services/firebase';
 import { clearAllData, getUserData } from '../../services/storage';
+import type { UserData } from '../../services/storage';
 
 interface ProfileScreenProps {
   onLogout: () => void;
 }
 
 const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
-  const [userData, setUserData] = React.useState<any>(null);
+  const [userData, setUserData] = React.useState<UserData | null>(null);
 
   React.useEffect(() => {
     loadUserData();
