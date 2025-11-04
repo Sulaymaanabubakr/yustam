@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "YUSTAM Marketplace",
+    "slug": "yustam-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/logo.jpeg",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/logo.jpeg",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.yustam.marketplace"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/logo.jpeg",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.yustam.marketplace",
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/logo.jpeg"
+    }
+  }
+}
