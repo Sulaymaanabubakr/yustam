@@ -317,9 +317,14 @@ require_admin_auth();
     }
 
     .chip.free { background: rgba(17, 17, 17, 0.08); color: var(--ink); }
-    .chip.plus { border: 1px solid var(--orange); color: var(--orange); background: rgba(243, 115, 30, 0.08); }
+    .chip.starter,
+    .chip.plus,
+    .chip.basic { border: 1px solid var(--orange); color: var(--orange); background: rgba(243, 115, 30, 0.08); }
     .chip.pro { border: 1px solid var(--emerald); color: var(--emerald); background: rgba(0, 77, 64, 0.08); }
+    .chip.elite,
     .chip.premium { background: var(--orange); color: var(--white); }
+    .chip.power,
+    .chip.platinum { background: linear-gradient(120deg, rgba(243, 115, 30, 0.82), rgba(17, 129, 101, 0.82)); color: var(--white); }
 
     .vendor-section {
       display: flex;
@@ -695,7 +700,27 @@ require_admin_auth();
     }
 
     .vendor-chip.plan {
-      background: rgba(0, 77, 64, 0.12);
+      background: rgba(17, 17, 17, 0.08);
+      color: var(--ink);
+    }
+    .vendor-chip.plan-starter,
+    .vendor-chip.plan-plus,
+    .vendor-chip.plan-basic {
+      background: rgba(243, 115, 30, 0.14);
+      color: var(--orange);
+    }
+    .vendor-chip.plan-pro {
+      background: rgba(0, 77, 64, 0.16);
+      color: var(--emerald);
+    }
+    .vendor-chip.plan-elite,
+    .vendor-chip.plan-premium {
+      background: linear-gradient(120deg, rgba(243, 115, 30, 0.18), rgba(0, 77, 64, 0.16));
+      color: var(--emerald);
+    }
+    .vendor-chip.plan-power,
+    .vendor-chip.plan-platinum {
+      background: linear-gradient(120deg, rgba(15, 138, 113, 0.18), rgba(243, 115, 30, 0.16));
       color: var(--emerald);
     }
 
@@ -1079,9 +1104,10 @@ require_admin_auth();
         <select id="planFilter">
           <option value="">All Plans</option>
           <option value="free">Free</option>
-          <option value="plus">Plus</option>
+          <option value="starter">Starter</option>
           <option value="pro">Pro</option>
-          <option value="premium">Premium</option>
+          <option value="elite">Elite</option>
+          <option value="power">Power</option>
         </select>
         <select id="statusFilter">
           <option value="">All Status</option>
@@ -1109,9 +1135,10 @@ require_admin_auth();
         <span class="label">Plan Distribution</span>
         <div class="plan-chips">
           <span class="chip free">Free <span id="freeCount">0</span></span>
-          <span class="chip plus">Plus <span id="plusCount">0</span></span>
+          <span class="chip starter">Starter <span id="starterCount">0</span></span>
           <span class="chip pro">Pro <span id="proCount">0</span></span>
-          <span class="chip premium">Premium <span id="premiumCount">0</span></span>
+          <span class="chip elite">Elite <span id="eliteCount">0</span></span>
+          <span class="chip power">Power <span id="powerCount">0</span></span>
         </div>
       </article>
       <article class="stat-card">
@@ -1157,7 +1184,7 @@ require_admin_auth();
   <footer>© 2025 YUSTAM - All Rights Reserved.</footer>
 
   <script src="theme-manager.js" defer></script>
-  <script src="admin-vendors.js" defer></script>
+  <script type="module" src="admin-vendors.js"></script>
 </body>
 </html>
 

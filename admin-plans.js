@@ -2,6 +2,7 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.4/fireba
     import { getAuth, onAuthStateChanged, signOut, getIdTokenResult } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js';
     import { getFirestore, collection, getDocs, doc, getDoc, updateDoc, addDoc, serverTimestamp, query } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
     import { app as firebaseApp, auth as firebaseAuth, db as firebaseDb } from './firebase.js';
+    import { displayPlanLabel, normalisePlanSlug } from './plan-utils.js';
 
     const app = firebaseApp || initializeApp({});
     const auth = firebaseAuth || getAuth(app);
@@ -47,12 +48,18 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.4/fireba
 
     const planMeta = {
       free: { label:'Free', price:0, className:'plan-free', badge:'free' },
-      plus: { label:'Plus', price:3000, className:'plan-plus', badge:'plus' },
-      pro: { label:'Pro', price:5000, className:'plan-pro', badge:'pro' },
-      premium: { label:'Premium', price:7000, className:'plan-premium', badge:'premium' }
+      starter: { label:'Starter Seller', price:3000, className:'plan-starter', badge:'starter' },
+      pro: { label:'Pro Seller', price:5000, className:'plan-pro', badge:'pro' },
+      elite: { label:'Elite Seller', price:8000, className:'plan-elite', badge:'elite' },
+      power: { label:'Power Vendor', price:15000, className:'plan-power', badge:'power' }
     };
 
     // Utility
+    const resolvePlanLabel = (value) => {
+      const label = displayPlanLabel(value);
+      return label.toLowerCase().startsWith('free') ? 'Free' : label;
+    };
+
     const currency = new Intl.NumberFormat('en-NG', { style:'currency', currency:'NGN', maximumFractionDigits:0 });
 
     function showToast(message, success=true){
@@ -126,9 +133,10 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.4/fireba
       planSelect.innerHTML = `
         <option value="all">All Plans</option>
         <option value="free">Free</option>
-        <option value="plus">Plus</option>
+        <option value="starter">Starter</option>
         <option value="pro">Pro</option>
-        <option value="premium">Premium</option>
+        <option value="elite">Elite</option>
+        <option value="power">Power</option>
       `;
       planSelect.value = activeFilters.plan;
       planSelect.addEventListener('change',(e)=>{
@@ -187,12 +195,14 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.4/fireba
       }
       filtered.forEach(v=>{
         const tr = document.createElement('tr');
-        const planChipClass = `plan-chip ${v.plan === 'plus' ? 'chip-plus' : v.plan === 'pro' ? 'chip-pro' : v.plan === 'premium' ? 'chip-premium' : 'chip-free'}`;
+        const planSlug = normalisePlanSlug(v.plan);
+        const planChipClass = `plan-chip chip-${planSlug}`;
+        const planLabel = planMeta[planSlug]?.label || resolvePlanLabel(planSlug);
         tr.innerHTML = `
           <td>${v.displayName || v.businessName || 'Unnamed Vendor'}</td>
           <td>${v.email || '-'}</td>
           <td>${v.phone || '-'}</td>
-          <td><span class="${planChipClass}">${planMeta[v.plan]?.label || 'Free'}</span></td>
+          <td><span class="${planChipClass}">${planLabel}</span></td>
           <td>${v.planStartDate ? new Date(v.planStartDate.seconds*1000).toLocaleDateString() : '-'}</td>
           <td>${v.planExpiryDate ? new Date(v.planExpiryDate.seconds*1000).toLocaleDateString() : '-'}</td>
           <td>
@@ -207,11 +217,13 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.4/fireba
     }
 
     function updateRevenue(counts){
-      const plusCount = counts.plus || 0;
-      const proCount = counts.pro || 0;
-      const premiumCount = counts.premium || 0;
-      const totalVendors = Object.values(counts).reduce((acc,val)=>acc + val,0);
-      const totalRevenue = (plusCount*3000) + (proCount*5000) + (premiumCount*7000);
+      const totalVendors = Object.values(counts).reduce((acc,val)=>acc + (val || 0),0);
+      const paidSlugs = ['starter','pro','elite','power'];
+      const totalRevenue = paidSlugs.reduce((sum, slug)=>{
+        const price = planMeta[slug]?.price || 0;
+        const quantity = counts[slug] || 0;
+        return sum + (price * quantity);
+      }, 0);
       const annualRevenue = totalRevenue * 12;
       const avgRevenue = totalVendors ? totalRevenue/Math.max(totalVendors,1) : 0;
 
@@ -223,10 +235,28 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.4/fireba
 
     function renderChart(counts){
       const ctx = document.getElementById('planChart').getContext('2d');
-      const data = [counts.free || 0, counts.plus || 0, counts.pro || 0, counts.premium || 0];
-      const labels = ['Free','Plus','Pro','Premium'];
+      const order = ['free','starter','pro','elite','power'];
+      const data = order.map((slug)=> counts[slug] || 0);
+      const labels = order.map((slug)=> planMeta[slug]?.label || displayPlanLabel(slug));
+      const backgroundColor = [
+        'rgba(17,17,17,0.2)',
+        'rgba(243,115,30,0.25)',
+        'rgba(0,105,92,0.28)',
+        'rgba(243,115,30,0.5)',
+        'rgba(17,129,101,0.35)'
+      ];
+      const borderColor = [
+        'rgba(17,17,17,0.35)',
+        'rgba(243,115,30,0.45)',
+        'rgba(0,105,92,0.48)',
+        'rgba(243,115,30,0.7)',
+        'rgba(17,129,101,0.55)'
+      ];
       if(planChart){
+        planChart.data.labels = labels;
         planChart.data.datasets[0].data = data;
+        planChart.data.datasets[0].backgroundColor = backgroundColor;
+        planChart.data.datasets[0].borderColor = borderColor;
         planChart.update();
       } else {
         planChart = new window.Chart(ctx, {
@@ -235,12 +265,8 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.4/fireba
             labels,
             datasets:[{
               data,
-              backgroundColor:[
-                'rgba(17,17,17,0.2)',
-                'rgba(243,115,30,0.8)',
-                'rgba(0,105,92,0.8)',
-                'rgba(243,115,30,1)'
-              ],
+              backgroundColor,
+              borderColor,
               borderWidth:1,
               hoverOffset:8
             }]
@@ -258,7 +284,7 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.4/fireba
       labels.forEach((label, index)=>{
         const item = document.createElement('span');
         item.className = 'legend-item';
-        item.innerHTML = `<span class="legend-dot" style="background:${planChart.data.datasets[0].backgroundColor[index]}"></span>${label}`;
+        item.innerHTML = `<span class="legend-dot" style="background:${backgroundColor[index]}"></span>${label}`;
         legend.appendChild(item);
       });
     }
@@ -325,12 +351,22 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.4/fireba
         const vendorsCol = collection(db,'vendors');
         const q = query(vendorsCol);
         const snapshot = await getDocs(q);
-        vendorData = snapshot.docs.map(docSnap=>({ id:docSnap.id, ...docSnap.data() }));
+        vendorData = snapshot.docs.map((docSnap)=>{
+          const payload = { id:docSnap.id, ...docSnap.data() };
+          const planSlug = normalisePlanSlug(payload.plan);
+          const planLabel = resolvePlanLabel(payload.plan);
+          return {
+            ...payload,
+            planRaw: payload.plan,
+            plan: planSlug,
+            planLabel,
+          };
+        });
         const counts = vendorData.reduce((acc,v)=>{
-          const plan = (v.plan || 'free').toLowerCase();
+          const plan = v.plan || 'free';
           acc[plan] = (acc[plan] || 0) + 1;
           return acc;
-        }, { free:0, plus:0, pro:0, premium:0 });
+        }, { free:0, starter:0, pro:0, elite:0, power:0 });
 
         renderMetricCards(counts);
         renderControls();

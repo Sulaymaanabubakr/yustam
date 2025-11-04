@@ -24,53 +24,112 @@ if (defined('YUSTAM_VENDORS_TABLE') && preg_match('/^[A-Za-z0-9_]+$/', (string) 
 }
 
 $planPriceMap = [
-    'plus' => 3000,
+    'starter' => 3000,
     'pro' => 5000,
-    'premium' => 7000,
+    'elite' => 8000,
+    'power' => 15000,
 ];
+
+/**
+ * Convert a stored plan value into a canonical slug.
+ */
+function yustam_canonical_plan_slug($value): string
+{
+    $raw = strtolower(trim((string) $value));
+    if ($raw === '') {
+        return 'free';
+    }
+
+    $raw = preg_replace('/plan$/', '', $raw);
+    $raw = preg_replace('/[^a-z0-9]+/', '-', $raw);
+    $raw = trim((string) $raw, '-');
+
+    if ($raw === '') {
+        return 'free';
+    }
+
+    static $aliasMap = [
+        'free' => 'free',
+        'free-seller' => 'free',
+        'free-vendor' => 'free',
+        'starter' => 'starter',
+        'starter-seller' => 'starter',
+        'starter-plan' => 'starter',
+        'starter-vendor' => 'starter',
+        'plus' => 'starter',
+        'plus-plan' => 'starter',
+        'plus-seller' => 'starter',
+        'basic' => 'starter',
+        'basic-plan' => 'starter',
+        'basic-seller' => 'starter',
+        'pro' => 'pro',
+        'pro-seller' => 'pro',
+        'pro-plan' => 'pro',
+        'elite' => 'elite',
+        'elite-seller' => 'elite',
+        'elite-plan' => 'elite',
+        'premium' => 'elite',
+        'premium-plan' => 'elite',
+        'power' => 'power',
+        'power-vendor' => 'power',
+        'power-plan' => 'power',
+        'platinum' => 'power',
+        'platinum-plan' => 'power',
+        'platinum-vendor' => 'power',
+    ];
+
+    if (isset($aliasMap[$raw])) {
+        return $aliasMap[$raw];
+    }
+
+    $needles = [
+        'starter' => ['starter', 'plus', 'basic'],
+        'pro' => ['pro'],
+        'elite' => ['elite', 'premium'],
+        'power' => ['power', 'platinum'],
+    ];
+
+    foreach ($needles as $slug => $patterns) {
+        foreach ($patterns as $pattern) {
+            if (str_contains($raw, $pattern)) {
+                return $slug;
+            }
+        }
+    }
+
+    return 'free';
+}
 
 /**
  * Normalise plan names to the dashboard buckets.
  */
 function yustam_normalise_plan_bucket($value): string
 {
-    $value = strtolower(trim((string) $value));
-    if ($value === '' || $value === 'free' || strpos($value, 'starter') !== false) {
-        return 'free';
-    }
-    if (strpos($value, 'plus') !== false) {
-        return 'plus';
-    }
-    if (strpos($value, 'pro') !== false) {
-        return 'pro';
-    }
-    if (strpos($value, 'premium') !== false || strpos($value, 'elite') !== false) {
-        return 'premium';
-    }
-    return 'free';
+    return yustam_canonical_plan_slug($value);
+}
+
+function yustam_plan_label_from_slug(string $slug): string
+{
+    static $labels = [
+        'free' => 'Free',
+        'starter' => 'Starter Seller',
+        'pro' => 'Pro Seller',
+        'elite' => 'Elite Seller',
+        'power' => 'Power Vendor',
+    ];
+
+    return $labels[$slug] ?? 'Free';
 }
 
 function yustam_format_plan_label(?string $plan): string
 {
-    $plan = trim((string) $plan);
-    if ($plan === '') {
-        return 'Free';
-    }
-
-    $plan = preg_replace('/\s*Plan$/i', '', $plan);
-    $plan = preg_replace('/\s{2,}/', ' ', $plan);
-
-    return trim($plan) !== '' ? trim($plan) : 'Free';
+    $slug = yustam_canonical_plan_slug($plan);
+    return yustam_plan_label_from_slug($slug);
 }
 
 function yustam_slugify_plan(?string $plan): string
 {
-    $plan = strtolower(trim((string) $plan));
-    $plan = preg_replace('/plan$/', '', $plan);
-    $plan = preg_replace('/[^a-z0-9]+/', '-', $plan);
-    $plan = trim((string) $plan, '-');
-
-    return $plan !== '' ? $plan : 'free';
+    return yustam_canonical_plan_slug($plan);
 }
 
 function yustam_normalise_verification_state($value): string
@@ -146,9 +205,10 @@ function yustam_prepare_vendor_summary(mysqli $db, string $vendorTable, array $p
             'total' => 0,
             'planCounts' => [
                 'free' => 0,
-                'plus' => 0,
+                'starter' => 0,
                 'pro' => 0,
-                'premium' => 0,
+                'elite' => 0,
+                'power' => 0,
             ],
             'activePlans' => 0,
             'revenue' => 0,
@@ -168,6 +228,9 @@ function yustam_prepare_vendor_summary(mysqli $db, string $vendorTable, array $p
         if ($planResult instanceof mysqli_result) {
             while ($row = $planResult->fetch_assoc()) {
                 $bucket = yustam_normalise_plan_bucket($row['plan'] ?? '');
+                if (!array_key_exists($bucket, $response['summary']['planCounts'])) {
+                    $response['summary']['planCounts'][$bucket] = 0;
+                }
                 $response['summary']['planCounts'][$bucket] += (int) ($row['total'] ?? 0);
             }
             $planResult->free();
@@ -176,9 +239,10 @@ function yustam_prepare_vendor_summary(mysqli $db, string $vendorTable, array $p
         $response['summary']['planCounts']['free'] = $response['summary']['total'];
     }
 
-    $response['summary']['activePlans'] = $response['summary']['planCounts']['plus']
+    $response['summary']['activePlans'] = $response['summary']['planCounts']['starter']
         + $response['summary']['planCounts']['pro']
-        + $response['summary']['planCounts']['premium'];
+        + $response['summary']['planCounts']['elite']
+        + $response['summary']['planCounts']['power'];
 
     $estimatedRevenue = 0;
     foreach ($planPriceMap as $plan => $price) {

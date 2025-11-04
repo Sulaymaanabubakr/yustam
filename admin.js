@@ -1,4 +1,5 @@
 import { auth, db } from './firebase.js';
+        import { displayPlanLabel, normalisePlanSlug } from './plan-utils.js';
         import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js';
         import { collection, doc, getDoc, setDoc, query, orderBy, limit, onSnapshot, updateDoc, addDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
 
@@ -21,9 +22,10 @@ import { auth, db } from './firebase.js';
 
         const planCountsEls = {
             free: document.querySelector('[data-plan-count="free"]'),
-            plus: document.querySelector('[data-plan-count="plus"]'),
+            starter: document.querySelector('[data-plan-count="starter"]'),
             pro: document.querySelector('[data-plan-count="pro"]'),
-            premium: document.querySelector('[data-plan-count="premium"]')
+            elite: document.querySelector('[data-plan-count="elite"]'),
+            power: document.querySelector('[data-plan-count="power"]')
         };
 
         const vendorDirectory = new Map();
@@ -77,9 +79,10 @@ import { auth, db } from './firebase.js';
         };
 
         const PLAN_PRICING = {
-            plus: 3000,
+            starter: 3000,
             pro: 5000,
-            premium: 7000
+            elite: 8000,
+            power: 15000
         };
 
         const escapeHtml = (value) => String(value ?? '')
@@ -89,20 +92,11 @@ import { auth, db } from './firebase.js';
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#39;');
 
-        const slugifyPlan = (plan) => {
-            if (!plan) return 'free';
-            return String(plan)
-                .toLowerCase()
-                .replace(/plan/g, '')
-                .replace(/[^a-z0-9]+/g, '-')
-                .replace(/(^-+|-+$)/g, '') || 'free';
-        };
+        const slugifyPlan = (plan) => normalisePlanSlug(plan);
 
         const formatPlanLabel = (plan) => {
-            if (!plan) return 'Free';
-            const trimmed = String(plan).trim();
-            if (!trimmed) return 'Free';
-            return trimmed.replace(/\s*Plan$/i, '').replace(/\s{2,}/g, ' ').trim() || 'Free';
+            const label = displayPlanLabel(plan);
+            return label.toLowerCase().startsWith('free') ? 'Free' : label;
         };
 
         const formatStatusLabel = (status) => {
@@ -333,9 +327,10 @@ import { auth, db } from './firebase.js';
         const applyPlanSummary = (summary = {}) => {
             const counts = {
                 free: 0,
-                plus: 0,
+                starter: 0,
                 pro: 0,
-                premium: 0,
+                elite: 0,
+                power: 0,
                 ...(summary.planCounts || {}),
             };
             Object.entries(counts).forEach(([plan, count]) => {
@@ -343,9 +338,14 @@ import { auth, db } from './firebase.js';
                     planCountsEls[plan].textContent = count.toString();
                 }
             });
-            const revenue = summary.revenue ?? ((counts.plus * PLAN_PRICING.plus) + (counts.pro * PLAN_PRICING.pro) + (counts.premium * PLAN_PRICING.premium));
+            const revenue = summary.revenue ?? (
+                (counts.starter * (PLAN_PRICING.starter || 0)) +
+                (counts.pro * (PLAN_PRICING.pro || 0)) +
+                (counts.elite * (PLAN_PRICING.elite || 0)) +
+                (counts.power * (PLAN_PRICING.power || 0))
+            );
             revenueTotal.textContent = formatCurrency(revenue);
-            const activePlans = summary.activePlans ?? (counts.plus + counts.pro + counts.premium);
+            const activePlans = summary.activePlans ?? (counts.starter + counts.pro + counts.elite + counts.power);
             statsElements.activePlans.textContent = activePlans.toString();
             statsElements.revenue.textContent = formatCurrency(revenue);
         };

@@ -494,9 +494,14 @@ require_admin_auth();
         }
 
         .plan-free { background: rgba(0, 0, 0, 0.08); color: rgba(17,17,17,0.7); }
-        .plan-plus { background: rgba(243, 115, 30, 0.16); color: var(--orange); }
+        .plan-starter,
+        .plan-plus,
+        .plan-basic { background: rgba(243, 115, 30, 0.16); color: var(--orange); }
         .plan-pro { background: rgba(0, 77, 64, 0.16); color: var(--emerald); }
+        .plan-elite,
         .plan-premium { background: linear-gradient(90deg, rgba(0,77,64,0.22), rgba(243,115,30,0.22)); color: var(--emerald); }
+        .plan-power,
+        .plan-platinum { background: linear-gradient(120deg, rgba(243,115,30,0.22), rgba(17,129,101,0.22)); color: var(--orange); }
 
         /* Plans Snapshot */
         .plans-snapshot {
@@ -769,7 +774,7 @@ require_admin_auth();
                             <div class="stat-icon"><i class="ri-flashlight-line"></i></div>
                             <span class="stat-title">Active Paid Plans</span>
                             <span class="stat-value" data-stat="activePlans">0</span>
-                            <small>Plus, Pro &amp; Premium vendors</small>
+                            <small>Starter, Pro, Elite &amp; Power vendors</small>
                         </article>
                         <article class="stat-card">
                             <div class="stat-icon"><i class="ri-money-naira-circle-line"></i></div>
@@ -812,9 +817,10 @@ require_admin_auth();
                     <div class="plans-snapshot">
                         <div class="plans-grid">
                             <div class="plan-row"><span>Free Vendors</span><span data-plan-count="free">0</span></div>
-                            <div class="plan-row"><span>Plus Vendors</span><span data-plan-count="plus">0</span></div>
+                            <div class="plan-row"><span>Starter Vendors</span><span data-plan-count="starter">0</span></div>
                             <div class="plan-row"><span>Pro Vendors</span><span data-plan-count="pro">0</span></div>
-                            <div class="plan-row"><span>Premium Vendors</span><span data-plan-count="premium">0</span></div>
+                            <div class="plan-row"><span>Elite Vendors</span><span data-plan-count="elite">0</span></div>
+                            <div class="plan-row"><span>Power Vendors</span><span data-plan-count="power">0</span></div>
                         </div>
                         <div>
                             <span class="stat-title">Estimated Monthly Revenue</span>
