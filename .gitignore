@@ -9,3 +9,11 @@ firebase-admin-key.json
 .env.*
 *.env.local
 
+# Node modules
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+
