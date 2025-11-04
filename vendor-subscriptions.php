@@ -168,7 +168,7 @@ function yustam_paystack_public_key(): string {
     yustam_paystack_load_env();
     $key = getenv('PAYSTACK_PUBLIC_KEY');
     if ($key === false || trim($key) === '') {
-        $key = defined('PAYSTACK_PUBLIC_KEY') ? PAYSTACK_PUBLIC_KEY : '';
+        $key = defined('PAYSTACK_PUBLIC_KEY') ? constant('PAYSTACK_PUBLIC_KEY') : '';
     }
     return yustam_paystack_filter_key($key);
 }
@@ -177,7 +177,7 @@ function yustam_paystack_secret_key(): string {
     yustam_paystack_load_env();
     $key = getenv('PAYSTACK_SECRET_KEY');
     if ($key === false || trim($key) === '') {
-        $key = defined('PAYSTACK_SECRET_KEY') ? PAYSTACK_SECRET_KEY : '';
+        $key = defined('PAYSTACK_SECRET_KEY') ? constant('PAYSTACK_SECRET_KEY') : '';
     }
     return yustam_paystack_filter_key($key);
 }
