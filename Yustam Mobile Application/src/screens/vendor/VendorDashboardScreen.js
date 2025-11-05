@@ -226,14 +226,21 @@ const VendorDashboardScreen = ({ navigation }) => {
               title="Add New Listing"
               subtitle="Create a new product"
               color={theme.colors.orange}
-              onPress={() => showToast('Opening listing creator...', 'info')}
+              onPress={() => navigation.navigate('ListingEditor', { listing: null })}
+            />
+            <QuickActionCard
+              icon="list-outline"
+              title="My Listings"
+              subtitle="Manage your products"
+              color={theme.colors.emerald}
+              onPress={() => navigation.navigate('VendorListings')}
             />
             <QuickActionCard
               icon="chatbubbles-outline"
               title="Messages"
               subtitle={`${dashboard.unreadMessages} unread`}
               color="#1976D2"
-              onPress={() => navigation.navigate('Chat')}
+              onPress={() => navigation.navigate('VendorChats')}
             />
             <QuickActionCard
               icon="notifications-outline"

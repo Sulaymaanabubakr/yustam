@@ -135,7 +135,7 @@ const ProfileScreen = ({ navigation }) => {
           <ProfileMenuItem
             icon="create-outline"
             label="Edit Profile"
-            onPress={() => {}}
+            onPress={() => navigation.navigate('EditProfile')}
           />
           
           {role === 'vendor' && (
@@ -153,7 +153,12 @@ const ProfileScreen = ({ navigation }) => {
               <ProfileMenuItem
                 icon="list-outline"
                 label="My Listings"
-                onPress={() => showToast('Opening My Listings...', 'info')}
+                onPress={() => navigation.navigate('VendorListings')}
+              />
+              <ProfileMenuItem
+                icon="chatbubbles-outline"
+                label="Messages"
+                onPress={() => navigation.navigate('VendorChats')}
               />
               <ProfileMenuItem
                 icon="receipt-outline"
@@ -163,7 +168,7 @@ const ProfileScreen = ({ navigation }) => {
               <ProfileMenuItem
                 icon="card-outline"
                 label="Plans & Billing"
-                onPress={() => showToast('Opening Plans...', 'info')}
+                onPress={() => navigation.navigate('Plans')}
               />
               <ProfileMenuItem
                 icon="storefront-outline"
@@ -173,7 +178,7 @@ const ProfileScreen = ({ navigation }) => {
               <ProfileMenuItem
                 icon="shield-checkmark-outline"
                 label="Verification"
-                onPress={() => showToast('Opening Verification...', 'info')}
+                onPress={() => navigation.navigate('Verification')}
               />
             </>
           )}
