@@ -18,6 +18,8 @@ import VendorNotificationsScreen from '../screens/vendor/VendorNotificationsScre
 import HelpSupportScreen from '../screens/vendor/HelpSupportScreen';
 import StorefrontScreen from '../screens/vendor/StorefrontScreen';
 import SettingsScreen from '../screens/vendor/SettingsScreen';
+import VendorListingsScreen from '../screens/vendor/VendorListingsScreen';
+import ListingEditorScreen from '../screens/vendor/ListingEditorScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -73,6 +75,8 @@ const AppNavigator = () => {
             <Stack.Screen name="HelpSupport" component={HelpSupportScreen} />
             <Stack.Screen name="Storefront" component={StorefrontScreen} />
             <Stack.Screen name="Settings" component={SettingsScreen} />
+            <Stack.Screen name="VendorListings" component={VendorListingsScreen} />
+            <Stack.Screen name="ListingEditor" component={ListingEditorScreen} />
           </>
         )}
       </Stack.Navigator>
