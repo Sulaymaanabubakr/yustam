@@ -1,0 +1,514 @@
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  RefreshControl,
+  ActivityIndicator,
+  TouchableOpacity,
+  Image,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '../../context/AuthContext';
+import theme from '../../theme';
+import Toast from '../../components/Toast';
+import Button from '../../components/Button';
+
+const VendorDashboardScreen = ({ navigation }) => {
+  const { user } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [toast, setToast] = useState({ visible: false, message: '', type: 'info' });
+  const [dashboard, setDashboard] = useState({
+    totalListings: 0,
+    activeListings: 0,
+    pendingListings: 0,
+    totalViews: 0,
+    unreadMessages: 0,
+    unreadNotifications: 0,
+    planName: 'Free',
+    planStatus: 'Active',
+    verificationStatus: 'Pending',
+  });
+
+  useEffect(() => {
+    fetchDashboard();
+  }, []);
+
+  const fetchDashboard = async () => {
+    try {
+      setLoading(true);
+      
+      // TODO: Replace with actual API call
+      // const response = await fetch(`https://yustam.com/vendor-dashboard.php?format=json`);
+      // const data = await response.json();
+      
+      // Mock data
+      setTimeout(() => {
+        setDashboard({
+          totalListings: 15,
+          activeListings: 12,
+          pendingListings: 2,
+          totalViews: 1245,
+          unreadMessages: 3,
+          unreadNotifications: 5,
+          planName: 'Premium',
+          planStatus: 'Active',
+          verificationStatus: 'Verified',
+        });
+        setLoading(false);
+      }, 1000);
+    } catch (error) {
+      console.error('Error fetching dashboard:', error);
+      showToast('Failed to load dashboard', 'error');
+      setLoading(false);
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchDashboard();
+    setRefreshing(false);
+  };
+
+  const showToast = (message, type = 'success') => {
+    setToast({ visible: true, message, type });
+  };
+
+  const hideToast = () => {
+    setToast({ ...toast, visible: false });
+  };
+
+  const QuickStatCard = ({ icon, label, value, color, onPress }) => (
+    <TouchableOpacity
+      style={[styles.statCard, { borderLeftColor: color }]}
+      onPress={onPress}
+      activeOpacity={0.7}
+    >
+      <View style={[styles.statIconContainer, { backgroundColor: `${color}20` }]}>
+        <Ionicons name={icon} size={24} color={color} />
+      </View>
+      <View style={styles.statContent}>
+        <Text style={styles.statLabel}>{label}</Text>
+        <Text style={[styles.statValue, { color }]}>{value}</Text>
+      </View>
+    </TouchableOpacity>
+  );
+
+  const QuickActionCard = ({ icon, title, subtitle, color, onPress }) => (
+    <TouchableOpacity style={styles.actionCard} onPress={onPress} activeOpacity={0.7}>
+      <View style={[styles.actionIcon, { backgroundColor: `${color}20` }]}>
+        <Ionicons name={icon} size={28} color={color} />
+      </View>
+      <View style={styles.actionContent}>
+        <Text style={styles.actionTitle}>{title}</Text>
+        <Text style={styles.actionSubtitle}>{subtitle}</Text>
+      </View>
+      <Ionicons name="chevron-forward" size={20} color={theme.colors.textSecondary} />
+    </TouchableOpacity>
+  );
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.title}>Vendor Dashboard</Text>
+        </View>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={theme.colors.orange} />
+          <Text style={styles.loadingText}>Loading your dashboard...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <Toast
+        visible={toast.visible}
+        message={toast.message}
+        type={toast.type}
+        onHide={hideToast}
+      />
+      
+      <View style={styles.header}>
+        <View>
+          <Text style={styles.greeting}>Welcome back,</Text>
+          <Text style={styles.title}>{user?.displayName || user?.fullName || 'Vendor'}</Text>
+        </View>
+        <TouchableOpacity onPress={() => navigation.navigate('Profile')} style={styles.profileButton}>
+          {user?.photoURL ? (
+            <Image source={{ uri: user.photoURL }} style={styles.profileImage} />
+          ) : (
+            <View style={styles.profilePlaceholder}>
+              <Ionicons name="person" size={24} color={theme.colors.white} />
+            </View>
+          )}
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView
+        style={styles.content}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[theme.colors.orange]}
+            tintColor={theme.colors.orange}
+          />
+        }
+      >
+        {/* Quick Stats Grid */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Quick Stats</Text>
+          <View style={styles.statsGrid}>
+            <QuickStatCard
+              icon="layers-outline"
+              label="Total Listings"
+              value={dashboard.totalListings}
+              color={theme.colors.emerald}
+              onPress={() => navigation.navigate('Analytics')}
+            />
+            <QuickStatCard
+              icon="checkmark-circle-outline"
+              label="Active"
+              value={dashboard.activeListings}
+              color="#0F9D58"
+              onPress={() => navigation.navigate('Analytics')}
+            />
+            <QuickStatCard
+              icon="time-outline"
+              label="Pending"
+              value={dashboard.pendingListings}
+              color="#FFA500"
+              onPress={() => navigation.navigate('Analytics')}
+            />
+            <QuickStatCard
+              icon="eye-outline"
+              label="Views"
+              value={dashboard.totalViews.toLocaleString()}
+              color={theme.colors.orange}
+              onPress={() => navigation.navigate('Analytics')}
+            />
+          </View>
+        </View>
+
+        {/* Plan Status */}
+        <View style={styles.section}>
+          <View style={styles.planCard}>
+            <View style={styles.planHeader}>
+              <View style={styles.planInfo}>
+                <Text style={styles.planLabel}>Current Plan</Text>
+                <Text style={styles.planName}>{dashboard.planName}</Text>
+              </View>
+              <View style={[styles.statusBadge, dashboard.planStatus === 'Active' ? styles.activeBadge : styles.inactiveBadge]}>
+                <Text style={styles.statusText}>{dashboard.planStatus}</Text>
+              </View>
+            </View>
+            <Button
+              title="Manage Plan"
+              onPress={() => navigation.navigate('BillingHistory')}
+              variant="outline"
+              size="small"
+              icon="card-outline"
+            />
+          </View>
+        </View>
+
+        {/* Quick Actions */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Quick Actions</Text>
+          <View style={styles.actionsContainer}>
+            <QuickActionCard
+              icon="add-circle-outline"
+              title="Add New Listing"
+              subtitle="Create a new product"
+              color={theme.colors.orange}
+              onPress={() => showToast('Opening listing creator...', 'info')}
+            />
+            <QuickActionCard
+              icon="chatbubbles-outline"
+              title="Messages"
+              subtitle={`${dashboard.unreadMessages} unread`}
+              color="#1976D2"
+              onPress={() => navigation.navigate('Chat')}
+            />
+            <QuickActionCard
+              icon="notifications-outline"
+              title="Notifications"
+              subtitle={`${dashboard.unreadNotifications} new`}
+              color={theme.colors.emerald}
+              onPress={() => navigation.navigate('VendorNotifications')}
+            />
+            <QuickActionCard
+              icon="bar-chart-outline"
+              title="Full Analytics"
+              subtitle="View detailed insights"
+              color="#9C27B0"
+              onPress={() => navigation.navigate('Analytics')}
+            />
+            <QuickActionCard
+              icon="storefront-outline"
+              title="My Storefront"
+              subtitle="View & share your page"
+              color="#FF6F00"
+              onPress={() => navigation.navigate('Storefront')}
+            />
+            <QuickActionCard
+              icon="help-circle-outline"
+              title="Help & Support"
+              subtitle="Get assistance"
+              color="#00897B"
+              onPress={() => navigation.navigate('HelpSupport')}
+            />
+          </View>
+        </View>
+
+        {/* Verification Status */}
+        {dashboard.verificationStatus !== 'Verified' && (
+          <View style={styles.section}>
+            <View style={styles.verificationBanner}>
+              <Ionicons name="shield-outline" size={32} color={theme.colors.orange} />
+              <View style={styles.verificationContent}>
+                <Text style={styles.verificationTitle}>Complete Verification</Text>
+                <Text style={styles.verificationText}>
+                  Get verified to unlock more features and build trust with buyers
+                </Text>
+              </View>
+              <TouchableOpacity style={styles.verificationButton}>
+                <Text style={styles.verificationButtonText}>Verify</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        <View style={styles.bottomPadding} />
+      </ScrollView>
+    </SafeAreaView>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: theme.colors.background,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.base,
+    backgroundColor: theme.colors.white,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+  },
+  greeting: {
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.textSecondary,
+  },
+  title: {
+    fontFamily: theme.typography.fontFamily.anton,
+    fontSize: theme.typography.fontSize['2xl'],
+    color: theme.colors.emerald,
+    letterSpacing: theme.typography.letterSpacing.wide,
+  },
+  profileButton: {
+    padding: theme.spacing.xs,
+  },
+  profileImage: {
+    width: 48,
+    height: 48,
+    borderRadius: theme.borderRadius.full,
+  },
+  profilePlaceholder: {
+    width: 48,
+    height: 48,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.emerald,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  content: {
+    flex: 1,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: theme.spacing.base,
+  },
+  loadingText: {
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.base,
+    color: theme.colors.textSecondary,
+  },
+  section: {
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.xl,
+  },
+  sectionTitle: {
+    fontFamily: theme.typography.fontFamily.anton,
+    fontSize: theme.typography.fontSize.lg,
+    color: theme.colors.emerald,
+    letterSpacing: theme.typography.letterSpacing.wide,
+    marginBottom: theme.spacing.base,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: theme.spacing.base,
+  },
+  statCard: {
+    flex: 1,
+    minWidth: '47%',
+    backgroundColor: theme.colors.white,
+    borderRadius: theme.borderRadius.lg,
+    padding: theme.spacing.base,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    borderLeftWidth: 4,
+    ...theme.shadows.small,
+  },
+  statIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: theme.borderRadius.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  statContent: {
+    flex: 1,
+  },
+  statLabel: {
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.textSecondary,
+    marginBottom: theme.spacing.xs / 2,
+  },
+  statValue: {
+    fontFamily: theme.typography.fontFamily.anton,
+    fontSize: theme.typography.fontSize.xl,
+    letterSpacing: theme.typography.letterSpacing.wide,
+  },
+  planCard: {
+    backgroundColor: theme.colors.white,
+    borderRadius: theme.borderRadius.lg,
+    padding: theme.spacing.lg,
+    ...theme.shadows.medium,
+  },
+  planHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: theme.spacing.base,
+  },
+  planInfo: {
+    flex: 1,
+  },
+  planLabel: {
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.textSecondary,
+    marginBottom: theme.spacing.xs / 2,
+  },
+  planName: {
+    fontFamily: theme.typography.fontFamily.anton,
+    fontSize: theme.typography.fontSize.xl,
+    color: theme.colors.emerald,
+    letterSpacing: theme.typography.letterSpacing.wide,
+  },
+  statusBadge: {
+    paddingHorizontal: theme.spacing.base,
+    paddingVertical: theme.spacing.xs / 2,
+    borderRadius: theme.borderRadius.full,
+  },
+  activeBadge: {
+    backgroundColor: '#E8F5E9',
+  },
+  inactiveBadge: {
+    backgroundColor: '#FFEBEE',
+  },
+  statusText: {
+    fontFamily: theme.typography.fontFamily.interSemiBold,
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.emerald,
+  },
+  actionsContainer: {
+    gap: theme.spacing.base,
+  },
+  actionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.colors.white,
+    borderRadius: theme.borderRadius.lg,
+    padding: theme.spacing.base,
+    gap: theme.spacing.base,
+    ...theme.shadows.small,
+  },
+  actionIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: theme.borderRadius.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  actionContent: {
+    flex: 1,
+  },
+  actionTitle: {
+    fontFamily: theme.typography.fontFamily.interSemiBold,
+    fontSize: theme.typography.fontSize.base,
+    color: theme.colors.textPrimary,
+    marginBottom: theme.spacing.xs / 2,
+  },
+  actionSubtitle: {
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.textSecondary,
+  },
+  verificationBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: `${theme.colors.orange}10`,
+    borderRadius: theme.borderRadius.lg,
+    padding: theme.spacing.base,
+    gap: theme.spacing.base,
+    borderWidth: 1,
+    borderColor: `${theme.colors.orange}30`,
+  },
+  verificationContent: {
+    flex: 1,
+  },
+  verificationTitle: {
+    fontFamily: theme.typography.fontFamily.interSemiBold,
+    fontSize: theme.typography.fontSize.base,
+    color: theme.colors.textPrimary,
+    marginBottom: theme.spacing.xs / 2,
+  },
+  verificationText: {
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.textSecondary,
+  },
+  verificationButton: {
+    backgroundColor: theme.colors.orange,
+    paddingHorizontal: theme.spacing.base,
+    paddingVertical: theme.spacing.sm,
+    borderRadius: theme.borderRadius.md,
+  },
+  verificationButtonText: {
+    fontFamily: theme.typography.fontFamily.interSemiBold,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.white,
+  },
+  bottomPadding: {
+    height: theme.spacing['2xl'],
+  },
+});
+
+export default VendorDashboardScreen;

@@ -11,6 +11,7 @@ import AuthScreen from '../screens/auth/AuthScreen';
 import MainTabNavigator from './MainTabNavigator';
 
 // Vendor Screens
+import VendorDashboardScreen from '../screens/vendor/VendorDashboardScreen';
 import AnalyticsScreen from '../screens/vendor/AnalyticsScreen';
 import BillingHistoryScreen from '../screens/vendor/BillingHistoryScreen';
 import VendorNotificationsScreen from '../screens/vendor/VendorNotificationsScreen';
@@ -65,6 +66,7 @@ const AppNavigator = () => {
             <Stack.Screen name="MainTabs" component={MainTabNavigator} />
             
             {/* Vendor Screens */}
+            <Stack.Screen name="VendorDashboard" component={VendorDashboardScreen} />
             <Stack.Screen name="Analytics" component={AnalyticsScreen} />
             <Stack.Screen name="BillingHistory" component={BillingHistoryScreen} />
             <Stack.Screen name="VendorNotifications" component={VendorNotificationsScreen} />
