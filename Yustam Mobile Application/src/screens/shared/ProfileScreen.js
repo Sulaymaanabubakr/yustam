@@ -141,19 +141,34 @@ const ProfileScreen = ({ navigation }) => {
           {role === 'vendor' && (
             <>
               <ProfileMenuItem
+                icon="bar-chart-outline"
+                label="Analytics & Insights"
+                onPress={() => navigation.navigate('Analytics')}
+              />
+              <ProfileMenuItem
                 icon="list-outline"
                 label="My Listings"
-                onPress={() => {}}
+                onPress={() => showToast('Opening My Listings...', 'info')}
+              />
+              <ProfileMenuItem
+                icon="receipt-outline"
+                label="Billing History"
+                onPress={() => navigation.navigate('BillingHistory')}
               />
               <ProfileMenuItem
                 icon="card-outline"
                 label="Plans & Billing"
-                onPress={() => {}}
+                onPress={() => showToast('Opening Plans...', 'info')}
+              />
+              <ProfileMenuItem
+                icon="storefront-outline"
+                label="My Storefront"
+                onPress={() => navigation.navigate('Storefront')}
               />
               <ProfileMenuItem
                 icon="shield-checkmark-outline"
                 label="Verification"
-                onPress={() => {}}
+                onPress={() => showToast('Opening Verification...', 'info')}
               />
             </>
           )}
@@ -179,21 +194,27 @@ const ProfileScreen = ({ navigation }) => {
           <Text style={styles.sectionTitle}>Settings</Text>
           
           <ProfileMenuItem
+            icon="settings-outline"
+            label="App Settings"
+            onPress={() => navigation.navigate('Settings')}
+          />
+          
+          <ProfileMenuItem
             icon="lock-closed-outline"
             label="Change Password"
-            onPress={() => {}}
+            onPress={() => showToast('Opening Change Password...', 'info')}
           />
           
           <ProfileMenuItem
             icon="notifications-outline"
             label="Notifications"
-            onPress={() => {}}
+            onPress={() => navigation.navigate('VendorNotifications')}
           />
           
           <ProfileMenuItem
             icon="language-outline"
             label="Language"
-            onPress={() => {}}
+            onPress={() => showToast('Language selection coming soon...', 'info')}
           />
         </View>
 
@@ -204,19 +225,19 @@ const ProfileScreen = ({ navigation }) => {
           <ProfileMenuItem
             icon="help-circle-outline"
             label="Help & Support"
-            onPress={() => {}}
+            onPress={() => navigation.navigate('HelpSupport')}
           />
           
           <ProfileMenuItem
             icon="shield-outline"
             label="Privacy Policy"
-            onPress={() => {}}
+            onPress={() => showToast('Opening Privacy Policy...', 'info')}
           />
           
           <ProfileMenuItem
             icon="document-text-outline"
             label="Terms & Conditions"
-            onPress={() => {}}
+            onPress={() => showToast('Opening Terms...', 'info')}
           />
         </View>
 
