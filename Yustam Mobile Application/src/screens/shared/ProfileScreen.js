@@ -141,6 +141,11 @@ const ProfileScreen = ({ navigation }) => {
           {role === 'vendor' && (
             <>
               <ProfileMenuItem
+                icon="grid-outline"
+                label="Vendor Dashboard"
+                onPress={() => navigation.navigate('VendorDashboard')}
+              />
+              <ProfileMenuItem
                 icon="bar-chart-outline"
                 label="Analytics & Insights"
                 onPress={() => navigation.navigate('Analytics')}

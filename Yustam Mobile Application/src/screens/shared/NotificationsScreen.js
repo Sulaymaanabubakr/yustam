@@ -1,10 +1,23 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '../../context/AuthContext';
+import { useNavigation } from '@react-navigation/native';
 import theme from '../../theme';
 
 const NotificationsScreen = () => {
+  const { role } = useAuth();
+  const navigation = useNavigation();
+
+  // Redirect vendors to the full VendorNotificationsScreen
+  useEffect(() => {
+    if (role === 'vendor') {
+      navigation.replace('VendorNotifications');
+    }
+  }, [role, navigation]);
+
+  // Buyer notifications (simplified for now)
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
