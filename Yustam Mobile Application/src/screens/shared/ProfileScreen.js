@@ -135,7 +135,7 @@ const ProfileScreen = ({ navigation }) => {
           <ProfileMenuItem
             icon="create-outline"
             label="Edit Profile"
-            onPress={() => {}}
+            onPress={() => navigation.navigate('EditProfile')}
           />
           
           {role === 'vendor' && (
