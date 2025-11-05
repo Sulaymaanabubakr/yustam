@@ -86,8 +86,9 @@ export const chatAPI = {
 export const profileAPI = {
   get: () => api.get('/vendor-profile.php'),
   update: (data) => api.post('/update-vendor-profile.php', data),
-  getSettings: () => api.get('/vendor-settings.php'),
+  getSettings: () => api.get('/vendor-settings.php', { params: { format: 'json' } }),
   updateSettings: (data) => api.post('/update-vendor-settings.php', data),
+  deleteAccount: () => api.post('/vendor-delete-account.php'),
 };
 
 // Vendor-specific endpoints
