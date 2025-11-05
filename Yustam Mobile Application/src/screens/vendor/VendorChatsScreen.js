@@ -121,8 +121,13 @@ const VendorChatsScreen = ({ navigation }) => {
   };
 
   const handleChatPress = (chat) => {
-    // TODO: Navigate to chat thread detail screen
-    // navigation.navigate('ChatThread', { chatId: chat.id, buyerName: chat.buyerName });
+    // TODO: Create ChatThreadScreen.js and integrate Firebase real-time messaging
+    // Steps needed:
+    // 1. Create src/screens/vendor/ChatThreadScreen.js
+    // 2. Add Firebase Firestore subscription for messages
+    // 3. Implement send message with api/chat/send-message.php
+    // 4. Add typing indicators and read receipts
+    // 5. Add navigation: navigation.navigate('ChatThread', { chatId: chat.id, buyerName: chat.buyerName });
     showToast('Chat detail view coming soon', 'info');
   };
 

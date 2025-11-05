@@ -139,9 +139,15 @@ const PlansScreen = ({ navigation }) => {
       return;
     }
 
-    // TODO: Navigate to payment screen or handle plan selection
-    // navigation.navigate('PlanPayment', { plan });
-    showToast('Payment integration coming soon', 'info');
+    // TODO: Integrate Paystack payment gateway
+    // Steps needed:
+    // 1. Install react-native-paystack-webview
+    // 2. Get Paystack public key from backend
+    // 3. Initialize payment with plan amount
+    // 4. On success, call vendor-subscription-action.php with plan slug
+    // 5. Update local state and show success message
+    // Example: navigation.navigate('PaystackPayment', { plan, amount: plan.price });
+    showToast('Payment integration with Paystack coming soon', 'info');
   };
 
   const PlanCard = ({ plan, isCurrentPlan }) => (
