@@ -12,3 +12,5 @@ export { default as VendorListingsScreen } from './VendorListingsScreen';
 export { default as ListingEditorScreen } from './ListingEditorScreen';
 export { default as EditProfileScreen } from './EditProfileScreen';
 export { default as VendorChatsScreen } from './VendorChatsScreen';
+export { default as PlansScreen } from './PlansScreen';
+export { default as VerificationScreen } from './VerificationScreen';
