@@ -8,3 +8,5 @@ export { default as VendorNotificationsScreen } from './VendorNotificationsScree
 export { default as HelpSupportScreen } from './HelpSupportScreen';
 export { default as StorefrontScreen } from './StorefrontScreen';
 export { default as SettingsScreen } from './SettingsScreen';
+export { default as VendorListingsScreen } from './VendorListingsScreen';
+export { default as ListingEditorScreen } from './ListingEditorScreen';

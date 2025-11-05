@@ -153,7 +153,7 @@ const ProfileScreen = ({ navigation }) => {
               <ProfileMenuItem
                 icon="list-outline"
                 label="My Listings"
-                onPress={() => showToast('Opening My Listings...', 'info')}
+                onPress={() => navigation.navigate('VendorListings')}
               />
               <ProfileMenuItem
                 icon="receipt-outline"
