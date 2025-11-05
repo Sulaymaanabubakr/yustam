@@ -50,13 +50,31 @@ const OnboardingScreen = ({ navigation }) => {
     }
   };
 
+  const resolveIconName = (iconName) => {
+    if (iconName && Ionicons.glyphMap?.[iconName]) return iconName;
+
+    const fallbacks = {
+      'shield-check-line': 'shield-checkmark-outline',
+      'store-3-line': 'storefront-outline',
+      'team-line': 'people-circle-outline',
+    };
+
+    if (iconName && fallbacks[iconName]) {
+      const mapped = fallbacks[iconName];
+      if (Ionicons.glyphMap?.[mapped]) return mapped;
+    }
+
+    return 'sparkles-outline';
+  };
+
   const renderSlide = ({ item, index }) => {
     const isLastSlide = index === ONBOARDING_SLIDES.length - 1;
+    const slideIcon = resolveIconName(item.icon);
 
     return (
       <View style={styles.slide}>
         <View style={styles.iconContainer}>
-          <Ionicons name={item.icon} size={80} color={theme.colors.orange} />
+          <Ionicons name={slideIcon} size={80} color={theme.colors.orange} />
         </View>
         
         <Text style={styles.title}>{item.title}</Text>

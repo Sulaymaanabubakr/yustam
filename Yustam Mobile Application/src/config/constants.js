@@ -39,18 +39,18 @@ export const ONBOARDING_SLIDES = [
     id: '1',
     title: 'Buy from Verified Vendors',
     description: 'Shop with confidence from trusted sellers across Nigeria. Every vendor is verified for your safety.',
-    icon: 'shield-check-line',
+    icon: 'shield-checkmark-outline',
   },
   {
     id: '2',
     title: 'Sell Smarter, Grow Faster',
     description: 'Reach thousands of ready buyers. List your products, manage orders, and grow your business effortlessly.',
-    icon: 'store-3-line',
+    icon: 'storefront-outline',
   },
   {
     id: '3',
     title: 'Join Nigeria\'s Trusted Marketplace',
     description: 'A safe, vibrant community where buyers and sellers connect. Start buying or selling today!',
-    icon: 'team-line',
+    icon: 'people-circle-outline',
   },
 ];
