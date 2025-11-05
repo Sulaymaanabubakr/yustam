@@ -5,7 +5,7 @@
 This document describes the vendor-specific features added to the YUSTAM Marketplace Mobile Application to achieve feature parity with the web vendor dashboard.
 
 ## Implementation Date
-November 5, 2025
+November 5, 2024
 
 ## Added Features
 
@@ -480,7 +480,7 @@ For questions or issues with these vendor features:
 
 ## Credits
 
-**Implementation Date**: November 5, 2025  
+**Implementation Date**: November 5, 2024  
 **Framework**: React Native with Expo SDK 54  
 **Design System**: YUSTAM Marketplace  
 **License**: © 2025 YUSTAM - All Rights Reserved

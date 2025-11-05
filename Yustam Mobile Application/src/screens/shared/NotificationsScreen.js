@@ -13,9 +13,13 @@ const NotificationsScreen = () => {
   // Redirect vendors to the full VendorNotificationsScreen
   useEffect(() => {
     if (role === 'vendor') {
-      navigation.replace('VendorNotifications');
+      // Small delay to prevent navigation loop
+      const timer = setTimeout(() => {
+        navigation.replace('VendorNotifications');
+      }, 100);
+      return () => clearTimeout(timer);
     }
-  }, [role, navigation]);
+  }, [role]);
 
   // Buyer notifications (simplified for now)
   return (
