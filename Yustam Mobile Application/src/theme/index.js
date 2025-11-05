@@ -7,6 +7,7 @@ export const theme = {
   typography,
   spacing,
   radius,
+  borderRadius: radius,
   shadows,
 };
 
