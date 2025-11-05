@@ -30,7 +30,8 @@
     "expo-image-picker": "~16.0.4",
     "@expo-google-fonts/anton": "^0.2.3",
     "@expo-google-fonts/inter": "^0.2.3",
-    "react-native-gesture-handler": "~2.20.2"
+    "react-native-gesture-handler": "~2.20.2",
+    "@react-native-picker/picker": "^2.9.0"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2"
