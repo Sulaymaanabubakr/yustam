@@ -173,8 +173,8 @@ const ListingEditorScreen = ({ route, navigation }) => {
         formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
         formData.append('folder', `listings/${user?.uid || 'vendor'}`);
 
-        const response = await fetch(
-          `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
+        const uploadUrl = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
+        const response = await fetch(uploadUrl,
           {
             method: 'POST',
             body: formData,

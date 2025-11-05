@@ -489,8 +489,11 @@ const styles = StyleSheet.create({
   },
   changePhotoButton: {
     position: 'absolute',
-    right: 130,
-    bottom: 30,
+    // Position calculated based on photoContainer (120x120) centered in photoSection
+    // right: (screenWidth/2) + (photoSize/2) - buttonSize = centered + 60 - 40 = ~130
+    // bottom: photoSize - buttonSize - offset = 120 - 40 - 50 = 30
+    right: 130, // Approximate center of screen + half photo size - button size
+    bottom: 30, // From bottom of photo container
     width: 40,
     height: 40,
     borderRadius: 20,
