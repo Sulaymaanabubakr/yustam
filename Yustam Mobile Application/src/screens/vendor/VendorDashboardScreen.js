@@ -240,7 +240,7 @@ const VendorDashboardScreen = ({ navigation }) => {
               title="Messages"
               subtitle={`${dashboard.unreadMessages} unread`}
               color="#1976D2"
-              onPress={() => navigation.navigate('Chat')}
+              onPress={() => navigation.navigate('VendorChats')}
             />
             <QuickActionCard
               icon="notifications-outline"

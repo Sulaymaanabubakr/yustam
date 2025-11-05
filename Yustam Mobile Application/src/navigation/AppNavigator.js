@@ -21,6 +21,7 @@ import SettingsScreen from '../screens/vendor/SettingsScreen';
 import VendorListingsScreen from '../screens/vendor/VendorListingsScreen';
 import ListingEditorScreen from '../screens/vendor/ListingEditorScreen';
 import EditProfileScreen from '../screens/vendor/EditProfileScreen';
+import VendorChatsScreen from '../screens/vendor/VendorChatsScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -79,6 +80,7 @@ const AppNavigator = () => {
             <Stack.Screen name="VendorListings" component={VendorListingsScreen} />
             <Stack.Screen name="ListingEditor" component={ListingEditorScreen} />
             <Stack.Screen name="EditProfile" component={EditProfileScreen} />
+            <Stack.Screen name="VendorChats" component={VendorChatsScreen} />
           </>
         )}
       </Stack.Navigator>

@@ -156,6 +156,11 @@ const ProfileScreen = ({ navigation }) => {
                 onPress={() => navigation.navigate('VendorListings')}
               />
               <ProfileMenuItem
+                icon="chatbubbles-outline"
+                label="Messages"
+                onPress={() => navigation.navigate('VendorChats')}
+              />
+              <ProfileMenuItem
                 icon="receipt-outline"
                 label="Billing History"
                 onPress={() => navigation.navigate('BillingHistory')}
