@@ -11,3 +11,4 @@ export { default as SettingsScreen } from './SettingsScreen';
 export { default as VendorListingsScreen } from './VendorListingsScreen';
 export { default as ListingEditorScreen } from './ListingEditorScreen';
 export { default as EditProfileScreen } from './EditProfileScreen';
+export { default as VendorChatsScreen } from './VendorChatsScreen';
