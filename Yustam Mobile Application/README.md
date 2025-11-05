@@ -20,7 +20,12 @@ A premium React Native + Expo mobile application for Nigeria's trusted marketpla
 ### Vendor Features
 - Create and manage product listings
 - Upload images via Cloudinary
-- View analytics and insights
+- **Analytics & Insights Dashboard**
+- **Billing History & Payments**
+- **Comprehensive Notifications Center**
+- **Help & Support with FAQ**
+- **Public Storefront**
+- **App Settings & Preferences**
 - Manage business profile
 - Handle customer inquiries
 
@@ -191,11 +196,25 @@ The app is designed for manual testing via:
 - Create a test account via the Register screen
 - Or use Firebase Auth UI for testing
 
+## ✨ New: Vendor Features (November 2025)
+
+### Complete Vendor Dashboard
+The app now includes comprehensive vendor features matching the web dashboard:
+
+1. **Analytics & Insights** - Performance metrics, listing stats, plan usage
+2. **Billing History** - Transaction history, payment management
+3. **Vendor Notifications** - Full notification center with filtering
+4. **Help & Support** - FAQ section and contact form
+5. **Vendor Storefront** - Public storefront with share functionality
+6. **Settings** - App preferences, privacy, and account management
+
+See **VENDOR_FEATURES.md** for complete documentation.
+
 ## 🚧 Known Limitations / Future Enhancements
 
 1. **Google Sign-In**: Placeholder implemented, needs expo-auth-session configuration
 2. **Chat System**: Shell screen only, needs WebSocket/Firestore real-time integration
-3. **Notifications**: Shell screen, needs Firebase Cloud Messaging integration
+3. **Backend Integration**: Vendor features use mock data, need API connection
 4. **Listing Creation**: Vendor create listing flow not yet implemented
 5. **Payment Integration**: No payment processing yet (plans are visible)
 6. **Offline Mode**: No offline caching yet
