@@ -18,8 +18,8 @@ import { useAuth } from '../../context/AuthContext';
 import theme from '../../theme';
 import Toast from '../../components/Toast';
 import Button from '../../components/Button';
-import { API_BASE_URL } from '../../config/constants';
 import { uploadImage } from '../../config/cloudinary';
+import { vendorAPI } from '../../services/api';
 
 const DOCUMENT_TYPES = [
   {
@@ -103,25 +103,19 @@ const VerificationScreen = ({ navigation }) => {
   const loadVerificationStatus = async () => {
     try {
       setLoading(true);
-      
-      // TODO: Fetch verification status from API
-      // const response = await fetch(`${API_BASE_URL}/vendor-verification-status.php?format=json`, {
-      //   credentials: 'include',
-      // });
-      // const data = await response.json();
-      // setStatus(data.status);
-      // setDocuments(data.documents || {});
-      // setRejectionReason(data.rejectionReason || '');
+      const response = await vendorAPI.getVerificationStatus();
+      if (!response.data?.success) {
+        throw new Error(response.data?.message || 'Unable to load verification status.');
+      }
 
-      // Mock data for now
-      setTimeout(() => {
-        setStatus('not_submitted');
-        setDocuments({});
-        setLoading(false);
-      }, 1000);
+      const data = response.data?.data || {};
+      const normalizedStatus = (data.status || 'not_submitted').toLowerCase();
+      setStatus(normalizedStatus);
+      setRejectionReason(data.feedback || '');
     } catch (error) {
       console.error('Error loading verification status:', error);
       showToast('Failed to load verification status', 'error');
+    } finally {
       setLoading(false);
     }
   };
@@ -281,37 +275,29 @@ const VerificationScreen = ({ navigation }) => {
 
       // Upload documents to Cloudinary
       const uploadedDocs = await uploadDocuments();
+      setDocuments(uploadedDocs);
 
-      // Prepare payload
-      const payload = {
-        documents: Object.entries(uploadedDocs).reduce((acc, [key, doc]) => {
-          acc[key] = doc.uri;
-          return acc;
-        }, {}),
-      };
+      const documentPayload = Object.entries(uploadedDocs).reduce((acc, [key, doc]) => {
+        acc[key] = doc.uri;
+        return acc;
+      }, {});
 
-      // Call API
-      const response = await fetch(`${API_BASE_URL}/verify.php`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify(payload),
+      const response = await vendorAPI.submitVerification({
+        action: 'submit',
+        documents: JSON.stringify(documentPayload),
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to submit verification');
+      if (!response.data?.success) {
+        throw new Error(response.data?.message || 'Failed to submit verification');
       }
 
-      const result = await response.json();
-
-      if (result.success) {
-        setStatus('pending');
-        showToast('Verification submitted successfully! We\'ll review your documents shortly.');
-      } else {
-        throw new Error(result.message || 'Failed to submit verification');
-      }
+      const nextStatus = response.data?.data?.status || 'pending';
+      setStatus(nextStatus);
+      setRejectionReason('');
+      showToast(
+        response.data?.message || 'Verification submitted successfully! We\'ll review your documents shortly.'
+      );
+      await loadVerificationStatus();
     } catch (error) {
       console.error('Error submitting verification:', error);
       showToast(error.message || 'Failed to submit verification', 'error');

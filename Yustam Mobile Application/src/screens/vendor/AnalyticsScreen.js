@@ -13,6 +13,19 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import theme from '../../theme';
 import Toast from '../../components/Toast';
+import { vendorAPI } from '../../services/api';
+import { formatNumber } from '../../utils/formatters';
+
+const PLAN_LIMITS = {
+  free: 5,
+  starter: 20,
+  basic: 20,
+  pro: 50,
+  premium: 50,
+  elite: 80,
+  professional: 150,
+  power: 150,
+};
 
 const AnalyticsScreen = ({ navigation }) => {
   const { user } = useAuth();
@@ -36,37 +49,78 @@ const AnalyticsScreen = ({ navigation }) => {
 
   useEffect(() => {
     fetchAnalytics();
-  }, []);
+  }, [user?.uid]);
 
   const fetchAnalytics = async () => {
     try {
       setLoading(true);
-      
-      // TODO: Replace with actual API call
-      // const response = await fetch(`https://yustam.com/vendor-dashboard.php?format=json`);
-      // const data = await response.json();
-      
-      // Mock data for now - replace with real API integration
-      setTimeout(() => {
-        setAnalytics({
-          totalListings: 15,
-          activeListings: 12,
-          pendingListings: 2,
-          rejectedListings: 1,
-          soldListings: 3,
-          totalViews: 1245,
-          planName: 'Premium',
-          planStatus: 'Active',
-          listingsUsed: 12,
-          listingsAllowed: 50,
-          verificationStatus: 'Verified',
-          verificationProgress: 100,
-        });
-        setLoading(false);
-      }, 1000);
+
+      const [dashboardResponse, verificationResponse] = await Promise.all([
+        vendorAPI.getDashboard(),
+        vendorAPI.getVerificationStatus().catch(() => null),
+      ]);
+
+      const payload = dashboardResponse?.data?.data;
+      if (!dashboardResponse?.data?.success || !payload) {
+        throw new Error('Unable to load analytics data.');
+      }
+
+      const stats = payload.stats || {};
+      const subscription = payload.subscription || {};
+      const listings = Array.isArray(payload.listings) ? payload.listings : [];
+
+      const totalListings = stats.total_listings || listings.length;
+      const getStatus = (item) => (item.status_raw || item.status || '').toLowerCase();
+
+      const activeListings =
+        stats.active_listings ||
+        listings.filter((listing) => getStatus(listing) === 'approved').length;
+
+      const pendingListings =
+        typeof stats.pending_listings === 'number'
+          ? stats.pending_listings
+          : Math.max(0, totalListings - activeListings);
+
+      const soldListings = listings.filter((listing) => getStatus(listing) === 'sold').length;
+      const rejectedListings = listings.filter((listing) =>
+        ['rejected', 'archived'].includes(getStatus(listing))
+      ).length;
+
+      const slug = (subscription.slug || subscription.planName || '').toLowerCase();
+      const listingsAllowed =
+        PLAN_LIMITS[slug] || PLAN_LIMITS[slug.replace('-plan', '')] || PLAN_LIMITS.free;
+
+      const verificationData = verificationResponse?.data?.data;
+      const verificationStatus =
+        verificationData?.statusDisplay ||
+        (verificationData?.status
+          ? verificationData.status.charAt(0).toUpperCase() + verificationData.status.slice(1)
+          : 'Pending');
+      const verificationProgress =
+        verificationStatus.toLowerCase() === 'verified'
+          ? 100
+          : verificationStatus.toLowerCase() === 'pending'
+          ? 60
+          : 30;
+
+      setAnalytics({
+        totalListings,
+        activeListings,
+        pendingListings,
+        rejectedListings,
+        soldListings,
+        totalViews: stats.total_views || 0,
+        planName: subscription.displayName || 'Free',
+        planStatus: subscription.statusLabel || subscription.status || 'Active',
+        listingsUsed: activeListings,
+        listingsAllowed,
+        verificationStatus,
+        verificationProgress,
+      });
     } catch (error) {
       console.error('Error fetching analytics:', error);
-      showToast('Failed to load analytics', 'error');
+      showToast(error.message || 'Failed to load analytics', 'error');
+    } finally {
       setLoading(false);
     }
   };
@@ -85,18 +139,28 @@ const AnalyticsScreen = ({ navigation }) => {
     setToast({ ...toast, visible: false });
   };
 
-  const MetricCard = ({ icon, label, value, subtitle, color }) => (
-    <View style={[styles.metricCard, { borderLeftColor: color || theme.colors.orange }]}>
-      <View style={styles.metricHeader}>
-        <View style={[styles.iconContainer, { backgroundColor: color ? `${color}20` : theme.colors.orangeLight }]}>
-          <Ionicons name={icon} size={24} color={color || theme.colors.orange} />
+  const MetricCard = ({ icon, label, value, subtitle, color }) => {
+    const displayValue =
+      typeof value === 'number' ? formatNumber(value) : value ?? '-';
+
+    return (
+      <View style={[styles.metricCard, { borderLeftColor: color || theme.colors.orange }]}>
+        <View style={styles.metricHeader}>
+          <View
+            style={[
+              styles.iconContainer,
+              { backgroundColor: color ? `${color}20` : theme.colors.orangeLight },
+            ]}
+          >
+            <Ionicons name={icon} size={24} color={color || theme.colors.orange} />
+          </View>
+          <Text style={styles.metricLabel}>{label}</Text>
         </View>
-        <Text style={styles.metricLabel}>{label}</Text>
+        <Text style={[styles.metricValue, color && { color }]}>{displayValue}</Text>
+        {subtitle && <Text style={styles.metricSubtitle}>{subtitle}</Text>}
       </View>
-      <Text style={[styles.metricValue, color && { color }]}>{value}</Text>
-      {subtitle && <Text style={styles.metricSubtitle}>{subtitle}</Text>}
-    </View>
-  );
+    );
+  };
 
   const ProgressBar = ({ progress, color }) => (
     <View style={styles.progressBarContainer}>
@@ -189,7 +253,7 @@ const AnalyticsScreen = ({ navigation }) => {
           <MetricCard
             icon="eye-outline"
             label="Total Views"
-            value={analytics.totalViews.toLocaleString()}
+            value={analytics.totalViews}
             color={theme.colors.orange}
           />
         </View>
@@ -212,7 +276,11 @@ const AnalyticsScreen = ({ navigation }) => {
                 Listings: {analytics.listingsUsed} / {analytics.listingsAllowed}
               </Text>
               <ProgressBar
-                progress={(analytics.listingsUsed / analytics.listingsAllowed) * 100}
+                progress={
+                  analytics.listingsAllowed
+                    ? Math.min(100, (analytics.listingsUsed / analytics.listingsAllowed) * 100)
+                    : 0
+                }
                 color={theme.colors.orange}
               />
             </View>

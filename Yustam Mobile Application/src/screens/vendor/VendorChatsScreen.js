@@ -14,6 +14,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import theme from '../../theme';
 import Toast from '../../components/Toast';
+import { vendorAPI } from '../../services/api';
+import resolveMediaUrl from '../../utils/url';
+import { timeAgo } from '../../utils/formatters';
 
 const VendorChatsScreen = ({ navigation }) => {
   const { user } = useAuth();
@@ -29,51 +32,33 @@ const VendorChatsScreen = ({ navigation }) => {
   const fetchChats = async () => {
     try {
       setLoading(true);
-      
-      // TODO: Implement Firebase Firestore subscription for real-time chats
-      // This should subscribe to the vendor's chat threads from Firestore
-      // Similar to vendor-chats.js in the web app
-      
-      // Mock data for now
-      setTimeout(() => {
-        const mockChats = [
-          {
-            id: 'chat1',
-            buyerName: 'John Doe',
-            buyerPhoto: 'https://via.placeholder.com/50',
-            lastMessage: 'Is this still available?',
-            lastMessageTime: new Date(Date.now() - 1000 * 60 * 15), // 15 minutes ago
-            unreadCount: 2,
-            lastType: 'text',
-            buyerId: 'buyer1',
-          },
-          {
-            id: 'chat2',
-            buyerName: 'Jane Smith',
-            buyerPhoto: 'https://via.placeholder.com/50',
-            lastMessage: 'What is your best price?',
-            lastMessageTime: new Date(Date.now() - 1000 * 60 * 60 * 2), // 2 hours ago
-            unreadCount: 0,
-            lastType: 'text',
-            buyerId: 'buyer2',
-          },
-          {
-            id: 'chat3',
-            buyerName: 'Mike Johnson',
-            buyerPhoto: 'https://via.placeholder.com/50',
-            lastMessage: 'Photo attachment',
-            lastMessageTime: new Date(Date.now() - 1000 * 60 * 60 * 24), // 1 day ago
-            unreadCount: 0,
-            lastType: 'image',
-            buyerId: 'buyer3',
-          },
-        ];
-        setChats(mockChats);
-        setLoading(false);
-      }, 1000);
+      if (!user?.uid) {
+        throw new Error('Unable to load chats. Please sign in again.');
+      }
+
+      const response = await vendorAPI.getChats(user.uid);
+      if (!response.data?.success) {
+        throw new Error(response.data?.message || 'Unable to load chats.');
+      }
+
+      const chatThreads = response.data?.chats || [];
+      setChats(
+        chatThreads.map((chat) => ({
+          id: chat.chat_id || chat.id,
+          buyerName: chat.buyer_name || 'Buyer',
+          buyerPhoto: resolveMediaUrl(chat.buyer_avatar),
+          lastMessage: chat.last_text || chat.last_message || '',
+          lastMessageTime: chat.last_ts || chat.updated_at || chat.created_at,
+          unreadCount: Number(chat.unread_for_vendor) || 0,
+          lastType: chat.last_type || 'text',
+          buyerId: chat.buyer_uid,
+        }))
+      );
     } catch (error) {
       console.error('Error fetching chats:', error);
-      showToast('Failed to load chats', 'error');
+      showToast(error.message || 'Failed to load chats', 'error');
+      setChats([]);
+    } finally {
       setLoading(false);
     }
   };
@@ -92,23 +77,7 @@ const VendorChatsScreen = ({ navigation }) => {
     setToast({ ...toast, visible: false });
   };
 
-  const formatTime = (date) => {
-    if (!date) return '';
-    
-    const now = new Date();
-    const diffMs = now - date;
-    const diffMinutes = Math.floor(diffMs / (1000 * 60));
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-    if (diffMinutes < 1) return 'just now';
-    if (diffMinutes < 60) return `${diffMinutes}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays === 1) return 'yesterday';
-    if (diffDays < 7) return `${diffDays}d ago`;
-    
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  };
+  const formatTime = (value) => timeAgo(value);
 
   const getMessagePreview = (chat) => {
     if (chat.lastType === 'image') {
@@ -121,14 +90,12 @@ const VendorChatsScreen = ({ navigation }) => {
   };
 
   const handleChatPress = (chat) => {
-    // TODO: Create ChatThreadScreen.js and integrate Firebase real-time messaging
-    // Steps needed:
-    // 1. Create src/screens/vendor/ChatThreadScreen.js
-    // 2. Add Firebase Firestore subscription for messages
-    // 3. Implement send message with api/chat/send-message.php
-    // 4. Add typing indicators and read receipts
-    // 5. Add navigation: navigation.navigate('ChatThread', { chatId: chat.id, buyerName: chat.buyerName });
-    showToast('Chat detail view coming soon', 'info');
+    navigation.navigate('ChatThread', {
+      chatId: chat.id,
+      buyerName: chat.buyerName,
+      buyerPhoto: chat.buyerPhoto,
+      buyerId: chat.buyerId,
+    });
   };
 
   const ChatItem = ({ item }) => (

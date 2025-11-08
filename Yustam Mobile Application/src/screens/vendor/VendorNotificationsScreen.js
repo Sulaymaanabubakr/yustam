@@ -14,6 +14,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import theme from '../../theme';
 import Toast from '../../components/Toast';
+import { vendorAPI } from '../../services/api';
+import { timeAgo } from '../../utils/formatters';
 
 const VendorNotificationsScreen = ({ navigation }) => {
   const { user } = useAuth();
@@ -30,70 +32,25 @@ const VendorNotificationsScreen = ({ navigation }) => {
   const fetchNotifications = async () => {
     try {
       setLoading(true);
-      
-      // TODO: Replace with actual API call
-      // const response = await fetch(`https://yustam.com/vendor-notifications-data.php?format=json`);
-      // const data = await response.json();
-      
-      // Mock data for now - replace with real API integration
-      setTimeout(() => {
-        setNotifications([
-          {
-            id: '1',
-            type: 'approval',
-            title: 'Listing Approved',
-            message: 'Your listing "iPhone 13 Pro Max" has been approved and is now live',
-            timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-            read: false,
-            icon: 'checkmark-circle',
-            color: '#0F9D58',
-          },
-          {
-            id: '2',
-            type: 'rejection',
-            title: 'Listing Rejected',
-            message: 'Your listing was rejected. Reason: Missing product details',
-            timestamp: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
-            read: false,
-            icon: 'close-circle',
-            color: '#D93025',
-          },
-          {
-            id: '3',
-            type: 'message',
-            title: 'New Message',
-            message: 'You have a new inquiry about your listing',
-            timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-            read: true,
-            icon: 'chatbubble',
-            color: theme.colors.orange,
-          },
-          {
-            id: '4',
-            type: 'plan',
-            title: 'Plan Expiry Warning',
-            message: 'Your Premium plan will expire in 7 days. Renew now to avoid interruption',
-            timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-            read: true,
-            icon: 'warning',
-            color: '#FFA500',
-          },
-          {
-            id: '5',
-            type: 'verification',
-            title: 'Verification Update',
-            message: 'Your business verification documents have been received',
-            timestamp: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-            read: true,
-            icon: 'shield-checkmark',
-            color: theme.colors.emerald,
-          },
-        ]);
-        setLoading(false);
-      }, 1000);
+      const response = await vendorAPI.getNotifications();
+      if (!response.data?.success) {
+        throw new Error(response.data?.message || 'Unable to load notifications.');
+      }
+      const items = response.data?.data?.notifications || [];
+      setNotifications(
+        items.map((notification) => ({
+          id: String(notification.id),
+          type: notification.type || 'general',
+          title: notification.title || 'Notification',
+          message: notification.message || notification.detail || '',
+          timestamp: notification.createdAt,
+          read: (notification.status || '').toLowerCase() === 'read',
+        }))
+      );
     } catch (error) {
       console.error('Error fetching notifications:', error);
-      showToast('Failed to load notifications', 'error');
+      showToast(error.message || 'Failed to load notifications', 'error');
+    } finally {
       setLoading(false);
     }
   };
@@ -120,9 +77,15 @@ const VendorNotificationsScreen = ({ navigation }) => {
     );
   };
 
-  const markAllAsRead = () => {
-    setNotifications(notifications.map((notif) => ({ ...notif, read: true })));
-    showToast('All notifications marked as read');
+  const markAllAsRead = async () => {
+    try {
+      await vendorAPI.updateNotifications('markAllRead');
+      setNotifications((current) => current.map((notif) => ({ ...notif, read: true })));
+      showToast('All notifications marked as read');
+    } catch (error) {
+      console.error('Error updating notifications:', error);
+      showToast(error.message || 'Unable to mark notifications as read', 'error');
+    }
   };
 
   const clearAllNotifications = () => {
@@ -137,28 +100,38 @@ const VendorNotificationsScreen = ({ navigation }) => {
         {
           text: 'Clear All',
           style: 'destructive',
-          onPress: () => {
-            setNotifications([]);
-            showToast('All notifications cleared');
+          onPress: async () => {
+            try {
+              await vendorAPI.updateNotifications('clearAll');
+              setNotifications([]);
+              showToast('All notifications cleared');
+            } catch (error) {
+              console.error('Error clearing notifications:', error);
+              showToast(error.message || 'Unable to clear notifications', 'error');
+            }
           },
         },
       ]
     );
   };
 
-  const getTimeAgo = (timestamp) => {
-    const date = new Date(timestamp);
-    const now = new Date();
-    const seconds = Math.floor((now - date) / 1000);
+  const getTimeAgo = (timestamp) => timeAgo(timestamp);
 
-    if (seconds < 60) return 'Just now';
-    const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return `${minutes}m ago`;
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours}h ago`;
-    const days = Math.floor(hours / 24);
-    if (days < 7) return `${days}d ago`;
-    return date.toLocaleDateString('en-NG', { day: 'numeric', month: 'short' });
+  const getNotificationMeta = (type) => {
+    switch ((type || '').toLowerCase()) {
+      case 'approval':
+        return { icon: 'checkmark-circle', color: '#0F9D58' };
+      case 'rejection':
+        return { icon: 'close-circle', color: '#D93025' };
+      case 'message':
+        return { icon: 'chatbubble', color: theme.colors.orange };
+      case 'plan':
+        return { icon: 'card-outline', color: '#FFA500' };
+      case 'verification':
+        return { icon: 'shield-checkmark', color: theme.colors.emerald };
+      default:
+        return { icon: 'notifications-outline', color: theme.colors.textSecondary };
+    }
   };
 
   const filteredNotifications = notifications.filter((notif) => {
@@ -169,30 +142,33 @@ const VendorNotificationsScreen = ({ navigation }) => {
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
-  const NotificationCard = ({ notification }) => (
-    <TouchableOpacity
-      style={[styles.notificationCard, !notification.read && styles.unreadCard]}
-      onPress={() => markAsRead(notification.id)}
-      activeOpacity={0.7}
-    >
-      <View style={[styles.iconContainer, { backgroundColor: `${notification.color}20` }]}>
-        <Ionicons name={notification.icon} size={24} color={notification.color} />
-      </View>
-      
-      <View style={styles.notificationContent}>
-        <View style={styles.notificationHeader}>
-          <Text style={styles.notificationTitle} numberOfLines={1}>
-            {notification.title}
-          </Text>
-          <Text style={styles.timestamp}>{getTimeAgo(notification.timestamp)}</Text>
+  const NotificationCard = ({ notification }) => {
+    const meta = getNotificationMeta(notification.type);
+    return (
+      <TouchableOpacity
+        style={[styles.notificationCard, !notification.read && styles.unreadCard]}
+        onPress={() => markAsRead(notification.id)}
+        activeOpacity={0.7}
+      >
+        <View style={[styles.iconContainer, { backgroundColor: `${meta.color}20` }]}>
+          <Ionicons name={meta.icon} size={24} color={meta.color} />
         </View>
-        <Text style={styles.notificationMessage} numberOfLines={2}>
-          {notification.message}
-        </Text>
-        {!notification.read && <View style={styles.unreadDot} />}
-      </View>
-    </TouchableOpacity>
-  );
+        
+        <View style={styles.notificationContent}>
+          <View style={styles.notificationHeader}>
+            <Text style={styles.notificationTitle} numberOfLines={1}>
+              {notification.title}
+            </Text>
+            <Text style={styles.timestamp}>{getTimeAgo(notification.timestamp)}</Text>
+          </View>
+          <Text style={styles.notificationMessage} numberOfLines={2}>
+            {notification.message}
+          </Text>
+          {!notification.read && <View style={styles.unreadDot} />}
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   if (loading) {
     return (

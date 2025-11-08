@@ -16,7 +16,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import theme from '../../theme';
 import Toast from '../../components/Toast';
-import { API_BASE_URL } from '../../config/constants';
+import { vendorAPI } from '../../services/api';
+import resolveMediaUrl from '../../utils/url';
+import { formatNaira } from '../../utils/formatters';
 
 const VendorListingsScreen = ({ navigation }) => {
   const { user } = useAuth();
@@ -47,69 +49,36 @@ const VendorListingsScreen = ({ navigation }) => {
   const fetchListings = async () => {
     try {
       setLoading(true);
-      
-      // TODO: Replace with actual API call
-      const response = await fetch(`${API_BASE_URL}/vendor-listings-data.php?format=json`, {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch listings');
+      const response = await vendorAPI.getListings({ status: 'all', perPage: 50 });
+      const payload = response.data?.data;
+      if (!response.data?.success || !payload) {
+        throw new Error('Unable to load listings right now.');
       }
 
-      const data = await response.json();
-      
-      // Mock data for now
-      const mockListings = [
-        {
-          id: '1',
-          title: 'iPhone 13 Pro Max',
-          description: 'Brand new sealed in box',
-          price: 450000,
-          status_raw: 'approved',
-          status_label: 'Live',
-          views: 125,
-          added_on: '2024-11-01',
-          image: 'https://via.placeholder.com/150',
-          category: 'Electronics',
-          location: 'Lagos',
-        },
-        {
-          id: '2',
-          title: 'Samsung Galaxy S23',
-          description: 'Excellent condition, 6 months used',
-          price: 280000,
-          status_raw: 'pending',
-          status_label: 'Pending Review',
-          views: 45,
-          added_on: '2024-11-03',
-          image: 'https://via.placeholder.com/150',
-          category: 'Electronics',
-          location: 'Abuja',
-        },
-        {
-          id: '3',
-          title: 'MacBook Pro 2023',
-          description: 'M2 chip, 16GB RAM, 512GB SSD',
-          price: 850000,
-          status_raw: 'draft',
-          status_label: 'Draft',
-          views: 0,
-          added_on: '2024-11-04',
-          image: 'https://via.placeholder.com/150',
-          category: 'Electronics',
-          location: 'Lagos',
-        },
-      ];
+      const normalizedListings = Array.isArray(payload.listings)
+        ? payload.listings.map((listing) => ({
+            id: listing.id || listing.listing_id || listing.public_id || '',
+            title: listing.title || 'Untitled listing',
+            description: listing.description || '',
+            price: Number(listing.price) || 0,
+            status_raw: (listing.status_raw || listing.status || 'pending').toLowerCase(),
+            status_label: listing.status || 'Pending',
+            views: listing.views || 0,
+            added_on: listing.added_on || '',
+            image: resolveMediaUrl(listing.image),
+            images: Array.isArray(listing.images)
+              ? listing.images.map((img) => resolveMediaUrl(img))
+              : [],
+            category: listing.category || '',
+            location: listing.location || listing.state || '',
+          }))
+        : [];
 
-      setListings(mockListings);
-      setLoading(false);
+      setListings(normalizedListings);
     } catch (error) {
       console.error('Error fetching listings:', error);
       showToast('Failed to load listings', 'error');
+    } finally {
       setLoading(false);
     }
   };
@@ -172,26 +141,12 @@ const VendorListingsScreen = ({ navigation }) => {
 
   const confirmDeleteListing = async (listingId) => {
     try {
-      // TODO: Call API
-      const response = await fetch(`${API_BASE_URL}/vendor-listing-delete.php`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({ listingId }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to delete listing');
-      }
-
-      // Remove from local state
-      setListings(listings.filter(l => l.id !== listingId));
+      await vendorAPI.deleteListing(listingId);
+      setListings((current) => current.filter((listing) => listing.id !== listingId));
       showToast('Listing deleted successfully');
     } catch (error) {
       console.error('Error deleting listing:', error);
-      showToast('Failed to delete listing', 'error');
+      showToast(error.message || 'Failed to delete listing', 'error');
     }
   };
 
@@ -214,9 +169,7 @@ const VendorListingsScreen = ({ navigation }) => {
     }
   };
 
-  const formatPrice = (price) => {
-    return `₦${price?.toLocaleString() || '0'}`;
-  };
+  const formatPrice = (price) => formatNaira(price || 0);
 
   const FilterChip = ({ filterKey, label, isSelected }) => (
     <TouchableOpacity

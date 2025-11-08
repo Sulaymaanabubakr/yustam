@@ -8,9 +8,9 @@
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/splash-logo.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#F5EDE5"
     },
     "ios": {
       "supportsTablet": true,
@@ -24,6 +24,7 @@
       "edgeToEdgeEnabled": true,
       "package": "com.yustam.marketplace"
     },
+    "scheme": "yustam",
     "web": {
       "favicon": "./assets/favicon.png"
     },
@@ -41,6 +42,14 @@
         }
       ],
       "expo-web-browser"
-    ]
+    ],
+    "extra": {
+      "googleAuth": {
+        "expoClientId": "90080814337-23s48plm9jo0o545h9m5b5c6ut8e5ami.apps.googleusercontent.com",
+        "androidClientId": "90080814337-23s48plm9jo0o545h9m5b5c6ut8e5ami.apps.googleusercontent.com",
+        "iosClientId": "90080814337-23s48plm9jo0o545h9m5b5c6ut8e5ami.apps.googleusercontent.com",
+        "webClientId": "90080814337-23s48plm9jo0o545h9m5b5c6ut8e5ami.apps.googleusercontent.com"
+      }
+    }
   }
 }

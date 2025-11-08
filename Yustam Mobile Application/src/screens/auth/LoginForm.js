@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   Image,
-  Platform,
+  ActivityIndicator,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../../context/AuthContext';
@@ -13,22 +13,44 @@ import theme from '../../theme';
 import Input from '../../components/Input';
 import Button from '../../components/Button';
 import Toast from '../../components/Toast';
+import * as Google from 'expo-auth-session/providers/google';
+import { makeRedirectUri } from 'expo-auth-session';
+import {
+  GOOGLE_OAUTH_CONFIG,
+  GOOGLE_OAUTH_SCOPES,
+  hasGoogleOAuthConfig,
+} from '../../config/googleAuth';
 
 const LoginForm = ({ navigation }) => {
-  const { login } = useAuth();
+  const { login, signInWithGoogle, role: currentRole } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [errors, setErrors] = useState({});
   const [toast, setToast] = useState({ visible: false, message: '', type: 'info' });
+  const redirectUri = makeRedirectUri({
+    scheme: 'yustam',
+    useProxy: true,
+  });
+  const [request, response, promptAsync] = Google.useAuthRequest({
+    expoClientId: GOOGLE_OAUTH_CONFIG.expoClientId,
+    iosClientId: GOOGLE_OAUTH_CONFIG.iosClientId,
+    androidClientId: GOOGLE_OAUTH_CONFIG.androidClientId,
+    webClientId: GOOGLE_OAUTH_CONFIG.webClientId,
+    responseType: 'id_token',
+    scopes: GOOGLE_OAUTH_SCOPES,
+    selectAccount: true,
+    redirectUri,
+  });
 
-  const showToast = (message, type = 'error') => {
+  const showToast = useCallback((message, type = 'error') => {
     setToast({ visible: true, message, type });
-  };
+  }, [setToast]);
 
-  const hideToast = () => {
-    setToast({ ...toast, visible: false });
-  };
+  const hideToast = useCallback(() => {
+    setToast((prev) => ({ ...prev, visible: false }));
+  }, [setToast]);
 
   const validate = () => {
     const newErrors = {};
@@ -72,9 +94,78 @@ const LoginForm = ({ navigation }) => {
     }
   };
 
-  const handleGoogleLogin = async () => {
-    // TODO: Implement Google Sign-In with expo-auth-session
-    showToast('Google Sign-In coming soon!', 'info');
+  useEffect(() => {
+    if (!response) {
+      return;
+    }
+
+    const handleGoogleResponse = async () => {
+      if (response.type === 'success') {
+        const idToken =
+          response.authentication?.idToken || response.params?.id_token || null;
+
+        if (!idToken) {
+          showToast('Unable to retrieve Google credentials. Please try again.');
+          setGoogleLoading(false);
+          return;
+        }
+
+        try {
+          const storedRole = await AsyncStorage.getItem('role');
+          const targetRole = storedRole || currentRole || 'buyer';
+          await signInWithGoogle(idToken, targetRole);
+          showToast('Login successful!', 'success');
+          setTimeout(() => {
+            navigation.replace('MainTabs');
+          }, 500);
+        } catch (error) {
+          console.error('Google login error:', error);
+          const message = error instanceof Error ? error.message : 'Google sign-in failed. Please try again.';
+          showToast(message);
+        } finally {
+          setGoogleLoading(false);
+        }
+        return;
+      }
+
+      if (response.type === 'error') {
+        const message = response.error?.message || 'Google sign-in failed. Please try again.';
+        showToast(message);
+      }
+
+      setGoogleLoading(false);
+    };
+
+    handleGoogleResponse();
+  }, [response, currentRole, navigation, showToast, signInWithGoogle]);
+
+  const handleGoogleButtonPress = async () => {
+    if (!hasGoogleOAuthConfig()) {
+      showToast('Google sign-in is not configured. Please contact support.');
+      return;
+    }
+
+    if (!request) {
+      showToast('Google sign-in is preparing. Please try again in a moment.');
+      return;
+    }
+
+    if (googleLoading) {
+      return;
+    }
+
+    setGoogleLoading(true);
+
+    try {
+      await promptAsync({
+        useProxy: true,
+        showInRecents: true,
+      });
+    } catch (error) {
+      console.error('Google prompt error:', error);
+      showToast('Unable to start Google sign-in. Please try again.');
+      setGoogleLoading(false);
+    }
   };
 
   return (
@@ -138,15 +229,25 @@ const LoginForm = ({ navigation }) => {
       </View>
 
       <TouchableOpacity
-        style={styles.googleButton}
-        onPress={handleGoogleLogin}
+        style={[styles.googleButton, (!request || googleLoading) && styles.googleButtonDisabled]}
+        onPress={handleGoogleButtonPress}
         activeOpacity={0.8}
+        disabled={!request || googleLoading}
       >
-        <Image
-          source={{ uri: 'https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg' }}
-          style={styles.googleIcon}
-        />
-        <Text style={styles.googleButtonText}>Sign in with Google</Text>
+        {googleLoading ? (
+          <>
+            <ActivityIndicator size="small" color={theme.colors.orange} />
+            <Text style={styles.googleButtonText}>Signing in...</Text>
+          </>
+        ) : (
+          <>
+            <Image
+              source={{ uri: 'https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg' }}
+              style={styles.googleIcon}
+            />
+            <Text style={styles.googleButtonText}>Sign in with Google</Text>
+          </>
+        )}
       </TouchableOpacity>
     </View>
   );
@@ -193,6 +294,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.colors.borderDark,
     ...theme.shadows.soft,
+  },
+  googleButtonDisabled: {
+    opacity: 0.6,
   },
   googleIcon: {
     width: 24,

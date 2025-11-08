@@ -21,6 +21,8 @@ import Toast from '../../components/Toast';
 import Button from '../../components/Button';
 import { API_BASE_URL, STATES } from '../../config/constants';
 import { uploadImage } from '../../config/cloudinary';
+import { vendorAPI } from '../../services/api';
+import resolveMediaUrl from '../../utils/url';
 
 const EditProfileScreen = ({ navigation }) => {
   const { user, updateUserProfile } = useAuth();
@@ -54,31 +56,32 @@ const EditProfileScreen = ({ navigation }) => {
   const loadProfile = async () => {
     try {
       setLoading(true);
-      
-      // Load profile from user context
-      if (user) {
-        setFormData({
-          name: user.displayName || user.fullName || '',
-          email: user.email || '',
-          phone: user.phone || user.phoneNumber || '',
-          businessName: user.businessName || '',
-          businessAddress: user.businessAddress || '',
-          state: user.state || '',
-          profilePhoto: user.photoURL || user.profilePhoto || '',
-        });
+      const response = await vendorAPI.getProfile();
+      if (!response.data?.success) {
+        throw new Error(response.data?.message || 'Unable to load profile data.');
       }
 
-      // TODO: Fetch additional profile data from API
-      // const response = await fetch(`${API_BASE_URL}/vendor-profile.php?format=json`, {
-      //   credentials: 'include',
-      // });
-      // const data = await response.json();
-      // setProfileData({ plan: data.plan, planStatus: data.planStatus, planExpiry: data.planExpiry });
+      const profile = response.data?.profile || {};
 
-      setLoading(false);
+      setFormData({
+        name: profile.name || user?.displayName || '',
+        email: profile.email || user?.email || '',
+        phone: profile.phone || user?.phone || '',
+        businessName: profile.businessName || '',
+        businessAddress: profile.address || profile.businessAddress || '',
+        state: profile.state || '',
+        profilePhoto: resolveMediaUrl(profile.profilePhoto) || user?.photoURL || '',
+      });
+
+      setProfileData({
+        plan: profile.plan || 'Free',
+        planStatus: profile.verification?.statusDisplay || 'Active',
+        planExpiry: profile.planRenewal || '',
+      });
     } catch (error) {
       console.error('Error loading profile:', error);
       showToast('Failed to load profile', 'error');
+    } finally {
       setLoading(false);
     }
   };
@@ -184,52 +187,37 @@ const EditProfileScreen = ({ navigation }) => {
         profilePhotoUrl = await uploadProfilePhoto();
       }
 
-      // Prepare payload
-      const payload = {
-        name: formData.name.trim(),
-        business_name: formData.businessName.trim(),
-        phone: formData.phone.trim(),
-        state: formData.state,
-        business_address: formData.businessAddress.trim(),
-        profile_photo: profilePhotoUrl,
-      };
-
-      // Call API
-      const response = await fetch(`${API_BASE_URL}/update-vendor-profile.php`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to update profile');
+      const payload = new FormData();
+      payload.append('name', formData.name.trim());
+      payload.append('business_name', formData.businessName.trim());
+      payload.append('phone', formData.phone.trim());
+      payload.append('state', formData.state);
+      payload.append('business_address', formData.businessAddress.trim());
+      if (profilePhotoUrl) {
+        payload.append('profile_photo_url', profilePhotoUrl);
       }
 
-      const result = await response.json();
+      const response = await vendorAPI.updateProfile(payload);
 
-      if (result.success) {
-        // Update local auth context
-        if (updateUserProfile) {
-          await updateUserProfile({
-            displayName: formData.name,
-            photoURL: profilePhotoUrl,
-            phone: formData.phone,
-            businessName: formData.businessName,
-            businessAddress: formData.businessAddress,
-            state: formData.state,
-          });
-        }
-
-        showToast('Profile updated successfully');
-        setTimeout(() => {
-          navigation.goBack();
-        }, 1000);
-      } else {
-        throw new Error(result.message || 'Failed to update profile');
+      if (!response.data?.success) {
+        throw new Error(response.data?.message || 'Failed to update profile');
       }
+
+      if (updateUserProfile) {
+        await updateUserProfile({
+          displayName: formData.name,
+          photoURL: profilePhotoUrl,
+          phone: formData.phone,
+          businessName: formData.businessName,
+          businessAddress: formData.businessAddress,
+          state: formData.state,
+        });
+      }
+
+      showToast('Profile updated successfully');
+      setTimeout(() => {
+        navigation.goBack();
+      }, 1000);
     } catch (error) {
       console.error('Error saving profile:', error);
       showToast(error.message || 'Failed to update profile', 'error');

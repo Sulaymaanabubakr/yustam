@@ -15,8 +15,11 @@ import theme from '../../theme';
 import Toast from '../../components/Toast';
 import Button from '../../components/Button';
 import { API_BASE_URL } from '../../config/constants';
+import { vendorAPI } from '../../services/api';
+import { formatNumber } from '../../utils/formatters';
+import * as WebBrowser from 'expo-web-browser';
 
-const PLANS = [
+const DEFAULT_PLANS = [
   {
     slug: 'free',
     name: 'Free',
@@ -89,7 +92,10 @@ const PlansScreen = ({ navigation }) => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [plans, setPlans] = useState(DEFAULT_PLANS);
   const [currentPlan, setCurrentPlan] = useState('free');
+  const [paystackKey, setPaystackKey] = useState('');
+  const [processingPlan, setProcessingPlan] = useState(null);
   const [toast, setToast] = useState({ visible: false, message: '', type: 'info' });
 
   useEffect(() => {
@@ -99,30 +105,52 @@ const PlansScreen = ({ navigation }) => {
   const loadPlans = async () => {
     try {
       setLoading(true);
-      
-      // TODO: Fetch current vendor plan from API
-      // const response = await fetch(`${API_BASE_URL}/vendor-plans.php?format=json`, {
-      //   credentials: 'include',
-      // });
-      // const data = await response.json();
-      // setCurrentPlan(data.currentPlan);
+      const response = await vendorAPI.getPlans();
+      if (!response.data?.success) {
+        throw new Error(response.data?.message || 'Unable to load plans right now.');
+      }
 
-      // Mock data for now
-      setTimeout(() => {
-        setCurrentPlan('free');
-        setLoading(false);
-      }, 1000);
+      const payload = response.data?.data || {};
+      const catalog = payload.plans || {};
+      const normalizedPlans = Object.entries(catalog).map(([slug, definition]) => {
+        const monthly = definition?.durations?.['1'] || definition?.durations?.[1] || {};
+        const fallback = DEFAULT_PLANS.find((plan) => plan.slug === slug) || {};
+        return {
+          slug,
+          name: definition.displayName || definition.name || fallback.name || getPlanLabel(slug),
+          price: monthly.amount || definition.monthlyPrice || fallback.price || 0,
+          duration: monthly.intervalLabel || definition.durationLabel || fallback.duration || 'Monthly',
+          listings: definition.listings || definition.listingLimit || fallback.listings || 0,
+          features: definition.features || fallback.features || [],
+          color: fallback.color || '#F3731E',
+          popular: definition.popular ?? fallback.popular ?? slug === 'premium',
+          paystackCode: monthly.planCode || null,
+        };
+      });
+
+      normalizedPlans.sort((a, b) => (a.price || 0) - (b.price || 0));
+
+      const subscription = payload.subscription || payload.currentPlan || {};
+      const slugRaw = (subscription.slug || subscription.planName || subscription.planSlug || 'free')
+        .toLowerCase()
+        .replace('-plan', '');
+
+      setPlans(normalizedPlans.length ? normalizedPlans : DEFAULT_PLANS);
+      setCurrentPlan(slugRaw);
+      setPaystackKey(payload.paystackKey || '');
     } catch (error) {
       console.error('Error loading plans:', error);
-      showToast('Failed to load plans', 'error');
+      setPlans(DEFAULT_PLANS);
+      showToast(error.message || 'Failed to load plans', 'error');
+    } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
   const onRefresh = async () => {
     setRefreshing(true);
     await loadPlans();
-    setRefreshing(false);
   };
 
   const showToast = (message, type = 'success') => {
@@ -139,86 +167,112 @@ const PlansScreen = ({ navigation }) => {
       return;
     }
 
-    // TODO: Integrate Paystack payment gateway
-    // Steps needed:
-    // 1. Install react-native-paystack-webview
-    // 2. Get Paystack public key from backend
-    // 3. Initialize payment with plan amount
-    // 4. On success, call vendor-subscription-action.php with plan slug
-    // 5. Update local state and show success message
-    // Example: navigation.navigate('PaystackPayment', { plan, amount: plan.price });
-    showToast('Payment integration with Paystack coming soon', 'info');
+    if (!paystackKey) {
+      showToast('Payment configuration is not available yet. Please try again shortly.', 'error');
+      return;
+    }
+
+    const openCheckout = async () => {
+      try {
+        setProcessingPlan(plan.slug);
+        const checkoutUrl = `${API_BASE_URL}/vendor-renew-plan.php?plan=${encodeURIComponent(plan.slug)}`;
+        await WebBrowser.openBrowserAsync(checkoutUrl);
+        showToast('Complete the payment in your browser and return to refresh your plan.', 'info');
+        await loadPlans();
+      } catch (error) {
+        console.error('Plan selection error:', error);
+        showToast(error.message || 'Unable to open payment page right now.', 'error');
+      } finally {
+        setProcessingPlan(null);
+      }
+    };
+
+    openCheckout();
   };
 
-  const PlanCard = ({ plan, isCurrentPlan }) => (
-    <View style={[styles.planCard, isCurrentPlan && styles.planCardCurrent]}>
-      {plan.popular && (
-        <View style={styles.popularBadge}>
-          <Text style={styles.popularText}>MOST POPULAR</Text>
-        </View>
-      )}
-      
-      <View style={styles.planHeader}>
-        <View style={[styles.planIcon, { backgroundColor: `${plan.color}20` }]}>
-          <Ionicons
-            name={
-              plan.slug === 'free' ? 'cube-outline' :
-              plan.slug === 'basic' ? 'rocket-outline' :
-              plan.slug === 'premium' ? 'star-outline' :
-              'trophy-outline'
-            }
-            size={32}
-            color={plan.color}
-          />
-        </View>
-        
-        <View style={styles.planTitleContainer}>
-          <Text style={styles.planName}>{plan.name}</Text>
-          {isCurrentPlan && (
-            <View style={styles.currentBadge}>
-              <Text style={styles.currentText}>Current Plan</Text>
-            </View>
-          )}
-        </View>
-      </View>
+  const getPlanLabel = (slug) =>
+    slug ? slug.replace(/-/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase()) : 'Free';
 
-      <View style={styles.priceContainer}>
-        <Text style={styles.currency}>₦</Text>
-        <Text style={styles.price}>{plan.price.toLocaleString()}</Text>
-        <Text style={styles.duration}>/{plan.duration}</Text>
-      </View>
+  const PlanCard = ({ plan, isCurrentPlan }) => {
+    const priceLabel = formatNumber(plan.price || 0);
 
-      <View style={styles.listingsInfo}>
-        <Ionicons name="list-outline" size={20} color={theme.colors.textSecondary} />
-        <Text style={styles.listingsText}>{plan.listings} Active Listings</Text>
-      </View>
-
-      <View style={styles.featuresContainer}>
-        {plan.features.map((feature, index) => (
-          <View key={index} style={styles.featureRow}>
-            <Ionicons name="checkmark-circle" size={20} color={theme.colors.success} />
-            <Text style={styles.featureText}>{feature}</Text>
+    return (
+      <View style={[styles.planCard, isCurrentPlan && styles.planCardCurrent]}>
+        {plan.popular && (
+          <View style={styles.popularBadge}>
+            <Text style={styles.popularText}>MOST POPULAR</Text>
           </View>
-        ))}
-      </View>
+        )}
+        
+        <View style={styles.planHeader}>
+          <View style={[styles.planIcon, { backgroundColor: `${plan.color}20` }]}>
+            <Ionicons
+              name={
+                plan.slug === 'free' ? 'cube-outline' :
+                plan.slug === 'basic' ? 'rocket-outline' :
+                plan.slug === 'premium' ? 'star-outline' :
+                'trophy-outline'
+              }
+              size={32}
+              color={plan.color}
+            />
+          </View>
+          
+          <View style={styles.planTitleContainer}>
+            <Text style={styles.planName}>{plan.name}</Text>
+            {isCurrentPlan && (
+              <View style={styles.currentBadge}>
+                <Text style={styles.currentText}>Current Plan</Text>
+              </View>
+            )}
+          </View>
+        </View>
 
-      <Button
-        title={
-          isCurrentPlan ? 'Current Plan' :
-          plan.slug === 'free' ? 'Downgrade' :
-          currentPlan === 'free' ? 'Upgrade' :
-          'Change Plan'
-        }
-        onPress={() => handleSelectPlan(plan)}
-        disabled={isCurrentPlan}
-        style={[
-          styles.selectButton,
-          isCurrentPlan && styles.selectButtonDisabled,
-          plan.popular && !isCurrentPlan && styles.selectButtonPopular,
-        ]}
-      />
-    </View>
-  );
+        <View style={styles.priceContainer}>
+          <Text style={styles.currency}>₦</Text>
+          <Text style={styles.price}>{priceLabel}</Text>
+          <Text style={styles.duration}>/{plan.duration}</Text>
+        </View>
+
+        <View style={styles.listingsInfo}>
+          <Ionicons name="list-outline" size={20} color={theme.colors.textSecondary} />
+          <Text style={styles.listingsText}>{plan.listings} Active Listings</Text>
+        </View>
+
+        <View style={styles.featuresContainer}>
+          {(Array.isArray(plan.features) ? plan.features : []).map((feature, index) => (
+            <View key={`${plan.slug}-${feature}-${index}`} style={styles.featureRow}>
+              <Ionicons name="checkmark-circle" size={20} color={theme.colors.success} />
+              <Text style={styles.featureText}>{feature}</Text>
+            </View>
+          ))}
+        </View>
+
+        <Button
+          onPress={() => handleSelectPlan(plan)}
+          disabled={isCurrentPlan || processingPlan === plan.slug}
+          loading={processingPlan === plan.slug}
+          variant={plan.popular ? 'secondary' : 'primary'}
+          size="large"
+          fullWidth
+          icon="sparkles-outline"
+          style={[
+            styles.selectButton,
+            isCurrentPlan && styles.selectButtonDisabled,
+            plan.popular && !isCurrentPlan && styles.selectButtonPopular,
+          ]}
+        >
+          {isCurrentPlan
+            ? 'Current Plan'
+            : plan.slug === 'free'
+            ? 'Downgrade'
+            : currentPlan === 'free'
+            ? 'Upgrade'
+            : 'Change Plan'}
+        </Button>
+      </View>
+    );
+  };
 
   if (loading) {
     return (
@@ -269,15 +323,28 @@ const PlansScreen = ({ navigation }) => {
         }
       >
         {/* Intro Section */}
-        <View style={styles.introSection}>
-          <Text style={styles.introTitle}>Choose Your Plan</Text>
-          <Text style={styles.introText}>
-            Select the perfect plan for your business. Upgrade or downgrade anytime.
+      <View style={styles.introSection}>
+        <Text style={styles.introTitle}>Choose Your Plan</Text>
+        <Text style={styles.introText}>
+          Select the perfect plan for your business. Upgrade or downgrade anytime.
+        </Text>
+        <View style={styles.subscriptionSummary}>
+          <Text style={styles.subscriptionSummaryText}>
+            Current Plan: {getPlanLabel(currentPlan)}
           </Text>
+          <Button
+            variant="outline"
+            size="small"
+            icon="information-circle-outline"
+            onPress={() => navigation.navigate('SubscriptionDetails')}
+          >
+            View Details
+          </Button>
         </View>
+      </View>
 
         {/* Plans Grid */}
-        {PLANS.map((plan) => (
+        {plans.map((plan) => (
           <PlanCard
             key={plan.slug}
             plan={plan}
@@ -353,6 +420,17 @@ const styles = StyleSheet.create({
   introSection: {
     alignItems: 'center',
     marginBottom: theme.spacing.xl,
+  },
+  subscriptionSummary: {
+    width: '100%',
+    marginTop: theme.spacing.lg,
+    gap: theme.spacing.sm,
+    alignItems: 'center',
+  },
+  subscriptionSummaryText: {
+    fontFamily: theme.typography.fontFamily.interMedium,
+    fontSize: theme.typography.fontSize.base,
+    color: theme.colors.textPrimary,
   },
   introTitle: {
     fontFamily: theme.typography.fontFamilyHeading,

@@ -1,5 +1,5 @@
 // API Base URL (update this to match your production server)
-export const API_BASE_URL = 'https://yustam.com';
+export const API_BASE_URL = 'https://yustam.com.ng';
 
 // Categories from web app
 export const CATEGORIES = [

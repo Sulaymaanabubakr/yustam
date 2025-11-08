@@ -17,6 +17,10 @@ import { useAuth } from '../../context/AuthContext';
 import theme from '../../theme';
 import Toast from '../../components/Toast';
 import Button from '../../components/Button';
+import { vendorAPI } from '../../services/api';
+import resolveMediaUrl from '../../utils/url';
+import { API_BASE_URL } from '../../config/constants';
+import { formatDate, formatNaira } from '../../utils/formatters';
 
 const { width } = Dimensions.get('window');
 const LISTING_WIDTH = (width - theme.spacing.lg * 3) / 2;
@@ -37,6 +41,7 @@ const StorefrontScreen = ({ navigation }) => {
     joinedDate: '',
     profileImage: '',
     coverImage: '',
+    vendorUid: '',
   });
   const [listings, setListings] = useState([]);
 
@@ -47,62 +52,47 @@ const StorefrontScreen = ({ navigation }) => {
   const fetchStorefront = async () => {
     try {
       setLoading(true);
-      
-      // TODO: Replace with actual API call
-      // const response = await fetch(`https://yustam.com/vendor-storefront-data.php?vendor_id=${user.id}`);
-      // const data = await response.json();
-      
-      // Mock data for now
-      setTimeout(() => {
-        setStorefront({
-          businessName: 'Premium Electronics Store',
-          description: 'Your trusted source for quality electronics and gadgets in Lagos. We offer authentic products with warranty.',
-          location: 'Lagos, Nigeria',
-          verified: true,
-          rating: 4.8,
-          totalReviews: 156,
-          totalListings: 42,
-          joinedDate: 'January 2024',
-          profileImage: 'https://via.placeholder.com/150',
-          coverImage: 'https://via.placeholder.com/800x300',
-        });
-        
-        setListings([
-          {
-            id: '1',
-            title: 'iPhone 13 Pro Max',
-            price: 450000,
-            image: 'https://via.placeholder.com/200',
-            status: 'active',
-          },
-          {
-            id: '2',
-            title: 'Samsung Galaxy S21',
-            price: 280000,
-            image: 'https://via.placeholder.com/200',
-            status: 'active',
-          },
-          {
-            id: '3',
-            title: 'MacBook Pro M1',
-            price: 850000,
-            image: 'https://via.placeholder.com/200',
-            status: 'active',
-          },
-          {
-            id: '4',
-            title: 'AirPods Pro',
-            price: 75000,
-            image: 'https://via.placeholder.com/200',
-            status: 'active',
-          },
-        ]);
-        
-        setLoading(false);
-      }, 1000);
+      if (!user?.uid) {
+        throw new Error('Unable to determine your vendor account.');
+      }
+
+      const response = await vendorAPI.getStorefront(user.uid);
+      if (!response.data?.success) {
+        throw new Error(response.data?.message || 'Unable to load storefront data.');
+      }
+
+      const vendor = response.data.vendor || {};
+      const listingData = Array.isArray(response.data.listings) ? response.data.listings : [];
+
+      setStorefront({
+        businessName: vendor.businessName || vendor.displayName || 'Your Storefront',
+        description: vendor.about || '',
+        location: vendor.location || vendor.city || vendor.state || vendor.country || '',
+        verified: (vendor.verificationState || '').toLowerCase() === 'verified',
+        rating: vendor.rating || 0,
+        totalReviews: vendor.totalReviews || 0,
+        totalListings: listingData.length,
+        joinedDate: vendor.createdAt
+          ? formatDate(vendor.createdAt, { month: 'long', year: 'numeric' })
+          : '',
+        profileImage: resolveMediaUrl(vendor.avatar),
+        coverImage: resolveMediaUrl(vendor.banner),
+        vendorUid: vendor.vendorUid || vendor.firebaseUid || user.uid,
+      });
+
+      setListings(
+        listingData.map((listing) => ({
+          id: listing.id || listing.listing_id || listing.public_id,
+          title: listing.title || 'Untitled',
+          price: listing.price || 0,
+          image: resolveMediaUrl(listing.image),
+          status: listing.status || 'active',
+        }))
+      );
     } catch (error) {
       console.error('Error fetching storefront:', error);
       showToast('Failed to load storefront', 'error');
+    } finally {
       setLoading(false);
     }
   };
@@ -123,8 +113,8 @@ const StorefrontScreen = ({ navigation }) => {
 
   const handleShareStorefront = async () => {
     try {
-      // TODO: Use actual storefront URL
-      const storefrontUrl = `https://yustam.com/vendor-storefront.php?id=${user?.id}`;
+      const identifier = storefront.vendorUid || user?.uid;
+      const storefrontUrl = `${API_BASE_URL}/vendor-storefront.php?id=${identifier}`;
       
       await Share.share({
         message: `Check out ${storefront.businessName} on YUSTAM Marketplace!\n${storefrontUrl}`,
@@ -136,9 +126,7 @@ const StorefrontScreen = ({ navigation }) => {
     }
   };
 
-  const formatPrice = (price) => {
-    return `₦${price.toLocaleString('en-NG')}`;
-  };
+  const formatPrice = (price) => formatNaira(price || 0);
 
   const ListingCard = ({ listing }) => (
     <TouchableOpacity

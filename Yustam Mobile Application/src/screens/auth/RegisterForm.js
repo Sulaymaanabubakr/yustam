@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   Image,
-  ScrollView,
+  ActivityIndicator,
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -15,11 +15,19 @@ import theme from '../../theme';
 import Input from '../../components/Input';
 import Button from '../../components/Button';
 import Toast from '../../components/Toast';
+import * as Google from 'expo-auth-session/providers/google';
+import { makeRedirectUri } from 'expo-auth-session';
+import {
+  GOOGLE_OAUTH_CONFIG,
+  GOOGLE_OAUTH_SCOPES,
+  hasGoogleOAuthConfig,
+} from '../../config/googleAuth';
 
 const RegisterForm = ({ navigation }) => {
-  const { register } = useAuth();
+  const { register: registerUser, signInWithGoogle, role: currentRole } = useAuth();
   const [role, setRole] = useState('buyer'); // Default role
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [errors, setErrors] = useState({});
   const [toast, setToast] = useState({ visible: false, message: '', type: 'info' });
   
@@ -35,7 +43,22 @@ const RegisterForm = ({ navigation }) => {
   const [businessName, setBusinessName] = useState('');
   const [category, setCategory] = useState('');
 
-  useState(() => {
+  const redirectUri = makeRedirectUri({
+    scheme: 'yustam',
+    useProxy: true,
+  });
+  const [request, response, promptAsync] = Google.useAuthRequest({
+    expoClientId: GOOGLE_OAUTH_CONFIG.expoClientId,
+    iosClientId: GOOGLE_OAUTH_CONFIG.iosClientId,
+    androidClientId: GOOGLE_OAUTH_CONFIG.androidClientId,
+    webClientId: GOOGLE_OAUTH_CONFIG.webClientId,
+    responseType: 'id_token',
+    scopes: GOOGLE_OAUTH_SCOPES,
+    selectAccount: true,
+    redirectUri,
+  });
+
+  useEffect(() => {
     // Load role from AsyncStorage
     const loadRole = async () => {
       const storedRole = await AsyncStorage.getItem('role');
@@ -46,13 +69,13 @@ const RegisterForm = ({ navigation }) => {
     loadRole();
   }, []);
 
-  const showToast = (message, type = 'error') => {
+  const showToast = useCallback((message, type = 'error') => {
     setToast({ visible: true, message, type });
-  };
+  }, [setToast]);
 
-  const hideToast = () => {
-    setToast({ ...toast, visible: false });
-  };
+  const hideToast = useCallback(() => {
+    setToast((prev) => ({ ...prev, visible: false }));
+  }, [setToast]);
 
   const validate = () => {
     const newErrors = {};
@@ -119,7 +142,7 @@ const RegisterForm = ({ navigation }) => {
         userData.category = category;
       }
 
-      await register(email.trim(), password, userData, role);
+      await registerUser(email.trim(), password, userData, role);
       showToast('Registration successful!', 'success');
       
       // Navigate to main app
@@ -133,9 +156,77 @@ const RegisterForm = ({ navigation }) => {
     }
   };
 
+  useEffect(() => {
+    if (!response) {
+      return;
+    }
+
+    const handleGoogleResponse = async () => {
+      if (response.type === 'success') {
+        const idToken =
+          response.authentication?.idToken || response.params?.id_token || null;
+
+        if (!idToken) {
+          showToast('Unable to retrieve Google credentials. Please try again.');
+          setGoogleLoading(false);
+          return;
+        }
+
+        try {
+          const targetRole = role || currentRole || 'buyer';
+          await signInWithGoogle(idToken, targetRole);
+          showToast('Registration successful!', 'success');
+          setTimeout(() => {
+            navigation.replace('MainTabs');
+          }, 500);
+        } catch (error) {
+          console.error('Google registration error:', error);
+          const message = error instanceof Error ? error.message : 'Google sign-in failed. Please try again.';
+          showToast(message);
+        } finally {
+          setGoogleLoading(false);
+        }
+        return;
+      }
+
+      if (response.type === 'error') {
+        const message = response.error?.message || 'Google sign-in failed. Please try again.';
+        showToast(message);
+      }
+
+      setGoogleLoading(false);
+    };
+
+    handleGoogleResponse();
+  }, [response, role, currentRole, navigation, showToast, signInWithGoogle]);
+
   const handleGoogleSignUp = async () => {
-    // TODO: Implement Google Sign-Up with expo-auth-session
-    showToast('Google Sign-Up coming soon!', 'info');
+    if (!hasGoogleOAuthConfig()) {
+      showToast('Google sign-in is not configured. Please contact support.');
+      return;
+    }
+
+    if (!request) {
+      showToast('Google sign-in is preparing. Please try again in a moment.');
+      return;
+    }
+
+    if (googleLoading) {
+      return;
+    }
+
+    setGoogleLoading(true);
+
+    try {
+      await promptAsync({
+        useProxy: true,
+        showInRecents: true,
+      });
+    } catch (error) {
+      console.error('Google prompt error:', error);
+      showToast('Unable to start Google sign-in. Please try again.');
+      setGoogleLoading(false);
+    }
   };
 
   return (
@@ -286,15 +377,25 @@ const RegisterForm = ({ navigation }) => {
       </View>
 
       <TouchableOpacity
-        style={styles.googleButton}
+        style={[styles.googleButton, (!request || googleLoading) && styles.googleButtonDisabled]}
         onPress={handleGoogleSignUp}
         activeOpacity={0.8}
+        disabled={!request || googleLoading}
       >
-        <Image
-          source={{ uri: 'https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg' }}
-          style={styles.googleIcon}
-        />
-        <Text style={styles.googleButtonText}>Sign up with Google</Text>
+        {googleLoading ? (
+          <>
+            <ActivityIndicator size="small" color={theme.colors.orange} />
+            <Text style={styles.googleButtonText}>Signing in...</Text>
+          </>
+        ) : (
+          <>
+            <Image
+              source={{ uri: 'https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg' }}
+              style={styles.googleIcon}
+            />
+            <Text style={styles.googleButtonText}>Sign up with Google</Text>
+          </>
+        )}
       </TouchableOpacity>
     </View>
   );
@@ -397,6 +498,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.colors.borderDark,
     ...theme.shadows.soft,
+  },
+  googleButtonDisabled: {
+    opacity: 0.6,
   },
   googleIcon: {
     width: 24,

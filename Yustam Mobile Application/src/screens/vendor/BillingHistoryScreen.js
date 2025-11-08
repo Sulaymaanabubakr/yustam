@@ -15,6 +15,8 @@ import { useAuth } from '../../context/AuthContext';
 import theme from '../../theme';
 import Toast from '../../components/Toast';
 import Button from '../../components/Button';
+import { vendorAPI } from '../../services/api';
+import { formatNaira, formatDate } from '../../utils/formatters';
 
 const BillingHistoryScreen = ({ navigation }) => {
   const { user } = useAuth();
@@ -30,47 +32,24 @@ const BillingHistoryScreen = ({ navigation }) => {
   const fetchBillingHistory = async () => {
     try {
       setLoading(true);
-      
-      // TODO: Replace with actual API call
-      // const response = await fetch(`https://yustam.com/vendor-billing-history.php?format=json`);
-      // const data = await response.json();
-      
-      // Mock data for now - replace with real API integration
-      setTimeout(() => {
-        setTransactions([
-          {
-            id: '1',
-            plan: 'Premium Plan',
-            amount: 25000,
-            date: '2025-11-01',
-            status: 'Completed',
-            paymentMethod: 'Card',
-            reference: 'TXN-2025110100123',
-          },
-          {
-            id: '2',
-            plan: 'Basic Plan',
-            amount: 10000,
-            date: '2025-10-01',
-            status: 'Completed',
-            paymentMethod: 'Bank Transfer',
-            reference: 'TXN-2025100100456',
-          },
-          {
-            id: '3',
-            plan: 'Premium Plan',
-            amount: 25000,
-            date: '2025-09-01',
-            status: 'Completed',
-            paymentMethod: 'Card',
-            reference: 'TXN-2025090100789',
-          },
-        ]);
-        setLoading(false);
-      }, 1000);
+      const response = await vendorAPI.getBillingHistory();
+      if (typeof response.data !== 'object' || !response.data) {
+        throw new Error('Billing history is only available on the web dashboard at the moment.');
+      }
+
+      if (!response.data?.success || !Array.isArray(response.data?.data?.transactions)) {
+        throw new Error(response.data?.message || 'No billing records found.');
+      }
+
+      setTransactions(response.data.data.transactions);
     } catch (error) {
       console.error('Error fetching billing history:', error);
-      showToast('Failed to load billing history', 'error');
+      setTransactions([]);
+      showToast(
+        error.message || 'Billing history is not available right now. Please try again later.',
+        'error'
+      );
+    } finally {
       setLoading(false);
     }
   };
@@ -90,42 +69,16 @@ const BillingHistoryScreen = ({ navigation }) => {
   };
 
   const handleRenewPlan = () => {
-    Alert.alert(
-      'Renew Plan',
-      'Would you like to renew your current plan?',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Renew',
-          onPress: () => {
-            // TODO: Navigate to payment or plans screen
-            showToast('Redirecting to payment...', 'info');
-          },
-        },
-      ]
-    );
+    navigation.navigate('Plans');
   };
 
   const handleUpgradePlan = () => {
-    // TODO: Navigate to plans screen
-    showToast('Redirecting to plans...', 'info');
+    navigation.navigate('Plans');
   };
 
-  const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-NG', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    });
-  };
+  const formatDateLabel = (dateString) => formatDate(dateString);
 
-  const formatAmount = (amount) => {
-    return `₦${amount.toLocaleString('en-NG')}`;
-  };
+  const formatAmount = (amount) => formatNaira(amount || 0);
 
   const getStatusColor = (status) => {
     switch (status.toLowerCase()) {
@@ -157,7 +110,7 @@ const BillingHistoryScreen = ({ navigation }) => {
       <View style={styles.transactionDetails}>
         <View style={styles.detailRow}>
           <Ionicons name="calendar-outline" size={16} color={theme.colors.textSecondary} />
-          <Text style={styles.detailText}>{formatDate(transaction.date)}</Text>
+              <Text style={styles.detailText}>{formatDateLabel(transaction.date)}</Text>
         </View>
         <View style={styles.detailRow}>
           <Ionicons name="card-outline" size={16} color={theme.colors.textSecondary} />

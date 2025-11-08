@@ -5,17 +5,30 @@ import { API_BASE_URL } from '../config/constants';
 const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 30000,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
+    Accept: 'application/json',
+    'X-Requested-With': 'XMLHttpRequest',
   },
 });
+
+const buildFormData = (payload = {}) => {
+  const formData = new FormData();
+  Object.entries(payload).forEach(([key, value]) => {
+    if (value !== undefined && value !== null) {
+      formData.append(key, value);
+    }
+  });
+  return formData;
+};
 
 // Request interceptor for adding auth token
 api.interceptors.request.use(
   (config) => {
-    // Add auth token if available
-    // Token will be added by AuthContext when needed
-    return config;
+    const nextConfig = { ...config };
+    nextConfig.withCredentials = true;
+    return nextConfig;
   },
   (error) => {
     return Promise.reject(error);
@@ -43,8 +56,28 @@ api.interceptors.response.use(
 // Auth endpoints
 export const authAPI = {
   // Vendor endpoints
-  vendorRegister: (data) => api.post('/signup.php', { ...data, role: 'vendor' }),
-  vendorLogin: (email, password) => api.post('/vendor-login.html', { email, password }),
+  vendorRegister: (data = {}) => {
+    const formData = buildFormData({
+      name: data.name || data.fullName,
+      email: data.email,
+      phone: data.phone,
+      password: data.password,
+      confirm: data.confirm ?? data.password,
+      business_name: data.business_name || data.businessName,
+      category: data.category,
+      role: 'vendor',
+      source: data.source || 'mobile-app',
+    });
+    return api.post('/signup.php', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  vendorLogin: (email, password) => {
+    const formData = buildFormData({ email, password });
+    return api.post('/login.php', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
   
   // Buyer endpoints
   buyerRegister: (data) => api.post('/buyer-register.php', data),
@@ -84,8 +117,11 @@ export const chatAPI = {
 
 // Profile endpoints
 export const profileAPI = {
-  get: () => api.get('/vendor-profile.php'),
-  update: (data) => api.post('/update-vendor-profile.php', data),
+  get: () => api.get('/vendor-profile.php', { params: { format: 'json' } }),
+  update: (data) =>
+    api.post('/update-vendor-profile.php', data, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
   getSettings: () => api.get('/vendor-settings.php', { params: { format: 'json' } }),
   updateSettings: (data) => api.post('/update-vendor-settings.php', data),
   deleteAccount: () => api.post('/vendor-delete-account.php'),
@@ -93,17 +129,44 @@ export const profileAPI = {
 
 // Vendor-specific endpoints
 export const vendorAPI = {
-  getPlans: () => api.get('/vendor-plans.php'),
-  subscribeToPlan: (planId) => api.post('/vendor-subscription-action.php', { planId, action: 'subscribe' }),
-  getBillingHistory: () => api.get('/vendor-billing-history.php'),
+  getDashboard: () => api.get('/vendor-dashboard.php', { params: { format: 'json' } }),
+  getListings: (params = {}) =>
+    api.get('/vendor-listings-data.php', { params: { format: 'json', ...params } }),
+  deleteListing: (listingId) => api.post('/vendor-listing-delete.php', { listingId }),
+  getPlans: () => api.get('/vendor-plans.php', { params: { format: 'json' } }),
+  manageSubscription: (payload) => api.post('/vendor-subscription-action.php', payload),
+  getBillingHistory: () => api.get('/vendor-billing-history.php', { params: { format: 'json' } }),
   getVerificationStatus: () => api.get('/vendor-verification-status.php'),
-  submitVerification: (data) => api.post('/vendor-verification.php', data),
+  submitVerification: (payload) => {
+    const formData = buildFormData(payload);
+    return api.post('/vendor-verification-status.php', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  getStorefront: (identifier) => api.get('/vendor-storefront-data.php', { params: { id: identifier } }),
+  getProfile: () => api.get('/vendor-profile.php', { params: { format: 'json' } }),
+  updateProfile: (payload) =>
+    api.post('/update-vendor-profile.php', payload, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  getNotifications: () => api.get('/vendor-notifications-data.php'),
+  updateNotifications: (action) => {
+    const formData = buildFormData({ action });
+    return api.post('/vendor-notifications-data.php', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  getChats: (uid) =>
+    api.get('/api/chat/list-chats.php', {
+      params: { role: 'vendor', uid },
+    }),
 };
 
 // Notifications endpoints
 export const notificationsAPI = {
-  getAll: () => api.get('/vendor-notifications-data.php'),
-  markAsRead: (id) => api.post('/notifications-storage.php', { id, action: 'read' }),
+  getAll: () => vendorAPI.getNotifications(),
+  markAllRead: () => vendorAPI.updateNotifications('markAllRead'),
+  clearAll: () => vendorAPI.updateNotifications('clearAll'),
 };
 
 // Saved items (buyer)

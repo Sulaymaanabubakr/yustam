@@ -171,6 +171,11 @@ const ProfileScreen = ({ navigation }) => {
                 onPress={() => navigation.navigate('Plans')}
               />
               <ProfileMenuItem
+                icon="information-circle-outline"
+                label="Subscription Details"
+                onPress={() => navigation.navigate('SubscriptionDetails')}
+              />
+              <ProfileMenuItem
                 icon="storefront-outline"
                 label="My Storefront"
                 onPress={() => navigation.navigate('Storefront')}

@@ -15,6 +15,8 @@ import { useAuth } from '../../context/AuthContext';
 import theme from '../../theme';
 import Toast from '../../components/Toast';
 import Button from '../../components/Button';
+import { vendorAPI } from '../../services/api';
+import { formatNumber } from '../../utils/formatters';
 
 const VendorDashboardScreen = ({ navigation }) => {
   const { user } = useAuth();
@@ -30,39 +32,75 @@ const VendorDashboardScreen = ({ navigation }) => {
     unreadNotifications: 0,
     planName: 'Free',
     planStatus: 'Active',
+    planRenewal: '--',
     verificationStatus: 'Pending',
   });
 
   useEffect(() => {
     fetchDashboard();
-  }, []);
+  }, [user?.uid]);
 
   const fetchDashboard = async () => {
     try {
       setLoading(true);
-      
-      // TODO: Replace with actual API call
-      // const response = await fetch(`https://yustam.com/vendor-dashboard.php?format=json`);
-      // const data = await response.json();
-      
-      // Mock data
-      setTimeout(() => {
-        setDashboard({
-          totalListings: 15,
-          activeListings: 12,
-          pendingListings: 2,
-          totalViews: 1245,
-          unreadMessages: 3,
-          unreadNotifications: 5,
-          planName: 'Premium',
-          planStatus: 'Active',
-          verificationStatus: 'Verified',
-        });
-        setLoading(false);
-      }, 1000);
+
+      const [dashboardResponse, verificationResponse, notificationsResponse, chatsResponse] =
+        await Promise.all([
+          vendorAPI.getDashboard(),
+          vendorAPI.getVerificationStatus().catch(() => null),
+          vendorAPI.getNotifications().catch(() => null),
+          user?.uid ? vendorAPI.getChats(user.uid).catch(() => null) : Promise.resolve(null),
+        ]);
+
+      const payload = dashboardResponse?.data?.data;
+      if (!dashboardResponse?.data?.success || !payload) {
+        throw new Error('Unable to load dashboard data.');
+      }
+
+      const stats = payload.stats || {};
+      const subscription = payload.subscription || {};
+      const profile = payload.profile || {};
+
+      const totalListings = stats.total_listings || 0;
+      const activeListings = stats.active_listings || 0;
+      const pendingListings =
+        typeof stats.pending_listings === 'number'
+          ? stats.pending_listings
+          : Math.max(0, totalListings - activeListings);
+
+      const notifications = notificationsResponse?.data?.data?.notifications;
+      const unreadNotifications = Array.isArray(notifications)
+        ? notifications.filter((notif) => (notif.status || '').toLowerCase() === 'new').length
+        : 0;
+
+      const chats = chatsResponse?.data?.chats;
+      const unreadMessages = Array.isArray(chats)
+        ? chats.reduce((sum, chat) => sum + (Number(chat.unread_for_vendor) || 0), 0)
+        : 0;
+
+      const verificationData = verificationResponse?.data?.data;
+      const verificationStatus =
+        verificationData?.statusDisplay ||
+        (verificationData?.status
+          ? verificationData.status.charAt(0).toUpperCase() + verificationData.status.slice(1)
+          : 'Pending');
+
+      setDashboard({
+        totalListings,
+        activeListings,
+        pendingListings,
+        totalViews: stats.total_views || 0,
+        unreadMessages,
+        unreadNotifications,
+        planName: subscription.displayName || profile.plan || 'Free',
+        planStatus: subscription.statusLabel || subscription.status || profile.planStatus || 'Active',
+        planRenewal: subscription.nextBillingDisplay || profile.planRenewal || '--',
+        verificationStatus,
+      });
     } catch (error) {
       console.error('Error fetching dashboard:', error);
-      showToast('Failed to load dashboard', 'error');
+      showToast(error.message || 'Failed to load dashboard', 'error');
+    } finally {
       setLoading(false);
     }
   };
@@ -81,21 +119,26 @@ const VendorDashboardScreen = ({ navigation }) => {
     setToast({ ...toast, visible: false });
   };
 
-  const QuickStatCard = ({ icon, label, value, color, onPress }) => (
-    <TouchableOpacity
-      style={[styles.statCard, { borderLeftColor: color }]}
-      onPress={onPress}
-      activeOpacity={0.7}
-    >
-      <View style={[styles.statIconContainer, { backgroundColor: `${color}20` }]}>
-        <Ionicons name={icon} size={24} color={color} />
-      </View>
-      <View style={styles.statContent}>
-        <Text style={styles.statLabel}>{label}</Text>
-        <Text style={[styles.statValue, { color }]}>{value}</Text>
-      </View>
-    </TouchableOpacity>
-  );
+  const QuickStatCard = ({ icon, label, value, color, onPress }) => {
+    const displayValue =
+      typeof value === 'number' ? formatNumber(value) : value ?? '--';
+
+    return (
+      <TouchableOpacity
+        style={[styles.statCard, { borderLeftColor: color }]}
+        onPress={onPress}
+        activeOpacity={0.7}
+      >
+        <View style={[styles.statIconContainer, { backgroundColor: `${color}20` }]}>
+          <Ionicons name={icon} size={24} color={color} />
+        </View>
+        <View style={styles.statContent}>
+          <Text style={styles.statLabel}>{label}</Text>
+          <Text style={[styles.statValue, { color }]}>{displayValue}</Text>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   const QuickActionCard = ({ icon, title, subtitle, color, onPress }) => (
     <TouchableOpacity style={styles.actionCard} onPress={onPress} activeOpacity={0.7}>
@@ -188,7 +231,7 @@ const VendorDashboardScreen = ({ navigation }) => {
             <QuickStatCard
               icon="eye-outline"
               label="Views"
-              value={dashboard.totalViews.toLocaleString()}
+              value={dashboard.totalViews}
               color={theme.colors.orange}
               onPress={() => navigation.navigate('Analytics')}
             />
@@ -207,6 +250,9 @@ const VendorDashboardScreen = ({ navigation }) => {
                 <Text style={styles.statusText}>{dashboard.planStatus}</Text>
               </View>
             </View>
+            <Text style={styles.planRenewal}>
+              Next billing: {dashboard.planRenewal && dashboard.planRenewal !== '--' ? dashboard.planRenewal : 'Not scheduled'}
+            </Text>
             <Button
               title="Manage Plan"
               onPress={() => navigation.navigate('BillingHistory')}
@@ -428,6 +474,13 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.xl,
     color: theme.colors.emerald,
     letterSpacing: theme.typography.letterSpacing.wide,
+  },
+  planRenewal: {
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.textSecondary,
+    marginTop: theme.spacing.xs,
+    marginBottom: theme.spacing.base,
   },
   statusBadge: {
     paddingHorizontal: theme.spacing.base,
