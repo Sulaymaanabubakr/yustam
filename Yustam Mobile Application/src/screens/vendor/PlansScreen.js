@@ -16,6 +16,7 @@ import Toast from '../../components/Toast';
 import Button from '../../components/Button';
 import { API_BASE_URL } from '../../config/constants';
 import { vendorAPI } from '../../services/api';
+import { goBackOrNavigate } from '../../utils/navigation';
 import { formatNumber } from '../../utils/formatters';
 import * as WebBrowser from 'expo-web-browser';
 
@@ -278,7 +279,7 @@ const PlansScreen = ({ navigation }) => {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <TouchableOpacity onPress={() => goBackOrNavigate(navigation)} style={styles.backButton}>
             <Ionicons name="arrow-back" size={24} color={theme.colors.primary} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>PLANS & PRICING</Text>
@@ -303,7 +304,7 @@ const PlansScreen = ({ navigation }) => {
 
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+        <TouchableOpacity onPress={() => goBackOrNavigate(navigation)} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color={theme.colors.primary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>PLANS & PRICING</Text>

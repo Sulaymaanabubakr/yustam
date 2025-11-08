@@ -9,6 +9,11 @@ import SplashScreen from '../screens/shared/SplashScreen';
 import OnboardingScreen from '../screens/shared/OnboardingScreen';
 import AuthScreen from '../screens/auth/AuthScreen';
 import MainTabNavigator from './MainTabNavigator';
+import BuyerFlashSaleScreen from '../screens/buyer/FlashSaleScreen';
+import BuyerProductDetailScreen from '../screens/buyer/ProductDetailScreen';
+import BuyerSupportScreen from '../screens/buyer/SupportScreen';
+import BuyerCartScreen from '../screens/buyer/CartScreen';
+import NotificationsScreen from '../screens/shared/NotificationsScreen';
 
 // Vendor Screens
 import VendorDashboardScreen from '../screens/vendor/VendorDashboardScreen';
@@ -72,6 +77,11 @@ const AppNavigator = () => {
         ) : (
           <>
             <Stack.Screen name="MainTabs" component={MainTabNavigator} />
+            <Stack.Screen name="BuyerFlashSale" component={BuyerFlashSaleScreen} />
+            <Stack.Screen name="BuyerProductDetail" component={BuyerProductDetailScreen} />
+            <Stack.Screen name="BuyerSupport" component={BuyerSupportScreen} />
+            <Stack.Screen name="BuyerCart" component={BuyerCartScreen} />
+            <Stack.Screen name="BuyerNotifications" component={NotificationsScreen} />
             
             {/* Vendor Screens */}
             <Stack.Screen name="VendorDashboard" component={VendorDashboardScreen} />

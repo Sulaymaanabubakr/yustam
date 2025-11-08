@@ -18,6 +18,7 @@ import { useAuth } from '../../context/AuthContext';
 import theme from '../../theme';
 import Toast from '../../components/Toast';
 import Button from '../../components/Button';
+import { goBackOrNavigate } from '../../utils/navigation';
 import { chatAPI } from '../../services/api';
 import { timeAgo } from '../../utils/formatters';
 import resolveMediaUrl from '../../utils/url';
@@ -162,7 +163,7 @@ const ChatThreadScreen = ({ navigation, route }) => {
 
   const Header = () => (
     <View style={styles.header}>
-      <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerButton}>
+      <TouchableOpacity onPress={() => goBackOrNavigate(navigation)} style={styles.headerButton}>
         <Ionicons name="arrow-back" size={24} color={theme.colors.primary} />
       </TouchableOpacity>
       <View style={styles.headerInfo}>
@@ -190,7 +191,7 @@ const ChatThreadScreen = ({ navigation, route }) => {
         <Header />
         <View style={styles.centerContent}>
           <Text style={styles.errorText}>Missing conversation details.</Text>
-          <Button onPress={() => navigation.goBack()} variant="outline">
+          <Button onPress={() => goBackOrNavigate(navigation)} variant="outline">
             Go Back
           </Button>
         </View>

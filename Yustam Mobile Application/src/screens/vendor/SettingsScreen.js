@@ -15,6 +15,7 @@ import { useAuth } from '../../context/AuthContext';
 import theme from '../../theme';
 import Toast from '../../components/Toast';
 import { profileAPI } from '../../services/api';
+import { goBackOrNavigate } from '../../utils/navigation';
 
 const SETTINGS_KEY_MAP = {
   listingApprovals: 'notifApproved',
@@ -276,7 +277,7 @@ const SettingsScreen = ({ navigation }) => {
       />
       
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+        <TouchableOpacity onPress={() => goBackOrNavigate(navigation)} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color={theme.colors.emerald} />
         </TouchableOpacity>
         <Text style={styles.title}>Settings</Text>

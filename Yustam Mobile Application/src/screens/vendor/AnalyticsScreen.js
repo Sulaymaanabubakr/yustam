@@ -14,6 +14,7 @@ import { useAuth } from '../../context/AuthContext';
 import theme from '../../theme';
 import Toast from '../../components/Toast';
 import { vendorAPI } from '../../services/api';
+import { goBackOrNavigate } from '../../utils/navigation';
 import { formatNumber } from '../../utils/formatters';
 
 const PLAN_LIMITS = {
@@ -172,7 +173,7 @@ const AnalyticsScreen = ({ navigation }) => {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <TouchableOpacity onPress={() => goBackOrNavigate(navigation)} style={styles.backButton}>
             <Ionicons name="arrow-back" size={24} color={theme.colors.emerald} />
           </TouchableOpacity>
           <Text style={styles.title}>Analytics & Insights</Text>
@@ -195,7 +196,7 @@ const AnalyticsScreen = ({ navigation }) => {
       />
       
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+        <TouchableOpacity onPress={() => goBackOrNavigate(navigation)} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color={theme.colors.emerald} />
         </TouchableOpacity>
         <Text style={styles.title}>Analytics & Insights</Text>

@@ -22,6 +22,7 @@ import Button from '../../components/Button';
 import { API_BASE_URL, STATES } from '../../config/constants';
 import { uploadImage } from '../../config/cloudinary';
 import { vendorAPI } from '../../services/api';
+import { goBackOrNavigate } from '../../utils/navigation';
 import resolveMediaUrl from '../../utils/url';
 
 const EditProfileScreen = ({ navigation }) => {
@@ -216,7 +217,7 @@ const EditProfileScreen = ({ navigation }) => {
 
       showToast('Profile updated successfully');
       setTimeout(() => {
-        navigation.goBack();
+        goBackOrNavigate(navigation);
       }, 1000);
     } catch (error) {
       console.error('Error saving profile:', error);
@@ -230,7 +231,7 @@ const EditProfileScreen = ({ navigation }) => {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <TouchableOpacity onPress={() => goBackOrNavigate(navigation)} style={styles.backButton}>
             <Ionicons name="arrow-back" size={24} color={theme.colors.primary} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>EDIT PROFILE</Text>
@@ -255,7 +256,7 @@ const EditProfileScreen = ({ navigation }) => {
 
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+        <TouchableOpacity onPress={() => goBackOrNavigate(navigation)} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color={theme.colors.primary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>EDIT PROFILE</Text>

@@ -21,6 +21,7 @@ import Toast from '../../components/Toast';
 import Button from '../../components/Button';
 import { API_BASE_URL } from '../../config/constants';
 import { CLOUDINARY_UPLOAD_PRESET, CLOUDINARY_CLOUD_NAME } from '../../config/cloudinary';
+import { goBackOrNavigate } from '../../utils/navigation';
 
 const NIGERIAN_STATES = [
   'Abia', 'Adamawa', 'Akwa Ibom', 'Anambra', 'Bauchi', 'Bayelsa', 'Benue', 'Borno',
@@ -280,7 +281,7 @@ const ListingEditorScreen = ({ route, navigation }) => {
 
         showToast(isEditMode ? 'Listing updated successfully' : 'Listing created successfully');
         setTimeout(() => {
-          navigation.goBack();
+          goBackOrNavigate(navigation);
         }, 1000);
       } else {
         throw new Error(result.message || 'Failed to save listing');
@@ -304,7 +305,7 @@ const ListingEditorScreen = ({ route, navigation }) => {
 
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+        <TouchableOpacity onPress={() => goBackOrNavigate(navigation)} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color={theme.colors.primary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{isEditMode ? 'EDIT LISTING' : 'NEW LISTING'}</Text>

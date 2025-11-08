@@ -14,6 +14,7 @@ import Button from '../../components/Button';
 import Toast from '../../components/Toast';
 import theme from '../../theme';
 import { vendorAPI } from '../../services/api';
+import { goBackOrNavigate } from '../../utils/navigation';
 import { API_BASE_URL } from '../../config/constants';
 import { formatNaira, formatNumber } from '../../utils/formatters';
 import * as WebBrowser from 'expo-web-browser';
@@ -154,7 +155,7 @@ const SubscriptionDetailsScreen = ({ navigation }) => {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+          <TouchableOpacity style={styles.backButton} onPress={() => goBackOrNavigate(navigation)}>
             <Ionicons name="arrow-back" size={24} color={theme.colors.primary} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Subscription Details</Text>
@@ -172,7 +173,7 @@ const SubscriptionDetailsScreen = ({ navigation }) => {
     <SafeAreaView style={styles.container}>
       <Toast visible={toast.visible} message={toast.message} type={toast.type} onDismiss={hideToast} />
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+        <TouchableOpacity style={styles.backButton} onPress={() => goBackOrNavigate(navigation)}>
           <Ionicons name="arrow-back" size={24} color={theme.colors.primary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Subscription Details</Text>
