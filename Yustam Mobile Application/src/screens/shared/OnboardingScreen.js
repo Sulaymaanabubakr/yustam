@@ -36,6 +36,14 @@ const OnboardingScreen = ({ navigation }) => {
     }
   };
 
+  const scrollBack = () => {
+    if (currentIndex > 0) {
+      slidesRef.current.scrollToIndex({ index: currentIndex - 1 });
+    } else if (navigation.canGoBack()) {
+      navigation.goBack();
+    }
+  };
+
   const handleSkip = () => {
     // Skip to last slide (role selection)
     slidesRef.current.scrollToIndex({ index: ONBOARDING_SLIDES.length - 1 });
@@ -44,7 +52,8 @@ const OnboardingScreen = ({ navigation }) => {
   const handleRoleSelection = async (role) => {
     try {
       await AsyncStorage.setItem('role', role);
-      navigation.replace('Auth');
+      slidesRef.current?.scrollToIndex?.({ index: ONBOARDING_SLIDES.length - 1 });
+      navigation.navigate('Auth');
     } catch (error) {
       console.error('Error saving role:', error);
     }
@@ -83,34 +92,31 @@ const OnboardingScreen = ({ navigation }) => {
         {isLastSlide && (
           <View style={styles.roleSection}>
             <Text style={styles.roleTitle}>Continue As</Text>
-            
-            <TouchableOpacity
-              style={styles.roleCard}
-              onPress={() => handleRoleSelection('buyer')}
-              activeOpacity={0.8}
-            >
-              <View style={[styles.roleIconCircle, { backgroundColor: theme.colors.emerald }]}>
-                <Ionicons name="bag-handle" size={40} color="white" />
-              </View>
-              <Text style={styles.roleLabel}>Buyer</Text>
-              <Text style={styles.roleSubtext}>Browse and shop</Text>
-            </TouchableOpacity>
+            <View style={styles.roleOptions}>
+              <TouchableOpacity
+                style={styles.roleCard}
+                onPress={() => handleRoleSelection('buyer')}
+                activeOpacity={0.8}
+              >
+                <View style={[styles.roleIconCircle, { backgroundColor: theme.colors.emerald }]}>
+                  <Ionicons name="bag-handle" size={32} color="white" />
+                </View>
+                <Text style={styles.roleLabel}>Buyer</Text>
+                <Text style={styles.roleSubtext}>Browse and shop</Text>
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.roleCard}
-              onPress={() => handleRoleSelection('vendor')}
-              activeOpacity={0.8}
-            >
-              <View style={[styles.roleIconCircle, { backgroundColor: theme.colors.orange }]}>
-                <Ionicons name="storefront" size={40} color="white" />
-              </View>
-              <Text style={styles.roleLabel}>Vendor</Text>
-              <Text style={styles.roleSubtext}>Sell and grow</Text>
-            </TouchableOpacity>
-
-            <Text style={styles.switchRoleNote}>
-              Chose the wrong role? You can change this later in Settings.
-            </Text>
+              <TouchableOpacity
+                style={styles.roleCard}
+                onPress={() => handleRoleSelection('vendor')}
+                activeOpacity={0.8}
+              >
+                <View style={[styles.roleIconCircle, { backgroundColor: theme.colors.orange }]}>
+                  <Ionicons name="storefront" size={32} color="white" />
+                </View>
+                <Text style={styles.roleLabel}>Vendor</Text>
+                <Text style={styles.roleSubtext}>Sell and grow</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
       </View>
@@ -155,10 +161,21 @@ const OnboardingScreen = ({ navigation }) => {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        {currentIndex < ONBOARDING_SLIDES.length - 1 && (
+        {(currentIndex > 0 || navigation.canGoBack()) ? (
+          <TouchableOpacity onPress={scrollBack} style={styles.headerButton}>
+            <Ionicons name="arrow-back" size={22} color={theme.colors.textPrimary} />
+            <Text style={styles.headerButtonText}>Back</Text>
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.headerSpacer} />
+        )}
+
+        {currentIndex < ONBOARDING_SLIDES.length - 1 ? (
           <TouchableOpacity onPress={handleSkip} style={styles.skipButton}>
             <Text style={styles.skipText}>Skip</Text>
           </TouchableOpacity>
+        ) : (
+          <View style={styles.headerSpacer} />
         )}
       </View>
 
@@ -206,7 +223,25 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: theme.spacing.lg,
     paddingVertical: theme.spacing.md,
-    alignItems: 'flex-end',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  headerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.base,
+  },
+  headerButtonText: {
+    fontFamily: theme.typography.fontFamily.interSemiBold,
+    fontSize: theme.typography.fontSize.base,
+    color: theme.colors.textPrimary,
+  },
+  headerSpacer: {
+    width: 72,
+    height: theme.spacing.lg,
   },
   skipButton: {
     paddingVertical: theme.spacing.sm,
@@ -261,41 +296,40 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.md,
     letterSpacing: theme.typography.letterSpacing.wide,
   },
+  roleOptions: {
+    flexDirection: 'row',
+    gap: theme.spacing.md,
+  },
   roleCard: {
     backgroundColor: theme.colors.white,
-    borderRadius: theme.radius.xl,
-    padding: theme.spacing.xl,
+    borderRadius: theme.radius.lg,
+    paddingVertical: theme.spacing.lg,
+    paddingHorizontal: theme.spacing.md,
     alignItems: 'center',
-    gap: theme.spacing.md,
-    borderWidth: 2,
+    justifyContent: 'center',
+    gap: theme.spacing.sm,
+    borderWidth: 1.5,
     borderColor: theme.colors.border,
+    flex: 1,
     ...theme.shadows.card,
   },
   roleIconCircle: {
-    width: 80,
-    height: 80,
+    width: 64,
+    height: 64,
     borderRadius: theme.radius.full,
     alignItems: 'center',
     justifyContent: 'center',
   },
   roleLabel: {
     fontFamily: theme.typography.fontFamily.anton,
-    fontSize: theme.typography.fontSize.xl,
+    fontSize: theme.typography.fontSize.lg,
     color: theme.colors.emerald,
     letterSpacing: theme.typography.letterSpacing.wide,
   },
   roleSubtext: {
     fontFamily: theme.typography.fontFamily.inter,
-    fontSize: theme.typography.fontSize.base,
-    color: theme.colors.textSecondary,
-  },
-  switchRoleNote: {
-    fontFamily: theme.typography.fontFamily.inter,
     fontSize: theme.typography.fontSize.sm,
-    color: theme.colors.textTertiary,
-    textAlign: 'center',
-    marginTop: theme.spacing.md,
-    lineHeight: theme.typography.lineHeight.relaxed * theme.typography.fontSize.sm,
+    color: theme.colors.textSecondary,
   },
   footer: {
     paddingHorizontal: theme.spacing.lg,

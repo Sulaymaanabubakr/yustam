@@ -22,10 +22,20 @@ import { goBackOrNavigate } from '../../utils/navigation';
 import { chatAPI } from '../../services/api';
 import { timeAgo } from '../../utils/formatters';
 import resolveMediaUrl from '../../utils/url';
+import { USER_ROLES } from '../../config/constants';
 
 const ChatThreadScreen = ({ navigation, route }) => {
-  const { chatId, buyerName = 'Buyer', buyerPhoto, buyerId } = route.params || {};
-  const { user } = useAuth();
+  const {
+    chatId,
+    buyerName = 'Buyer',
+    buyerPhoto,
+    buyerId,
+    vendorName,
+    vendorPhoto,
+    vendorPlanLabel,
+    listingTitle,
+  } = route.params || {};
+  const { user, role } = useAuth();
   const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState('');
   const [loading, setLoading] = useState(true);
@@ -33,6 +43,12 @@ const ChatThreadScreen = ({ navigation, route }) => {
   const [sending, setSending] = useState(false);
   const [toast, setToast] = useState({ visible: false, message: '', type: 'info' });
   const listRef = useRef(null);
+  const viewingAsVendor = role === USER_ROLES.VENDOR;
+  const peerName = viewingAsVendor ? buyerName || 'Buyer' : vendorName || 'Marketplace Vendor';
+  const peerSubtitle = viewingAsVendor
+    ? buyerId ? `Buyer ID: ${buyerId}` : 'Buyer'
+    : listingTitle || vendorPlanLabel || 'Vendor';
+  const peerAvatar = viewingAsVendor ? resolveMediaUrl(buyerPhoto) : resolveMediaUrl(vendorPhoto);
 
   const showToast = (message, type = 'success') => {
     setToast({ visible: true, message, type });
@@ -44,25 +60,35 @@ const ChatThreadScreen = ({ navigation, route }) => {
 
   const mapMessage = useCallback(
     (message) => {
-      const senderRaw = (message.sender || message.role || message.author || '').toLowerCase();
-      const senderUid = (message.sender_uid || message.uid || '').toString();
-      const vendorUid = (user?.uid || '').toString();
-      const isVendorSender =
-        senderRaw.includes('vendor') ||
-        (senderUid && vendorUid && senderUid === vendorUid) ||
-        !!message.isMine;
+      const senderRaw = String(message.sender || message.role || message.author || '').toLowerCase();
+      const senderUid = String(message.sender_uid || message.uid || '').trim();
+      const viewerUid = (user?.uid || '').toString();
+      const senderRole = senderRaw.includes('vendor')
+        ? USER_ROLES.VENDOR
+        : senderRaw.includes('buyer')
+        ? USER_ROLES.BUYER
+        : null;
+      const fallbackMine = senderRole
+        ? senderRole === (viewingAsVendor ? USER_ROLES.VENDOR : USER_ROLES.BUYER)
+        : viewingAsVendor
+        ? !senderRaw.includes('buyer')
+        : senderRaw.includes('buyer');
+      const isMine =
+        Boolean(message.isMine) ||
+        (viewerUid && senderUid && viewerUid === senderUid) ||
+        (!viewerUid && fallbackMine);
 
       return {
         id: message.id || message.message_id || message.clientId || `${Date.now()}-${Math.random()}`,
         text: message.message || message.text || message.body || '',
         type: message.type || (message.attachment ? 'image' : 'text'),
         timestamp: message.timestamp || message.created_at || message.sent_at || new Date().toISOString(),
-        isMine: isVendorSender,
+        isMine,
         status: message.status || 'sent',
         attachment: resolveMediaUrl(message.attachment || message.image),
       };
     },
-    [user?.uid]
+    [user?.uid, viewingAsVendor]
   );
 
   const fetchMessages = useCallback(
@@ -167,20 +193,24 @@ const ChatThreadScreen = ({ navigation, route }) => {
         <Ionicons name="arrow-back" size={24} color={theme.colors.primary} />
       </TouchableOpacity>
       <View style={styles.headerInfo}>
-        {buyerPhoto ? (
-          <Image source={{ uri: resolveMediaUrl(buyerPhoto) }} style={styles.headerAvatar} />
+        {peerAvatar ? (
+          <Image source={{ uri: peerAvatar }} style={styles.headerAvatar} />
         ) : (
           <View style={styles.headerAvatarPlaceholder}>
             <Ionicons name="person" size={20} color={theme.colors.white} />
           </View>
         )}
         <View>
-          <Text style={styles.headerTitle}>{buyerName}</Text>
-          <Text style={styles.headerSubtitle}>{buyerId ? `Buyer ID: ${buyerId}` : 'Buyer'}</Text>
+          <Text style={styles.headerTitle}>{peerName}</Text>
+          <Text style={styles.headerSubtitle}>{peerSubtitle}</Text>
         </View>
       </View>
       <View style={styles.headerButton}>
-        <Ionicons name="call-outline" size={22} color={theme.colors.primary} />
+        <Ionicons
+          name={viewingAsVendor ? 'call-outline' : 'shield-checkmark-outline'}
+          size={22}
+          color={theme.colors.primary}
+        />
       </View>
     </View>
   );

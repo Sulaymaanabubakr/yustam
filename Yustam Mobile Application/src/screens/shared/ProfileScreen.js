@@ -16,7 +16,7 @@ import Button from '../../components/Button';
 import Toast from '../../components/Toast';
 
 const ProfileScreen = ({ navigation }) => {
-  const { user, role, logout, switchRole } = useAuth();
+  const { user, role, logout } = useAuth();
   const [toast, setToast] = useState({ visible: false, message: '', type: 'info' });
 
   const showToast = (message, type = 'success') => {
@@ -25,31 +25,6 @@ const ProfileScreen = ({ navigation }) => {
 
   const hideToast = () => {
     setToast({ ...toast, visible: false });
-  };
-
-  const handleSwitchRole = () => {
-    Alert.alert(
-      'Switch Role',
-      `Switch to ${role === 'buyer' ? 'Vendor' : 'Buyer'} mode?`,
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Switch',
-          onPress: async () => {
-            try {
-              const newRole = role === 'buyer' ? 'vendor' : 'buyer';
-              await switchRole(newRole);
-              showToast(`Switched to ${newRole} mode`);
-            } catch (error) {
-              showToast(error.message, 'error');
-            }
-          },
-        },
-      ]
-    );
   };
 
   const handleLogout = () => {
@@ -68,7 +43,6 @@ const ProfileScreen = ({ navigation }) => {
             try {
               await logout();
               showToast('Logged out successfully');
-              navigation.replace('Auth');
             } catch (error) {
               showToast(error.message, 'error');
             }
@@ -78,17 +52,12 @@ const ProfileScreen = ({ navigation }) => {
     );
   };
 
-  const ProfileMenuItem = ({ icon, label, onPress, color, showBadge }) => (
+  const ProfileMenuItem = ({ icon, label, onPress, color }) => (
     <TouchableOpacity style={styles.menuItem} onPress={onPress} activeOpacity={0.7}>
       <View style={styles.menuItemLeft}>
         <Ionicons name={icon} size={24} color={color || theme.colors.textPrimary} />
         <Text style={[styles.menuItemText, color && { color }]}>{label}</Text>
       </View>
-      {showBadge && (
-        <View style={styles.roleBadge}>
-          <Text style={styles.roleBadgeText}>{role}</Text>
-        </View>
-      )}
       <Ionicons name="chevron-forward" size={20} color={theme.colors.textSecondary} />
     </TouchableOpacity>
   );
@@ -196,12 +165,6 @@ const ProfileScreen = ({ navigation }) => {
             />
           )}
 
-          <ProfileMenuItem
-            icon="swap-horizontal-outline"
-            label="Switch Role"
-            onPress={handleSwitchRole}
-            showBadge
-          />
         </View>
 
         {/* Settings Section */}
@@ -359,18 +322,6 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.fontFamily.interMedium,
     fontSize: theme.typography.fontSize.base,
     color: theme.colors.textPrimary,
-  },
-  roleBadge: {
-    paddingVertical: theme.spacing.xs,
-    paddingHorizontal: theme.spacing.sm,
-    backgroundColor: theme.colors.emerald,
-    borderRadius: theme.radius.sm,
-  },
-  roleBadgeText: {
-    fontFamily: theme.typography.fontFamily.interSemiBold,
-    fontSize: theme.typography.fontSize.xs,
-    color: theme.colors.white,
-    textTransform: 'capitalize',
   },
   logoutSection: {
     paddingHorizontal: theme.spacing.lg,

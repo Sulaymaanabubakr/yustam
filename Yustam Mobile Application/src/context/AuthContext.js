@@ -316,17 +316,6 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Switch role
-  const switchRole = async (newRole) => {
-    try {
-      await AsyncStorage.setItem(STORAGE_KEYS.role, newRole);
-      setRole(newRole);
-    } catch (error) {
-      console.error('Error switching role:', error);
-      throw new Error('Failed to switch role');
-    }
-  };
-
   const value = {
     user,
     role,
@@ -336,7 +325,6 @@ export const AuthProvider = ({ children }) => {
     register,
     signInWithGoogle,
     logout,
-    switchRole,
     updateUserProfile,
   };
 

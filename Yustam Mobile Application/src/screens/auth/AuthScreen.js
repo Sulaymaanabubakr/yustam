@@ -18,6 +18,14 @@ import RegisterForm from './RegisterForm';
 const AuthScreen = ({ navigation }) => {
   const [activeTab, setActiveTab] = useState('login'); // 'login' or 'register'
 
+  const handleGoBack = () => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      navigation.navigate('Onboarding');
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
@@ -29,6 +37,13 @@ const AuthScreen = ({ navigation }) => {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
+          <View style={styles.topBar}>
+            <TouchableOpacity style={styles.backButton} onPress={handleGoBack} activeOpacity={0.7}>
+              <Ionicons name="arrow-back" size={22} color={theme.colors.textPrimary} />
+              <Text style={styles.backButtonText}>Back</Text>
+            </TouchableOpacity>
+          </View>
+
           {/* Logo */}
           <View style={styles.logoContainer}>
             <Image
@@ -88,6 +103,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.lg,
     paddingVertical: theme.spacing['2xl'],
     gap: theme.spacing.xl,
+  },
+  topBar: {
+    width: '100%',
+    alignItems: 'flex-start',
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.xs,
+  },
+  backButtonText: {
+    fontFamily: theme.typography.fontFamily.interSemiBold,
+    fontSize: theme.typography.fontSize.base,
+    color: theme.colors.textPrimary,
   },
   logoContainer: {
     alignItems: 'center',

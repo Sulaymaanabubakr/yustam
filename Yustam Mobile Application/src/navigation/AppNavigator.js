@@ -12,7 +12,6 @@ import MainTabNavigator from './MainTabNavigator';
 import BuyerFlashSaleScreen from '../screens/buyer/FlashSaleScreen';
 import BuyerProductDetailScreen from '../screens/buyer/ProductDetailScreen';
 import BuyerSupportScreen from '../screens/buyer/SupportScreen';
-import BuyerCartScreen from '../screens/buyer/CartScreen';
 import NotificationsScreen from '../screens/shared/NotificationsScreen';
 
 // Vendor Screens
@@ -64,14 +63,23 @@ const AppNavigator = () => {
     return null; // Or a loading screen
   }
 
+  const navigatorKey = `${isAuthenticated ? 'auth' : 'guest'}-${hasSeenOnboarding ? 'seen' : 'new'}`;
+  const initialRouteName = !isAuthenticated
+    ? hasSeenOnboarding
+      ? 'Auth'
+      : 'Onboarding'
+    : 'MainTabs';
+
   return (
     <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Navigator
+        key={navigatorKey}
+        initialRouteName={initialRouteName}
+        screenOptions={{ headerShown: false }}
+      >
         {!isAuthenticated ? (
           <>
-            {!hasSeenOnboarding && (
-              <Stack.Screen name="Onboarding" component={OnboardingScreen} />
-            )}
+            <Stack.Screen name="Onboarding" component={OnboardingScreen} />
             <Stack.Screen name="Auth" component={AuthScreen} />
           </>
         ) : (
@@ -80,7 +88,6 @@ const AppNavigator = () => {
             <Stack.Screen name="BuyerFlashSale" component={BuyerFlashSaleScreen} />
             <Stack.Screen name="BuyerProductDetail" component={BuyerProductDetailScreen} />
             <Stack.Screen name="BuyerSupport" component={BuyerSupportScreen} />
-            <Stack.Screen name="BuyerCart" component={BuyerCartScreen} />
             <Stack.Screen name="BuyerNotifications" component={NotificationsScreen} />
             
             {/* Vendor Screens */}

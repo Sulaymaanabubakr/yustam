@@ -1,0 +1,1416 @@
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Dimensions,
+  Image,
+  Linking,
+  ScrollView,
+  Share,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { doc, getDoc } from 'firebase/firestore';
+import theme from '../../theme';
+import Toast from '../../components/Toast';
+import { db } from '../../config/firebase';
+import { useAuth } from '../../context/AuthContext';
+import { formatDate, formatNaira } from '../../utils/formatters';
+import resolveMediaUrl from '../../utils/url';
+import { API_BASE_URL, USER_ROLES } from '../../config/constants';
+import { chatAPI, vendorAPI } from '../../services/api';
+
+const { width } = Dimensions.get('window');
+const HERO_HEIGHT = width * 0.78;
+const FEATURE_FIELDS = [
+  'keyFeatures',
+  'highlights',
+  'highlightFeatures',
+  'smartFeatures',
+  'features',
+  'featureList',
+  'sellingPoints',
+];
+const EXCLUDED_SPEC_KEYS = new Set([
+  'title',
+  'listingtitle',
+  'producttitle',
+  'productname',
+  'name',
+  'price',
+  'amount',
+  'oldprice',
+  'previousprice',
+  'current_price',
+  'currency',
+  'description',
+  'details',
+  'highlights',
+  'highlightfeatures',
+  'smartfeatures',
+  'features',
+  'featurelist',
+  'sellingpoints',
+  'category',
+  'subcategory',
+  'collection',
+  'segment',
+  'status',
+  'state',
+  'city',
+  'country',
+  'vendor',
+  'vendorid',
+  'vendor_id',
+  'vendoruid',
+  'vendor_uid',
+  'vendorfirebaseuid',
+  'vendorfirebase_uid',
+  'vendorname',
+  'vendorbusinessname',
+  'vendorplan',
+  'vendorverified',
+  'vendorverification',
+  'verification',
+  'verificationstatus',
+  'verification_state',
+  'verificationstage',
+  'plan',
+  'planlabel',
+  'planslug',
+  'image',
+  'imageurl',
+  'imageurls',
+  'images',
+  'gallery',
+  'primaryimage',
+  'coverimage',
+  'thumbnail',
+  'createdat',
+  'updatedat',
+  'approvedat',
+  'rejectedat',
+  'feedback',
+  'tags',
+  'badges',
+  'locationfiltervalue',
+  'location',
+  'vendorlocation',
+  'vendorcity',
+  'vendorstate',
+  'vendorphone',
+  'vendorwhatsapp',
+  'vendor_email',
+  'vendoremail',
+  'vendorphoto',
+  'vendoravatar',
+  'syncstatus',
+  'synced',
+  'metadata',
+]);
+const PLACEHOLDER_IMAGE = resolveMediaUrl('logo.jpeg');
+
+const ProductDetailScreen = ({ navigation, route }) => {
+  const { productId, product: initialProduct } = route.params || {};
+  const { user, role } = useAuth();
+  const [listingSource, setListingSource] = useState(initialProduct || null);
+  const [listingId, setListingId] = useState(productId || initialProduct?.id || null);
+  const [gallery, setGallery] = useState(() => deriveGallery(initialProduct));
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [loading, setLoading] = useState(!initialProduct);
+  const [error, setError] = useState('');
+  const [toast, setToast] = useState({ visible: false, message: '', type: 'info' });
+  const [chatLoading, setChatLoading] = useState(false);
+  const [vendorRecord, setVendorRecord] = useState(null);
+  const [vendorLoading, setVendorLoading] = useState(false);
+  const [reloadToken, setReloadToken] = useState(0);
+  const vendorLookupKeyRef = useRef('');
+  const scrollRef = useRef(null);
+
+  const listing = useMemo(() => buildListingModel(listingSource, listingId), [listingSource, listingId]);
+  const listingData = listing?.raw || listingSource || {};
+  const features = useMemo(() => extractFeaturesFromListing(listingData), [listingData]);
+  const specifications = useMemo(() => extractSpecifications(listingData), [listingData]);
+  const baseVendor = useMemo(() => buildVendorFromListing(listing), [listing]);
+  const vendorProfile = useMemo(() => mergeVendorProfiles(baseVendor, vendorRecord), [baseVendor, vendorRecord]);
+
+  const vendorIdentifiers = useMemo(() => {
+    if (!listing) {
+      return [];
+    }
+    return [listing.vendorUid, listing.vendorFirebaseUid, listing.vendorId]
+      .map((value) => (value ? String(value).trim() : ''))
+      .filter(Boolean);
+  }, [listing]);
+
+  const fetchVendorProfile = useCallback(async (identifiers) => {
+    if (!identifiers.length) {
+      return;
+    }
+
+    setVendorLoading(true);
+    for (const identifier of identifiers) {
+      try {
+        const response = await vendorAPI.getStorefront(identifier);
+        if (response.data?.success && response.data?.vendor) {
+          setVendorRecord(transformVendorPayload(response.data.vendor));
+          setVendorLoading(false);
+          return;
+        }
+      } catch (fetchError) {
+        console.warn('Vendor lookup failed for', identifier, fetchError);
+      }
+    }
+    setVendorLoading(false);
+  }, []);
+
+  useEffect(() => {
+    const identifierKey = vendorIdentifiers.join('|');
+    if (!identifierKey || identifierKey === vendorLookupKeyRef.current) {
+      return;
+    }
+    vendorLookupKeyRef.current = identifierKey;
+    fetchVendorProfile(vendorIdentifiers);
+  }, [fetchVendorProfile, vendorIdentifiers]);
+
+  useEffect(() => {
+    setGallery(deriveGallery(listingSource));
+    setActiveImageIndex(0);
+  }, [listingSource]);
+
+  useEffect(() => {
+    const targetId = productId || initialProduct?.id;
+    if (!targetId) {
+      setLoading(false);
+      setError('Missing listing reference.');
+      return;
+    }
+
+    let isMounted = true;
+
+    const loadListing = async () => {
+      try {
+        setLoading(true);
+        const snapshot = await getDoc(doc(db, 'listings', targetId));
+        if (!snapshot.exists()) {
+          if (isMounted) {
+            setError('Listing not found or has been removed.');
+          }
+          return;
+        }
+        const data = snapshot.data() || {};
+        if (isMounted) {
+          setError('');
+          setListingSource({ ...data });
+          setListingId(snapshot.id);
+        }
+      } catch (fetchError) {
+        console.error('Unable to load listing:', fetchError);
+        if (isMounted) {
+          setError(fetchError?.message || 'Unable to load this product right now.');
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadListing();
+    return () => {
+      isMounted = false;
+    };
+  }, [initialProduct?.id, productId, reloadToken]);
+
+  const showToast = useCallback((message, type = 'success') => {
+    setToast({ visible: true, message, type });
+  }, []);
+
+  const hideToast = useCallback(() => {
+    setToast((prev) => ({ ...prev, visible: false }));
+  }, []);
+
+  const handleShare = useCallback(async () => {
+    if (!listing) {
+      return;
+    }
+    const shareUrl = `${API_BASE_URL}/product.php?id=${encodeURIComponent(listing.id || productId || '')}`;
+    try {
+      await Share.share({
+        title: listing.title,
+        message: `${listing.title} on Yustam Marketplace${listing.price ? ` - ${formatNaira(listing.price)}` : ''}\n${shareUrl}`,
+        url: shareUrl,
+      });
+    } catch (shareError) {
+      console.warn('Share failed:', shareError);
+    }
+  }, [listing, productId]);
+
+  const handleCallVendor = useCallback(async () => {
+    if (!vendorProfile.phone) {
+      showToast('Vendor phone number is unavailable.', 'error');
+      return;
+    }
+    const tel = vendorProfile.phone.replace(/\s+/g, '');
+    try {
+      await Linking.openURL(`tel:${tel}`);
+    } catch (callError) {
+      showToast('Unable to open the dialer on this device.', 'error');
+    }
+  }, [showToast, vendorProfile.phone]);
+
+  const handleWhatsappVendor = useCallback(async () => {
+    const number = vendorProfile.whatsapp || vendorProfile.phone;
+    if (!number) {
+      showToast('Vendor WhatsApp number is unavailable.', 'error');
+      return;
+    }
+    const digits = sanitizePhoneNumber(number);
+    if (!digits) {
+      showToast('Vendor WhatsApp number is invalid.', 'error');
+      return;
+    }
+    const messageLines = [
+      `Hello ${vendorProfile.name || 'vendor'},`,
+      '',
+      `I am interested in "${listing?.title || 'your listing'}" on Yustam.`,
+    ];
+    if (listing?.price) {
+      messageLines.push(`Displayed price: ${formatNaira(listing.price)}.`);
+    }
+    const url = `${API_BASE_URL}/product.php?id=${encodeURIComponent(listing?.id || productId || '')}`;
+    messageLines.push(`Listing link: ${url}`);
+    const encodedMessage = encodeURIComponent(messageLines.join('\n'));
+    const whatsappUrl = `https://wa.me/${digits}?text=${encodedMessage}`;
+    try {
+      await Linking.openURL(whatsappUrl);
+    } catch (waError) {
+      showToast('Unable to open WhatsApp on this device.', 'error');
+    }
+  }, [listing, productId, showToast, vendorProfile.name, vendorProfile.phone, vendorProfile.whatsapp]);
+
+  const handleOpenStorefront = useCallback(async () => {
+    if (!vendorProfile.storefrontUrl) {
+      showToast('Vendor storefront is not available yet.', 'info');
+      return;
+    }
+    try {
+      await Linking.openURL(vendorProfile.storefrontUrl);
+    } catch (openError) {
+      showToast('Unable to launch vendor storefront link.', 'error');
+    }
+  }, [showToast, vendorProfile.storefrontUrl]);
+
+  const handleChatVendor = useCallback(async () => {
+    if (!listing || !vendorProfile.vendorUid) {
+      showToast('Vendor chat is unavailable for this listing.', 'error');
+      return;
+    }
+    if (!user?.uid) {
+      showToast('Please sign in to start a chat.', 'error');
+      return;
+    }
+    if (role && role !== USER_ROLES.BUYER) {
+      showToast('Switch to buyer mode to chat with vendors.', 'info');
+      return;
+    }
+
+    setChatLoading(true);
+    try {
+      const payload = {
+        buyer_uid: user.uid,
+        buyer_name: user.fullName || user.displayName || user.email || 'Buyer',
+        vendor_uid: vendorProfile.vendorUid,
+        vendor_name: vendorProfile.name,
+        vendor_business_name: vendorProfile.businessName || vendorProfile.name,
+        vendor_plan: vendorProfile.planLabel,
+        listing_id: listing.id,
+        listing_title: listing.title,
+        listing_image: gallery[activeImageIndex] || gallery[0] || PLACEHOLDER_IMAGE,
+      };
+      const response = await chatAPI.openChat(payload);
+      const chatId = response.data?.chat_id || response.data?.data?.chat_id;
+      if (!chatId) {
+        throw new Error('Unable to start chat right now.');
+      }
+
+      navigation.navigate('ChatThread', {
+        chatId,
+        vendorName: vendorProfile.name,
+        vendorPhoto: vendorProfile.avatar,
+        vendorPlanLabel: vendorProfile.planLabel,
+        listingTitle: listing.title,
+      });
+    } catch (chatError) {
+      console.error('Chat initialisation failed:', chatError);
+      showToast(chatError?.message || 'Unable to start chat.', 'error');
+    } finally {
+      setChatLoading(false);
+    }
+  }, [
+    activeImageIndex,
+    gallery,
+    listing,
+    navigation,
+    role,
+    showToast,
+    user?.displayName,
+    user?.email,
+    user?.fullName,
+    user?.uid,
+    vendorProfile.avatar,
+    vendorProfile.businessName,
+    vendorProfile.name,
+    vendorProfile.planLabel,
+    vendorProfile.vendorUid,
+  ]);
+
+  const handleGalleryScroll = useCallback((event) => {
+    const offsetX = event.nativeEvent.contentOffset.x;
+    const index = Math.round(offsetX / width);
+    setActiveImageIndex(index);
+  }, []);
+
+  const handleRetry = useCallback(() => {
+    setReloadToken((prev) => prev + 1);
+    setError('');
+  }, []);
+
+  const renderStatus = () => {
+    if (!listing?.statusLabel) {
+      return null;
+    }
+    return (
+      <View style={styles.statusChip}>
+        <Ionicons name="shield-checkmark-outline" size={14} color={theme.colors.emerald} />
+        <Text style={styles.statusText}>{listing.statusLabel}</Text>
+      </View>
+    );
+  };
+  if (!loading && !listing) {
+    return (
+      <SafeAreaView style={styles.emptyContainer}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerButton}>
+            <Ionicons name="arrow-back" size={22} color={theme.colors.textPrimary} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Product</Text>
+          <View style={styles.headerButton} />
+        </View>
+        <View style={styles.centerContent}>
+          <Ionicons name="cube-outline" size={48} color={theme.colors.textSecondary} />
+          <Text style={styles.emptyTitle}>We can&apos;t find that product</Text>
+          <Text style={styles.emptyMessage}>
+            The vendor might have removed it or changed the link. Please explore other listings.
+          </Text>
+          <TouchableOpacity style={styles.retryButton} onPress={handleRetry}>
+            <Text style={styles.retryButtonText}>Refresh</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.screen}>
+      <Toast visible={toast.visible} message={toast.message} type={toast.type} onDismiss={hideToast} />
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerButton}>
+          <Ionicons name="arrow-back" size={22} color={theme.colors.textPrimary} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Product Details</Text>
+        <TouchableOpacity onPress={handleShare} style={styles.headerButton}>
+          <Ionicons name="share-social-outline" size={22} color={theme.colors.textPrimary} />
+        </TouchableOpacity>
+      </View>
+
+      {loading && !listingSource ? (
+        <View style={styles.centerContent}>
+          <ActivityIndicator color={theme.colors.primary} />
+          <Text style={styles.loadingText}>Fetching live listing...</Text>
+        </View>
+      ) : (
+        <ScrollView
+          ref={scrollRef}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollBody}
+        >
+          <View style={styles.heroWrapper}>
+            <ScrollView
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              onMomentumScrollEnd={handleGalleryScroll}
+            >
+              {gallery.map((img, index) => (
+                <Image key={`${img}-${index}`} source={{ uri: img }} style={styles.heroImage} resizeMode="cover" />
+              ))}
+            </ScrollView>
+            {gallery.length > 1 ? (
+              <View style={styles.paginationDots}>
+                {gallery.map((_, index) => (
+                  <View key={`dot-${index}`} style={[styles.dot, index === activeImageIndex && styles.activeDot]} />
+                ))}
+              </View>
+            ) : null}
+          </View>
+
+          <View style={styles.sectionCard}>
+            <Text style={styles.productTitle}>{listing?.title || 'Marketplace listing'}</Text>
+            {renderStatus()}
+            <View style={styles.priceRow}>
+              {listing?.price ? (
+                <Text style={styles.price}>{formatNaira(listing.price)}</Text>
+              ) : (
+                <Text style={styles.price}>Contact vendor</Text>
+              )}
+              {listing?.oldPrice ? <Text style={styles.oldPrice}>{formatNaira(listing.oldPrice)}</Text> : null}
+            </View>
+            <View style={styles.metaRow}>
+              {listing?.categoryLabel ? (
+                <View style={styles.metaPill}>
+                  <Ionicons name="layers-outline" size={14} color={theme.colors.textSecondary} />
+                  <Text style={styles.metaText}>{listing.categoryLabel}</Text>
+                </View>
+              ) : null}
+              {listing?.location ? (
+                <View style={styles.metaPill}>
+                  <Ionicons name="location-outline" size={14} color={theme.colors.textSecondary} />
+                  <Text style={styles.metaText}>{listing.location}</Text>
+                </View>
+              ) : null}
+              {listing?.createdAt ? (
+                <View style={styles.metaPill}>
+                  <Ionicons name="time-outline" size={14} color={theme.colors.textSecondary} />
+                  <Text style={styles.metaText}>{formatDate(listing.createdAt)}</Text>
+                </View>
+              ) : null}
+            </View>
+
+            {listing?.badges?.length ? (
+              <View style={styles.badgeRow}>
+                {listing.badges.map((badge) => (
+                  <View key={badge} style={styles.badge}>
+                    <Text style={styles.badgeText}>{badge}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+
+            <Text style={styles.sectionHeading}>Overview</Text>
+            <Text style={styles.bodyText}>
+              {listing?.description || 'This vendor has not provided additional information for this listing.'}
+            </Text>
+          </View>
+
+          {features.length ? (
+            <View style={styles.sectionCard}>
+              <Text style={styles.sectionHeading}>Key features</Text>
+              {features.map((feature) => (
+                <View key={feature} style={styles.listRow}>
+                  <Ionicons name="checkmark-circle-outline" size={20} color={theme.colors.primary} />
+                  <Text style={styles.listText}>{feature}</Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
+
+          <View style={styles.sectionCard}>
+            <Text style={styles.sectionHeading}>Specifications</Text>
+            {specifications.length ? (
+              specifications.map((spec) => (
+                <View key={`${spec.label}-${spec.value}`} style={styles.specRow}>
+                  <Text style={styles.specLabel}>{spec.label}</Text>
+                  <Text style={styles.specValue}>{spec.value}</Text>
+                </View>
+              ))
+            ) : (
+              <Text style={styles.bodyText}>
+                Vendor has not provided detailed specifications for this item yet.
+              </Text>
+            )}
+          </View>
+
+          <View style={styles.sectionCard}>
+            <Text style={styles.sectionHeading}>Listing info</Text>
+            <View style={styles.specRow}>
+              <Text style={styles.specLabel}>Listing ID</Text>
+              <Text style={styles.specValue}>{listing?.id || 'Unavailable'}</Text>
+            </View>
+            {listing?.categoryLabel ? (
+              <View style={styles.specRow}>
+                <Text style={styles.specLabel}>Category</Text>
+                <Text style={styles.specValue}>{listing.categoryLabel}</Text>
+              </View>
+            ) : null}
+            {listing?.location ? (
+              <View style={styles.specRow}>
+                <Text style={styles.specLabel}>Location</Text>
+                <Text style={styles.specValue}>{listing.location}</Text>
+              </View>
+            ) : null}
+            {listing?.createdAt ? (
+              <View style={styles.specRow}>
+                <Text style={styles.specLabel}>Posted on</Text>
+                <Text style={styles.specValue}>{formatDate(listing.createdAt)}</Text>
+              </View>
+            ) : null}
+          </View>
+
+          <View style={styles.sectionCard}>
+            <View style={styles.vendorHeader}>
+              <View style={styles.vendorAvatarWrapper}>
+                {vendorProfile.avatar ? (
+                  <Image source={{ uri: vendorProfile.avatar }} style={styles.vendorAvatar} />
+                ) : (
+                  <View style={styles.vendorAvatarPlaceholder}>
+                    <Ionicons name="storefront-outline" size={20} color={theme.colors.white} />
+                  </View>
+                )}
+              </View>
+              <View style={styles.vendorInfo}>
+                <Text style={styles.vendorName}>{vendorProfile.name || 'Marketplace Vendor'}</Text>
+                <Text style={styles.vendorPlan}>{vendorProfile.planLabel || 'Free Plan'}</Text>
+                <View style={styles.metaRow}>
+                  <View style={styles.metaPill}>
+                    <Ionicons
+                      name={
+                        vendorProfile.verification === 'verified'
+                          ? 'shield-checkmark'
+                          : vendorProfile.verification === 'pending'
+                          ? 'shield-half-outline'
+                          : 'shield-outline'
+                      }
+                      size={14}
+                      color={theme.colors.orange}
+                    />
+                    <Text style={styles.metaText}>
+                      {vendorProfile.verification === 'verified'
+                        ? 'Verified vendor'
+                        : vendorProfile.verification === 'pending'
+                        ? 'Pending verification'
+                        : 'Unverified'}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+              <TouchableOpacity style={styles.storefrontButton} onPress={handleOpenStorefront}>
+                <Ionicons name="open-outline" size={18} color={theme.colors.primary} />
+                <Text style={styles.storefrontText}>Storefront</Text>
+              </TouchableOpacity>
+            </View>
+
+            {vendorLoading ? (
+              <View style={styles.loadingRow}>
+                <ActivityIndicator color={theme.colors.primary} />
+                <Text style={styles.bodyText}>Syncing vendor profile...</Text>
+              </View>
+            ) : null}
+
+            {vendorProfile.location ? (
+              <View style={styles.listRow}>
+                <Ionicons name="location-outline" size={20} color={theme.colors.textSecondary} />
+                <Text style={styles.listText}>{vendorProfile.location}</Text>
+              </View>
+            ) : null}
+
+            {vendorProfile.phone ? (
+              <View style={styles.listRow}>
+                <Ionicons name="call-outline" size={20} color={theme.colors.textSecondary} />
+                <Text style={styles.listText}>{vendorProfile.phone}</Text>
+              </View>
+            ) : null}
+
+            {vendorProfile.email ? (
+              <View style={styles.listRow}>
+                <Ionicons name="mail-outline" size={20} color={theme.colors.textSecondary} />
+                <Text style={styles.listText}>{vendorProfile.email}</Text>
+              </View>
+            ) : null}
+
+            {listing?.tags?.length ? (
+              <View style={styles.tagRow}>
+                {listing.tags.map((tag) => (
+                  <View key={tag} style={styles.tagPill}>
+                    <Text style={styles.tagText}>{tag}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+          </View>
+        </ScrollView>
+      )}
+
+      <View style={styles.contactBar}>
+        <TouchableOpacity
+          style={[styles.secondaryCta, !vendorProfile.phone && styles.disabledCta]}
+          onPress={handleCallVendor}
+          disabled={!vendorProfile.phone}
+        >
+          <Ionicons name="call-outline" size={20} color={theme.colors.primary} />
+          <Text style={styles.secondaryCtaText}>Call</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.secondaryCta, !(vendorProfile.whatsapp || vendorProfile.phone) && styles.disabledCta]}
+          onPress={handleWhatsappVendor}
+          disabled={!(vendorProfile.whatsapp || vendorProfile.phone)}
+        >
+          <Ionicons name="logo-whatsapp" size={20} color={theme.colors.primary} />
+          <Text style={styles.secondaryCtaText}>WhatsApp</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.primaryCta, chatLoading && styles.disabledCta]}
+          onPress={handleChatVendor}
+          disabled={chatLoading}
+        >
+          {chatLoading ? (
+            <ActivityIndicator color={theme.colors.white} />
+          ) : (
+            <>
+              <Ionicons name="chatbubble-ellipses-outline" size={20} color={theme.colors.white} />
+              <Text style={styles.primaryCtaText}>Chat vendor</Text>
+            </>
+          )}
+        </TouchableOpacity>
+      </View>
+    </SafeAreaView>
+  );
+};
+const pickFirstString = (...values) => {
+  for (const value of values) {
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (trimmed) {
+        return trimmed;
+      }
+    }
+  }
+  return '';
+};
+
+const parsePrice = (value) => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
+  }
+  const numeric = Number(String(value).replace(/[^0-9.]/g, ''));
+  return Number.isFinite(numeric) ? numeric : null;
+};
+
+const ensureArray = (input) => {
+  if (Array.isArray(input)) {
+    return input;
+  }
+  if (input === null || input === undefined) {
+    return [];
+  }
+  return [input];
+};
+
+const dedupeArray = (values = []) => {
+  return Array.from(
+    new Set(
+      ensureArray(values)
+        .map((value) => (typeof value === 'string' ? value.trim() : value))
+        .filter(Boolean)
+    )
+  );
+};
+
+const normaliseStatus = (value) => {
+  const normalised = String(value || '').trim().toLowerCase();
+  if (!normalised) {
+    return 'available';
+  }
+  if (['approved', 'active', 'live', 'available', 'published'].includes(normalised)) {
+    return 'available';
+  }
+  if (['pending', 'in_review', 'review', 'processing'].includes(normalised)) {
+    return 'pending';
+  }
+  if (['sold', 'soldout', 'unavailable', 'disabled', 'suspended'].includes(normalised)) {
+    return 'unavailable';
+  }
+  return normalised;
+};
+
+const buildStatusLabel = (status) => {
+  switch (status) {
+    case 'pending':
+      return 'Pending approval';
+    case 'unavailable':
+      return 'Temporarily unavailable';
+    case 'available':
+      return 'Available';
+    default:
+      return friendlyLabel(status || 'Status');
+  }
+};
+
+const parseTimestamp = (value) => {
+  if (!value) {
+    return null;
+  }
+  if (typeof value.toDate === 'function') {
+    return value.toDate();
+  }
+  if (value instanceof Date) {
+    return value;
+  }
+  if (typeof value === 'object' && typeof value.seconds === 'number') {
+    return new Date(value.seconds * 1000);
+  }
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? null : new Date(parsed);
+};
+
+const deriveGallery = (source) => {
+  if (!source) {
+    return [PLACEHOLDER_IMAGE];
+  }
+  const values = [];
+  const candidateArrays = [source.images, source.imageUrls, source.gallery, source.photos];
+  candidateArrays.forEach((collection) => {
+    if (Array.isArray(collection)) {
+      collection.forEach((item) => {
+        const resolved = resolveMediaUrl(item);
+        if (resolved) {
+          values.push(resolved);
+        }
+      });
+    }
+  });
+  const singleImages = [source.image, source.primaryImage, source.coverImage, source.thumbnail];
+  singleImages.forEach((item) => {
+    const resolved = resolveMediaUrl(item);
+    if (resolved) {
+      values.push(resolved);
+    }
+  });
+  return values.length ? dedupeArray(values) : [PLACEHOLDER_IMAGE];
+};
+
+const extractFeaturesFromListing = (source = {}) => {
+  const featureSet = new Set();
+  FEATURE_FIELDS.forEach((field) => {
+    const value = source[field];
+    if (!value) {
+      return;
+    }
+    if (Array.isArray(value)) {
+      value.forEach((item) => {
+        const text = String(item || '').trim();
+        if (text) {
+          featureSet.add(text);
+        }
+      });
+      return;
+    }
+    if (typeof value === 'string') {
+      value
+        .split(/[\n;,•]+/)
+        .map((item) => item.trim())
+        .filter(Boolean)
+        .forEach((item) => featureSet.add(item));
+    }
+  });
+  return Array.from(featureSet);
+};
+
+const formatSpecValue = (rawValue) => {
+  if (rawValue === null || rawValue === undefined) {
+    return '';
+  }
+  if (typeof rawValue === 'string') {
+    return rawValue.trim();
+  }
+  if (typeof rawValue === 'number') {
+    return Number.isFinite(rawValue) ? `${rawValue}` : '';
+  }
+  if (typeof rawValue === 'boolean') {
+    return rawValue ? 'Yes' : 'No';
+  }
+  if (typeof rawValue.toDate === 'function') {
+    return formatDate(rawValue.toDate());
+  }
+  if (rawValue instanceof Date) {
+    return formatDate(rawValue);
+  }
+  if (Array.isArray(rawValue)) {
+    return rawValue.map((item) => formatSpecValue(item)).filter(Boolean).join(', ');
+  }
+  return '';
+};
+
+const friendlyLabel = (value) => {
+  if (!value) {
+    return '';
+  }
+  return String(value)
+    .replace(/[_\-]/g, ' ')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/\s+/g, ' ')
+    .replace(/\b\w/g, (match) => match.toUpperCase())
+    .trim();
+};
+
+const extractSpecifications = (source = {}) => {
+  if (!source || typeof source !== 'object') {
+    return [];
+  }
+  const rows = [];
+  Object.entries(source).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === '') {
+      return;
+    }
+    const normalisedKey = key.toLowerCase();
+    if (EXCLUDED_SPEC_KEYS.has(normalisedKey)) {
+      return;
+    }
+    if (normalisedKey.includes('uid') || normalisedKey.includes('token') || normalisedKey.includes('sync')) {
+      return;
+    }
+    if (normalisedKey.includes('image') || normalisedKey.includes('photo') || normalisedKey.includes('url')) {
+      return;
+    }
+    const displayValue = formatSpecValue(value);
+    if (!displayValue) {
+      return;
+    }
+    rows.push({ label: friendlyLabel(key), value: displayValue });
+  });
+  return rows.slice(0, 24);
+};
+
+const normaliseVerificationState = (value) => {
+  if (value === true || value === 1 || value === '1') {
+    return 'verified';
+  }
+  if (value === false || value === 0 || value === '0') {
+    return 'unverified';
+  }
+  const normalised = String(value || '').trim().toLowerCase();
+  if (['verified', 'approved', 'active', 'complete', 'completed'].includes(normalised)) {
+    return 'verified';
+  }
+  if (['pending', 'review', 'processing', 'submitted', 'in_review'].includes(normalised)) {
+    return 'pending';
+  }
+  if (!normalised) {
+    return 'unverified';
+  }
+  return normalised;
+};
+
+const buildPlanLabel = (value) => {
+  const plan = String(value || '').trim();
+  if (!plan) {
+    return 'Free Plan';
+  }
+  const cleaned = plan.replace(/plan$/i, '').trim();
+  return `${cleaned || 'Free'} Plan`;
+};
+
+const buildLocationLabel = ({ location, city, state, country }) => {
+  const parts = [];
+  if (city) {
+    parts.push(city);
+  }
+  if (state && (!city || city.toLowerCase() !== state.toLowerCase())) {
+    parts.push(state);
+  }
+  if (!parts.length && location) {
+    parts.push(location);
+  }
+  if (country && !parts.includes(country)) {
+    parts.push(country);
+  }
+  return parts.filter(Boolean).join(', ');
+};
+
+const buildListingModel = (source = {}, fallbackId) => {
+  if (!source) {
+    return null;
+  }
+  const data = typeof source.data === 'function' ? source.data() : source;
+  const id =
+    data.id || data.listingId || data.listing_id || data.firestoreId || fallbackId || data.public_id || null;
+  const title = pickFirstString(
+    data.title,
+    data.productTitle,
+    data.listingTitle,
+    data.name,
+    id ? `Listing ${id}` : 'Yustam Listing'
+  );
+  const category = pickFirstString(data.category, data.productCategory, data.collection) || 'Marketplace';
+  const subcategory = pickFirstString(data.subcategory, data.productSubcategory, data.segment);
+  const categoryLabel = [category, subcategory && subcategory !== category ? subcategory : null]
+    .filter(Boolean)
+    .join(' / ');
+
+  return {
+    id,
+    title,
+    description: pickFirstString(data.description, data.productDescription, data.details, data.summary),
+    price: parsePrice(data.price ?? data.amount ?? data.listingPrice ?? data.current_price),
+    oldPrice: parsePrice(data.oldPrice ?? data.previousPrice ?? data.old_price ?? data.compareAt),
+    status: normaliseStatus(data.status ?? data.state),
+    statusLabel: buildStatusLabel(normaliseStatus(data.status ?? data.state)),
+    badges: dedupeArray([
+      ...(Array.isArray(data.badges) ? data.badges : []),
+      data.isFeatured || data.featured ? 'Featured' : null,
+      data.vendorPlan ? buildPlanLabel(data.vendorPlan) : null,
+    ]),
+    tags: dedupeArray([
+      ...(Array.isArray(data.tags) ? data.tags : []),
+      data.tagline,
+      data.subcategory,
+      data.segment,
+    ]),
+    category,
+    subcategory,
+    categoryLabel,
+    location: buildLocationLabel({
+      location: data.location ?? data.vendorLocation,
+      city: data.city ?? data.vendorCity,
+      state: data.state ?? data.vendorState,
+      country: data.country,
+    }),
+    createdAt: parseTimestamp(data.createdAt),
+    vendorUid: pickFirstString(data.vendorUid, data.vendorFirebaseUid, data.vendor_uid),
+    vendorFirebaseUid: pickFirstString(data.vendorFirebaseUid, data.vendor_uid),
+    vendorId: pickFirstString(data.vendorId, data.vendorID, data.vendorNumericId),
+    vendorName: pickFirstString(data.vendorBusinessName, data.vendorName, data.vendor, 'Marketplace Vendor'),
+    vendorPlan: data.vendorPlan || data.plan,
+    vendorVerification: normaliseVerificationState(
+      data.vendorVerification ?? data.verification ?? data.verificationStatus ?? data.vendorVerified ?? data.verified
+    ),
+    vendorPhone: pickFirstString(data.vendorPhone, data.phone, data.contactPhone),
+    vendorWhatsapp: pickFirstString(data.vendorWhatsapp, data.whatsapp),
+    vendorEmail: pickFirstString(data.vendorEmail, data.email, data.contactEmail),
+    vendorLocation: pickFirstString(data.vendorLocation, data.location),
+    raw: data,
+  };
+};
+
+const buildVendorFromListing = (listing) => {
+  if (!listing) {
+    return {};
+  }
+  return {
+    name: listing.vendorName || 'Marketplace Vendor',
+    businessName: listing.vendorName,
+    planLabel: buildPlanLabel(listing.vendorPlan),
+    verification: listing.vendorVerification,
+    phone: listing.vendorPhone,
+    whatsapp: listing.vendorWhatsapp,
+    email: listing.vendorEmail,
+    location: listing.vendorLocation || listing.location,
+    vendorUid: listing.vendorUid,
+    vendorId: listing.vendorId,
+  };
+};
+
+const transformVendorPayload = (payload = {}) => {
+  const location = buildLocationLabel({
+    location: payload.location,
+    city: payload.city,
+    state: payload.state,
+    country: payload.country,
+  });
+
+  let storefrontUrl = '';
+  if (payload.id) {
+    storefrontUrl = `${API_BASE_URL}/vendor-storefront.php?vendorId=${encodeURIComponent(payload.id)}`;
+  } else if (payload.vendorUid || payload.firebaseUid) {
+    const identifier = payload.vendorUid || payload.firebaseUid;
+    storefrontUrl = `${API_BASE_URL}/vendor-storefront.php?vendorUid=${encodeURIComponent(identifier)}`;
+  }
+
+  return {
+    name: payload.businessName || payload.displayName || 'Marketplace Vendor',
+    businessName: payload.businessName || payload.displayName,
+    planLabel: payload.planLabel || buildPlanLabel(payload.plan),
+    verification: normaliseVerificationState(payload.verificationState || payload.status),
+    phone: payload.phone,
+    whatsapp: payload.whatsapp,
+    email: payload.email,
+    location,
+    avatar: resolveMediaUrl(payload.avatar),
+    vendorUid: payload.vendorUid || payload.firebaseUid,
+    vendorId: payload.id ? String(payload.id) : '',
+    storefrontUrl: storefrontUrl || '',
+  };
+};
+
+const mergeVendorProfiles = (base = {}, override = {}) => ({
+  name: override.name || base.name || 'Marketplace Vendor',
+  businessName: override.businessName || base.businessName || override.name,
+  planLabel: override.planLabel || base.planLabel || 'Free Plan',
+  verification: override.verification || base.verification || 'unverified',
+  phone: override.phone || base.phone || '',
+  whatsapp: override.whatsapp || base.whatsapp || override.phone || base.phone || '',
+  email: override.email || base.email || '',
+  location: override.location || base.location || '',
+  avatar: override.avatar || '',
+  vendorUid: override.vendorUid || base.vendorUid || '',
+  vendorId: override.vendorId || base.vendorId || '',
+  storefrontUrl: override.storefrontUrl || base.storefrontUrl || '',
+});
+
+const sanitizePhoneNumber = (value = '') => value.replace(/[^0-9]/g, '');
+
+const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: theme.colors.background,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+    backgroundColor: theme.colors.white,
+  },
+  headerButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: theme.colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...theme.shadows.soft,
+  },
+  headerTitle: {
+    fontFamily: theme.typography.fontFamily.interSemiBold,
+    fontSize: theme.typography.fontSize.lg,
+    color: theme.colors.textPrimary,
+  },
+  scrollBody: {
+    paddingBottom: 140,
+    gap: theme.spacing.lg,
+  },
+  heroWrapper: {
+    width: '100%',
+    height: HERO_HEIGHT,
+    backgroundColor: theme.colors.white,
+  },
+  heroImage: {
+    width,
+    height: HERO_HEIGHT,
+    backgroundColor: theme.colors.backgroundLight,
+  },
+  paginationDots: {
+    position: 'absolute',
+    bottom: theme.spacing.md,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    gap: 6,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: 4,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: `${theme.colors.overlayDark}70`,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: theme.colors.white,
+    opacity: 0.4,
+  },
+  activeDot: {
+    opacity: 1,
+  },
+  sectionCard: {
+    marginHorizontal: theme.spacing.lg,
+    padding: theme.spacing.lg,
+    borderRadius: theme.borderRadius['2xl'],
+    backgroundColor: theme.colors.white,
+    ...theme.shadows.medium,
+    gap: theme.spacing.sm,
+  },
+  productTitle: {
+    fontFamily: theme.typography.fontFamily.interSemiBold,
+    fontSize: theme.typography.fontSize.xl,
+    color: theme.colors.textPrimary,
+  },
+  priceRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: theme.spacing.sm,
+  },
+  price: {
+    fontFamily: theme.typography.fontFamily.interBold,
+    fontSize: theme.typography.fontSize['2xl'],
+    color: theme.colors.emerald,
+  },
+  oldPrice: {
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.base,
+    color: theme.colors.textSecondary,
+    textDecorationLine: 'line-through',
+  },
+  metaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: theme.spacing.sm,
+  },
+  metaPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: 4,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.backgroundLight,
+  },
+  metaText: {
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.textSecondary,
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: theme.spacing.xs,
+  },
+  badge: {
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: 4,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: `${theme.colors.orange}15`,
+  },
+  badgeText: {
+    fontFamily: theme.typography.fontFamily.interMedium,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.orange,
+  },
+  sectionHeading: {
+    marginTop: theme.spacing.sm,
+    fontFamily: theme.typography.fontFamily.interSemiBold,
+    fontSize: theme.typography.fontSize.lg,
+    color: theme.colors.textPrimary,
+  },
+  bodyText: {
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.base,
+    color: theme.colors.textSecondary,
+    lineHeight: theme.typography.lineHeight.relaxed * theme.typography.fontSize.base,
+  },
+  listRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+  },
+  listText: {
+    flex: 1,
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.base,
+    color: theme.colors.textSecondary,
+  },
+  specRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: theme.spacing.xs,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.borderLight,
+  },
+  specLabel: {
+    flex: 0.5,
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.textSecondary,
+  },
+  specValue: {
+    flex: 0.5,
+    fontFamily: theme.typography.fontFamily.interSemiBold,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.textPrimary,
+    textAlign: 'right',
+  },
+  vendorHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.md,
+  },
+  vendorAvatarWrapper: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: theme.colors.backgroundLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  vendorAvatar: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+  },
+  vendorAvatarPlaceholder: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: theme.colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  vendorInfo: {
+    flex: 1,
+    gap: 4,
+  },
+  vendorName: {
+    fontFamily: theme.typography.fontFamily.interSemiBold,
+    fontSize: theme.typography.fontSize.lg,
+    color: theme.colors.textPrimary,
+  },
+  vendorPlan: {
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.textSecondary,
+  },
+  storefrontButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.xs,
+    borderRadius: theme.borderRadius.full,
+    borderWidth: 1,
+    borderColor: theme.colors.primary,
+  },
+  storefrontText: {
+    fontFamily: theme.typography.fontFamily.interMedium,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.primary,
+  },
+  tagRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: theme.spacing.xs,
+  },
+  tagPill: {
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: 4,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.backgroundLight,
+  },
+  tagText: {
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.textSecondary,
+  },
+  statusChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: 4,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: `${theme.colors.emerald}15`,
+  },
+  statusText: {
+    fontFamily: theme.typography.fontFamily.interMedium,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.emerald,
+  },
+  contactBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    padding: theme.spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+    backgroundColor: theme.colors.white,
+  },
+  secondaryCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    borderRadius: theme.borderRadius.full,
+    borderWidth: 1,
+    borderColor: theme.colors.primary,
+  },
+  secondaryCtaText: {
+    fontFamily: theme.typography.fontFamily.interSemiBold,
+    fontSize: theme.typography.fontSize.base,
+    color: theme.colors.primary,
+  },
+  primaryCta: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: theme.spacing.sm,
+    paddingVertical: theme.spacing.sm,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.primary,
+  },
+  primaryCtaText: {
+    fontFamily: theme.typography.fontFamily.interSemiBold,
+    fontSize: theme.typography.fontSize.base,
+    color: theme.colors.white,
+  },
+  disabledCta: {
+    opacity: 0.5,
+  },
+  centerContent: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: theme.spacing['2xl'],
+    gap: theme.spacing.md,
+  },
+  loadingText: {
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.base,
+    color: theme.colors.textSecondary,
+  },
+  emptyContainer: {
+    flex: 1,
+    backgroundColor: theme.colors.background,
+  },
+  emptyTitle: {
+    fontFamily: theme.typography.fontFamily.interSemiBold,
+    fontSize: theme.typography.fontSize.lg,
+    color: theme.colors.textPrimary,
+  },
+  emptyMessage: {
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.base,
+    color: theme.colors.textSecondary,
+    textAlign: 'center',
+  },
+  retryButton: {
+    paddingHorizontal: theme.spacing.xl,
+    paddingVertical: theme.spacing.sm,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.primary,
+  },
+  retryButtonText: {
+    fontFamily: theme.typography.fontFamily.interSemiBold,
+    fontSize: theme.typography.fontSize.base,
+    color: theme.colors.white,
+  },
+  loadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+  },
+});
+
+export default ProductDetailScreen;

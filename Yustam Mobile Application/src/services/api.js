@@ -112,7 +112,7 @@ export const chatAPI = {
   listMessages: (chatId) => api.get('/api/chat/list-messages.php', { params: { chatId } }),
   sendMessage: (chatId, message) => api.post('/api/chat/send-message.php', { chatId, message }),
   markAsRead: (chatId) => api.post('/api/chat/mark-read.php', { chatId }),
-  openChat: (vendorId, listingId) => api.post('/api/chat/chat-open.php', { vendorId, listingId }),
+  openChat: (payload = {}) => api.post('/api/chat/chat-open.php', payload),
 };
 
 // Profile endpoints
