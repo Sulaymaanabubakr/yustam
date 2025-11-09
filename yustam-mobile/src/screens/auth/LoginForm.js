@@ -31,7 +31,7 @@ const LoginForm = ({ navigation }) => {
   const [toast, setToast] = useState({ visible: false, message: '', type: 'info' });
   const redirectUri = makeRedirectUri({
     scheme: 'yustam',
-    useProxy: true,
+    useProxy: false,
   });
   const [request, response, promptAsync] = Google.useAuthRequest({
     expoClientId: GOOGLE_OAUTH_CONFIG.expoClientId,
@@ -158,7 +158,7 @@ const LoginForm = ({ navigation }) => {
 
     try {
       await promptAsync({
-        useProxy: true,
+        useProxy: false,
         showInRecents: true,
       });
     } catch (error) {
