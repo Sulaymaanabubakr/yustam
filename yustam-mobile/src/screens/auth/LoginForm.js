@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   Image,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../../context/AuthContext';
@@ -29,8 +30,15 @@ const LoginForm = ({ navigation }) => {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [errors, setErrors] = useState({});
   const [toast, setToast] = useState({ visible: false, message: '', type: 'info' });
+  const nativeRedirectUri = Platform.select({
+    android: 'com.googleusercontent.apps.90080814337-3k0s5u9pne7i5vnfgalu5sddj8uc9jj3:/oauthredirect',
+    ios: 'com.googleusercontent.apps.90080814337-adt11pru8ka1b5adl5q381iolbjrsj93:/oauthredirect',
+    default: undefined,
+  });
+
   const redirectUri = makeRedirectUri({
     scheme: 'yustam',
+    native: nativeRedirectUri,
     useProxy: false,
   });
   const [request, response, promptAsync] = Google.useAuthRequest({
@@ -160,6 +168,7 @@ const LoginForm = ({ navigation }) => {
       await promptAsync({
         useProxy: false,
         showInRecents: true,
+        redirectUri,
       });
     } catch (error) {
       console.error('Google prompt error:', error);

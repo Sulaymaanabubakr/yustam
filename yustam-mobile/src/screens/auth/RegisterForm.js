@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   Image,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -43,8 +44,15 @@ const RegisterForm = ({ navigation }) => {
   const [businessName, setBusinessName] = useState('');
   const [category, setCategory] = useState('');
 
+  const nativeRedirectUri = Platform.select({
+    android: 'com.googleusercontent.apps.90080814337-3k0s5u9pne7i5vnfgalu5sddj8uc9jj3:/oauthredirect',
+    ios: 'com.googleusercontent.apps.90080814337-adt11pru8ka1b5adl5q381iolbjrsj93:/oauthredirect',
+    default: undefined,
+  });
+
   const redirectUri = makeRedirectUri({
     scheme: 'yustam',
+    native: nativeRedirectUri,
     useProxy: false,
   });
   const [request, response, promptAsync] = Google.useAuthRequest({
@@ -221,6 +229,7 @@ const RegisterForm = ({ navigation }) => {
       await promptAsync({
         useProxy: false,
         showInRecents: true,
+        redirectUri,
       });
     } catch (error) {
       console.error('Google prompt error:', error);
