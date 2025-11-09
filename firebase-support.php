@@ -56,6 +56,14 @@ function yustam_firebase_service_account(): array
         }
     }
 
+    $cpanelPath = '/home/yustamco/firebase-admin.json';
+    if (is_file($cpanelPath)) {
+        $decoded = json_decode((string) file_get_contents($cpanelPath), true);
+        if (is_array($decoded)) {
+            return $serviceAccount = $decoded;
+        }
+    }
+
     $defaultPath = __DIR__ . '/' . YUSTAM_FIREBASE_SERVICE_ACCOUNT_FILENAME;
     if (is_file($defaultPath)) {
         $decoded = json_decode((string) file_get_contents($defaultPath), true);

@@ -660,6 +660,7 @@ if (isset($_GET['format']) && $_GET['format'] === 'json') {
     window.__VENDOR_SETTINGS_ENDPOINT__ = 'update-vendor-settings.php';
     window.__VENDOR_SETTINGS_REFRESH__ = 'vendor-settings.php?format=json';
     window.__VENDOR_DELETE_ENDPOINT__ = 'vendor-delete-account.php';
+    window.__VENDOR_PASSWORD_ENDPOINT__ = 'vendor-update-password.php';
   </script>
   <script src="vendor-settings.js" defer></script>
 </body>

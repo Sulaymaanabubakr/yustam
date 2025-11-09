@@ -55,6 +55,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const changePasswordModal = document.getElementById('changePasswordModal');
   const updatePasswordBtn = document.getElementById('updatePasswordBtn');
   const cancelPasswordBtn = document.getElementById('cancelPasswordBtn');
+  const passwordEndpoint = window.__VENDOR_PASSWORD_ENDPOINT__ || 'vendor-update-password.php';
   const passwordInputs = {
     current: document.getElementById('currentPassword'),
     next: document.getElementById('newPassword'),
@@ -211,19 +212,77 @@ document.addEventListener('DOMContentLoaded', () => {
       resetPasswordFields();
     }
   });
-  updatePasswordBtn?.addEventListener('click', () => {
+  updatePasswordBtn?.addEventListener('click', async () => {
     const { current, next, confirm } = passwordInputs;
-    if (!current.value.trim() || !next.value.trim() || !confirm.value.trim()) {
-      showToast('Please fill in all password fields.', 'error');
+    const currentValue = current?.value.trim() || '';
+    const nextValue = next?.value.trim() || '';
+    const confirmValue = confirm?.value.trim() || '';
+
+    if (!nextValue || !confirmValue) {
+      showToast('Enter and confirm your new password.', 'error');
       return;
     }
-    if (next.value !== confirm.value) {
+
+    if (nextValue !== confirmValue) {
       showToast('New passwords do not match.', 'error');
       return;
     }
-    showToast('Password updated successfully.', 'success');
-    toggleModal(changePasswordModal, false);
-    resetPasswordFields();
+
+    if (nextValue.length < 6) {
+      showToast('Password must be at least 6 characters.', 'error');
+      return;
+    }
+
+    if (currentValue && currentValue === nextValue) {
+      showToast('Choose a password different from the current one.', 'error');
+      return;
+    }
+
+    if (!passwordEndpoint) {
+      showToast('Password service not available. Please contact support.', 'error');
+      return;
+    }
+
+    let previousText = '';
+    if (updatePasswordBtn) {
+      previousText = updatePasswordBtn.textContent || '';
+      updatePasswordBtn.disabled = true;
+      updatePasswordBtn.textContent = 'Updating...';
+    }
+
+    try {
+      const response = await fetch(passwordEndpoint, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+        body: JSON.stringify({
+          currentPassword: currentValue,
+          newPassword: nextValue,
+          confirmPassword: confirmValue,
+        }),
+      });
+
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.success) {
+        throw new Error(payload?.message || 'Unable to update password right now.');
+      }
+
+      showToast(payload.message || 'Password updated successfully.', 'success');
+      toggleModal(changePasswordModal, false);
+      resetPasswordFields();
+    } catch (error) {
+      console.error('Password update failed:', error);
+      showToast(error.message || 'Unable to update password right now.', 'error');
+    } finally {
+      if (updatePasswordBtn) {
+        updatePasswordBtn.disabled = false;
+        updatePasswordBtn.textContent = previousText || 'Update Password';
+      }
+    }
   });
 
   deleteAccountBtn?.addEventListener('click', () => toggleModal(deleteAccountModal, true));

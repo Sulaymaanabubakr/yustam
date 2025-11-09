@@ -79,51 +79,78 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $firebaseUid = trim((string) ($reset['firebase_uid'] ?? ''));
                 $firebaseEmail = trim((string) ($reset['email'] ?? ''));
 
-                try {
-                    if ($firebaseUid === '' && $firebaseEmail !== '') {
-                        $firebaseUser = yustam_firebase_get_user_by_email($firebaseEmail);
-                        if (is_array($firebaseUser) && !empty($firebaseUser['localId'])) {
-                            $firebaseUid = (string) $firebaseUser['localId'];
-                            if ($firebaseUid !== '') {
-                                try {
-                                    yustam_vendor_set_firebase_uid($vendorId, $firebaseUid, $db);
-                                } catch (Throwable $syncUidError) {
-                                    error_log('Password reset: unable to store Firebase UID for vendor ' . $vendorId . ': ' . $syncUidError->getMessage());
-                                }
-                            }
-                        }
-                    }
+                $firebaseUpdateFailed = false;
 
-                    if ($firebaseUid !== '') {
-                        yustam_firebase_update_user_password($firebaseUid, $password);
+                if ($firebaseUid === '' && $firebaseEmail !== '') {
+                  try {
+                    $firebaseUser = yustam_firebase_get_user_by_email($firebaseEmail);
+                    if (is_array($firebaseUser) && !empty($firebaseUser['localId'])) {
+                      $firebaseUid = (string) $firebaseUser['localId'];
+                      if ($firebaseUid !== '') {
+                        try {
+                          yustam_vendor_set_firebase_uid($vendorId, $firebaseUid, $db);
+                        } catch (Throwable $syncUidError) {
+                          error_log('Password reset: unable to store Firebase UID for vendor ' . $vendorId . ': ' . $syncUidError->getMessage());
+                        }
+                      }
                     }
-                } catch (Throwable $firebaseError) {
-                    error_log('Password reset: unable to sync Firebase password for ' . ($firebaseEmail ?: ('vendor ' . $vendorId)) . ': ' . $firebaseError->getMessage());
+                  } catch (Throwable $lookupError) {
+                    error_log('Password reset: unable to lookup Firebase account for ' . $firebaseEmail . ': ' . $lookupError->getMessage());
+                  }
                 }
 
-                // Update user password
-                $hashed = password_hash($password, PASSWORD_DEFAULT);
-                $providerColumn = yustam_vendor_table_has_column('provider');
-                $updateSql = $providerColumn
+                if ($firebaseUid === '') {
+                  $firebaseUpdateFailed = true;
+                  $message = 'Unable to locate your authentication record. Please contact support.';
+                  if ($isAjax) {
+                    respond_json(false, $message);
+                  }
+                }
+
+                if (!$firebaseUpdateFailed) {
+                  try {
+                    yustam_firebase_update_user_password($firebaseUid, $password);
+                  } catch (YustamFirebaseAuthException $firebaseError) {
+                    $firebaseUpdateFailed = true;
+                    $message = $firebaseError->getMessage();
+                    if ($isAjax) {
+                      respond_json(false, $message);
+                    }
+                  } catch (Throwable $firebaseError) {
+                    $firebaseUpdateFailed = true;
+                    error_log('Password reset: unable to sync Firebase password for ' . ($firebaseEmail ?: ('vendor ' . $vendorId)) . ': ' . $firebaseError->getMessage());
+                    $message = 'Unable to update your password right now. Please try again.';
+                    if ($isAjax) {
+                      respond_json(false, $message);
+                    }
+                  }
+                }
+
+                if (!$firebaseUpdateFailed) {
+                  // Update user password locally after Firebase succeeds
+                  $hashed = password_hash($password, PASSWORD_DEFAULT);
+                  $providerColumn = yustam_vendor_table_has_column('provider');
+                  $updateSql = $providerColumn
                     ? "UPDATE `{$vendorTable}` SET password = ?, provider = 'email', updated_at = NOW() WHERE id = ?"
                     : "UPDATE `{$vendorTable}` SET password = ?, updated_at = NOW() WHERE id = ?";
-                $update = $db->prepare($updateSql);
-                $update->bind_param('si', $hashed, $vendorId);
-                $update->execute();
-                $update->close();
+                  $update = $db->prepare($updateSql);
+                  $update->bind_param('si', $hashed, $vendorId);
+                  $update->execute();
+                  $update->close();
 
-                // Mark the reset token as used
-                $markUsed = $db->prepare("UPDATE password_resets SET used = 1 WHERE id = ?");
-                $markUsed->bind_param('i', $reset['id']);
-                $markUsed->execute();
-                $markUsed->close();
+                  // Mark the reset token as used
+                  $markUsed = $db->prepare("UPDATE password_resets SET used = 1 WHERE id = ?");
+                  $markUsed->bind_param('i', $reset['id']);
+                  $markUsed->execute();
+                  $markUsed->close();
 
-                if ($isAjax) {
+                  if ($isAjax) {
                     respond_json(true, 'Your password has been updated successfully.');
-                }
+                  }
 
-                header("Location: vendor-login.html?message=Password+reset+successful!+Please+log+in.&status=success");
-                exit;
+                  header("Location: vendor-login.html?message=Password+reset+successful!+Please+log+in.&status=success");
+                  exit;
+                }
             }
         }
     }
