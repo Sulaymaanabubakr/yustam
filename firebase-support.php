@@ -56,6 +56,14 @@ function yustam_firebase_service_account(): array
         }
     }
 
+    $customPath = '/home2/yustamco/yustam-50819-firebase-adminsdk-fbsvc-c7614e55c7.json';
+    if (is_file($customPath)) {
+        $decoded = json_decode((string) file_get_contents($customPath), true);
+        if (is_array($decoded)) {
+            return $serviceAccount = $decoded;
+        }
+    }
+
     $cpanelPath = '/home/yustamco/firebase-admin.json';
     if (is_file($cpanelPath)) {
         $decoded = json_decode((string) file_get_contents($cpanelPath), true);
