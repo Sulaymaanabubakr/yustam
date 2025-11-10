@@ -41,7 +41,7 @@ function yustam_firebase_service_account(): array
     }
 
     // Main service account file
-    $primaryPath = '/home2/yustamco/yustam-50819-firebase-adminsdk-fbsvc-c7614e55c7.json';
+    $primaryPath = '/home2/yustamco/firebase-service-account.json';
     if (is_file($primaryPath)) {
         $decoded = json_decode((string) file_get_contents($primaryPath), true);
         if (is_array($decoded)) {
