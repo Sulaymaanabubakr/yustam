@@ -79,10 +79,15 @@ function yustam_firebase_service_account(): array
     } elseif (getenv('FIREBASE_SERVICE_ACCOUNT_PATH')) {
         $customPath = getenv('FIREBASE_SERVICE_ACCOUNT_PATH');
     }
+    $defaultPath = __DIR__ . '/' . YUSTAM_FIREBASE_SERVICE_ACCOUNT_FILENAME;
     if ($customPath && is_file($customPath)) {
         $defaultPath = $customPath;
     } else {
-        $defaultPath = __DIR__ . '/' . YUSTAM_FIREBASE_SERVICE_ACCOUNT_FILENAME;
+        $documentRootPath = $_SERVER['DOCUMENT_ROOT'] ?? '';
+        $publicFile = $documentRootPath ? rtrim($documentRootPath, '/\\') . '/' . YUSTAM_FIREBASE_SERVICE_ACCOUNT_FILENAME : '';
+        if ($publicFile && is_file($publicFile)) {
+            $defaultPath = $publicFile;
+        }
     }
         if (is_file($defaultPath)) {
             $decoded = json_decode((string) file_get_contents($defaultPath), true);
