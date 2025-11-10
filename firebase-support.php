@@ -40,64 +40,41 @@ function yustam_firebase_service_account(): array
         return $serviceAccount;
     }
 
-        $customPath = '/home2/yustamco/yustam-50819-firebase-adminsdk-fbsvc-c7614e55c7.json';
-        if (is_file($customPath)) {
-            $decoded = json_decode((string) file_get_contents($customPath), true);
-            if (is_array($decoded)) {
-                return $serviceAccount = $decoded;
-            }
+    // Main service account file
+    $primaryPath = '/home2/yustamco/yustam-50819-firebase-adminsdk-fbsvc-c7614e55c7.json';
+    if (is_file($primaryPath)) {
+        $decoded = json_decode((string) file_get_contents($primaryPath), true);
+        if (is_array($decoded)) {
+            return $serviceAccount = $decoded;
         }
-
-        $inline = getenv('FIREBASE_SERVICE_ACCOUNT');
-        if ($inline) {
-            $decoded = json_decode($inline, true);
-            if (is_array($decoded)) {
-                return $serviceAccount = $decoded;
-            }
-        }
-
-        $envPath = getenv('GOOGLE_APPLICATION_CREDENTIALS');
-        if ($envPath && is_file($envPath)) {
-            $decoded = json_decode((string) file_get_contents($envPath), true);
-            if (is_array($decoded)) {
-                return $serviceAccount = $decoded;
-            }
-        }
-
-        $cpanelPath = '/home/yustamco/firebase-admin.json';
-        if (is_file($cpanelPath)) {
-            $decoded = json_decode((string) file_get_contents($cpanelPath), true);
-            if (is_array($decoded)) {
-                return $serviceAccount = $decoded;
-            }
-        }
-
-    // Allow overriding the stored service-account path via env var for setups where the JSON stays outside public_html.
-    $customPath = null;
-    if (defined('FIREBASE_SERVICE_ACCOUNT_PATH')) {
-        $customPath = FIREBASE_SERVICE_ACCOUNT_PATH;
-    } elseif (getenv('FIREBASE_SERVICE_ACCOUNT_PATH')) {
-        $customPath = getenv('FIREBASE_SERVICE_ACCOUNT_PATH');
     }
+
+    // Fallback: environment variable
+    $inline = getenv('FIREBASE_SERVICE_ACCOUNT');
+    if ($inline) {
+        $decoded = json_decode($inline, true);
+        if (is_array($decoded)) {
+            return $serviceAccount = $decoded;
+        }
+    }
+
+    // Fallback: GOOGLE_APPLICATION_CREDENTIALS
+    $envPath = getenv('GOOGLE_APPLICATION_CREDENTIALS');
+    if ($envPath && is_file($envPath)) {
+        $decoded = json_decode((string) file_get_contents($envPath), true);
+        if (is_array($decoded)) {
+            return $serviceAccount = $decoded;
+        }
+    }
+
+    // Fallback: local file in repo
     $defaultPath = __DIR__ . '/' . YUSTAM_FIREBASE_SERVICE_ACCOUNT_FILENAME;
-    $sharedAccountPath = '/home2/yustamco/firebase-service-account.json'; // new location from screenshot
-    if ($customPath && is_file($customPath)) {
-        $defaultPath = $customPath;
-    } elseif (is_file($sharedAccountPath)) {
-        $defaultPath = $sharedAccountPath;
-    } else {
-        $documentRootPath = $_SERVER['DOCUMENT_ROOT'] ?? '';
-        $publicFile = $documentRootPath ? rtrim($documentRootPath, '/\\') . '/' . YUSTAM_FIREBASE_SERVICE_ACCOUNT_FILENAME : '';
-        if ($publicFile && is_file($publicFile)) {
-            $defaultPath = $publicFile;
+    if (is_file($defaultPath)) {
+        $decoded = json_decode((string) file_get_contents($defaultPath), true);
+        if (is_array($decoded)) {
+            return $serviceAccount = $decoded;
         }
     }
-        if (is_file($defaultPath)) {
-            $decoded = json_decode((string) file_get_contents($defaultPath), true);
-            if (is_array($decoded)) {
-                return $serviceAccount = $decoded;
-            }
-        }
 
     throw new RuntimeException('Firebase service account credentials not configured.');
 }
