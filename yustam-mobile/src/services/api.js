@@ -125,6 +125,7 @@ export const profileAPI = {
   getSettings: () => api.get('/vendor-settings.php', { params: { format: 'json' } }),
   updateSettings: (data) => api.post('/update-vendor-settings.php', data),
   deleteAccount: () => api.post('/vendor-delete-account.php'),
+  updatePassword: (data) => api.post('/vendor-update-password.php', data),
 };
 
 // Vendor-specific endpoints

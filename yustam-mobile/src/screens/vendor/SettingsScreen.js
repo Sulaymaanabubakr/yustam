@@ -149,8 +149,7 @@ const SettingsScreen = ({ navigation }) => {
   };
 
   const handleChangePassword = () => {
-    // TODO: Navigate to change password screen or show modal
-    showToast('Opening change password...', 'info');
+    navigation.navigate('VendorChangePassword');
   };
 
   const handleDeleteAccount = () => {
