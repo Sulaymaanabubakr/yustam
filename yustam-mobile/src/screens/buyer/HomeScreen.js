@@ -1,19 +1,23 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
+  ActivityIndicator,
+  Image,
   ScrollView,
+  StyleSheet,
+  Text,
   TextInput,
   TouchableOpacity,
-  Image,
-  ImageBackground,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { collection, getDocs, limit, orderBy, query as buildQuery } from 'firebase/firestore';
 import theme from '../../theme';
 import { useAuth } from '../../context/AuthContext';
-import { getFlashSaleItems } from '../../data/buyerCatalog';
+import { db } from '../../config/firebase';
+import { formatNaira } from '../../utils/formatters';
+import { normalizeFirestoreListing, normalizeStaticListing } from '../../utils/listingTransforms';
+import { getFlashSaleItems, getMarketplaceProducts } from '../../data/buyerCatalog';
 
 const CATEGORY_ITEMS = [
   { id: 'phones-tablets', label: 'Phones & Tablets', icon: 'phone-portrait-outline' },
@@ -61,15 +65,90 @@ const PROMO_BANNERS = [
   },
 ];
 
+const SECTION_LIMITS = {
+  flash: 10,
+  trending: 8,
+  latest: 6,
+};
+
 const BuyerHomeScreen = ({ navigation }) => {
   const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
-  const flashSaleItems = useMemo(() => getFlashSaleItems(), []);
+  const [flashDeals, setFlashDeals] = useState([]);
+  const [trendingListings, setTrendingListings] = useState([]);
+  const [latestListings, setLatestListings] = useState([]);
+  const [loadingFeed, setLoadingFeed] = useState(true);
+  const [error, setError] = useState('');
 
   const firstName = useMemo(() => {
-    if (!user?.displayName) return 'there';
-    return user.displayName.split(' ')[0];
-  }, [user?.displayName]);
+    const source = (user?.fullName || user?.displayName || '').trim();
+    if (!source) {
+      return 'there';
+    }
+    return source.includes(' ') ? source.split(' ')[0] : source;
+  }, [user?.fullName, user?.displayName]);
+
+  const hydrateFromFallbacks = useCallback(() => {
+    const fallbackFlash = getFlashSaleItems().map((item) =>
+      normalizeStaticListing({
+        ...item,
+        category: 'Featured',
+        location: 'Nigeria',
+        vendor: 'Yustam Partner',
+        vendorPlan: 'premium',
+      })
+    );
+
+    const fallbackMarketplace = getMarketplaceProducts().map((item) => normalizeStaticListing(item));
+
+    setFlashDeals(fallbackFlash.slice(0, SECTION_LIMITS.flash));
+    setTrendingListings(fallbackMarketplace.slice(0, SECTION_LIMITS.trending));
+    setLatestListings(fallbackMarketplace.slice(SECTION_LIMITS.trending, SECTION_LIMITS.trending + SECTION_LIMITS.latest));
+  }, []);
+
+  const hydrateFromRecords = useCallback(
+    (records = []) => {
+      if (!records.length) {
+        hydrateFromFallbacks();
+        return;
+      }
+      setFlashDeals(selectFlashDeals(records));
+      setTrendingListings(selectTrendingListings(records));
+      setLatestListings(records.slice(0, SECTION_LIMITS.latest));
+    },
+    [hydrateFromFallbacks]
+  );
+
+  const fetchHomeFeed = useCallback(async () => {
+    try {
+      setLoadingFeed(true);
+      setError('');
+      const listingsRef = collection(db, 'listings');
+      const feedSnapshot = await getDocs(
+        buildQuery(listingsRef, orderBy('createdAt', 'desc'), limit(60))
+      );
+      const normalized = feedSnapshot.docs
+        .map((doc) => normalizeFirestoreListing(doc))
+        .filter(Boolean);
+
+      if (!normalized.length) {
+        hydrateFromFallbacks();
+        return;
+      }
+
+      hydrateFromRecords(normalized);
+    } catch (err) {
+      console.error('BuyerHomeScreen feed error:', err);
+      setError(err?.message || 'Unable to load marketplace feed.');
+      hydrateFromFallbacks();
+    } finally {
+      setLoadingFeed(false);
+    }
+  }, [hydrateFromFallbacks, hydrateFromRecords]);
+
+  useEffect(() => {
+    fetchHomeFeed();
+  }, [fetchHomeFeed]);
 
   const handleSearchSubmit = () => {
     const trimmed = searchQuery.trim();
@@ -79,20 +158,54 @@ const BuyerHomeScreen = ({ navigation }) => {
     navigation.navigate('BuyerSearch', { query: trimmed });
   };
 
-  const goToFlashSale = () => {
-    navigation.navigate('BuyerFlashSale');
+  const handleOpenListing = (listing) => {
+    navigation.navigate('BuyerProductDetail', {
+      productId: listing.id,
+      product: listing,
+    });
+  };
+
+  const handleCategoryPress = (categoryLabel) => {
+    navigation.navigate('BuyerSearch', { category: categoryLabel });
+  };
+
+  const renderListingRail = (title, listings, options = {}) => {
+    if (!listings.length) {
+      return null;
+    }
+    return (
+      <View style={styles.sectionWrapper}>
+        <View style={styles.sectionHeader}>
+          <View>
+            <Text style={styles.sectionTitle}>{title}</Text>
+            {options.subtitle ? <Text style={styles.sectionSubtitle}>{options.subtitle}</Text> : null}
+          </View>
+          {options.ctaLabel ? (
+            <TouchableOpacity onPress={options.onPressCta} activeOpacity={0.8}>
+              <Text style={styles.sectionLink}>{options.ctaLabel}</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.railContent}
+        >
+          {listings.map((item) => (
+            <ListingCard key={`${options.key || title}-${item.id}`} item={item} onPress={() => handleOpenListing(item)} />
+          ))}
+        </ScrollView>
+      </View>
+    );
   };
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <ScrollView
-        contentContainerStyle={styles.contentContainer}
-        showsVerticalScrollIndicator={false}
-      >
+      <ScrollView contentContainerStyle={styles.contentContainer} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <View style={styles.brandRow}>
             <Image source={require('../../../assets/splash-logo.png')} style={styles.brandLogo} resizeMode="contain" />
-            <Text style={styles.brand}>yustam</Text>
+            <Text style={styles.brand}>YUSTAM</Text>
           </View>
           <View style={styles.actions}>
             <TouchableOpacity
@@ -129,56 +242,8 @@ const BuyerHomeScreen = ({ navigation }) => {
             returnKeyType="search"
             onSubmitEditing={handleSearchSubmit}
           />
-          <TouchableOpacity
-            style={styles.searchButton}
-            onPress={handleSearchSubmit}
-            activeOpacity={0.85}
-          >
+          <TouchableOpacity style={styles.searchButton} onPress={handleSearchSubmit} activeOpacity={0.85}>
             <Text style={styles.searchButtonText}>Search</Text>
-          </TouchableOpacity>
-        </View>
-
-        <ImageBackground
-          source={{ uri: 'https://res.cloudinary.com/dk-find-out/image/upload/q_80,w_1400,f_auto/flash_sale_banner.png' }}
-          style={styles.heroCard}
-          imageStyle={styles.heroImage}
-        >
-          <View style={styles.heroOverlay} />
-          <View style={styles.heroContent}>
-            <View style={styles.heroBadge}>
-              <Text style={styles.heroBadgeText}>Flash Sale</Text>
-            </View>
-            <Text style={styles.heroTitle}>Green Friday Mega Deals</Text>
-            <Text style={styles.heroSubtitle}>Save up to 60% on power, audio and more this weekend only.</Text>
-            <TouchableOpacity style={styles.heroCta} onPress={goToFlashSale} activeOpacity={0.85}>
-              <Text style={styles.heroCtaText}>Save Now</Text>
-              <Ionicons name="arrow-forward" size={16} color={theme.colors.white} />
-            </TouchableOpacity>
-          </View>
-        </ImageBackground>
-
-        <View style={styles.categoriesSection}>
-          {CATEGORY_ITEMS.map((item) => (
-            <TouchableOpacity
-              key={item.id}
-              style={styles.categoryCard}
-              activeOpacity={0.8}
-              onPress={goToFlashSale}
-            >
-              <View style={styles.categoryIconWrapper}>
-                <Ionicons name={item.icon} size={20} color={theme.colors.orange} />
-              </View>
-              <Text style={styles.categoryLabel} numberOfLines={2}>
-                {item.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Game Feast</Text>
-          <TouchableOpacity onPress={goToFlashSale} activeOpacity={0.7}>
-            <Text style={styles.sectionLink}>View All</Text>
           </TouchableOpacity>
         </View>
 
@@ -201,97 +266,187 @@ const BuyerHomeScreen = ({ navigation }) => {
           ))}
         </ScrollView>
 
-        <View style={styles.sectionHeader}>
-          <View>
-            <Text style={styles.sectionTitle}>Flash Sale</Text>
-            <Text style={styles.sectionSubtitle}>App-only deals refreshed hourly</Text>
+        <View style={styles.categoriesCard}>
+          <Text style={styles.categoriesTitle}>Browse by category</Text>
+          <View style={styles.categoriesSection}>
+            {CATEGORY_ITEMS.map((item) => (
+              <TouchableOpacity
+                key={item.id}
+                style={styles.categoryCard}
+                activeOpacity={0.85}
+                onPress={() => handleCategoryPress(item.label)}
+              >
+                <View style={styles.categoryIconWrapper}>
+                  <Ionicons name={item.icon} size={18} color={theme.colors.orange} />
+                </View>
+                <Text style={styles.categoryLabel} numberOfLines={1} ellipsizeMode="tail">
+                  {item.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
-          <TouchableOpacity onPress={goToFlashSale} activeOpacity={0.7}>
-            <Text style={styles.sectionLink}>See More</Text>
-          </TouchableOpacity>
         </View>
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.flashRow}
-        >
-          {flashSaleItems.map((item) => (
-            <TouchableOpacity
-              key={item.id}
-              style={styles.flashCard}
-              activeOpacity={0.85}
-              onPress={() => navigation.navigate('BuyerProductDetail', { productId: item.id })}
-            >
-              <View style={styles.flashImageWrapper}>
-                <Image source={{ uri: item.image }} style={styles.flashImage} resizeMode="contain" />
-                <View style={styles.flashBadge}>
-                  <Text style={styles.flashBadgeText}>Flash Sale</Text>
-                </View>
-              </View>
-              <Text style={styles.flashName} numberOfLines={2}>
-                {item.name}
-              </Text>
-              <View style={styles.flashRating}>
-                <Ionicons name="star" size={14} color={theme.colors.orange} />
-                <Text style={styles.ratingValue}>{item.rating}</Text>
-                <Text style={styles.ratingCount}>({item.reviews})</Text>
-              </View>
-              <View style={styles.flashPrices}>
-                <Text style={styles.newPrice}>{formatCurrency(item.price)}</Text>
-                <Text style={styles.oldPrice}>{formatCurrency(item.oldPrice)}</Text>
-              </View>
-              <View style={styles.sellingPoints}>
-                {item.sellingPoints.map((point) => (
-                  <View key={point} style={styles.sellingChip}>
-                    <Text style={styles.sellingChipText}>{point}</Text>
-                  </View>
-                ))}
-              </View>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-
-        {!user && (
-          <View style={styles.signInCard}>
-            <View style={styles.signInIcon}>
-              <Ionicons name="star-outline" size={22} color={theme.colors.white} />
-            </View>
-            <View style={styles.signInContent}>
-              <Text style={styles.signInTitle}>Sign in for exclusive offers</Text>
-              <Text style={styles.signInSubtitle}>Unlock personalised deals, faster checkout and loyalty points.</Text>
-            </View>
-            <TouchableOpacity
-              style={styles.signInButton}
-              onPress={() => navigation.navigate('Auth')}
-              activeOpacity={0.9}
-            >
-              <Text style={styles.signInButtonText}>Sign In</Text>
+        {error ? (
+          <View style={styles.errorBanner}>
+            <Ionicons name="alert-circle" size={18} color={theme.colors.error} />
+            <Text style={styles.errorText}>{error}</Text>
+            <TouchableOpacity onPress={fetchHomeFeed} activeOpacity={0.8}>
+              <Text style={styles.errorLink}>Retry</Text>
             </TouchableOpacity>
           </View>
-        )}
+        ) : null}
+
+        {loadingFeed && !flashDeals.length && !trendingListings.length ? (
+          <View style={styles.loadingState}>
+            <ActivityIndicator color={theme.colors.orange} />
+            <Text style={styles.loadingText}>Fetching the freshest listings...</Text>
+          </View>
+        ) : null}
+
+        {renderListingRail('Flash Deals', flashDeals, {
+          key: 'flash-deals',
+          subtitle: 'App-only deals refreshed hourly',
+          ctaLabel: 'See all',
+          onPressCta: () => navigation.navigate('BuyerFlashSale'),
+        })}
+
+        {renderListingRail('Trending Now', trendingListings, {
+          key: 'trending-now',
+          subtitle: 'Top rated picks from verified vendors',
+          ctaLabel: 'Shop all',
+          onPressCta: () => navigation.navigate('BuyerSearch'),
+        })}
+
+        <View style={styles.sectionWrapper}>
+          <View style={styles.sectionHeader}>
+            <View>
+              <Text style={styles.sectionTitle}>Latest Listings</Text>
+              <Text style={styles.sectionSubtitle}>Fresh drops from the marketplace</Text>
+            </View>
+            <TouchableOpacity onPress={() => navigation.navigate('BuyerSearch')} activeOpacity={0.8}>
+              <Text style={styles.sectionLink}>Browse all</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.listingGrid}>
+            {latestListings.map((item) => (
+              <ListingCard key={`latest-${item.id}`} item={item} variant="grid" onPress={() => handleOpenListing(item)} />
+            ))}
+          </View>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
 };
 
-const formatCurrency = (value) => {
-  const amount = Number(value) || 0;
-  try {
-    return `₦${amount.toLocaleString('en-NG')}`;
-  } catch (error) {
-    return `₦${amount.toLocaleString()}`;
+const hasFlashBadge = (listing) => {
+  const matcher = /flash|deal|hot|sale/i;
+  return (
+    listing?.badges?.some((badge) => matcher.test(badge)) || listing?.tags?.some((tag) => matcher.test(tag))
+  );
+};
+
+const parseReviewCount = (value) => {
+  if (!value) {
+    return 0;
   }
+  if (typeof value === 'number') {
+    return value;
+  }
+  const trimmed = String(value).trim().toLowerCase();
+  if (trimmed.endsWith('k')) {
+    const numeric = parseFloat(trimmed.replace('k', ''));
+    return Number.isNaN(numeric) ? 0 : Math.round(numeric * 1000);
+  }
+  const numeric = parseInt(trimmed, 10);
+  return Number.isNaN(numeric) ? 0 : numeric;
+};
+
+const selectFlashDeals = (records = []) => {
+  const flashCandidates = records.filter((listing) => hasFlashBadge(listing));
+  const source = flashCandidates.length ? flashCandidates : records;
+  return source.slice(0, SECTION_LIMITS.flash);
+};
+
+const selectTrendingListings = (records = []) => {
+  return [...records]
+    .sort((a, b) => {
+      const ratingDifference = (b.rating || 0) - (a.rating || 0);
+      if (Math.abs(ratingDifference) > 0.05) {
+        return ratingDifference;
+      }
+      return parseReviewCount(b.reviews) - parseReviewCount(a.reviews);
+    })
+    .slice(0, SECTION_LIMITS.trending);
+};
+
+const formatRating = (rating) => {
+  if (!rating && rating !== 0) {
+    return '-';
+  }
+  return Number(rating).toFixed(1);
+};
+
+const ListingCard = ({ item, onPress, variant = 'rail' }) => {
+  return (
+    <TouchableOpacity
+      style={[styles.listingCard, variant === 'grid' && styles.listingCardGrid]}
+      onPress={onPress}
+      activeOpacity={0.92}
+    >
+      <View style={styles.listingImageWrapper}>
+        <Image source={{ uri: item.image }} style={styles.listingImage} resizeMode="contain" />
+        {item.badges?.length ? (
+          <View style={styles.listingBadge}>
+            <Text style={styles.listingBadgeText}>{item.badges[0]}</Text>
+          </View>
+        ) : null}
+      </View>
+      <Text style={styles.listingCategory}>{item.category}</Text>
+      <Text style={styles.listingTitle} numberOfLines={2}>
+        {item.name}
+      </Text>
+      <View style={styles.listingPriceRow}>
+        <Text style={styles.listingPrice}>{formatNaira(item.price)}</Text>
+        {item.oldPrice ? <Text style={styles.listingOldPrice}>{formatNaira(item.oldPrice)}</Text> : null}
+      </View>
+      <View style={styles.listingMetaRow}>
+        <View style={styles.listingRatingRow}>
+          <Ionicons name="star" size={14} color={theme.colors.orange} />
+          <Text style={styles.listingRatingValue}>{formatRating(item.rating)}</Text>
+          {item.reviews ? <Text style={styles.listingRatingCount}>({item.reviews})</Text> : null}
+        </View>
+        {item.location ? (
+          <View style={styles.listingLocationRow}>
+            <Ionicons name="location-outline" size={14} color={theme.colors.textSecondary} />
+            <Text style={styles.listingLocationText} numberOfLines={1}>
+              {item.location}
+            </Text>
+          </View>
+        ) : null}
+      </View>
+      <View style={styles.listingVendorRow}>
+        <Text style={styles.listingVendorName} numberOfLines={1}>
+          {item.vendor}
+        </Text>
+        {item.vendorPlan ? (
+          <View style={styles.listingPlanBadge}>
+            <Text style={styles.listingPlanText}>{item.vendorPlan.toUpperCase()}</Text>
+          </View>
+        ) : null}
+      </View>
+    </TouchableOpacity>
+  );
 };
 
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: theme.colors.background,
+    backgroundColor: theme.colors.backgroundLight,
   },
   contentContainer: {
-    paddingBottom: theme.spacing['4xl'] + theme.spacing.lg,
     paddingHorizontal: theme.spacing.lg,
+    paddingBottom: theme.spacing['4xl'],
     gap: theme.spacing['2xl'],
   },
   header: {
@@ -305,16 +460,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: theme.spacing.sm,
   },
+  brandLogo: {
+    width: 40,
+    height: 40,
+    borderRadius: theme.radius.full,
+  },
   brand: {
     fontFamily: theme.typography.fontFamily.anton,
     fontSize: theme.typography.fontSize['2xl'],
     color: theme.colors.emerald,
     letterSpacing: theme.typography.letterSpacing.wide,
-    textTransform: 'uppercase',
-  },
-  brandLogo: {
-    width: 32,
-    height: 32,
   },
   actions: {
     flexDirection: 'row',
@@ -334,8 +489,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 10,
     right: 10,
-    width: 6,
-    height: 6,
+    width: 8,
+    height: 8,
     borderRadius: theme.radius.full,
     backgroundColor: theme.colors.orange,
   },
@@ -343,178 +498,105 @@ const styles = StyleSheet.create({
     gap: theme.spacing.xs,
   },
   greetingTitle: {
-    fontFamily: theme.typography.fontFamily.interSemiBold,
-    fontSize: theme.typography.fontSize.lg,
+    fontFamily: theme.typography.fontFamily.anton,
+    fontSize: theme.typography.fontSize['3xl'],
     color: theme.colors.textPrimary,
   },
   greetingSub: {
     fontFamily: theme.typography.fontFamily.inter,
-    fontSize: theme.typography.fontSize.sm,
+    fontSize: theme.typography.fontSize.base,
     color: theme.colors.textSecondary,
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.md,
+    gap: theme.spacing.sm,
     backgroundColor: theme.colors.white,
-    borderRadius: theme.radius.xl,
+    borderRadius: theme.radius['2xl'],
     paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.md,
-    ...theme.shadows.card,
+    paddingVertical: theme.spacing.sm,
+    ...theme.shadows.soft,
   },
   searchInput: {
     flex: 1,
     fontFamily: theme.typography.fontFamily.inter,
-    fontSize: theme.typography.fontSize.sm,
+    fontSize: theme.typography.fontSize.base,
     color: theme.colors.textPrimary,
   },
   searchButton: {
     backgroundColor: theme.colors.emerald,
-    borderRadius: theme.radius.full,
     paddingHorizontal: theme.spacing.lg,
     paddingVertical: theme.spacing.sm,
+    borderRadius: theme.radius.full,
   },
   searchButtonText: {
-    fontFamily: theme.typography.fontFamily.interMedium,
-    fontSize: theme.typography.fontSize.sm,
-    color: theme.colors.white,
-  },
-  heroCard: {
-    height: 190,
-    borderRadius: theme.radius['2xl'],
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  heroImage: {
-    borderRadius: theme.radius['2xl'],
-  },
-  heroOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 77, 64, 0.72)',
-  },
-  heroContent: {
-    flex: 1,
-    padding: theme.spacing.xl,
-    justifyContent: 'center',
-    gap: theme.spacing.sm,
-  },
-  heroBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    paddingHorizontal: theme.spacing.sm,
-    paddingVertical: 4,
-    borderRadius: theme.radius.full,
-  },
-  heroBadgeText: {
     fontFamily: theme.typography.fontFamily.interSemiBold,
-    fontSize: theme.typography.fontSize.xs,
-    color: theme.colors.white,
-    letterSpacing: theme.typography.letterSpacing.wide,
-  },
-  heroTitle: {
-    fontFamily: theme.typography.fontFamily.anton,
-    fontSize: theme.typography.fontSize['2xl'],
-    color: theme.colors.white,
-    letterSpacing: theme.typography.letterSpacing.wide,
-  },
-  heroSubtitle: {
-    fontFamily: theme.typography.fontFamily.inter,
-    fontSize: theme.typography.fontSize.sm,
-    color: 'rgba(255,255,255,0.85)',
-    lineHeight: theme.typography.lineHeight.relaxed * theme.typography.fontSize.sm,
-  },
-  heroCta: {
-    marginTop: theme.spacing.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing.xs,
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(255,255,255,0.16)',
-    borderRadius: theme.radius.full,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.35)',
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.sm,
-  },
-  heroCtaText: {
-    fontFamily: theme.typography.fontFamily.interMedium,
     fontSize: theme.typography.fontSize.sm,
     color: theme.colors.white,
+  },
+  categoriesCard: {
+    backgroundColor: theme.colors.white,
+    borderRadius: theme.radius['2xl'],
+    padding: theme.spacing.lg,
+    ...theme.shadows.card,
+  },
+  categoriesTitle: {
+    fontFamily: theme.typography.fontFamily.interSemiBold,
+    fontSize: theme.typography.fontSize.base,
+    color: theme.colors.textPrimary,
+    marginBottom: theme.spacing.md,
+    textAlign: 'center',
   },
   categoriesSection: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    backgroundColor: theme.colors.white,
-    borderRadius: theme.radius['2xl'],
-    padding: theme.spacing.lg,
-    gap: theme.spacing.lg,
-    ...theme.shadows.card,
+    rowGap: theme.spacing.lg,
   },
   categoryCard: {
-    width: '28%',
+    width: '30%',
     alignItems: 'center',
-    gap: theme.spacing.sm,
+    gap: theme.spacing.xs,
   },
   categoryIconWrapper: {
-    width: 60,
-    height: 60,
+    width: 56,
+    height: 56,
     borderRadius: theme.radius.full,
-    backgroundColor: theme.colors.backgroundLight,
+    backgroundColor: '#FAEFE6',
     alignItems: 'center',
     justifyContent: 'center',
   },
   categoryLabel: {
-    fontFamily: theme.typography.fontFamily.inter,
-    fontSize: theme.typography.fontSize.xs,
-    color: theme.colors.textPrimary,
     textAlign: 'center',
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-  },
-  sectionTitle: {
-    fontFamily: theme.typography.fontFamily.anton,
-    fontSize: theme.typography.fontSize.xl,
-    color: theme.colors.textPrimary,
-    letterSpacing: theme.typography.letterSpacing.wide,
-  },
-  sectionSubtitle: {
     fontFamily: theme.typography.fontFamily.inter,
     fontSize: theme.typography.fontSize.xs,
-    color: theme.colors.textSecondary,
-    marginTop: theme.spacing.xs,
-  },
-  sectionLink: {
-    fontFamily: theme.typography.fontFamily.interMedium,
-    fontSize: theme.typography.fontSize.xs,
-    color: theme.colors.orange,
+    color: theme.colors.textPrimary,
+    maxWidth: 100,
   },
   promoRow: {
     gap: theme.spacing.md,
   },
   promoCard: {
-    width: 220,
-    borderRadius: theme.radius['2xl'],
-    padding: theme.spacing.lg,
     flexDirection: 'row',
     alignItems: 'center',
+    borderRadius: theme.radius['2xl'],
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.md,
     gap: theme.spacing.md,
+    minWidth: 220,
     ...theme.shadows.medium,
   },
   promoIconCircle: {
-    width: 42,
-    height: 42,
+    width: 40,
+    height: 40,
     borderRadius: theme.radius.full,
-    backgroundColor: 'rgba(255,255,255,0.15)',
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.25)',
   },
   promoContent: {
     flex: 1,
-    gap: 4,
+    gap: 2,
   },
   promoTitle: {
     fontFamily: theme.typography.fontFamily.interSemiBold,
@@ -524,135 +606,184 @@ const styles = StyleSheet.create({
   promoCaption: {
     fontFamily: theme.typography.fontFamily.inter,
     fontSize: theme.typography.fontSize.xs,
-    color: 'rgba(255,255,255,0.75)',
+    color: 'rgba(255,255,255,0.8)',
   },
-  flashRow: {
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    backgroundColor: theme.colors.white,
+    padding: theme.spacing.md,
+    borderRadius: theme.radius.xl,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  errorText: {
+    flex: 1,
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.textPrimary,
+  },
+  errorLink: {
+    fontFamily: theme.typography.fontFamily.interSemiBold,
+    color: theme.colors.orange,
+  },
+  loadingState: {
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+  },
+  loadingText: {
+    fontFamily: theme.typography.fontFamily.inter,
+    color: theme.colors.textSecondary,
+  },
+  sectionWrapper: {
     gap: theme.spacing.md,
   },
-  flashCard: {
-    width: 220,
-    borderRadius: theme.radius.xl,
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  sectionTitle: {
+    fontFamily: theme.typography.fontFamily.anton,
+    fontSize: theme.typography.fontSize['2xl'],
+    color: theme.colors.textPrimary,
+  },
+  sectionSubtitle: {
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.textSecondary,
+  },
+  sectionLink: {
+    fontFamily: theme.typography.fontFamily.interSemiBold,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.orange,
+  },
+  railContent: {
+    gap: theme.spacing.md,
+    paddingRight: theme.spacing.lg,
+  },
+  listingCard: {
+    width: 240,
+    borderRadius: theme.radius['2xl'],
     backgroundColor: theme.colors.white,
     padding: theme.spacing.md,
     gap: theme.spacing.sm,
     ...theme.shadows.card,
   },
-  flashImageWrapper: {
-    position: 'relative',
-    backgroundColor: theme.colors.backgroundLight,
-    borderRadius: theme.radius.lg,
-    padding: theme.spacing.md,
+  listingCardGrid: {
+    width: '48%',
   },
-  flashImage: {
+  listingImageWrapper: {
+    borderRadius: theme.radius.xl,
+    backgroundColor: theme.colors.background,
+    padding: theme.spacing.md,
+    position: 'relative',
+  },
+  listingImage: {
     width: '100%',
     height: 120,
   },
-  flashBadge: {
+  listingBadge: {
     position: 'absolute',
     top: theme.spacing.sm,
     left: theme.spacing.sm,
-    backgroundColor: theme.colors.orange,
-    borderRadius: theme.radius.full,
+    backgroundColor: 'rgba(244,115,30,0.12)',
     paddingHorizontal: theme.spacing.sm,
     paddingVertical: 4,
+    borderRadius: theme.radius.full,
   },
-  flashBadgeText: {
-    fontFamily: theme.typography.fontFamily.interMedium,
-    fontSize: theme.typography.fontSize.xs,
-    color: theme.colors.white,
-  },
-  flashName: {
-    fontFamily: theme.typography.fontFamily.interMedium,
-    fontSize: theme.typography.fontSize.sm,
-    color: theme.colors.textPrimary,
-    minHeight: 40,
-  },
-  flashRating: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  ratingValue: {
+  listingBadgeText: {
     fontFamily: theme.typography.fontFamily.interSemiBold,
     fontSize: theme.typography.fontSize.xs,
-    color: theme.colors.textPrimary,
+    color: theme.colors.orange,
   },
-  ratingCount: {
+  listingCategory: {
     fontFamily: theme.typography.fontFamily.inter,
     fontSize: theme.typography.fontSize.xs,
     color: theme.colors.textSecondary,
   },
-  flashPrices: {
+  listingTitle: {
+    fontFamily: theme.typography.fontFamily.interSemiBold,
+    fontSize: theme.typography.fontSize.base,
+    color: theme.colors.textPrimary,
+    minHeight: 44,
+  },
+  listingPriceRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing.xs,
   },
-  newPrice: {
+  listingPrice: {
     fontFamily: theme.typography.fontFamily.anton,
     fontSize: theme.typography.fontSize.lg,
     color: theme.colors.textPrimary,
   },
-  oldPrice: {
+  listingOldPrice: {
     fontFamily: theme.typography.fontFamily.inter,
     fontSize: theme.typography.fontSize.xs,
     color: theme.colors.textSecondary,
     textDecorationLine: 'line-through',
   },
-  sellingPoints: {
-    gap: theme.spacing.xs,
+  listingMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: theme.spacing.sm,
   },
-  sellingChip: {
-    backgroundColor: theme.colors.backgroundLight,
-    borderRadius: theme.radius.full,
-    paddingHorizontal: theme.spacing.sm,
-    paddingVertical: theme.spacing.xs,
+  listingRatingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
-  sellingChipText: {
+  listingRatingValue: {
+    fontFamily: theme.typography.fontFamily.interSemiBold,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.textPrimary,
+  },
+  listingRatingCount: {
     fontFamily: theme.typography.fontFamily.inter,
     fontSize: theme.typography.fontSize.xs,
     color: theme.colors.textSecondary,
   },
-  signInCard: {
+  listingLocationRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.colors.emerald,
-    borderRadius: theme.radius['2xl'],
-    padding: theme.spacing.lg,
-    gap: theme.spacing.md,
-  },
-  signInIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: theme.radius.full,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  signInContent: {
+    gap: 4,
     flex: 1,
-    gap: theme.spacing.xs,
   },
-  signInTitle: {
-    fontFamily: theme.typography.fontFamily.interSemiBold,
-    fontSize: theme.typography.fontSize.base,
-    color: theme.colors.white,
-  },
-  signInSubtitle: {
+  listingLocationText: {
     fontFamily: theme.typography.fontFamily.inter,
     fontSize: theme.typography.fontSize.xs,
-    color: 'rgba(255,255,255,0.75)',
-    lineHeight: theme.typography.lineHeight.relaxed * theme.typography.fontSize.xs,
+    color: theme.colors.textSecondary,
   },
-  signInButton: {
-    backgroundColor: theme.colors.orange,
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.sm,
-    borderRadius: theme.radius.full,
+  listingVendorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  signInButtonText: {
+  listingVendorName: {
+    flex: 1,
     fontFamily: theme.typography.fontFamily.interSemiBold,
     fontSize: theme.typography.fontSize.sm,
-    color: theme.colors.white,
+    color: theme.colors.textPrimary,
+  },
+  listingPlanBadge: {
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: 4,
+    borderRadius: theme.radius.full,
+    backgroundColor: theme.colors.backgroundLight,
+  },
+  listingPlanText: {
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.textSecondary,
+  },
+  listingGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    rowGap: theme.spacing.md,
   },
 });
 
