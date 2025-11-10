@@ -11,7 +11,8 @@ import BuyerHomeScreen from '../screens/buyer/HomeScreen';
 import BuyerSearchScreen from '../screens/buyer/SearchScreen';
 import BuyerSavedScreen from '../screens/buyer/SavedScreen';
 import ChatScreen from '../screens/shared/ChatScreen';
-import ProfileScreen from '../screens/shared/ProfileScreen';
+import BuyerProfileScreen from '../screens/buyer/BuyerProfileScreen';
+import VendorProfileScreen from '../screens/vendor/VendorProfileScreen';
 import VendorDashboardScreen from '../screens/vendor/VendorDashboardScreen';
 import VendorListingsScreen from '../screens/vendor/VendorListingsScreen';
 import VendorChatsScreen from '../screens/vendor/VendorChatsScreen';
@@ -119,7 +120,7 @@ const MainTabNavigator = () => {
             component={VendorNotificationsScreen}
             options={{ tabBarLabel: 'Alerts' }}
           />
-          <Tab.Screen name="Profile" component={ProfileScreen} />
+          <Tab.Screen name="Profile" component={VendorProfileScreen} />
         </>
       ) : (
         <>
@@ -135,7 +136,7 @@ const MainTabNavigator = () => {
             component={BuyerSavedScreen}
             options={{ tabBarLabel: 'Saved' }}
           />
-          <Tab.Screen name="Profile" component={ProfileScreen} />
+          <Tab.Screen name="Profile" component={BuyerProfileScreen} />
         </>
       )}
     </Tab.Navigator>

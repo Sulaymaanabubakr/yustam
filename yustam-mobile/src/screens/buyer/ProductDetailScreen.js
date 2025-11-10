@@ -22,6 +22,7 @@ import { formatDate, formatNaira } from '../../utils/formatters';
 import resolveMediaUrl from '../../utils/url';
 import { API_BASE_URL, USER_ROLES } from '../../config/constants';
 import { chatAPI, vendorAPI } from '../../services/api';
+import { addRecentlyViewedListing } from '../../storage/recentlyViewed';
 
 const { width } = Dimensions.get('window');
 const HERO_HEIGHT = width * 0.78;
@@ -180,6 +181,22 @@ const ProductDetailScreen = ({ navigation, route }) => {
     setGallery(deriveGallery(listingSource));
     setActiveImageIndex(0);
   }, [listingSource]);
+
+  useEffect(() => {
+    if (!listing) {
+      return;
+    }
+    const entry = {
+      id: listing.id,
+      title: listing.title,
+      name: listing.title,
+      price: listing.price,
+      image: gallery?.[0],
+      location: listing.location,
+      category: listing.category,
+    };
+    addRecentlyViewedListing(entry);
+  }, [listing, gallery]);
 
   useEffect(() => {
     const targetId = productId || initialProduct?.id;

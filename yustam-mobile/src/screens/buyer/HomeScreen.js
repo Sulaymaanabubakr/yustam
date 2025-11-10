@@ -18,6 +18,7 @@ import { db } from '../../config/firebase';
 import { formatNaira } from '../../utils/formatters';
 import { normalizeFirestoreListing, normalizeStaticListing } from '../../utils/listingTransforms';
 import { getFlashSaleItems, getMarketplaceProducts } from '../../data/buyerCatalog';
+import { getStoredNotificationsMeta } from '../../storage/notificationsMeta';
 
 const CATEGORY_ITEMS = [
   { id: 'phones-tablets', label: 'Phones & Tablets', icon: 'phone-portrait-outline' },
@@ -79,6 +80,7 @@ const BuyerHomeScreen = ({ navigation }) => {
   const [latestListings, setLatestListings] = useState([]);
   const [loadingFeed, setLoadingFeed] = useState(true);
   const [error, setError] = useState('');
+  const [hasNewNotifications, setHasNewNotifications] = useState(false);
 
   const firstName = useMemo(() => {
     const source = (user?.fullName || user?.displayName || '').trim();
@@ -149,6 +151,22 @@ const BuyerHomeScreen = ({ navigation }) => {
   useEffect(() => {
     fetchHomeFeed();
   }, [fetchHomeFeed]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const syncNotificationMeta = async () => {
+      const meta = await getStoredNotificationsMeta();
+      if (isMounted) {
+        setHasNewNotifications(Boolean(meta?.unread && meta.unread > 0));
+      }
+    };
+    syncNotificationMeta();
+    const intervalId = setInterval(syncNotificationMeta, 15000);
+    return () => {
+      isMounted = false;
+      clearInterval(intervalId);
+    };
+  }, []);
 
   const handleSearchSubmit = () => {
     const trimmed = searchQuery.trim();
@@ -221,7 +239,7 @@ const BuyerHomeScreen = ({ navigation }) => {
               activeOpacity={0.85}
             >
               <Ionicons name="notifications-outline" size={18} color={theme.colors.textPrimary} />
-              <View style={styles.badgeDot} />
+              {hasNewNotifications ? <View style={styles.badgeDot} /> : null}
             </TouchableOpacity>
           </View>
         </View>

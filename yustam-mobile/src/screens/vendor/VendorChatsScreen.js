@@ -27,14 +27,19 @@ const VendorChatsScreen = ({ navigation }) => {
   const [toast, setToast] = useState({ visible: false, message: '', type: 'info' });
 
   useEffect(() => {
+    if (!user?.uid) {
+      return;
+    }
     fetchChats();
-  }, []);
+  }, [user?.uid]);
 
   const fetchChats = async () => {
     try {
       setLoading(true);
       if (!user?.uid) {
-        throw new Error('Unable to load chats. Please sign in again.');
+        setChats([]);
+        setLoading(false);
+        return;
       }
 
       const response = await vendorAPI.getChats(user.uid);

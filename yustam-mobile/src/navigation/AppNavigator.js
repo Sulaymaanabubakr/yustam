@@ -12,6 +12,8 @@ import MainTabNavigator from './MainTabNavigator';
 import BuyerFlashSaleScreen from '../screens/buyer/FlashSaleScreen';
 import BuyerProductDetailScreen from '../screens/buyer/ProductDetailScreen';
 import BuyerSupportScreen from '../screens/buyer/SupportScreen';
+import BuyerPreferencesScreen from '../screens/buyer/PreferencesScreen';
+import BuyerRecentlyViewedScreen from '../screens/buyer/RecentlyViewedScreen';
 import NotificationsScreen from '../screens/shared/NotificationsScreen';
 
 // Vendor Screens
@@ -89,6 +91,8 @@ const AppNavigator = () => {
             <Stack.Screen name="BuyerProductDetail" component={BuyerProductDetailScreen} />
             <Stack.Screen name="BuyerSupport" component={BuyerSupportScreen} />
             <Stack.Screen name="BuyerNotifications" component={NotificationsScreen} />
+            <Stack.Screen name="BuyerPreferences" component={BuyerPreferencesScreen} />
+            <Stack.Screen name="BuyerRecentlyViewed" component={BuyerRecentlyViewedScreen} />
             
             {/* Vendor Screens */}
             <Stack.Screen name="VendorDashboard" component={VendorDashboardScreen} />

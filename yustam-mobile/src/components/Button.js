@@ -5,6 +5,7 @@ import theme from '../theme';
 
 const Button = ({
   children,
+  title,
   onPress,
   variant = 'primary', // primary, secondary, outline, text
   size = 'medium', // small, medium, large
@@ -106,7 +107,7 @@ const Button = ({
               style={styles.iconLeft}
             />
           )}
-          <Text style={getTextStyle()}>{children}</Text>
+          <Text style={getTextStyle()}>{children ?? title ?? ''}</Text>
           {icon && iconPosition === 'right' && (
             <Ionicons
               name={icon}
