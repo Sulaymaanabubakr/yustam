@@ -42,10 +42,19 @@ function yustam_firebase_service_account(): array
 
     // Main service account file
     $primaryPath = '/home2/yustamco/firebase-service-account.json';
+    // DEBUG: Check if file exists and can be read
+    error_log('DEBUG: Checking service account file at ' . $primaryPath);
+    error_log('DEBUG: file_exists=' . (is_file($primaryPath) ? 'true' : 'false'));
     if (is_file($primaryPath)) {
-        $decoded = json_decode((string) file_get_contents($primaryPath), true);
+        $fileContents = file_get_contents($primaryPath);
+        error_log('DEBUG: file_get_contents length=' . strlen($fileContents));
+        $decoded = json_decode((string) $fileContents, true);
+        error_log('DEBUG: json_decode result=' . (is_array($decoded) ? 'array' : 'not array'));
         if (is_array($decoded)) {
+            error_log('DEBUG: Loaded service account successfully.');
             return $serviceAccount = $decoded;
+        } else {
+            error_log('DEBUG: Failed to decode service account JSON.');
         }
     }
 
