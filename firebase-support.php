@@ -1,4 +1,5 @@
 <?php
+error_log('DEBUG: firebase-support.php loaded');
 declare(strict_types=1);
 
 /**
