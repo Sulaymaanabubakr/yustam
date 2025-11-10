@@ -80,8 +80,11 @@ function yustam_firebase_service_account(): array
         $customPath = getenv('FIREBASE_SERVICE_ACCOUNT_PATH');
     }
     $defaultPath = __DIR__ . '/' . YUSTAM_FIREBASE_SERVICE_ACCOUNT_FILENAME;
+    $sharedAccountPath = '/home2/yustamco/firebase-service-account.json'; // new location from screenshot
     if ($customPath && is_file($customPath)) {
         $defaultPath = $customPath;
+    } elseif (is_file($sharedAccountPath)) {
+        $defaultPath = $sharedAccountPath;
     } else {
         $documentRootPath = $_SERVER['DOCUMENT_ROOT'] ?? '';
         $publicFile = $documentRootPath ? rtrim($documentRootPath, '/\\') . '/' . YUSTAM_FIREBASE_SERVICE_ACCOUNT_FILENAME : '';
