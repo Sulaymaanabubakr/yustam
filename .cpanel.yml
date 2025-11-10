@@ -1,4 +1,5 @@
 ---
 deployment:
   tasks:
-    - /bin/cp -R /home2/yustamco/repositories/yustam/* /home2/yustamco/public_html/
+    - cd /home2/yustamco/repositories/yustam/
+    - find . -name '.git' -prune -o -type f -exec cp --parents {} /home2/yustamco/public_html/ \;
