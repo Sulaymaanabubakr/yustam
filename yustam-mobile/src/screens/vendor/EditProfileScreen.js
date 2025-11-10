@@ -24,9 +24,11 @@ import { uploadImage } from '../../config/cloudinary';
 import { vendorAPI } from '../../services/api';
 import { goBackOrNavigate } from '../../utils/navigation';
 import resolveMediaUrl from '../../utils/url';
+import { resolveUserUid } from '../../utils/user';
 
 const EditProfileScreen = ({ navigation }) => {
   const { user, updateUserProfile } = useAuth();
+  const vendorUid = resolveUserUid(user, 'vendor');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -141,7 +143,7 @@ const EditProfileScreen = ({ navigation }) => {
     try {
       setUploading(true);
       const result = await uploadImage(newPhotoUri, {
-        folder: `vendors/${user?.uid || 'vendor'}/profile`,
+        folder: `vendors/${vendorUid || 'vendor'}/profile`,
       });
       setUploading(false);
       return result.url;

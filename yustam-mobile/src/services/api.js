@@ -124,7 +124,7 @@ export const profileAPI = {
     }),
   getSettings: () => api.get('/vendor-settings.php', { params: { format: 'json' } }),
   updateSettings: (data) => api.post('/update-vendor-settings.php', data),
-  deleteAccount: () => api.post('/vendor-delete-account.php'),
+  deleteAccount: (payload = {}) => api.post('/vendor-delete-account.php', payload),
   updatePassword: (data) => api.post('/vendor-update-password.php', data),
 };
 
@@ -161,6 +161,9 @@ export const vendorAPI = {
     api.get('/api/chat/list-chats.php', {
       params: { role: 'vendor', uid },
     }),
+  getRenewPlan: () => api.get('/vendor-renew-plan.php', { params: { format: 'json' } }),
+  getSubscriptionDetails: () => api.get('/vendor-subscriptions.php', { params: { format: 'json' } }),
+  subscriptionAction: (payload) => api.post('/vendor-subscription-action.php', payload),
 };
 
 // Notifications endpoints

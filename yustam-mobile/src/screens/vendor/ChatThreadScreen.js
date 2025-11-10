@@ -23,6 +23,7 @@ import { chatAPI } from '../../services/api';
 import { timeAgo } from '../../utils/formatters';
 import resolveMediaUrl from '../../utils/url';
 import { USER_ROLES } from '../../config/constants';
+import { resolveUserUid } from '../../utils/user';
 
 const ChatThreadScreen = ({ navigation, route }) => {
   const {
@@ -36,6 +37,7 @@ const ChatThreadScreen = ({ navigation, route }) => {
     listingTitle,
   } = route.params || {};
   const { user, role } = useAuth();
+  const resolvedUid = resolveUserUid(user);
   const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState('');
   const [loading, setLoading] = useState(true);
@@ -62,7 +64,7 @@ const ChatThreadScreen = ({ navigation, route }) => {
     (message) => {
       const senderRaw = String(message.sender || message.role || message.author || '').toLowerCase();
       const senderUid = String(message.sender_uid || message.uid || '').trim();
-      const viewerUid = (user?.uid || '').toString();
+      const viewerUid = (resolvedUid || '').toString();
       const senderRole = senderRaw.includes('vendor')
         ? USER_ROLES.VENDOR
         : senderRaw.includes('buyer')
@@ -88,7 +90,7 @@ const ChatThreadScreen = ({ navigation, route }) => {
         attachment: resolveMediaUrl(message.attachment || message.image),
       };
     },
-    [user?.uid, viewingAsVendor]
+    [resolvedUid, viewingAsVendor]
   );
 
   const fetchMessages = useCallback(

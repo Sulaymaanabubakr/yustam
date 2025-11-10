@@ -40,6 +40,15 @@ if ($action === 'reject' && $reason === '') {
 require_once __DIR__ . '/firebase-support.php';
 require_once __DIR__ . '/db.php';
 
+if (!yustam_firebase_service_account_available()) {
+    http_response_code(503);
+    echo json_encode([
+        'success' => false,
+        'message' => 'Firebase service account credentials are missing. Set FIREBASE_SERVICE_ACCOUNT or provide a valid firebase-service-account.json file with client_email and private_key.',
+    ]);
+    exit;
+}
+
 $db = null;
 $listingsTable = null;
 $listingsColumns = [];

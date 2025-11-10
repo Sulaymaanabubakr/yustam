@@ -18,31 +18,46 @@ import { vendorAPI } from '../../services/api';
 import { goBackOrNavigate } from '../../utils/navigation';
 import resolveMediaUrl from '../../utils/url';
 import { timeAgo } from '../../utils/formatters';
+import { resolveUserUid } from '../../utils/user';
 
 const VendorChatsScreen = ({ navigation }) => {
   const { user } = useAuth();
+  const vendorUid = resolveUserUid(user);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [chats, setChats] = useState([]);
   const [toast, setToast] = useState({ visible: false, message: '', type: 'info' });
 
+  const showToast = (message, type = 'success') => {
+    setToast({ visible: true, message, type });
+  };
+
+  const hideToast = () => {
+    setToast({ ...toast, visible: false });
+  };
+
   useEffect(() => {
-    if (!user?.uid) {
+    if (!user) {
       return;
     }
-    fetchChats();
-  }, [user?.uid]);
+    if (!vendorUid) {
+      setChats([]);
+      setLoading(false);
+      showToast('We could not find your vendor ID. Please re-login and try again.', 'error');
+      return;
+    }
+    fetchChats(vendorUid);
+  }, [vendorUid]);
 
-  const fetchChats = async () => {
+  const fetchChats = async (uid = vendorUid) => {
     try {
       setLoading(true);
-      if (!user?.uid) {
+      if (!uid) {
         setChats([]);
-        setLoading(false);
         return;
       }
 
-      const response = await vendorAPI.getChats(user.uid);
+      const response = await vendorAPI.getChats(uid);
       if (!response.data?.success) {
         throw new Error(response.data?.message || 'Unable to load chats.');
       }
@@ -71,16 +86,8 @@ const VendorChatsScreen = ({ navigation }) => {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchChats();
+    await fetchChats(vendorUid);
     setRefreshing(false);
-  };
-
-  const showToast = (message, type = 'success') => {
-    setToast({ visible: true, message, type });
-  };
-
-  const hideToast = () => {
-    setToast({ ...toast, visible: false });
   };
 
   const formatTime = (value) => timeAgo(value);

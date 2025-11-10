@@ -127,6 +127,16 @@ const VendorProfileScreen = ({ navigation }) => {
             onPress={() => navigation.navigate('Plans')}
           />
           <ProfileMenuItem
+            icon="refresh-outline"
+            label="Renew Subscription"
+            onPress={() => navigation.navigate('VendorRenewPlan')}
+          />
+          <ProfileMenuItem
+            icon="calendar-outline"
+            label="Manage Subscription"
+            onPress={() => navigation.navigate('VendorManageSubscription')}
+          />
+          <ProfileMenuItem
             icon="document-text-outline"
             label="Verification"
             onPress={() => navigation.navigate('Verification')}
@@ -149,6 +159,12 @@ const VendorProfileScreen = ({ navigation }) => {
             icon="help-circle-outline"
             label="Help & Support"
             onPress={() => navigation.navigate('HelpSupport')}
+          />
+          <ProfileMenuItem
+            icon="warning-outline"
+            label="Delete Account"
+            color="#D93025"
+            onPress={() => navigation.navigate('VendorDeleteAccount')}
           />
         </View>
 

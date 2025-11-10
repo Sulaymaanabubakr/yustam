@@ -22,12 +22,14 @@ import { goBackOrNavigate } from '../../utils/navigation';
 import resolveMediaUrl from '../../utils/url';
 import { API_BASE_URL } from '../../config/constants';
 import { formatDate, formatNaira } from '../../utils/formatters';
+import { resolveUserUid } from '../../utils/user';
 
 const { width } = Dimensions.get('window');
 const LISTING_WIDTH = (width - theme.spacing.lg * 3) / 2;
 
 const StorefrontScreen = ({ navigation }) => {
   const { user } = useAuth();
+  const vendorUid = resolveUserUid(user);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [toast, setToast] = useState({ visible: false, message: '', type: 'info' });
@@ -53,11 +55,11 @@ const StorefrontScreen = ({ navigation }) => {
   const fetchStorefront = async () => {
     try {
       setLoading(true);
-      if (!user?.uid) {
+      if (!vendorUid) {
         throw new Error('Unable to determine your vendor account.');
       }
 
-      const response = await vendorAPI.getStorefront(user.uid);
+      const response = await vendorAPI.getStorefront(vendorUid);
       if (!response.data?.success) {
         throw new Error(response.data?.message || 'Unable to load storefront data.');
       }
@@ -78,7 +80,7 @@ const StorefrontScreen = ({ navigation }) => {
           : '',
         profileImage: resolveMediaUrl(vendor.avatar),
         coverImage: resolveMediaUrl(vendor.banner),
-        vendorUid: vendor.vendorUid || vendor.firebaseUid || user.uid,
+        vendorUid: vendor.vendorUid || vendor.firebaseUid || vendorUid,
       });
 
       setListings(
@@ -114,7 +116,7 @@ const StorefrontScreen = ({ navigation }) => {
 
   const handleShareStorefront = async () => {
     try {
-      const identifier = storefront.vendorUid || user?.uid;
+      const identifier = storefront.vendorUid || vendorUid;
       const storefrontUrl = `${API_BASE_URL}/vendor-storefront.php?id=${identifier}`;
       
       await Share.share({

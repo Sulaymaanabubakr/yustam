@@ -17,3 +17,6 @@ export { default as PlansScreen } from './PlansScreen';
 export { default as SubscriptionDetailsScreen } from './SubscriptionDetailsScreen';
 export { default as VerificationScreen } from './VerificationScreen';
 export { default as VendorChangePasswordScreen } from './ChangePasswordScreen';
+export { default as VendorRenewPlanScreen } from './RenewPlanScreen';
+export { default as VendorManageSubscriptionScreen } from './ManageSubscriptionScreen';
+export { default as VendorDeleteAccountScreen } from './DeleteAccountScreen';

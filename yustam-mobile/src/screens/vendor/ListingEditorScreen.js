@@ -22,6 +22,7 @@ import Button from '../../components/Button';
 import { API_BASE_URL } from '../../config/constants';
 import { CLOUDINARY_UPLOAD_PRESET, CLOUDINARY_CLOUD_NAME } from '../../config/cloudinary';
 import { goBackOrNavigate } from '../../utils/navigation';
+import { resolveUserUid } from '../../utils/user';
 
 const NIGERIAN_STATES = [
   'Abia', 'Adamawa', 'Akwa Ibom', 'Anambra', 'Bauchi', 'Bayelsa', 'Benue', 'Borno',
@@ -50,6 +51,7 @@ const STATUS_OPTIONS = [
 const ListingEditorScreen = ({ route, navigation }) => {
   const { listing } = route.params || {};
   const { user } = useAuth();
+  const vendorUid = resolveUserUid(user, 'vendor');
   const isEditMode = !!listing;
 
   const [formData, setFormData] = useState({
@@ -172,7 +174,7 @@ const ListingEditorScreen = ({ route, navigation }) => {
           name: `listing_${Date.now()}.jpg`,
         });
         formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-        formData.append('folder', `listings/${user?.uid || 'vendor'}`);
+        formData.append('folder', `listings/${vendorUid || 'vendor'}`);
 
         const uploadUrl = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
         const response = await fetch(uploadUrl,

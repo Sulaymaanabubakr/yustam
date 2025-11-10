@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   Switch,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -66,7 +65,6 @@ const SettingsScreen = ({ navigation }) => {
   });
   const [loading, setLoading] = useState(true);
   const [savingKeys, setSavingKeys] = useState({});
-  const [isDeleting, setIsDeleting] = useState(false);
 
   const showToast = (message, type = 'success') => {
     setToast({ visible: true, message, type });
@@ -150,54 +148,6 @@ const SettingsScreen = ({ navigation }) => {
 
   const handleChangePassword = () => {
     navigation.navigate('VendorChangePassword');
-  };
-
-  const handleDeleteAccount = () => {
-    Alert.alert(
-      'Delete Account',
-      'Are you sure you want to delete your account? This action cannot be undone and all your data will be permanently removed.',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Delete Account',
-          style: 'destructive',
-          onPress: async () => {
-            if (isDeleting) {
-              return;
-            }
-
-            setIsDeleting(true);
-
-            try {
-              const response = await profileAPI.deleteAccount();
-              const payload = response?.data ?? {};
-
-              showToast(payload?.message || 'Your account has been deleted.', 'success');
-
-              try {
-                await logout();
-              } catch (logoutError) {
-                console.warn('Logout after deletion failed:', logoutError);
-              }
-
-              setTimeout(() => {
-                navigation.reset({
-                  index: 0,
-                  routes: [{ name: 'Auth' }],
-                });
-              }, 800);
-            } catch (error) {
-              showToast(error.message || 'Unable to delete your account.', 'error');
-            } finally {
-              setIsDeleting(false);
-            }
-          },
-        },
-      ]
-    );
   };
 
   const handleClearCache = () => {
@@ -403,11 +353,10 @@ const SettingsScreen = ({ navigation }) => {
         <SettingSection title="Danger Zone">
           <ActionButton
             icon="warning-outline"
-            label={isDeleting ? 'Deleting Account…' : 'Delete Account'}
-            onPress={handleDeleteAccount}
+            label="Delete Account"
+            onPress={() => navigation.navigate('VendorDeleteAccount')}
             color="#D93025"
             variant="danger"
-            disabled={isDeleting}
           />
         </SettingSection>
 

@@ -21,6 +21,7 @@ import Button from '../../components/Button';
 import { uploadImage } from '../../config/cloudinary';
 import { vendorAPI } from '../../services/api';
 import { goBackOrNavigate } from '../../utils/navigation';
+import { resolveUserUid } from '../../utils/user';
 
 const DOCUMENT_TYPES = [
   {
@@ -89,6 +90,7 @@ const STATUS_CONFIG = {
 
 const VerificationScreen = ({ navigation }) => {
   const { user } = useAuth();
+  const vendorUid = resolveUserUid(user, 'vendor');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -247,7 +249,7 @@ const VerificationScreen = ({ navigation }) => {
     try {
       for (const [key, doc] of documentsToUpload) {
         const result = await uploadImage(doc.uri, {
-          folder: `vendors/${user?.uid || 'vendor'}/verification`,
+          folder: `vendors/${vendorUid || 'vendor'}/verification`,
         });
         uploadedDocs[key] = { uri: result.url, uploaded: true };
       }

@@ -17,9 +17,11 @@ import Toast from '../../components/Toast';
 import Button from '../../components/Button';
 import { vendorAPI } from '../../services/api';
 import { formatNumber } from '../../utils/formatters';
+import { resolveUserUid } from '../../utils/user';
 
 const VendorDashboardScreen = ({ navigation }) => {
   const { user } = useAuth();
+  const vendorUid = resolveUserUid(user);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [toast, setToast] = useState({ visible: false, message: '', type: 'info' });
@@ -38,7 +40,7 @@ const VendorDashboardScreen = ({ navigation }) => {
 
   useEffect(() => {
     fetchDashboard();
-  }, [user?.uid]);
+  }, [vendorUid]);
 
   const fetchDashboard = async () => {
     try {
@@ -49,7 +51,7 @@ const VendorDashboardScreen = ({ navigation }) => {
           vendorAPI.getDashboard(),
           vendorAPI.getVerificationStatus().catch(() => null),
           vendorAPI.getNotifications().catch(() => null),
-          user?.uid ? vendorAPI.getChats(user.uid).catch(() => null) : Promise.resolve(null),
+          vendorUid ? vendorAPI.getChats(vendorUid).catch(() => null) : Promise.resolve(null),
         ]);
 
       const payload = dashboardResponse?.data?.data;
