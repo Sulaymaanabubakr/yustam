@@ -72,7 +72,18 @@ function yustam_firebase_service_account(): array
             }
         }
 
+    // Allow overriding the stored service-account path via env var for setups where the JSON stays outside public_html.
+    $customPath = null;
+    if (defined('FIREBASE_SERVICE_ACCOUNT_PATH')) {
+        $customPath = FIREBASE_SERVICE_ACCOUNT_PATH;
+    } elseif (getenv('FIREBASE_SERVICE_ACCOUNT_PATH')) {
+        $customPath = getenv('FIREBASE_SERVICE_ACCOUNT_PATH');
+    }
+    if ($customPath && is_file($customPath)) {
+        $defaultPath = $customPath;
+    } else {
         $defaultPath = __DIR__ . '/' . YUSTAM_FIREBASE_SERVICE_ACCOUNT_FILENAME;
+    }
         if (is_file($defaultPath)) {
             $decoded = json_decode((string) file_get_contents($defaultPath), true);
             if (is_array($decoded)) {
