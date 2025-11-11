@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "472601563195",
+    "project_id": "yustam-50819",
+    "storage_bucket": "yustam-50819.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:472601563195:android:d9a85683d7a30522a20c1e",
+        "android_client_info": {
+          "package_name": "com.yustam.marketplace"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "472601563195-kmhmdbdllugsc25b7j4sbsgika5g6n5n.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDLZ8VdEAaA4zBwPx3T09xb9wL23BGwpHM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "472601563195-kmhmdbdllugsc25b7j4sbsgika5g6n5n.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

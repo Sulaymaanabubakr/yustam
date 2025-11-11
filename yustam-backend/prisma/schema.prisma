@@ -1,0 +1,360 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  BUYER
+  VENDOR
+  ADMIN
+}
+
+enum ProductStatus {
+  ACTIVE
+  DRAFT
+  ARCHIVED
+}
+
+enum ProductCondition {
+  NEW
+  USED
+  REFURBISHED
+}
+
+enum VerificationStatus {
+  NOT_STARTED
+  PENDING
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAUSED
+  EXPIRED
+  CANCELLED
+}
+
+enum TransactionStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+enum PaymentMethod {
+  CARD
+  TRANSFER
+  PAYSTACK
+  FLUTTERWAVE
+  BANK
+}
+
+enum NotificationType {
+  ORDER
+  CHAT
+  PLAN
+  VERIFICATION
+  LISTING
+  SYSTEM
+  SUPPORT
+}
+
+enum TicketStatus {
+  OPEN
+  PENDING
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum ChatStatus {
+  OPEN
+  CLOSED
+}
+
+model User {
+  id                  String               @id @default(cuid())
+  firebaseUid         String               @unique
+  email               String               @unique
+  displayName         String?
+  phone               String?
+  photoUrl            String?
+  role                Role                 @default(BUYER)
+  bio                 String?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  products            Product[]            @relation("ProductOwner")
+  addresses           Address[]
+  chatThreads         ChatThread[]         @relation("UserChats")
+  adminThreads        ChatThread[]         @relation("AdminChats")
+  savedItems          SavedItem[]
+  notifications       Notification[]
+  preferences         UserPreference?
+  supportTickets      SupportTicket[]
+  sentSupportMessages SupportMessage[]     @relation("SupportMessageSender")
+  planSubscriptions   PlanSubscription[]
+  billingTransactions BillingTransaction[]
+  vendorProfile       VendorProfile?
+  verificationRequests VerificationRequest[]
+  verificationReviews  VerificationRequest[] @relation("VerificationReviewer")
+}
+
+model Address {
+  id         String  @id @default(cuid())
+  user       User    @relation(fields: [userId], references: [id])
+  userId     String
+  label      String?
+  street     String
+  city       String
+  state      String
+  country    String
+  postalCode String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Category {
+  id        String    @id @default(cuid())
+  name      String
+  slug      String    @unique
+  icon      String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  products  Product[]
+}
+
+model Product {
+  id             String            @id @default(cuid())
+  name           String
+  description    String
+  price          Decimal           @db.Decimal(10, 2)
+  stock          Int               @default(0)
+  status         ProductStatus     @default(ACTIVE)
+  condition      ProductCondition?
+  locationCity   String?
+  locationState  String?
+  tags           String[]          @default([])
+  isFeatured     Boolean           @default(false)
+  isFlashSale    Boolean           @default(false)
+  flashSaleEndsAt DateTime?
+  owner          User?             @relation("ProductOwner", fields: [ownerId], references: [id])
+  ownerId        String?
+  category       Category?         @relation(fields: [categoryId], references: [id])
+  categoryId     String?
+  media          ProductImage[]
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  savedBy        SavedItem[]
+}
+
+model ProductImage {
+  id        String   @id @default(cuid())
+  product   Product  @relation(fields: [productId], references: [id])
+  productId String
+  url       String
+  publicId  String
+  isPrimary Boolean  @default(false)
+}
+
+model SavedItem {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  product   Product  @relation(fields: [productId], references: [id])
+  productId String
+  createdAt DateTime @default(now())
+
+  @@unique([userId, productId])
+}
+
+model VendorProfile {
+  id                       String             @id @default(cuid())
+  user                     User               @relation(fields: [userId], references: [id])
+  userId                   String             @unique
+  businessName             String
+  category                 String?
+  tagline                  String?
+  description              String?
+  website                  String?
+  socials                  Json?
+  addressLine              String?
+  city                     String?
+  state                    String?
+  country                  String?
+  verificationStatus       VerificationStatus @default(NOT_STARTED)
+  verificationNotes        String?
+  verificationSubmittedAt  DateTime?
+  verificationReviewedAt   DateTime?
+  storefrontSlug           String             @unique
+  averageRating            Float              @default(0)
+  reviewCount              Int                @default(0)
+  listingsPublished        Int                @default(0)
+  listingsSold             Int                @default(0)
+  currentPlanId            String?
+  currentPlan              Plan?              @relation("CurrentPlan", fields: [currentPlanId], references: [id])
+  createdAt                DateTime           @default(now())
+  updatedAt                DateTime           @updatedAt
+}
+
+model Plan {
+  id             String             @id @default(cuid())
+  name           String
+  price          Decimal            @db.Decimal(10, 2)
+  currency       String             @default("NGN")
+  durationDays   Int
+  listingLimit   Int
+  features       String[]           @default([])
+  supportLevel   String?
+  isPopular      Boolean            @default(false)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  subscriptions  PlanSubscription[]
+  vendorProfiles VendorProfile[]    @relation("CurrentPlan")
+  transactions   BillingTransaction[]
+}
+
+model PlanSubscription {
+  id            String             @id @default(cuid())
+  user          User               @relation(fields: [userId], references: [id])
+  userId        String
+  plan          Plan               @relation(fields: [planId], references: [id])
+  planId        String
+  status        SubscriptionStatus @default(ACTIVE)
+  startsAt      DateTime
+  endsAt        DateTime
+  autoRenew     Boolean            @default(true)
+  listingsUsed  Int                @default(0)
+  metadata      Json?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  transactions  BillingTransaction[]
+}
+
+model BillingTransaction {
+  id             String            @id @default(cuid())
+  user           User              @relation(fields: [userId], references: [id])
+  userId         String
+  plan           Plan?             @relation(fields: [planId], references: [id])
+  planId         String?
+  subscription   PlanSubscription? @relation(fields: [subscriptionId], references: [id])
+  subscriptionId String?
+  amount         Decimal           @db.Decimal(10, 2)
+  currency       String            @default("NGN")
+  status         TransactionStatus @default(PENDING)
+  method         PaymentMethod     @default(CARD)
+  reference      String            @unique
+  paidAt         DateTime?
+  metadata       Json?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  user      User             @relation(fields: [userId], references: [id])
+  userId    String
+  title     String
+  body      String
+  type      NotificationType @default(SYSTEM)
+  data      Json?
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+  readAt    DateTime?
+}
+
+model UserPreference {
+  id            String  @id @default(cuid())
+  user          User    @relation(fields: [userId], references: [id])
+  userId        String  @unique
+  language      String  @default("en")
+  pushEnabled   Boolean @default(true)
+  emailEnabled  Boolean @default(true)
+  smsEnabled    Boolean @default(false)
+  theme         String  @default("light")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model VerificationRequest {
+  id          String             @id @default(cuid())
+  user        User               @relation(fields: [userId], references: [id])
+  userId      String
+  status      VerificationStatus @default(PENDING)
+  notes       String?
+  submittedAt DateTime           @default(now())
+  reviewedAt  DateTime?
+  reviewer    User?              @relation("VerificationReviewer", fields: [reviewerId], references: [id])
+  reviewerId  String?
+  documents   VerificationDocument[]
+}
+
+model VerificationDocument {
+  id        String             @id @default(cuid())
+  request   VerificationRequest @relation(fields: [requestId], references: [id])
+  requestId String
+  type      String
+  url       String
+  status    VerificationStatus  @default(PENDING)
+  createdAt DateTime            @default(now())
+}
+
+model SupportTicket {
+  id          String         @id @default(cuid())
+  user        User           @relation(fields: [userId], references: [id])
+  userId      String
+  subject     String
+  category    String
+  description String
+  status      TicketStatus   @default(OPEN)
+  priority    TicketPriority @default(MEDIUM)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  messages    SupportMessage[]
+}
+
+model SupportMessage {
+  id         String        @id @default(cuid())
+  ticket     SupportTicket @relation(fields: [ticketId], references: [id])
+  ticketId   String
+  sender     User?         @relation("SupportMessageSender", fields: [senderId], references: [id])
+  senderId   String?
+  body       String
+  isInternal Boolean       @default(false)
+  sentAt     DateTime      @default(now())
+}
+
+model ChatThread {
+  id               String     @id @default(cuid())
+  firebaseThreadId String     @unique
+  user             User       @relation("UserChats", fields: [userId], references: [id])
+  userId           String
+  admin            User?      @relation("AdminChats", fields: [adminId], references: [id])
+  adminId          String?
+  status           ChatStatus @default(OPEN)
+  lastMessage      String?
+  lastMessageAt    DateTime?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  messages         ChatMessage[]
+}
+
+model ChatMessage {
+  id          String     @id @default(cuid())
+  thread      ChatThread @relation(fields: [threadId], references: [id])
+  threadId    String
+  senderId    String
+  preview     String
+  firebaseKey String     @unique
+  sentAt      DateTime   @default(now())
+}

@@ -1,5 +1,6 @@
-// API Base URL (update this to match your production server)
-export const API_BASE_URL = 'https://yustam.com.ng';
+// API Base URL (point to the new Node/Express backend)
+// Update this to match your deployed server (e.g. https://api.yustam.com/api)
+export const API_BASE_URL = 'http://localhost:4000/api';
 
 // Categories from web app
 export const CATEGORIES = [

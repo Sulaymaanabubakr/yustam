@@ -9,8 +9,8 @@ import {
   fetchSignInMethodsForEmail,
 } from 'firebase/auth';
 import { auth } from '../config/firebase';
-import { authAPI } from '../services/api';
-import { API_BASE_URL, USER_ROLES } from '../config/constants';
+import { authAPI, vendorAPI, setApiAuthToken } from '../services/api';
+import { USER_ROLES } from '../config/constants';
 
 const AuthContext = createContext();
 
@@ -32,6 +32,7 @@ export const AuthProvider = ({ children }) => {
     user: 'user',
     role: 'role',
     token: 'authToken',
+    backendUser: 'backendUser',
   };
 
   // Load user data from AsyncStorage on mount
@@ -41,8 +42,15 @@ export const AuthProvider = ({ children }) => {
 
   const loadUserData = async () => {
     try {
-      const userData = await AsyncStorage.getItem(STORAGE_KEYS.user);
-      const userRole = await AsyncStorage.getItem(STORAGE_KEYS.role);
+      const [userData, userRole, token] = await Promise.all([
+        AsyncStorage.getItem(STORAGE_KEYS.user),
+        AsyncStorage.getItem(STORAGE_KEYS.role),
+        AsyncStorage.getItem(STORAGE_KEYS.token),
+      ]);
+
+      if (token) {
+        setApiAuthToken(token);
+      }
 
       if (userData && userRole) {
         setUser(JSON.parse(userData));
@@ -56,11 +64,14 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const saveUserData = async (userData, userRole) => {
+  const saveUserData = async (userData, userRole, backendUser = null) => {
     try {
       const mergedUser = { ...(user || {}), ...userData };
       await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(mergedUser));
       await AsyncStorage.setItem(STORAGE_KEYS.role, userRole);
+      if (backendUser) {
+        await AsyncStorage.setItem(STORAGE_KEYS.backendUser, JSON.stringify(backendUser));
+      }
       setUser(mergedUser);
       setRole(userRole);
       setIsAuthenticated(true);
@@ -73,7 +84,13 @@ export const AuthProvider = ({ children }) => {
 
   const clearUserData = async () => {
     try {
-      await AsyncStorage.multiRemove([STORAGE_KEYS.user, STORAGE_KEYS.role, STORAGE_KEYS.token]);
+      await AsyncStorage.multiRemove([
+        STORAGE_KEYS.user,
+        STORAGE_KEYS.role,
+        STORAGE_KEYS.token,
+        STORAGE_KEYS.backendUser,
+      ]);
+      setApiAuthToken(null);
       setUser(null);
       setRole(null);
       setIsAuthenticated(false);
@@ -94,173 +111,97 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const establishBackendSession = async (email, password) => {
-    const formData = new FormData();
-    formData.append('email', email.trim().toLowerCase());
-    formData.append('password', password);
-    formData.append('remember', '1');
-
-    const response = await fetch(`${API_BASE_URL}/login.php`, {
-      method: 'POST',
-      headers: { Accept: 'application/json' },
-      body: formData,
-      credentials: 'include',
-    });
-
-    const payload = await response.json().catch(() => ({}));
-
-    if (!response.ok || payload?.success === false) {
-      throw new Error(payload?.message || 'Unable to reach Yustam servers. Please try again.');
-    }
-
-    return payload;
+  const composeUserProfile = (firebaseUser, backendUser, overrides = {}) => {
+    const backendRole = backendUser?.role?.toLowerCase();
+    return {
+      uid: firebaseUser?.uid ?? overrides.uid,
+      id: backendUser?.id ?? overrides.id,
+      email: overrides.email ?? backendUser?.email ?? firebaseUser?.email ?? '',
+      displayName: overrides.displayName ?? backendUser?.displayName ?? firebaseUser?.displayName ?? '',
+      photoURL: overrides.photoURL ?? backendUser?.photoUrl ?? firebaseUser?.photoURL ?? null,
+      phone: overrides.phone ?? backendUser?.phone ?? firebaseUser?.phoneNumber ?? null,
+      role: overrides.role ?? backendRole ?? overrides.role,
+      ...overrides,
+    };
   };
 
-  const destroyBackendSession = async () => {
-    try {
-      await fetch(`${API_BASE_URL}/logout.php`, {
-        method: 'GET',
-        credentials: 'include',
-      });
-    } catch (logoutError) {
-      console.warn('Backend logout failed', logoutError);
+  const syncBackendSession = async (firebaseUser) => {
+    const idToken = await firebaseUser.getIdToken(true);
+    await AsyncStorage.setItem(STORAGE_KEYS.token, idToken);
+    setApiAuthToken(idToken);
+    const { data } = await authAPI.createSession(idToken);
+    const backendUser = data?.user ?? data;
+    if (backendUser) {
+      await AsyncStorage.setItem(STORAGE_KEYS.backendUser, JSON.stringify(backendUser));
     }
+    return { token: idToken, backendUser };
   };
+
+
+
+
 
   // Login with email/password
+
   const login = async (email, password, userRole) => {
     try {
       const normalisedEmail = email.trim().toLowerCase();
       const targetRole = userRole || role || USER_ROLES.BUYER;
 
-      if (targetRole === USER_ROLES.VENDOR) {
-        await establishBackendSession(normalisedEmail, password);
-      }
+      const userCredential = await signInWithEmailAndPassword(auth, normalisedEmail, password);
+      const firebaseUser = userCredential.user;
+      const { backendUser } = await syncBackendSession(firebaseUser);
+      const resolvedRole = backendUser?.role?.toLowerCase() ?? targetRole;
+      const profile = composeUserProfile(firebaseUser, backendUser, { role: resolvedRole });
 
-      let firebaseUser;
+      await saveUserData(profile, resolvedRole, backendUser);
 
-      try {
-        const userCredential = await signInWithEmailAndPassword(auth, normalisedEmail, password);
-        firebaseUser = userCredential.user;
-      } catch (authError) {
-        const shouldBootstrapVendor =
-          targetRole === USER_ROLES.VENDOR &&
-          (authError?.code === 'auth/user-not-found' || authError?.code === 'auth/invalid-credential');
-
-        if (!shouldBootstrapVendor) {
-          throw authError;
-        }
-
-        const signInMethods = await fetchSignInMethodsForEmail(auth, normalisedEmail);
-        if (signInMethods.length) {
-          throw authError;
-        }
-
-        const createdCredential = await createUserWithEmailAndPassword(
-          auth,
-          normalisedEmail,
-          password
-        );
-        firebaseUser = createdCredential.user;
-      }
-
-      if (!firebaseUser) {
-        throw new Error('Authentication failed. Please try again.');
-      }
-
-      // Get user token
-      const token = await firebaseUser.getIdToken();
-      await AsyncStorage.setItem(STORAGE_KEYS.token, token);
-
-      // Prepare user data
-      const userData = {
-        uid: firebaseUser.uid,
-        email: firebaseUser.email,
-        displayName: firebaseUser.displayName,
-        photoURL: firebaseUser.photoURL,
-      };
-
-      // Save to AsyncStorage
-      await saveUserData(userData, targetRole);
-
-      return { success: true, user: userData };
+      return { success: true, user: profile };
     } catch (error) {
       console.error('Login error:', error);
-      if (error instanceof Error && !error.code && error.message) {
+      if (error instanceof Error && error.message) {
         throw error;
       }
       throw new Error(getAuthErrorMessage(error.code));
     }
   };
 
+
   // Register new user
+
   const register = async (email, password, userData = {}, userRole) => {
     try {
       const normalisedEmail = (email || '').trim().toLowerCase();
       const targetRole = userRole || USER_ROLES.BUYER;
-      let firebaseUser;
 
-      if (targetRole === USER_ROLES.VENDOR) {
-        const vendorPayload = {
-          name: userData.fullName || userData.name || normalisedEmail.split('@')[0],
-          email: normalisedEmail,
-          phone: userData.phone,
-          business_name: userData.businessName,
-          category: userData.category,
-          password,
-          confirm: password,
-          source: 'mobile-app',
-        };
-
-        await authAPI.vendorRegister(vendorPayload);
-        try {
-          const createdCredential = await createUserWithEmailAndPassword(
-            auth,
-            normalisedEmail,
-            password
-          );
-          firebaseUser = createdCredential.user;
-        } catch (authError) {
-          if (authError?.code !== 'auth/email-already-in-use') {
-            throw authError;
-          }
-
-          const existingCredential = await signInWithEmailAndPassword(
-            auth,
-            normalisedEmail,
-            password
-          );
-          firebaseUser = existingCredential.user;
-        }
-
-        await establishBackendSession(normalisedEmail, password);
-      } else {
-        const credential = await createUserWithEmailAndPassword(
-          auth,
-          normalisedEmail,
-          password
-        );
-        firebaseUser = credential.user;
-        await authAPI.buyerRegister({ ...userData, email: normalisedEmail, uid: firebaseUser.uid });
+      const signInMethods = await fetchSignInMethodsForEmail(auth, normalisedEmail);
+      if (signInMethods.length) {
+        throw new Error('This email is already registered. Please log in.');
       }
 
-      const token = await firebaseUser.getIdToken();
-      await AsyncStorage.setItem(STORAGE_KEYS.token, token);
+      const credential = await createUserWithEmailAndPassword(auth, normalisedEmail, password);
+      const firebaseUser = credential.user;
+      const { backendUser } = await syncBackendSession(firebaseUser);
 
-      const completeUserData = {
-        uid: firebaseUser.uid,
-        email: firebaseUser.email,
+      if (targetRole === USER_ROLES.VENDOR) {
+        await vendorAPI.activate({ businessName: userData.businessName || userData.fullName || normalisedEmail.split('@')[0] });
+        if (userData.businessName || userData.category || userData.phone) {
+          await vendorAPI.updateProfile({
+            businessName: userData.businessName,
+            category: userData.category,
+            phone: userData.phone,
+          });
+        }
+      }
+
+      const profile = composeUserProfile(firebaseUser, backendUser, {
         ...userData,
-        displayName: userData.fullName || userData.displayName || firebaseUser.displayName,
-        fullName: userData.fullName || firebaseUser.displayName,
-        phone: userData.phone,
-        businessName: userData.businessName,
-        category: userData.category,
-      };
+        role: targetRole,
+      });
 
-      await saveUserData(completeUserData, targetRole);
+      await saveUserData(profile, targetRole, backendUser);
 
-      return { success: true, user: completeUserData };
+      return { success: true, user: profile };
     } catch (error) {
       console.error('Registration error:', error);
       if (error instanceof Error && !error.code && error.message) {
@@ -270,6 +211,8 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+
+
   // Google Sign-In
   const signInWithGoogle = async (idToken, userRole) => {
     try {
@@ -278,23 +221,15 @@ export const AuthProvider = ({ children }) => {
       const userCredential = await signInWithCredential(auth, credential);
       const firebaseUser = userCredential.user;
 
-      // Get user token
-      const token = await firebaseUser.getIdToken();
-      await AsyncStorage.setItem(STORAGE_KEYS.token, token);
+      const { backendUser } = await syncBackendSession(firebaseUser);
+      if (targetRole === USER_ROLES.VENDOR) {
+        await vendorAPI.activate({ businessName: firebaseUser.displayName || firebaseUser.email?.split('@')[0] });
+      }
 
-      // Call backend to register/login
-      await authAPI.googleLogin(idToken, targetRole);
+      const profile = composeUserProfile(firebaseUser, backendUser, { role: targetRole });
+      await saveUserData(profile, targetRole, backendUser);
 
-      const userData = {
-        uid: firebaseUser.uid,
-        email: firebaseUser.email,
-        displayName: firebaseUser.displayName,
-        photoURL: firebaseUser.photoURL,
-      };
-
-      await saveUserData(userData, targetRole);
-
-      return { success: true, user: userData };
+      return { success: true, user: profile };
     } catch (error) {
       console.error('Google sign-in error:', error);
       if (error instanceof Error && error.message) {
@@ -304,10 +239,11 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+
   // Logout
+
   const logout = async () => {
     try {
-      await destroyBackendSession();
       await firebaseSignOut(auth);
       await clearUserData();
     } catch (error) {
@@ -315,6 +251,7 @@ export const AuthProvider = ({ children }) => {
       throw new Error('Failed to logout. Please try again.');
     }
   };
+
 
   const value = {
     user,
