@@ -337,8 +337,9 @@ const ProductDetailScreen = ({ navigation, route }) => {
       vendorUid: targetVendorUid,
       vendorId: targetVendorId,
       vendorName: vendorProfile.name,
+      initialVendorProfile: vendorProfile,
     });
-  }, [navigation, showToast, vendorProfile.name, vendorProfile.vendorId, vendorProfile.vendorUid]);
+  }, [navigation, showToast, vendorProfile, vendorProfile.name, vendorProfile.vendorId, vendorProfile.vendorUid]);
 
   const handleChatVendor = useCallback(async () => {
     if (!listing || !vendorProfile.vendorUid) {
@@ -1050,6 +1051,18 @@ const buildListingModel = (source = {}, fallbackId) => {
     vendorWhatsapp: pickFirstString(data.vendorWhatsapp, data.whatsapp),
     vendorEmail: pickFirstString(data.vendorEmail, data.email, data.contactEmail),
     vendorLocation: pickFirstString(data.vendorLocation, data.location),
+    vendorAvatar: resolveMediaUrl(
+      pickFirstString(
+        data.vendorAvatar,
+        data.vendorPhoto,
+        data.vendorImage,
+        data.vendor_avatar,
+        data.vendor_logo,
+        data.vendorLogo,
+        data.vendorProfilePhoto,
+        data.vendorPicture
+      )
+    ),
     raw: data,
   };
 };
@@ -1093,6 +1106,7 @@ const buildVendorFromListing = (listing) => {
     location: listing.vendorLocation || listing.location,
     vendorUid: listing.vendorUid,
     vendorId: listing.vendorId,
+    avatar: listing.vendorAvatar,
     storefrontUrl: buildStorefrontUrl({
       vendorId: listing.vendorId,
       vendorUid: listing.vendorUid || listing.vendorFirebaseUid,
@@ -1115,6 +1129,17 @@ const transformVendorPayload = (payload = {}) => {
     vendorId: payload.id,
     vendorUid: payload.vendorUid || payload.firebaseUid,
   });
+  const avatarCandidate = pickFirstString(
+    payload.avatar,
+    payload.profilePhoto,
+    payload.profile_image,
+    payload.logo,
+    payload.logoUrl,
+    payload.photo,
+    payload.photoURL,
+    payload.image,
+    payload.banner
+  );
 
   return {
     name: payload.businessName || payload.displayName || 'Marketplace Vendor',
@@ -1126,7 +1151,7 @@ const transformVendorPayload = (payload = {}) => {
     whatsapp: payload.whatsapp,
     email: payload.email,
     location,
-    avatar: resolveMediaUrl(payload.avatar),
+    avatar: resolveMediaUrl(avatarCandidate),
     vendorUid: payload.vendorUid || payload.firebaseUid,
     vendorId: payload.id ? String(payload.id) : '',
     storefrontUrl,

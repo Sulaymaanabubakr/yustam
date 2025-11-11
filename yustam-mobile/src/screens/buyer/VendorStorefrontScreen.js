@@ -15,10 +15,12 @@ import { Ionicons } from '@expo/vector-icons';
 import Toast from '../../components/Toast';
 import Button from '../../components/Button';
 import theme from '../../theme';
+import { collection, getDocs, limit, query, where } from 'firebase/firestore';
 import { vendorAPI } from '../../services/api';
 import resolveMediaUrl from '../../utils/url';
 import { goBackOrNavigate } from '../../utils/navigation';
 import { formatDate, formatNaira } from '../../utils/formatters';
+import { db } from '../../config/firebase';
 
 const sanitizePhoneNumber = (value = '') => value.replace(/[^0-9]/g, '');
 
@@ -84,20 +86,156 @@ const buildPlanLabel = (value) => {
   return plan.replace(/plan$/i, '').trim() || 'Custom Plan';
 };
 
-const VendorStorefrontScreen = ({ navigation, route }) => {
-  const { vendorId = '', vendorUid = '', vendorName = 'Marketplace Vendor' } = route.params || {};
-  const identifierCandidates = useMemo(() => {
-    return [vendorId, vendorUid]
-      .map((value) => (value ? String(value).trim() : ''))
-      .filter(Boolean);
-  }, [vendorId, vendorUid]);
+const buildStorefrontFromProfile = (profile) => {
+  if (!profile || typeof profile !== 'object') {
+    return null;
+  }
+  const verificationState = normaliseVerificationState(
+    profile.verification || profile.verificationState || profile.status
+  );
+  return {
+    businessName: profile.businessName || profile.name || 'Marketplace Vendor',
+    planLabel: profile.planLabel || buildPlanLabel(profile.plan),
+    verificationState,
+    verificationLabel: profile.verificationLabel || buildVerificationLabel(verificationState),
+    location: profile.location || '',
+    description: profile.description || '',
+    avatar: resolveMediaUrl(profile.avatar),
+    coverImage: resolveMediaUrl(profile.coverImage),
+    phone: profile.phone || '',
+    whatsapp: profile.whatsapp || profile.phone || '',
+    email: profile.email || '',
+    website: profile.website || '',
+    instagram: profile.instagram || '',
+    facebook: profile.facebook || '',
+    twitter: profile.twitter || '',
+    rating: Number(profile.rating) || 0,
+    totalReviews: Number(profile.totalReviews) || 0,
+    totalListings: Number(profile.totalListings) || 0,
+    joinedDate: profile.joinedDate || '',
+    vendorUid: profile.vendorUid || profile.vendorFirebaseUid || '',
+    vendorId: profile.vendorId || '',
+  };
+};
 
-  const [storefront, setStorefront] = useState(null);
+const mergeStorefrontData = (base, update) => {
+  if (!update) {
+    return base;
+  }
+  const merged = { ...(base || {}), ...update };
+  const verificationState = merged.verificationState || merged.verification;
+  merged.verificationState = normaliseVerificationState(verificationState);
+  merged.verificationLabel =
+    merged.verificationLabel || buildVerificationLabel(merged.verificationState);
+  return merged;
+};
+
+const transformListingRecord = (listing = {}) => {
+  const title =
+    listing.title ||
+    listing.name ||
+    listing.productTitle ||
+    listing.listingTitle ||
+    'Marketplace listing';
+  const price = listing.price ?? listing.amount ?? listing.current_price ?? 0;
+  const location = [listing.location, listing.city, listing.state, listing.country]
+    .filter(Boolean)
+    .join(', ');
+  const imageCandidate =
+    listing.image ||
+    listing.cover ||
+    listing.coverImage ||
+    (Array.isArray(listing.images) ? listing.images[0] : '');
+  return {
+    id: listing.id || listing.listing_id || listing.public_id || '',
+    title,
+    price,
+    location,
+    status: listing.status || 'active',
+    image: resolveMediaUrl(imageCandidate),
+  };
+};
+
+const fetchStorefrontFromFirestore = async (vendorUid) => {
+  if (!vendorUid) {
+    return null;
+  }
+  try {
+    const listingsRef = collection(db, 'listings');
+    const snapshot = await getDocs(
+      query(listingsRef, where('vendorUid', '==', vendorUid), limit(40))
+    );
+    if (snapshot.empty) {
+      return { vendor: null, listings: [] };
+    }
+
+    const listings = [];
+    let vendorProfile = null;
+    snapshot.forEach((docSnap) => {
+      const data = docSnap.data() || {};
+      listings.push(
+        transformListingRecord({
+          id: docSnap.id,
+          ...data,
+        })
+      );
+      if (!vendorProfile) {
+        vendorProfile = buildStorefrontFromProfile({
+          name: data.vendorName || data.vendorBusinessName,
+          businessName: data.vendorBusinessName || data.vendorName,
+          planLabel: buildPlanLabel(data.vendorPlan || data.plan),
+          verification: data.vendorVerification || data.verificationStatus,
+          location: data.vendorLocation || data.location,
+          avatar: data.vendorAvatar || data.vendorPhoto,
+          phone: data.vendorPhone,
+          whatsapp: data.vendorWhatsapp,
+          email: data.vendorEmail,
+          vendorUid: data.vendorUid || vendorUid,
+          vendorId: data.vendorId,
+        });
+      }
+    });
+
+    return { vendor: vendorProfile, listings };
+  } catch (firestoreError) {
+    console.error('Firestore storefront fallback failed:', firestoreError);
+    return null;
+  }
+};
+
+const VendorStorefrontScreen = ({ navigation, route }) => {
+  const {
+    vendorId = '',
+    vendorUid = '',
+    vendorName = 'Marketplace Vendor',
+    initialVendorProfile = null,
+  } = route.params || {};
+
+  const initialStorefront = useMemo(
+    () => buildStorefrontFromProfile(initialVendorProfile),
+    [initialVendorProfile]
+  );
+
+  const identifierCandidates = useMemo(() => {
+    return [vendorId, vendorUid, initialStorefront?.vendorId, initialStorefront?.vendorUid]
+      .map((value) => (value ? String(value).trim() : ''))
+      .filter(Boolean)
+      .filter((value, index, array) => array.indexOf(value) === index);
+  }, [vendorId, vendorUid, initialStorefront?.vendorId, initialStorefront?.vendorUid]);
+
+  const [storefront, setStorefront] = useState(initialStorefront);
   const [listings, setListings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
+  const [warning, setWarning] = useState('');
   const [toast, setToast] = useState({ visible: false, message: '', type: 'info' });
+
+  useEffect(() => {
+    if (initialStorefront) {
+      setStorefront((prev) => prev || initialStorefront);
+    }
+  }, [initialStorefront]);
 
   const showToast = (message, type = 'success') => setToast({ visible: true, message, type });
   const hideToast = () => setToast({ ...toast, visible: false });
@@ -105,7 +243,7 @@ const VendorStorefrontScreen = ({ navigation, route }) => {
   const fetchStorefront = useCallback(async () => {
     if (!identifierCandidates.length) {
       setError('Vendor information is missing.');
-      setStorefront(null);
+      setStorefront(initialStorefront);
       setListings([]);
       setLoading(false);
       setRefreshing(false);
@@ -113,8 +251,9 @@ const VendorStorefrontScreen = ({ navigation, route }) => {
     }
 
     setError('');
+    setWarning('');
     setLoading(true);
-    setListings([]);
+    let lastError = '';
 
     for (const identifier of identifierCandidates) {
       try {
@@ -138,6 +277,10 @@ const VendorStorefrontScreen = ({ navigation, route }) => {
             phone: vendor.phone || vendor.contactPhone || '',
             whatsapp: vendor.whatsapp || vendor.phone || '',
             email: vendor.email || '',
+            website: vendor.website || vendor.siteUrl || '',
+            instagram: vendor.instagram || '',
+            facebook: vendor.facebook || '',
+            twitter: vendor.twitter || vendor.x || '',
             rating: Number(vendor.rating) || 0,
             totalReviews: Number(vendor.totalReviews) || 0,
             totalListings: listingData.length,
@@ -147,32 +290,53 @@ const VendorStorefrontScreen = ({ navigation, route }) => {
             vendorUid: vendor.vendorUid || vendor.firebaseUid || vendorUid || vendorId || '',
             vendorId: vendor.id ? String(vendor.id) : vendorId,
           };
-          setStorefront(nextStorefront);
-          setListings(
-            listingData.map((listing) => ({
-              id: listing.id || listing.listing_id || listing.public_id || '',
-              title: listing.title || listing.name || 'Marketplace listing',
-              price: listing.price || listing.amount || 0,
-              location: listing.location || listing.city || listing.state || '',
-              status: listing.status || 'active',
-              image: resolveMediaUrl(listing.image || listing.cover),
-            }))
-          );
+          setStorefront((prev) => mergeStorefrontData(prev, nextStorefront));
+          setListings(listingData.map((listing) => transformListingRecord(listing)));
           setLoading(false);
           setRefreshing(false);
+          setWarning('');
+          setError('');
           return;
         }
+        lastError = response.data?.message || 'Vendor storefront is unavailable.';
       } catch (apiError) {
         console.error('Storefront fetch error:', apiError);
+        lastError = apiError?.message || 'Unable to load vendor storefront right now.';
       }
     }
 
-    setError('Unable to load vendor storefront right now.');
-    setStorefront(null);
-    setListings([]);
+    const fallbackUid =
+      identifierCandidates.find((value) => value && !/^\d+$/.test(value)) ||
+      initialStorefront?.vendorUid ||
+      vendorUid;
+
+    if (fallbackUid) {
+      const fallback = await fetchStorefrontFromFirestore(fallbackUid);
+      if (fallback) {
+        const listingsPayload = Array.isArray(fallback.listings) ? fallback.listings : [];
+        if (fallback.vendor || listingsPayload.length) {
+          setStorefront((prev) =>
+            mergeStorefrontData(prev, {
+              ...(fallback.vendor || {}),
+              totalListings: listingsPayload.length || (fallback.vendor?.totalListings ?? prev?.totalListings ?? 0),
+            })
+          );
+        }
+        if (listingsPayload.length) {
+          setListings(listingsPayload);
+        }
+        setWarning(lastError || 'Showing limited storefront details.');
+        setError('');
+        setLoading(false);
+        setRefreshing(false);
+        return;
+      }
+    }
+
+    setError(lastError || 'Unable to load vendor storefront right now.');
     setLoading(false);
     setRefreshing(false);
-  }, [identifierCandidates, vendorId, vendorName, vendorUid]);
+  }, [identifierCandidates, initialStorefront, vendorId, vendorName, vendorUid]);
 
   useEffect(() => {
     fetchStorefront();
@@ -202,6 +366,28 @@ const VendorStorefrontScreen = ({ navigation, route }) => {
     Linking.openURL(waUrl).catch(() => showToast('Unable to open WhatsApp on this device.', 'error'));
   }, [storefront?.businessName, storefront?.phone, storefront?.whatsapp]);
 
+  const handleEmailVendor = useCallback(() => {
+    if (!storefront?.email) {
+      showToast('Email address is not available for this vendor.', 'info');
+      return;
+    }
+    Linking.openURL(`mailto:${storefront.email}`).catch(() =>
+      showToast('Unable to open email app.', 'error')
+    );
+  }, [storefront?.email]);
+
+  const handleOpenWebsite = useCallback(() => {
+    if (!storefront?.website) {
+      showToast('Website link is not available for this vendor.', 'info');
+      return;
+    }
+    let url = storefront.website.trim();
+    if (!/^https?:\/\//i.test(url)) {
+      url = `https://${url}`;
+    }
+    Linking.openURL(url).catch(() => showToast('Unable to open website link.', 'error'));
+  }, [storefront?.website]);
+
   const verificationState = storefront?.verificationState || 'unverified';
   const verificationColor =
     verificationState === 'verified'
@@ -216,6 +402,11 @@ const VendorStorefrontScreen = ({ navigation, route }) => {
       ? 'shield-half-outline'
       : 'shield-outline';
 
+  const blockingError = !loading && !storefront && error;
+  const noDataAvailable = !loading && !storefront && !error;
+
+  const listingsAvailable = listings.length || storefront?.totalListings || 0;
+
   return (
     <SafeAreaView style={styles.screen}>
       <Toast visible={toast.visible} message={toast.message} type={toast.type} onDismiss={hideToast} />
@@ -223,7 +414,7 @@ const VendorStorefrontScreen = ({ navigation, route }) => {
         <TouchableOpacity onPress={() => goBackOrNavigate(navigation)} style={styles.headerButton}>
           <Ionicons name="arrow-back" size={24} color={theme.colors.primary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Vendor Storefront</Text>
+        <Text style={styles.headerTitle}>{storefront?.businessName || vendorName}</Text>
         <View style={styles.headerSpacer} />
       </View>
 
@@ -232,13 +423,13 @@ const VendorStorefrontScreen = ({ navigation, route }) => {
           <ActivityIndicator size="large" color={theme.colors.primary} />
           <Text style={styles.loadingText}>Loading storefront...</Text>
         </View>
-      ) : error ? (
+      ) : blockingError ? (
         <View style={styles.centerContent}>
           <Ionicons name="storefront-outline" size={64} color={theme.colors.textSecondary} />
           <Text style={styles.errorText}>{error}</Text>
           <Button title="Try again" onPress={fetchStorefront} />
         </View>
-      ) : !storefront ? (
+      ) : noDataAvailable ? (
         <View style={styles.centerContent}>
           <Ionicons name="alert-circle-outline" size={64} color={theme.colors.textSecondary} />
           <Text style={styles.errorText}>No storefront information available.</Text>
@@ -248,6 +439,12 @@ const VendorStorefrontScreen = ({ navigation, route }) => {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={fetchStorefront} tintColor={theme.colors.primary} />}
           contentContainerStyle={styles.scrollContent}
         >
+          {warning ? (
+            <View style={styles.inlineError}>
+              <Ionicons name="warning-outline" size={16} color={theme.colors.orange} />
+              <Text style={styles.inlineErrorText}>{warning}</Text>
+            </View>
+          ) : null}
           <View style={styles.coverWrapper}>
             {storefront.coverImage ? (
               <Image source={{ uri: storefront.coverImage }} style={styles.coverImage} />
@@ -340,13 +537,55 @@ const VendorStorefrontScreen = ({ navigation, route }) => {
             </TouchableOpacity>
           </View>
 
+          {storefront.description || storefront.email || storefront.website || storefront.joinedDate ? (
+            <View style={styles.detailsCard}>
+              <Text style={styles.detailsTitle}>Vendor details</Text>
+              {storefront.description ? (
+                <Text style={styles.detailDescription}>{storefront.description}</Text>
+              ) : null}
+              {storefront.email ? (
+                <TouchableOpacity
+                  style={styles.detailRow}
+                  onPress={handleEmailVendor}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="mail-outline" size={18} color={theme.colors.textSecondary} />
+                  <View style={styles.detailTextGroup}>
+                    <Text style={styles.detailLabel}>Email</Text>
+                    <Text style={styles.detailValue}>{storefront.email}</Text>
+                  </View>
+                </TouchableOpacity>
+              ) : null}
+              {storefront.website ? (
+                <TouchableOpacity
+                  style={styles.detailRow}
+                  onPress={handleOpenWebsite}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="globe-outline" size={18} color={theme.colors.textSecondary} />
+                  <View style={styles.detailTextGroup}>
+                    <Text style={styles.detailLabel}>Website</Text>
+                    <Text style={styles.detailValue}>{storefront.website}</Text>
+                  </View>
+                </TouchableOpacity>
+              ) : null}
+              {storefront.joinedDate ? (
+                <View style={styles.detailRow}>
+                  <Ionicons name="calendar-outline" size={18} color={theme.colors.textSecondary} />
+                  <View style={styles.detailTextGroup}>
+                    <Text style={styles.detailLabel}>Joined</Text>
+                    <Text style={styles.detailValue}>{storefront.joinedDate}</Text>
+                  </View>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+
           <View style={styles.listingsSection}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Listings</Text>
               <Text style={styles.sectionHint}>
-                {storefront.totalListings
-                  ? `${storefront.totalListings} available`
-                  : 'No listings yet'}
+                {listingsAvailable ? `${listingsAvailable} available` : 'No listings yet'}
               </Text>
             </View>
 
@@ -570,6 +809,62 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.lg,
     paddingTop: theme.spacing['2xl'],
     gap: theme.spacing.base,
+  },
+  detailsCard: {
+    marginHorizontal: theme.spacing.lg,
+    marginTop: theme.spacing.xl,
+    padding: theme.spacing.lg,
+    borderRadius: theme.borderRadius.xl,
+    backgroundColor: theme.colors.white,
+    gap: theme.spacing.sm,
+    ...theme.shadows.small,
+  },
+  detailsTitle: {
+    fontFamily: theme.typography.fontFamily.interSemiBold,
+    fontSize: theme.typography.fontSize.base,
+    color: theme.colors.textPrimary,
+  },
+  detailDescription: {
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.base,
+    color: theme.colors.textSecondary,
+    lineHeight: theme.typography.lineHeight.relaxed * theme.typography.fontSize.base,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    paddingVertical: theme.spacing.xs,
+  },
+  detailTextGroup: {
+    flex: 1,
+  },
+  detailLabel: {
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.textSecondary,
+    textTransform: 'uppercase',
+  },
+  detailValue: {
+    fontFamily: theme.typography.fontFamily.interMedium,
+    fontSize: theme.typography.fontSize.base,
+    color: theme.colors.textPrimary,
+  },
+  inlineError: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    marginHorizontal: theme.spacing.lg,
+    marginBottom: theme.spacing.md,
+    padding: theme.spacing.sm,
+    borderRadius: theme.borderRadius.lg,
+    backgroundColor: `${theme.colors.orange}20`,
+  },
+  inlineErrorText: {
+    flex: 1,
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.orange,
   },
   sectionHeader: {
     flexDirection: 'row',
