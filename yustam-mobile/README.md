@@ -157,6 +157,15 @@ The app uses the same Firebase project as the YUSTAM web app:
 }
 ```
 
+### Native Firebase config files
+
+The platform-specific Firebase bundles contain sensitive keys and are intentionally excluded from version control:
+
+- android/app/google-services.json
+- ios/GoogleService-Info.plist
+
+After cloning the repo, download both files from the Firebase console and place them at the paths above. Use the template files (android/app/google-services.example.json and ios/GoogleService-Info.example.plist) as a reference for the required structure, but never commit the real credentials again.
+
 ## ☁️ Cloudinary Configuration
 
 Image uploads use the YUSTAM Cloudinary account:

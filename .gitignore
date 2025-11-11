@@ -8,6 +8,8 @@ firebase-admin-key.json
 .env
 .env.*
 *.env.local
+**/google-services.json
+**/GoogleService-Info.plist
 
 # Node modules
 node_modules/
