@@ -34,6 +34,15 @@ function yustam_chat_service_account(): array
         }
     }
 
+    // Support common cPanel/public_html location for shared hosts
+    $alternatePath = '/home2/yustamco/public_html/firebase-service-account.json';
+    if (is_file($alternatePath)) {
+        $decoded = json_decode((string)file_get_contents($alternatePath), true);
+        if (is_array($decoded)) {
+            return $serviceAccount = $decoded;
+        }
+    }
+
     throw new RuntimeException('Firebase service account credentials not configured.');
 }
 

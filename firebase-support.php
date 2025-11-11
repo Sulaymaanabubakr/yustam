@@ -59,6 +59,23 @@ function yustam_firebase_service_account(): array
         }
     }
 
+    // Alternate common cPanel location inside public_html
+    $publicHtmlPath = '/home2/yustamco/public_html/firebase-service-account.json';
+    error_log('DEBUG: Checking service account file at ' . $publicHtmlPath);
+    error_log('DEBUG: file_exists=' . (is_file($publicHtmlPath) ? 'true' : 'false'));
+    if (is_file($publicHtmlPath)) {
+        $fileContents = file_get_contents($publicHtmlPath);
+        error_log('DEBUG: file_get_contents length=' . strlen($fileContents));
+        $decoded = json_decode((string) $fileContents, true);
+        error_log('DEBUG: json_decode result=' . (is_array($decoded) ? 'array' : 'not array'));
+        if (is_array($decoded)) {
+            error_log('DEBUG: Loaded service account successfully from public_html.');
+            return $serviceAccount = $decoded;
+        } else {
+            error_log('DEBUG: Failed to decode service account JSON at public_html.');
+        }
+    }
+
     // Fallback: environment variable
     $inline = getenv('FIREBASE_SERVICE_ACCOUNT');
     if ($inline) {
