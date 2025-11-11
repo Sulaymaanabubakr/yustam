@@ -137,6 +137,23 @@ const ProductDetailScreen = ({ navigation, route }) => {
   const specifications = useMemo(() => extractSpecifications(listingData), [listingData]);
   const baseVendor = useMemo(() => buildVendorFromListing(listing), [listing]);
   const vendorProfile = useMemo(() => mergeVendorProfiles(baseVendor, vendorRecord), [baseVendor, vendorRecord]);
+  const verificationState = vendorProfile.verification || 'unverified';
+  const verificationLabel = vendorProfile.verificationLabel || buildVerificationLabel(verificationState);
+  const verificationColor =
+    verificationState === 'verified'
+      ? theme.colors.emerald
+      : verificationState === 'pending'
+      ? theme.colors.orange
+      : theme.colors.textSecondary;
+  const verificationIcon =
+    verificationState === 'verified'
+      ? 'shield-checkmark'
+      : verificationState === 'pending'
+      ? 'shield-half-outline'
+      : 'shield-outline';
+  const hasStorefront = Boolean(
+    vendorProfile.vendorUid || vendorProfile.vendorId || vendorProfile.storefrontUrl
+  );
 
   const vendorIdentifiers = useMemo(() => {
     if (!listing) {
@@ -309,17 +326,19 @@ const ProductDetailScreen = ({ navigation, route }) => {
     }
   }, [listing, productId, showToast, vendorProfile.name, vendorProfile.phone, vendorProfile.whatsapp]);
 
-  const handleOpenStorefront = useCallback(async () => {
-    if (!vendorProfile.storefrontUrl) {
+  const handleOpenStorefront = useCallback(() => {
+    const targetVendorUid = vendorProfile.vendorUid;
+    const targetVendorId = vendorProfile.vendorId;
+    if (!targetVendorUid && !targetVendorId) {
       showToast('Vendor storefront is not available yet.', 'info');
       return;
     }
-    try {
-      await Linking.openURL(vendorProfile.storefrontUrl);
-    } catch (openError) {
-      showToast('Unable to launch vendor storefront link.', 'error');
-    }
-  }, [showToast, vendorProfile.storefrontUrl]);
+    navigation.navigate('VendorStorefront', {
+      vendorUid: targetVendorUid,
+      vendorId: targetVendorId,
+      vendorName: vendorProfile.name,
+    });
+  }, [navigation, showToast, vendorProfile.name, vendorProfile.vendorId, vendorProfile.vendorUid]);
 
   const handleChatVendor = useCallback(async () => {
     if (!listing || !vendorProfile.vendorUid) {
@@ -559,10 +578,6 @@ const ProductDetailScreen = ({ navigation, route }) => {
 
           <View style={styles.sectionCard}>
             <Text style={styles.sectionHeading}>Listing info</Text>
-            <View style={styles.specRow}>
-              <Text style={styles.specLabel}>Listing ID</Text>
-              <Text style={styles.specValue}>{listing?.id || 'Unavailable'}</Text>
-            </View>
             {listing?.categoryLabel ? (
               <View style={styles.specRow}>
                 <Text style={styles.specLabel}>Category</Text>
@@ -599,28 +614,16 @@ const ProductDetailScreen = ({ navigation, route }) => {
                 <Text style={styles.vendorPlan}>{vendorProfile.planLabel || 'Free Plan'}</Text>
                 <View style={styles.metaRow}>
                   <View style={styles.metaPill}>
-                    <Ionicons
-                      name={
-                        vendorProfile.verification === 'verified'
-                          ? 'shield-checkmark'
-                          : vendorProfile.verification === 'pending'
-                          ? 'shield-half-outline'
-                          : 'shield-outline'
-                      }
-                      size={14}
-                      color={theme.colors.orange}
-                    />
-                    <Text style={styles.metaText}>
-                      {vendorProfile.verification === 'verified'
-                        ? 'Verified vendor'
-                        : vendorProfile.verification === 'pending'
-                        ? 'Pending verification'
-                        : 'Unverified'}
-                    </Text>
+                    <Ionicons name={verificationIcon} size={14} color={verificationColor} />
+                    <Text style={[styles.metaText, { color: verificationColor }]}>{verificationLabel}</Text>
                   </View>
                 </View>
               </View>
-              <TouchableOpacity style={styles.storefrontButton} onPress={handleOpenStorefront}>
+              <TouchableOpacity
+                style={[styles.storefrontButton, !hasStorefront && styles.disabledCta]}
+                onPress={handleOpenStorefront}
+                disabled={!hasStorefront}
+              >
                 <Ionicons name="open-outline" size={18} color={theme.colors.primary} />
                 <Text style={styles.storefrontText}>Storefront</Text>
               </TouchableOpacity>
@@ -917,17 +920,47 @@ const normaliseVerificationState = (value) => {
   if (value === false || value === 0 || value === '0') {
     return 'unverified';
   }
+
   const normalised = String(value || '').trim().toLowerCase();
-  if (['verified', 'approved', 'active', 'complete', 'completed'].includes(normalised)) {
-    return 'verified';
-  }
-  if (['pending', 'review', 'processing', 'submitted', 'in_review'].includes(normalised)) {
-    return 'pending';
-  }
   if (!normalised) {
     return 'unverified';
   }
+
+  const compact = normalised.replace(/[^a-z]/g, '');
+  if (
+    normalised.includes('verified') ||
+    ['verified', 'approved', 'active', 'complete', 'completed', 'verifiedvendor'].includes(compact)
+  ) {
+    return 'verified';
+  }
+
+  if (
+    normalised.includes('pending') ||
+    normalised.includes('review') ||
+    ['pending', 'submitted', 'processing', 'inreview', 'underreview'].includes(compact)
+  ) {
+    return 'pending';
+  }
+
+  if (normalised.includes('reject') || normalised.includes('declin') || normalised.includes('fail')) {
+    return 'rejected';
+  }
+
   return normalised;
+};
+
+const buildVerificationLabel = (state) => {
+  const value = normaliseVerificationState(state);
+  switch (value) {
+    case 'verified':
+      return 'Verified vendor';
+    case 'pending':
+      return 'Pending verification';
+    case 'rejected':
+      return 'Verification needs attention';
+    default:
+      return 'Unverified vendor';
+  }
 };
 
 const buildPlanLabel = (value) => {
@@ -1021,6 +1054,29 @@ const buildListingModel = (source = {}, fallbackId) => {
   };
 };
 
+const buildStorefrontUrl = ({ vendorId, vendorUid } = {}) => {
+  const normalise = (value) => {
+    if (value === null || value === undefined) {
+      return '';
+    }
+    if (typeof value === 'string') {
+      return value.trim();
+    }
+    return String(value).trim();
+  };
+
+  const id = normalise(vendorId);
+  const uid = normalise(vendorUid);
+
+  if (id) {
+    return `${API_BASE_URL}/vendor-storefront.php?vendorId=${encodeURIComponent(id)}`;
+  }
+  if (uid) {
+    return `${API_BASE_URL}/vendor-storefront.php?vendorUid=${encodeURIComponent(uid)}`;
+  }
+  return '';
+};
+
 const buildVendorFromListing = (listing) => {
   if (!listing) {
     return {};
@@ -1030,12 +1086,17 @@ const buildVendorFromListing = (listing) => {
     businessName: listing.vendorName,
     planLabel: buildPlanLabel(listing.vendorPlan),
     verification: listing.vendorVerification,
+    verificationLabel: buildVerificationLabel(listing.vendorVerification),
     phone: listing.vendorPhone,
     whatsapp: listing.vendorWhatsapp,
     email: listing.vendorEmail,
     location: listing.vendorLocation || listing.location,
     vendorUid: listing.vendorUid,
     vendorId: listing.vendorId,
+    storefrontUrl: buildStorefrontUrl({
+      vendorId: listing.vendorId,
+      vendorUid: listing.vendorUid || listing.vendorFirebaseUid,
+    }),
   };
 };
 
@@ -1047,19 +1108,20 @@ const transformVendorPayload = (payload = {}) => {
     country: payload.country,
   });
 
-  let storefrontUrl = '';
-  if (payload.id) {
-    storefrontUrl = `${API_BASE_URL}/vendor-storefront.php?vendorId=${encodeURIComponent(payload.id)}`;
-  } else if (payload.vendorUid || payload.firebaseUid) {
-    const identifier = payload.vendorUid || payload.firebaseUid;
-    storefrontUrl = `${API_BASE_URL}/vendor-storefront.php?vendorUid=${encodeURIComponent(identifier)}`;
-  }
+  const verificationState = normaliseVerificationState(
+    payload.verificationState || payload.verification || payload.status || payload.verificationStatus
+  );
+  const storefrontUrl = buildStorefrontUrl({
+    vendorId: payload.id,
+    vendorUid: payload.vendorUid || payload.firebaseUid,
+  });
 
   return {
     name: payload.businessName || payload.displayName || 'Marketplace Vendor',
     businessName: payload.businessName || payload.displayName,
     planLabel: payload.planLabel || buildPlanLabel(payload.plan),
-    verification: normaliseVerificationState(payload.verificationState || payload.status),
+    verification: verificationState,
+    verificationLabel: payload.verificationLabel || buildVerificationLabel(verificationState),
     phone: payload.phone,
     whatsapp: payload.whatsapp,
     email: payload.email,
@@ -1067,24 +1129,37 @@ const transformVendorPayload = (payload = {}) => {
     avatar: resolveMediaUrl(payload.avatar),
     vendorUid: payload.vendorUid || payload.firebaseUid,
     vendorId: payload.id ? String(payload.id) : '',
-    storefrontUrl: storefrontUrl || '',
+    storefrontUrl,
   };
 };
 
-const mergeVendorProfiles = (base = {}, override = {}) => ({
-  name: override.name || base.name || 'Marketplace Vendor',
-  businessName: override.businessName || base.businessName || override.name,
-  planLabel: override.planLabel || base.planLabel || 'Free Plan',
-  verification: override.verification || base.verification || 'unverified',
-  phone: override.phone || base.phone || '',
-  whatsapp: override.whatsapp || base.whatsapp || override.phone || base.phone || '',
-  email: override.email || base.email || '',
-  location: override.location || base.location || '',
-  avatar: override.avatar || '',
-  vendorUid: override.vendorUid || base.vendorUid || '',
-  vendorId: override.vendorId || base.vendorId || '',
-  storefrontUrl: override.storefrontUrl || base.storefrontUrl || '',
-});
+const mergeVendorProfiles = (base = {}, override = {}) => {
+  const safeBase = base && typeof base === 'object' ? base : {};
+  const safeOverride = override && typeof override === 'object' ? override : {};
+  return {
+    name: safeOverride.name || safeBase.name || 'Marketplace Vendor',
+    businessName: safeOverride.businessName || safeBase.businessName || safeOverride.name,
+    planLabel: safeOverride.planLabel || safeBase.planLabel || 'Free Plan',
+    verification: safeOverride.verification || safeBase.verification || 'unverified',
+    verificationLabel:
+      safeOverride.verificationLabel ||
+      safeBase.verificationLabel ||
+      buildVerificationLabel(safeOverride.verification || safeBase.verification),
+    phone: safeOverride.phone || safeBase.phone || '',
+    whatsapp:
+      safeOverride.whatsapp ||
+      safeBase.whatsapp ||
+      safeOverride.phone ||
+      safeBase.phone ||
+      '',
+    email: safeOverride.email || safeBase.email || '',
+    location: safeOverride.location || safeBase.location || '',
+    avatar: safeOverride.avatar || safeBase.avatar || '',
+    vendorUid: safeOverride.vendorUid || safeBase.vendorUid || '',
+    vendorId: safeOverride.vendorId || safeBase.vendorId || '',
+    storefrontUrl: safeOverride.storefrontUrl || safeBase.storefrontUrl || '',
+  };
+};
 
 const sanitizePhoneNumber = (value = '') => value.replace(/[^0-9]/g, '');
 

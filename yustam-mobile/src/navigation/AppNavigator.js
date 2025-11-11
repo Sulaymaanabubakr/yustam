@@ -14,6 +14,7 @@ import BuyerProductDetailScreen from '../screens/buyer/ProductDetailScreen';
 import BuyerSupportScreen from '../screens/buyer/SupportScreen';
 import BuyerPreferencesScreen from '../screens/buyer/PreferencesScreen';
 import BuyerRecentlyViewedScreen from '../screens/buyer/RecentlyViewedScreen';
+import BuyerVendorStorefrontScreen from '../screens/buyer/VendorStorefrontScreen';
 import NotificationsScreen from '../screens/shared/NotificationsScreen';
 
 // Vendor Screens
@@ -97,6 +98,7 @@ const AppNavigator = () => {
             <Stack.Screen name="BuyerNotifications" component={NotificationsScreen} />
             <Stack.Screen name="BuyerPreferences" component={BuyerPreferencesScreen} />
             <Stack.Screen name="BuyerRecentlyViewed" component={BuyerRecentlyViewedScreen} />
+            <Stack.Screen name="VendorStorefront" component={BuyerVendorStorefrontScreen} />
             
             {/* Vendor Screens */}
             <Stack.Screen name="VendorDashboard" component={VendorDashboardScreen} />
