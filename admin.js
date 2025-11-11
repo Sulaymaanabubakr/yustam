@@ -1,7 +1,8 @@
 import { auth, db } from './firebase.js';
-        import { displayPlanLabel, normalisePlanSlug } from './plan-utils.js';
-        import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js';
-        import { collection, doc, getDoc, setDoc, query, orderBy, limit, onSnapshot, updateDoc, addDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
+import { displayPlanLabel, normalisePlanSlug } from './plan-utils.js';
+import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js';
+import { collection, doc, getDoc, setDoc, query, orderBy, limit, onSnapshot, updateDoc, addDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
+import { adminAPI, clearAdminSession } from './admin-api.js';
 
         const dashboardContent = document.getElementById('dashboardContent');
         const loader = document.getElementById('loader');
@@ -350,46 +351,67 @@ import { auth, db } from './firebase.js';
             statsElements.revenue.textContent = formatCurrency(revenue);
         };
 
-        const normaliseVendorRecords = (vendors) => {
-            if (!Array.isArray(vendors)) return [];
-            return vendors.map((vendor) => {
-                const planLabel = formatPlanLabel(vendor.plan);
-                const joinedDisplay = (vendor.joined && vendor.joined !== '-') ? vendor.joined : '';
-                const record = {
-                    id: vendor.id ?? '',
-                    uid: vendor.vendorUid || vendor.uid || '',
-                    vendorUid: vendor.vendorUid || vendor.uid || '',
-                    firebaseUid: vendor.firebaseUid || '',
-                    name: vendor.name || vendor.businessName || 'Vendor',
-                    businessName: vendor.businessName || '',
-                    email: vendor.email || '',
-                    plan: planLabel,
-                    planSlug: vendor.planSlug || slugifyPlan(planLabel),
-                    status: vendor.status || '',
-                    profilePhoto: vendor.profilePhoto || '',
-                    joined: joinedDisplay,
-                };
+        const normaliseVendorRecords = (vendors) => {
+            if (!Array.isArray(vendors)) return [];
+            return vendors.map((vendor) => {
+                const planName = vendor.currentPlan?.name || vendor.plan || 'Free';
+                const planLabel = formatPlanLabel(planName);
+                const joinedAt = vendor.createdAt || vendor.joined;
+                const joinedDisplay = joinedAt ? new Date(joinedAt).toLocaleDateString() : '';
+                const record = {
+                    id: vendor.id ?? '',
+                    uid: vendor.user?.id || vendor.vendorUid || vendor.uid || '',
+                    firebaseUid: vendor.user?.firebaseUid || vendor.firebaseUid || '',
+                    name: vendor.user?.displayName || vendor.name || vendor.businessName || 'Vendor',
+                    businessName: vendor.businessName || vendor.name || '',
+                    email: vendor.user?.email || vendor.email || '',
+                    plan: planLabel,
+                    planSlug: vendor.planSlug || normalisePlanSlug(planName),
+                    status: vendor.verificationStatus || vendor.status || '',
+                    profilePhoto: vendor.user?.photoUrl || vendor.profilePhoto || '',
+                    joined: joinedDisplay,
+                };
+                storeVendorRecord(record);
+                return record;
+            });
+        };
                 storeVendorRecord(record);
                 return record;
             });
         };
 
+        const buildPlanSummary = (vendors) => {
+            const base = { free: 0, starter: 0, pro: 0, elite: 0, power: 0 };
+            vendors.forEach((vendor) => {
+                const key = vendor.planSlug || normalisePlanSlug(vendor.plan) || 'free';
+                if (base[key] !== undefined) {
+                    base[key] += 1;
+                } else {
+                    base[key] = 1;
+                }
+            });
+            const activePlans = base.starter + base.pro + base.elite + base.power;
+            const revenue =
+                (base.starter * (PLAN_PRICING.starter || 0)) +
+                (base.pro * (PLAN_PRICING.pro || 0)) +
+                (base.elite * (PLAN_PRICING.elite || 0)) +
+                (base.power * (PLAN_PRICING.power || 0));
+            return {
+                total: vendors.length,
+                activePlans,
+                revenue,
+                planCounts: base,
+            };
+        };
+
         const fetchVendorSummary = async () => {
             try {
-                const response = await fetch('admin-vendors-summary.php', {
-                    method: 'GET',
-                    credentials: 'same-origin',
-                    headers: { Accept: 'application/json' },
-                });
-                const payload = await response.json();
-                if (!response.ok || !payload?.success) {
-                    throw new Error(payload?.message || 'Unable to load vendor summary.');
-                }
-                const vendors = normaliseVendorRecords(payload.vendors || []);
+                const payload = await adminAPI.vendors();
+                const vendors = normaliseVendorRecords(payload?.vendors || []);
                 renderVendors(vendors);
-                applyPlanSummary(payload.summary || {});
-                const total = payload.summary?.total ?? vendors.length;
-                statsElements.vendors.textContent = total.toString();
+                const summary = buildPlanSummary(vendors);
+                applyPlanSummary(summary);
+                statsElements.vendors.textContent = summary.total.toString();
                 vendorSummaryErrorShown = false;
                 refreshListingVendorLabels();
             } catch (error) {
@@ -401,19 +423,9 @@ import { auth, db } from './firebase.js';
             }
         };
 
-        const performListingAction = async (listingId, action, extra = {}) => {
-            const body = new URLSearchParams({ listingId, action });
-            if (extra.reason) body.append('reason', extra.reason);
-            const response = await fetch('admin-listing-action.php', {
-                method: 'POST',
-                credentials: 'same-origin',
-                body,
-            });
-            const payload = await response.json().catch(() => ({}));
-            if (!response.ok || !payload?.success) {
-                throw new Error(payload?.message || 'Unable to process listing action.');
-            }
-            return payload;
+        const performListingAction = async (listingId, action) => {
+            const status = action === 'approve' ? 'ACTIVE' : 'ARCHIVED';
+            return adminAPI.updateProductStatus(listingId, { status });
         };
 
         const approveListing = async (listingId) => {
@@ -449,7 +461,22 @@ import { auth, db } from './firebase.js';
             }
             sendFeedback.disabled = true;
             try {
-                await performListingAction(selectedListingId, 'reject', { reason });
+                await performListingAction(selectedListingId, 'reject');
+                if (selectedListingVendor) {
+                    try {
+                        await addDoc(collection(db, 'notifications'), {
+                            type: 'listing-rejected',
+                            title: 'Listing rejected',
+                            message: reason,
+                            vendorId: selectedListingVendor,
+                            listingId: selectedListingId,
+                            read: false,
+                            createdAt: serverTimestamp(),
+                        });
+                    } catch (notificationError) {
+                        console.error('Failed to create rejection notification', notificationError);
+                    }
+                }
                 showToast('Feedback sent to vendor.');
                 removeListingCard(selectedListingId);
                 closeRejectModal();
@@ -587,18 +614,18 @@ import { auth, db } from './firebase.js';
             return null;
         };
 
-        const ensureSession = async () => {
+        const requireBackendAdmin = async () => {
             try {
-                const response = await fetch('admin-session-status.php', {
-                    method: 'GET',
-                    credentials: 'same-origin'
-                });
-                if (!response.ok) throw new Error('Session invalid');
-                return await response.json();
+                const response = await adminAPI.me();
+                const user = response?.user ?? response;
+                if (!user || user.role !== 'ADMIN') {
+                    throw new Error('Not authorised');
+                }
+                return user;
             } catch (error) {
-                console.error('Admin session validation failed:', error);
-                window.location.href = 'admin-login.php';
-                return null;
+                console.error('Backend admin validation failed:', error);
+                clearAdminSession();
+                throw error;
             }
         };
 
@@ -606,22 +633,21 @@ import { auth, db } from './firebase.js';
 
         const initAuth = () => {
             onAuthStateChanged(auth, async (user) => {
-                const session = await ensureSession();
-                if (!session) {
-                    return;
-                }
-
                 try {
-                    if (user) {
-                        const adminSnap = await withRetries(() => ensureAdminRecord(user), 3, 900);
+                    await requireBackendAdmin();
 
-                        if (!adminSnap || !adminSnap.exists()) {
-                            console.warn('Admin record still missing after retries, redirecting to homepage.');
-                            window.location.href = 'index.html';
-                            return;
-                        }
-                    } else {
-                        console.warn('Auth admin user not available; continuing with PHP session only.');
+                    if (!user) {
+                        console.warn('Firebase admin user not available; redirecting to login.');
+                        window.location.href = 'admin-login.php';
+                        return;
+                    }
+
+                    const adminSnap = await withRetries(() => ensureAdminRecord(user), 3, 900);
+
+                    if (!adminSnap || !adminSnap.exists()) {
+                        console.warn('Admin record still missing after retries, redirecting to homepage.');
+                        window.location.href = 'index.html';
+                        return;
                     }
 
                     loader.hidden = true;
@@ -630,7 +656,9 @@ import { auth, db } from './firebase.js';
                     hydrateData();
                 } catch (error) {
                     console.error('auth guard error', error);
-                    window.location.href = 'index.html';
+                    await signOut(auth).catch(() => undefined);
+                    clearAdminSession();
+                    window.location.href = 'admin-login.php';
                 }
             });
         };
@@ -677,11 +705,7 @@ import { auth, db } from './firebase.js';
             } catch (error) {
                 console.error('logout error', error);
             } finally {
-                try {
-                    await fetch('admin-logout.php', { method: 'GET', credentials: 'same-origin' });
-                } catch (logoutError) {
-                    console.error('Admin session logout failed:', logoutError);
-                }
+                clearAdminSession();
                 window.location.href = 'admin-login.php';
             }
         });

@@ -1,3 +1,17 @@
+import { auth } from './firebase.js';
+import {
+  signInWithEmailAndPassword,
+  onAuthStateChanged,
+  signOut,
+} from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js';
+import {
+  ADMIN_API_BASE_URL,
+  storeAdminSession,
+  clearAdminSession,
+  adminRequest,
+  getAdminToken,
+} from './admin-api.js';
+
 const loginForm = document.getElementById('adminLoginForm');
 const loginBtn = document.getElementById('loginBtn');
 const errorMessage = document.getElementById('errorMessage');
@@ -46,22 +60,42 @@ const redirectToDashboard = () => {
   window.location.href = 'admin-dashboard.php';
 };
 
+const establishBackendSession = async (firebaseUser) => {
+  const idToken = await firebaseUser.getIdToken(true);
+  const response = await fetch(`${ADMIN_API_BASE_URL}/auth/session`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ idToken }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || !payload?.token) {
+    throw new Error(payload?.message || 'Unable to create admin session.');
+  }
+  if (payload.user?.role !== 'ADMIN') {
+    throw new Error('This account is not authorised for admin access.');
+  }
+  storeAdminSession({ token: payload.token, user: payload.user });
+  return payload.user;
+};
+
 const checkExistingSession = async () => {
+  const token = getAdminToken();
+  if (!token) {
+    pageLoader?.classList.remove('active');
+    return;
+  }
   try {
-    const response = await fetch('admin-session-status.php', {
-      method: 'GET',
-      credentials: 'same-origin',
-    });
-    if (response.ok) {
+    const current = await adminRequest('/auth/me');
+    if (current?.user?.role === 'ADMIN') {
       redirectToDashboard();
-    } else if (pageLoader) {
-      pageLoader.classList.remove('active');
+      return;
     }
+    throw new Error('not admin');
   } catch (error) {
-    console.error('Session check failed:', error);
-    if (pageLoader) {
-      pageLoader.classList.remove('active');
-    }
+    console.warn('Admin session invalid', error);
+    clearAdminSession();
+    await signOut(auth).catch(() => undefined);
+    pageLoader?.classList.remove('active');
   }
 };
 
@@ -82,31 +116,17 @@ loginForm?.addEventListener('submit', async (event) => {
 
   try {
     setButtonLoading(true);
-    const response = await fetch('admin-login-action.php', {
-      method: 'POST',
-      credentials: 'same-origin',
-      body: new URLSearchParams({
-        email,
-        password,
-      }),
-    });
-
-    const data = await response.json().catch(() => ({}));
-
-    if (!response.ok || !data.success) {
-      const message = data.message || 'Login failed. Please try again.';
-      triggerError(message);
-      showToast(message, 'error');
-      return;
-    }
+    const credential = await signInWithEmailAndPassword(auth, email, password);
+    const firebaseUser = credential.user;
+    await establishBackendSession(firebaseUser);
 
     showToast('Access granted. Redirecting...');
     setTimeout(() => {
-      window.location.href = data.redirect || 'admin-dashboard.php';
+      redirectToDashboard();
     }, 800);
   } catch (error) {
     console.error('Admin login failed:', error);
-    const message = 'Unable to sign in right now. Please try again.';
+    const message = error?.message || 'Unable to sign in right now. Please try again.';
     triggerError(message);
     showToast(message, 'error');
   } finally {
@@ -115,8 +135,19 @@ loginForm?.addEventListener('submit', async (event) => {
 });
 
 document.addEventListener('DOMContentLoaded', () => {
-  if (pageLoader) {
-    pageLoader.classList.add('active');
-  }
+  pageLoader?.classList.add('active');
   checkExistingSession();
+  onAuthStateChanged(auth, async (user) => {
+    if (user) {
+      try {
+        await establishBackendSession(user);
+        redirectToDashboard();
+      } catch (error) {
+        console.warn('Firebase session present but backend session failed', error);
+        await signOut(auth).catch(() => undefined);
+        clearAdminSession();
+        pageLoader?.classList.remove('active');
+      }
+    }
+  });
 });
