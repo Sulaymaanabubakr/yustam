@@ -30,11 +30,14 @@ const ChatThreadScreen = ({ navigation, route }) => {
     chatId,
     buyerName = 'Buyer',
     buyerPhoto,
-    buyerId,
+    buyerId = '',
     vendorName,
     vendorPhoto,
     vendorPlanLabel,
-    listingTitle,
+    listingTitle = '',
+    listingId = '',
+    listingImage = '',
+    vendorUid = '',
   } = route.params || {};
   const { user, role } = useAuth();
   const resolvedUid = resolveUserUid(user);
@@ -51,6 +54,18 @@ const ChatThreadScreen = ({ navigation, route }) => {
     ? buyerId ? `Buyer ID: ${buyerId}` : 'Buyer'
     : listingTitle || vendorPlanLabel || 'Vendor';
   const peerAvatar = viewingAsVendor ? resolveMediaUrl(buyerPhoto) : resolveMediaUrl(vendorPhoto);
+  const viewerDisplayName = viewingAsVendor
+    ? user?.businessName || user?.displayName || user?.fullName || user?.name || 'Vendor'
+    : user?.fullName || user?.displayName || user?.email || 'Buyer';
+  const buyerUidResolved = (viewingAsVendor ? buyerId : resolvedUid) || '';
+  const vendorUidResolved = (viewingAsVendor ? resolvedUid : vendorUid) || '';
+  const buyerDisplayName = viewingAsVendor ? buyerName || 'Buyer' : viewerDisplayName;
+  const vendorDisplayName = viewingAsVendor ? viewerDisplayName : vendorName || 'Marketplace Vendor';
+  const listingMeta = {
+    id: listingId || '',
+    title: listingTitle || '',
+    image: resolveMediaUrl(listingImage) || '',
+  };
 
   const showToast = (message, type = 'success') => {
     setToast({ visible: true, message, type });
@@ -111,7 +126,9 @@ const ChatThreadScreen = ({ navigation, route }) => {
           .map(mapMessage)
           .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
         setMessages(nextMessages);
-        await chatAPI.markAsRead(chatId).catch(() => {});
+        await chatAPI
+          .markAsRead(chatId, viewingAsVendor ? 'vendor' : 'buyer')
+          .catch(() => {});
         requestAnimationFrame(() => {
           listRef.current?.scrollToEnd({ animated: false });
         });
@@ -123,7 +140,7 @@ const ChatThreadScreen = ({ navigation, route }) => {
         setRefreshing(false);
       }
     },
-    [chatId, mapMessage]
+    [chatId, mapMessage, viewingAsVendor]
   );
 
   useEffect(() => {
@@ -139,6 +156,10 @@ const ChatThreadScreen = ({ navigation, route }) => {
   const handleSend = async () => {
     const trimmed = inputValue.trim();
     if (!trimmed || sending || !chatId) {
+      return;
+    }
+    if (!buyerUidResolved || !vendorUidResolved) {
+      showToast('Chat participants missing. Please reload the conversation.', 'error');
       return;
     }
 
@@ -157,7 +178,20 @@ const ChatThreadScreen = ({ navigation, route }) => {
     setSending(true);
 
     try {
-      await chatAPI.sendMessage(chatId, trimmed);
+      await chatAPI.sendMessage({
+        chat_id: chatId,
+        text: trimmed,
+        message: trimmed,
+        role: viewingAsVendor ? 'vendor' : 'buyer',
+        buyer_uid: buyerUidResolved,
+        buyer_name: buyerDisplayName,
+        vendor_uid: vendorUidResolved,
+        vendor_name: vendorDisplayName,
+        vendor_business_name: vendorDisplayName,
+        listing_id: listingMeta.id,
+        listing_title: listingMeta.title,
+        listing_image: listingMeta.image,
+      });
       await fetchMessages(false);
     } catch (error) {
       console.error('Send message failed:', error);
@@ -181,7 +215,7 @@ const ChatThreadScreen = ({ navigation, route }) => {
           {showTimestamp && (
             <Text style={[styles.timestamp, item.isMine && styles.myTimestamp]}>
               {timeAgo(item.timestamp)}
-              {item.status === 'sending' && ' · Sending'}
+              {item.status === 'sending' && ' - Sending'}
             </Text>
           )}
         </View>

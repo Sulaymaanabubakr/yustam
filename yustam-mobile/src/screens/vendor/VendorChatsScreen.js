@@ -72,7 +72,10 @@ const VendorChatsScreen = ({ navigation }) => {
           lastMessageTime: chat.last_ts || chat.updated_at || chat.created_at,
           unreadCount: Number(chat.unread_for_vendor) || 0,
           lastType: chat.last_type || 'text',
-          buyerId: chat.buyer_uid,
+          buyerId: chat.buyer_uid || chat.buyerUid || '',
+          listingId: chat.listing_id || chat.listingId || '',
+          listingTitle: chat.listing_title || chat.listingTitle || '',
+          listingImage: resolveMediaUrl(chat.listing_image || chat.listingImage),
         }))
       );
     } catch (error) {
@@ -108,6 +111,9 @@ const VendorChatsScreen = ({ navigation }) => {
       buyerName: chat.buyerName,
       buyerPhoto: chat.buyerPhoto,
       buyerId: chat.buyerId,
+      listingId: chat.listingId,
+      listingTitle: chat.listingTitle,
+      listingImage: chat.listingImage,
     });
   };
 

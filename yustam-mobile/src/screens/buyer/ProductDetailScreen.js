@@ -337,6 +337,7 @@ const ProductDetailScreen = ({ navigation, route }) => {
 
     setChatLoading(true);
     try {
+      const coverImage = gallery[activeImageIndex] || gallery[0] || PLACEHOLDER_IMAGE;
       const payload = {
         buyer_uid: user.uid,
         buyer_name: user.fullName || user.displayName || user.email || 'Buyer',
@@ -346,7 +347,7 @@ const ProductDetailScreen = ({ navigation, route }) => {
         vendor_plan: vendorProfile.planLabel,
         listing_id: listing.id,
         listing_title: listing.title,
-        listing_image: gallery[activeImageIndex] || gallery[0] || PLACEHOLDER_IMAGE,
+        listing_image: coverImage,
       };
       const response = await chatAPI.openChat(payload);
       const chatId = response.data?.chat_id || response.data?.data?.chat_id;
@@ -359,7 +360,12 @@ const ProductDetailScreen = ({ navigation, route }) => {
         vendorName: vendorProfile.name,
         vendorPhoto: vendorProfile.avatar,
         vendorPlanLabel: vendorProfile.planLabel,
+        vendorUid: vendorProfile.vendorUid,
         listingTitle: listing.title,
+        listingId: listing.id,
+        listingImage: coverImage,
+        buyerId: user.uid,
+        buyerName: user.fullName || user.displayName || user.email || 'Buyer',
       });
     } catch (chatError) {
       console.error('Chat initialisation failed:', chatError);

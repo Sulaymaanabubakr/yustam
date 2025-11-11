@@ -109,9 +109,16 @@ export const listingsAPI = {
 // Chat endpoints
 export const chatAPI = {
   listChats: () => api.get('/api/chat/list-chats.php'),
-  listMessages: (chatId) => api.get('/api/chat/list-messages.php', { params: { chatId } }),
-  sendMessage: (chatId, message) => api.post('/api/chat/send-message.php', { chatId, message }),
-  markAsRead: (chatId) => api.post('/api/chat/mark-read.php', { chatId }),
+  listMessages: (chatId) =>
+    api.get('/api/chat/list-messages.php', {
+      params: { chat_id: chatId },
+    }),
+  sendMessage: (payload = {}) => api.post('/api/chat/send-message.php', payload),
+  markAsRead: (chatId, role) =>
+    api.post('/api/chat/mark-read.php', {
+      chat_id: chatId,
+      role,
+    }),
   openChat: (payload = {}) => api.post('/api/chat/chat-open.php', payload),
 };
 
