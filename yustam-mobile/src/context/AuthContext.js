@@ -182,7 +182,12 @@ export const AuthProvider = ({ children }) => {
 
       const userCredential = await signInWithEmailAndPassword(auth, normalisedEmail, password);
       const firebaseUser = userCredential.user;
-      const { backendUser } = await syncBackendSession(firebaseUser);
+      let { backendUser } = await syncBackendSession(firebaseUser);
+
+      if (targetRole === USER_ROLES.VENDOR) {
+        backendUser = await ensureVendorRoleForUser(firebaseUser, backendUser);
+      }
+
       const resolvedRole = backendUser?.role?.toLowerCase() ?? targetRole;
       const profile = composeUserProfile(firebaseUser, backendUser, { role: resolvedRole });
 
@@ -213,17 +218,10 @@ export const AuthProvider = ({ children }) => {
 
       const credential = await createUserWithEmailAndPassword(auth, normalisedEmail, password);
       const firebaseUser = credential.user;
-      const { backendUser } = await syncBackendSession(firebaseUser);
+      let { backendUser } = await syncBackendSession(firebaseUser);
 
       if (targetRole === USER_ROLES.VENDOR) {
-        await vendorAPI.activate({ businessName: userData.businessName || userData.fullName || normalisedEmail.split('@')[0] });
-        if (userData.businessName || userData.category || userData.phone) {
-          await vendorAPI.updateProfile({
-            businessName: userData.businessName,
-            category: userData.category,
-            phone: userData.phone,
-          });
-        }
+        backendUser = await ensureVendorRoleForUser(firebaseUser, backendUser, userData);
       }
 
       const profile = composeUserProfile(firebaseUser, backendUser, {
@@ -253,9 +251,11 @@ export const AuthProvider = ({ children }) => {
       const userCredential = await signInWithCredential(auth, credential);
       const firebaseUser = userCredential.user;
 
-      const { backendUser } = await syncBackendSession(firebaseUser);
+      let { backendUser } = await syncBackendSession(firebaseUser);
       if (targetRole === USER_ROLES.VENDOR) {
-        await vendorAPI.activate({ businessName: firebaseUser.displayName || firebaseUser.email?.split('@')[0] });
+        backendUser = await ensureVendorRoleForUser(firebaseUser, backendUser, {
+          businessName: firebaseUser.displayName,
+        });
       }
 
       const profile = composeUserProfile(firebaseUser, backendUser, { role: targetRole });
@@ -325,3 +325,46 @@ const getAuthErrorMessage = (errorCode) => {
 };
 
 export default AuthContext;
+  const fetchBackendUser = async () => {
+    try {
+      const response = await authAPI.getCurrentUser();
+      return response.data?.user ?? response.data;
+    } catch (error) {
+      console.warn('Unable to fetch backend user profile', error);
+      return null;
+    }
+  };
+
+  const ensureVendorRoleForUser = async (firebaseUser, backendUser, metadata = {}) => {
+    if (!firebaseUser) {
+      return backendUser;
+    }
+    if (backendUser?.role?.toLowerCase() === USER_ROLES.VENDOR) {
+      return backendUser;
+    }
+
+    const businessName =
+      metadata.businessName ||
+      metadata.fullName ||
+      backendUser?.displayName ||
+      firebaseUser.displayName ||
+      firebaseUser.email?.split('@')[0] ||
+      'Yustam Vendor';
+
+    try {
+      await vendorAPI.activate({ businessName });
+      if (metadata.businessName || metadata.category || metadata.phone) {
+        await vendorAPI.updateProfile({
+          businessName: metadata.businessName || businessName,
+          category: metadata.category,
+          phone: metadata.phone,
+        });
+      }
+    } catch (error) {
+      console.warn('Failed to ensure vendor access', error);
+      return backendUser;
+    }
+
+    const refreshedUser = await fetchBackendUser();
+    return refreshedUser ?? backendUser;
+  };
