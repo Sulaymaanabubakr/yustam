@@ -1,4 +1,12 @@
-const DEFAULT_BASE = 'http://localhost:4000/api';
+const PROD_BASE = 'https://yustam-backend.vercel.app/api';
+const LOCAL_BASE = 'http://localhost:4000/api';
+
+const DEFAULT_BASE =
+  typeof window !== 'undefined' && window.location
+    ? window.location.hostname === 'localhost'
+      ? LOCAL_BASE
+      : PROD_BASE
+    : PROD_BASE;
 const TOKEN_KEY = 'yustam_admin_token';
 const USER_KEY = 'yustam_admin_user';
 

@@ -59,6 +59,17 @@ npm run build && npm start       # compile to dist/ + run with node
 
 Express listens on `/api` (`/health` for probes).
 
+### Admin account bootstrap
+1. In `.env`, set `DEFAULT_ADMIN_EMAIL` (and optional `DEFAULT_ADMIN_DISPLAY_NAME`) to the email you want to act as the super admin.
+2. Create that same email inside Firebase Authentication (Console → Authentication → Add user) or run `npm run seed` in a development database, which upserts the admin record automatically.
+3. When that user signs in through the frontend and exchanges the Firebase ID token with `/api/auth/session`, the backend promotes the account to `Role.ADMIN`.
+
+All other users default to `Role.BUYER` until they complete vendor onboarding.
+
+### Connecting clients
+- **Admin dashboard**: the shared `admin-api.js` reads `window.__YUSTAM_API_BASE_URL__` if defined; otherwise it falls back to the production backend URL (`https://yustam-backend.vercel.app/api`). For local development, inject `window.__YUSTAM_API_BASE_URL__ = 'http://localhost:4000/api';` before loading the admin scripts.
+- **Mobile app**: `yustam-mobile/src/config/constants.js` now resolves the API base URL from `app.json > extra.apiBaseUrl`, falling back to the live backend. Override it per-environment via `EXPO_PUBLIC_API_BASE_URL` or `app.json`.
+
 ---
 ## Firebase + Mobile SDK Notes
 - Backend verifies Firebase ID tokens on every request (send `Authorization: Bearer <idToken>` from both the mobile app and admin panel).
