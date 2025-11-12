@@ -949,6 +949,7 @@ const styles = StyleSheet.create({
   },
   checkoutContainer: {
     width: '100%',
+    height: '85%',
     maxHeight: '90%',
     backgroundColor: '#FFFFFF',
     borderRadius: theme.borderRadius.lg,
