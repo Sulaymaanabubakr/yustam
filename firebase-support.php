@@ -1,6 +1,6 @@
 <?php
-error_log('DEBUG: firebase-support.php loaded');
 declare(strict_types=1);
+// error_log('DEBUG: firebase-support.php loaded');
 
 /**
  * Shared helpers for interacting with Firebase/Google services using a service account.
