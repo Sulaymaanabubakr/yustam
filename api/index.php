@@ -873,12 +873,10 @@ function yustam_api_plan_catalog(): array
             'name' => $plan['name'] ?? ucfirst($slug) . ' Plan',
             'displayName' => $plan['displayName'] ?? ucfirst($slug) . ' Plan',
             'price' => $monthly,
+            'listingLimit' => $plan['listingLimit'] ?? null,
             'durations' => $durations,
-            'features' => $plan['features'] ?? [
-                'Priority listing placement',
-                'Storefront analytics',
-                'Dedicated vendor success team',
-            ],
+            'features' => array_values($plan['features'] ?? []),
+            'popular' => !empty($plan['popular']),
         ];
     }
     return $plans;

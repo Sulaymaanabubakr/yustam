@@ -52,30 +52,81 @@ const normalisePlanSlug = (name, fallback) =>
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '') || fallback || 'plan';
 
+const formatDurationLabel = (months) => {
+  const numeric = Number(months);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return 'Custom';
+  }
+  if (numeric === 1) return 'Monthly';
+  if (numeric === 3) return 'Quarterly';
+  if (numeric === 6) return 'Biannual';
+  if (numeric === 12) return 'Annual';
+  return `${numeric}-Month`;
+};
+
 const buildPlanCatalog = (planArray = []) => {
   const catalog = {};
   planArray.forEach((plan, index) => {
-    const slug = normalisePlanSlug(plan?.name ?? '', `plan-${index + 1}`);
+    const slug = plan?.slug || normalisePlanSlug(plan?.name ?? '', `plan-${index + 1}`);
+    const durationSource = plan?.durations ?? plan?.durationOptions ?? {};
+    const durationMap = {};
+
+    if (Array.isArray(durationSource)) {
+      durationSource.forEach((entry) => {
+        const months = Number(entry?.months ?? entry?.interval ?? entry?.durationMonths);
+        if (!Number.isFinite(months) || months <= 0) {
+          return;
+        }
+        durationMap[months] = {
+          months,
+          amount: Number(entry?.amount ?? entry?.price ?? 0),
+          intervalLabel: entry?.intervalLabel || formatDurationLabel(months),
+          planCode: entry?.planCode ?? entry?.code ?? null,
+        };
+      });
+    } else if (durationSource && typeof durationSource === 'object') {
+      Object.entries(durationSource).forEach(([monthsKey, entry]) => {
+        const months = Number(monthsKey);
+        if (!Number.isFinite(months) || months <= 0) {
+          return;
+        }
+        durationMap[months] = {
+          months,
+          amount: Number(entry?.amount ?? entry?.price ?? 0),
+          intervalLabel: entry?.intervalLabel || formatDurationLabel(months),
+          planCode: entry?.planCode ?? entry?.code ?? null,
+        };
+      });
+    }
+
+    if (!Object.keys(durationMap).length) {
+      durationMap[1] = {
+        months: 1,
+        amount: Number(plan?.price ?? plan?.monthlyPrice ?? 0),
+        intervalLabel: 'Monthly',
+        planCode: plan?.id ?? null,
+      };
+    }
+
     catalog[slug] = {
       slug,
-      name: plan?.name ?? 'Plan',
-      displayName: plan?.name ?? 'Plan',
-      price: Number(plan?.price) || 0,
-      listings: plan?.listingLimit ?? 0,
-      features: plan?.features ?? [],
-      color: plan?.isPopular ? '#F3731E' : '#004D40',
-      popular: Boolean(plan?.isPopular),
-      durations: {
-        1: {
-          months: Math.max(1, Math.round((plan?.durationDays ?? 30) / 30)),
-          amount: Number(plan?.price) || 0,
-          intervalLabel: `${plan?.durationDays ?? 30}-Day`,
-          planCode: plan?.id ?? null,
-        },
-      },
+      name: plan?.displayName ?? plan?.name ?? 'Plan',
+      displayName: plan?.displayName ?? plan?.name ?? 'Plan',
+      price: Number(plan?.price ?? plan?.monthlyPrice) || 0,
+      listings: plan?.listingLimit ?? plan?.listings ?? 0,
+      features: Array.isArray(plan?.features) ? plan.features : [],
+      color: plan?.color || (plan?.popular ? '#F3731E' : '#004D40'),
+      popular: Boolean(plan?.popular || plan?.isPopular),
+      durations: durationMap,
     };
   });
   return catalog;
+};
+
+const LONG_TERM_DISCOUNTS = {
+  3: 0.07,
+  6: 0.12,
+  12: 0.17,
 };
 
 const fetchPlanCatalog = async () => {
@@ -313,6 +364,8 @@ export const vendorAPI = {
           plans: catalog,
           currency: 'NGN',
           currencySymbol: '₦',
+          paystackKey: 'redirect',
+          discounts: LONG_TERM_DISCOUNTS,
         },
       },
     };
@@ -485,3 +538,4 @@ export const supportAPI = {
 };
 
 export default api;
+

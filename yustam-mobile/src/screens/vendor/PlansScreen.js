@@ -28,6 +28,11 @@ const BILLING_LABELS = {
   12: 'Annual',
 };
 
+const DEFAULT_DISCOUNT_MAP = {
+  3: 0.07,
+  6: 0.12,
+  12: 0.17,
+};
 const getDurationLabel = (months, fallback = 'Custom') => {
   if (!Number.isFinite(months)) {
     return fallback;
@@ -53,11 +58,11 @@ const PlansScreen = ({ navigation }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [plans, setPlans] = useState(DEFAULT_VENDOR_PLANS);
   const [currentPlan, setCurrentPlan] = useState('free');
-  const [paystackKey, setPaystackKey] = useState('');
+  const [selectedDurations, setSelectedDurations] = useState({});
   const [processingPlan, setProcessingPlan] = useState(null);
   const [toast, setToast] = useState({ visible: false, message: '', type: 'info' });
   const [currentPlanInfo, setCurrentPlanInfo] = useState(null);
-  const [discounts, setDiscounts] = useState({});
+  const [discounts, setDiscounts] = useState(DEFAULT_DISCOUNT_MAP);
 
   useEffect(() => {
     loadPlans();
@@ -134,10 +139,38 @@ const PlansScreen = ({ navigation }) => {
         .toLowerCase()
         .replace('-plan', '');
 
-      setPlans(normalizedPlans.length ? normalizedPlans : DEFAULT_VENDOR_PLANS);
+      let resolvedPlans = normalizedPlans.length ? normalizedPlans : DEFAULT_VENDOR_PLANS;
+      if (!resolvedPlans.some((plan) => plan.slug === 'free')) {
+        const freePreset = getPlanPreset('free');
+        resolvedPlans = [
+          {
+            ...freePreset,
+            durationOptions: Array.isArray(freePreset.durationOptions)
+              ? [...freePreset.durationOptions]
+              : [{ months: 1, amount: 0, intervalLabel: 'Monthly' }],
+          },
+          ...resolvedPlans,
+        ];
+      }
+
+      setPlans(resolvedPlans);
+      setSelectedDurations((prev) => {
+        const next = { ...prev };
+        resolvedPlans.forEach((plan) => {
+          const options = Array.isArray(plan.durationOptions) ? plan.durationOptions : [];
+          const availableMonths = options.map((option) => option.months);
+          if (!availableMonths.length) {
+            next[plan.slug] = 1;
+            return;
+          }
+          if (!availableMonths.includes(next[plan.slug])) {
+            next[plan.slug] = availableMonths[0];
+          }
+        });
+        return next;
+      });
       setCurrentPlan(slugRaw);
-      setPaystackKey(payload.paystackKey || '');
-      setDiscounts(payload.discounts || {});
+      setDiscounts(Object.keys(payload.discounts || {}).length ? payload.discounts : DEFAULT_DISCOUNT_MAP);
       const summary = payload.currentPlan || {};
       setCurrentPlanInfo({
         name: summary.displayName || summary.name || getPlanLabel(slugRaw),
@@ -148,6 +181,15 @@ const PlansScreen = ({ navigation }) => {
     } catch (error) {
       console.error('Error loading plans:', error);
       setPlans(DEFAULT_VENDOR_PLANS);
+      setSelectedDurations(() => {
+        const defaults = {};
+        DEFAULT_VENDOR_PLANS.forEach((plan) => {
+          const fallbackOption = plan.durationOptions?.[0];
+          defaults[plan.slug] = fallbackOption?.months || 1;
+        });
+        return defaults;
+      });
+      setDiscounts(DEFAULT_DISCOUNT_MAP);
       showToast(error.message || 'Failed to load plans', 'error');
     } finally {
       setLoading(false);
@@ -174,17 +216,21 @@ const PlansScreen = ({ navigation }) => {
       return;
     }
 
-    if (!paystackKey) {
-      showToast('Payment configuration is not available yet. Please try again shortly.', 'error');
-      return;
-    }
-
+    const selectedMonths =
+      selectedDurations[plan.slug] ||
+      plan.durationOptions?.[0]?.months ||
+      1;
     const openCheckout = async () => {
       try {
         setProcessingPlan(plan.slug);
-        const checkoutUrl = `${API_BASE_URL}/vendor-renew-plan.php?plan=${encodeURIComponent(plan.slug)}`;
+        const checkoutUrl = `${API_BASE_URL}/vendor-renew-plan.php?plan=${encodeURIComponent(
+          plan.slug,
+        )}&months=${encodeURIComponent(selectedMonths)}`;
         await WebBrowser.openBrowserAsync(checkoutUrl);
-        showToast('Complete the payment in your browser and return to refresh your plan.', 'info');
+        showToast(
+          `Complete the ${getDurationLabel(selectedMonths)} payment in your browser and refresh to see updates.`,
+          'info',
+        );
         await loadPlans();
       } catch (error) {
         console.error('Plan selection error:', error);
@@ -197,6 +243,13 @@ const PlansScreen = ({ navigation }) => {
     openCheckout();
   };
 
+  const handleDurationChange = (planSlug, months) => {
+    setSelectedDurations((prev) => ({
+      ...prev,
+      [planSlug]: months,
+    }));
+  };
+
   const getPlanLabel = (slug) => getPlanPreset(slug)?.name || 'Free Plan';
 
   const PlanCard = ({ plan, isCurrentPlan }) => {
@@ -205,9 +258,13 @@ const PlansScreen = ({ navigation }) => {
       Number(plan.listings) > 0
         ? `${formatNumber(plan.listings)} Active Listings`
         : 'Unlimited Listings';
-    const extraDurations = (plan.durationOptions || []).filter(
-      (option) => option.months > 1 && Number(option.amount) > 0
-    );
+    const durationOptions = Array.isArray(plan.durationOptions) ? plan.durationOptions : [];
+    const selectedMonths =
+      selectedDurations[plan.slug] ||
+      durationOptions[0]?.months ||
+      1;
+    const selectedOption =
+      durationOptions.find((option) => option.months === selectedMonths) || durationOptions[0] || null;
 
     const resolveDiscount = (option) => {
       const explicit = getDiscountPercent(discounts, option.months);
@@ -271,26 +328,41 @@ const PlansScreen = ({ navigation }) => {
               </View>
             ))}
           </View>
-          {extraDurations.length > 0 && (
+          {durationOptions.length > 0 && (
             <View style={styles.durationExtras}>
-              {extraDurations.map((option) => {
+              {durationOptions.map((option) => {
+                const isSelected = option.months === selectedMonths;
                 const discountPercent = resolveDiscount(option);
                 return (
-                  <View key={`${plan.slug}-${option.months}`} style={styles.durationPill}>
+                  <TouchableOpacity
+                    key={`${plan.slug}-${option.months}`}
+                    style={[styles.durationPill, isSelected && styles.durationPillActive]}
+                    onPress={() => handleDurationChange(plan.slug, option.months)}
+                    activeOpacity={0.85}
+                  >
                     <View style={styles.durationPillTextGroup}>
-                      <Text style={styles.durationPillLabel}>
+                      <Text style={[styles.durationPillLabel, isSelected && styles.durationPillLabelActive]}>
                         {option.intervalLabel || getDurationLabel(option.months)}
                       </Text>
-                      <Text style={styles.durationPillPrice}>{formatNaira(option.amount)}</Text>
+                      <Text style={[styles.durationPillPrice, isSelected && styles.durationPillPriceActive]}>
+                        {formatNaira(option.amount)} total
+                      </Text>
                     </View>
                     {discountPercent > 0 && (
                       <View style={styles.durationDiscountBadge}>
                         <Text style={styles.durationDiscountText}>Save {discountPercent}%</Text>
                       </View>
                     )}
-                  </View>
+                  </TouchableOpacity>
                 );
               })}
+            </View>
+          )}
+          {selectedOption && (
+            <View style={styles.selectionSummary}>
+              <Text style={styles.selectionSummaryText}>
+                {`Billing ${selectedOption.intervalLabel || getDurationLabel(selectedOption.months)} · ${formatNaira(selectedOption.amount)} total`}
+              </Text>
             </View>
           )}
           <Button
@@ -766,7 +838,13 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing.sm,
     borderRadius: theme.borderRadius.md,
     backgroundColor: theme.colors.beige,
+    borderWidth: 1,
+    borderColor: '#E8DED3',
     gap: theme.spacing.sm,
+  },
+  durationPillActive: {
+    borderColor: theme.colors.accent,
+    backgroundColor: `${theme.colors.accent}20`,
   },
   durationPillTextGroup: {
     flex: 1,
@@ -776,10 +854,16 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.sm,
     color: theme.colors.textPrimary,
   },
+  durationPillLabelActive: {
+    color: theme.colors.accent,
+  },
   durationPillPrice: {
     fontFamily: theme.typography.fontFamily.inter,
     fontSize: theme.typography.fontSize.sm,
     color: theme.colors.textSecondary,
+  },
+  durationPillPriceActive: {
+    color: theme.colors.accent,
   },
   durationDiscountBadge: {
     paddingHorizontal: theme.spacing.sm,
@@ -791,6 +875,18 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.fontFamily.interSemiBold,
     fontSize: theme.typography.fontSize.xs,
     color: theme.colors.accent,
+  },
+  selectionSummary: {
+    backgroundColor: theme.colors.beige,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    borderRadius: theme.borderRadius.md,
+    marginBottom: theme.spacing.lg,
+  },
+  selectionSummaryText: {
+    fontFamily: theme.typography.fontFamilyBody,
+    fontSize: theme.typography.sizes.sm,
+    color: theme.colors.textPrimary,
   },
   selectButton: {
     marginTop: theme.spacing.sm,
