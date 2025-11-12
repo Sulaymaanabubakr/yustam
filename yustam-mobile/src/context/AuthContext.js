@@ -126,15 +126,30 @@ export const AuthProvider = ({ children }) => {
   };
 
   const syncBackendSession = async (firebaseUser) => {
-    const idToken = await firebaseUser.getIdToken(true);
-    await AsyncStorage.setItem(STORAGE_KEYS.token, idToken);
-    setApiAuthToken(idToken);
-    const { data } = await authAPI.createSession(idToken);
-    const backendUser = data?.user ?? data;
-    if (backendUser) {
-      await AsyncStorage.setItem(STORAGE_KEYS.backendUser, JSON.stringify(backendUser));
+    if (!firebaseUser) {
+      throw new Error('Firebase authentication failed');
     }
-    return { token: idToken, backendUser };
+
+    const idToken = await firebaseUser.getIdToken(true);
+
+    try {
+      const { data } = await authAPI.createSession(idToken);
+      const backendUser = data?.user ?? data;
+      const token = data?.token;
+
+      if (!backendUser || !token) {
+        throw new Error('Failed to create backend session');
+      }
+
+      setApiAuthToken(token);
+      await AsyncStorage.setItem(STORAGE_KEYS.token, token);
+      await AsyncStorage.setItem(STORAGE_KEYS.backendUser, JSON.stringify(backendUser));
+
+      return { token, backendUser };
+    } catch (error) {
+      console.error('Session error', error?.response?.data || error);
+      throw error;
+    }
   };
 
 
