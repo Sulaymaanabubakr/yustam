@@ -131,6 +131,7 @@ export const AuthProvider = ({ children }) => {
     }
 
     const idToken = await firebaseUser.getIdToken(true);
+    console.log('Firebase ID token (copy for curl test):', idToken);
 
     try {
       const { data } = await authAPI.createSession(idToken);
