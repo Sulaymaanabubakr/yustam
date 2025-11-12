@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { authenticate, requireRole } from '../middleware/auth';
 import {
   ensureVendorProfile,
-  getStorefrontBySlug,
+  getStorefrontByIdentifier,
   getVendorAnalytics,
   getVendorDashboard,
   getVendorProfile,
@@ -23,9 +23,9 @@ router.post('/activate', authenticate, async (req, res, next) => {
   }
 });
 
-router.get('/storefront/:slug', async (req, res, next) => {
+router.get('/storefront/:identifier', async (req, res, next) => {
   try {
-    const storefront = await getStorefrontBySlug(req.params.slug);
+    const storefront = await getStorefrontByIdentifier(req.params.identifier);
     res.json(storefront);
   } catch (error) {
     next(error);

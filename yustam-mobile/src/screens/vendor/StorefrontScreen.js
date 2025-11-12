@@ -26,10 +26,18 @@ import { resolveUserUid } from '../../utils/user';
 
 const { width } = Dimensions.get('window');
 const LISTING_WIDTH = (width - theme.spacing.lg * 3) / 2;
+const PUBLIC_BASE_URL = (API_BASE_URL || '').replace(/\/api\/?$/, '') || API_BASE_URL;
+const normaliseBase = (value = '') => (value.endsWith('/') ? value.slice(0, -1) : value);
+const buildStorefrontShareUrl = (slug) =>
+  slug ? `${normaliseBase(PUBLIC_BASE_URL)}/storefront/${encodeURIComponent(slug)}` : '';
+const buildApiStorefrontUrl = (identifier) =>
+  identifier ? `${API_BASE_URL}/vendor/storefront/${encodeURIComponent(identifier)}` : '';
 
-const StorefrontScreen = ({ navigation }) => {
+const StorefrontScreen = ({ navigation, route }) => {
   const { user } = useAuth();
   const vendorUid = resolveUserUid(user);
+  const { vendorUid: routeVendorUid, vendorId: routeVendorId, vendorSlug: routeVendorSlug } = route?.params ?? {};
+  const resolveIdentifier = () => routeVendorSlug || routeVendorUid || routeVendorId || vendorUid;
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [toast, setToast] = useState({ visible: false, message: '', type: 'info' });
@@ -45,52 +53,68 @@ const StorefrontScreen = ({ navigation }) => {
     profileImage: '',
     coverImage: '',
     vendorUid: '',
+    storefrontSlug: '',
+    storefrontUrl: '',
   });
   const [listings, setListings] = useState([]);
 
   useEffect(() => {
     fetchStorefront();
-  }, []);
+  }, [route?.params, vendorUid]);
 
   const fetchStorefront = async () => {
     try {
       setLoading(true);
-      if (!vendorUid) {
+      const identifier = resolveIdentifier();
+      if (!identifier) {
         throw new Error('Unable to determine your vendor account.');
       }
 
-      const response = await vendorAPI.getStorefront(vendorUid);
-      if (!response.data?.success) {
-        throw new Error(response.data?.message || 'Unable to load storefront data.');
-      }
+      const payload = await vendorAPI.getStorefront(identifier);
+      const vendor = payload?.vendor || {};
+      const listingData = Array.isArray(payload?.products)
+        ? payload.products
+        : Array.isArray(payload?.listings)
+          ? payload.listings
+          : [];
 
-      const vendor = response.data.vendor || {};
-      const listingData = Array.isArray(response.data.listings) ? response.data.listings : [];
+      const locationParts = [vendor.city, vendor.state, vendor.country].filter(Boolean);
+      const storefrontSlug = vendor.storefrontSlug;
+      const shareUrl =
+        buildStorefrontShareUrl(storefrontSlug) ||
+        buildApiStorefrontUrl(storefrontSlug || vendor.vendorUid || vendor.userId || identifier);
 
       setStorefront({
         businessName: vendor.businessName || vendor.displayName || 'Your Storefront',
-        description: vendor.about || '',
-        location: vendor.location || vendor.city || vendor.state || vendor.country || '',
-        verified: (vendor.verificationState || '').toLowerCase() === 'verified',
-        rating: vendor.rating || 0,
-        totalReviews: vendor.totalReviews || 0,
+        description: vendor.description || vendor.about || '',
+        location: locationParts.join(', '),
+        verified: (vendor.verificationStatus || '').toLowerCase() === 'approved',
+        rating: vendor.averageRating || vendor.rating || 0,
+        totalReviews: vendor.reviewCount || vendor.totalReviews || 0,
         totalListings: listingData.length,
         joinedDate: vendor.createdAt
           ? formatDate(vendor.createdAt, { month: 'long', year: 'numeric' })
           : '',
-        profileImage: resolveMediaUrl(vendor.avatar),
+        profileImage: resolveMediaUrl(vendor.avatar || vendor.profileImage || vendor.user?.photoUrl),
         coverImage: resolveMediaUrl(vendor.banner),
-        vendorUid: vendor.vendorUid || vendor.firebaseUid || vendorUid,
+        vendorUid: vendor.user?.firebaseUid || vendor.vendorUid || vendorUid,
+        storefrontSlug,
+        storefrontUrl: shareUrl,
       });
 
       setListings(
-        listingData.map((listing) => ({
-          id: listing.id || listing.listing_id || listing.public_id,
-          title: listing.title || 'Untitled',
-          price: listing.price || 0,
-          image: resolveMediaUrl(listing.image),
-          status: listing.status || 'active',
-        }))
+        listingData.map((listing) => {
+          const mediaArray = Array.isArray(listing.media) ? listing.media : [];
+          const primaryMedia =
+            mediaArray.find((item) => item.isPrimary)?.url || mediaArray[0]?.url || listing.image || listing.coverImage;
+          return {
+            id: listing.id || listing.listing_id || listing.public_id,
+            title: listing.title || listing.name || 'Untitled',
+            price: listing.price || 0,
+            image: resolveMediaUrl(primaryMedia),
+            status: listing.status || 'active',
+          };
+        })
       );
     } catch (error) {
       console.error('Error fetching storefront:', error);
@@ -116,9 +140,12 @@ const StorefrontScreen = ({ navigation }) => {
 
   const handleShareStorefront = async () => {
     try {
-      const identifier = storefront.vendorUid || vendorUid;
-      const storefrontUrl = `${API_BASE_URL}/vendor-storefront.php?id=${identifier}`;
-      
+      const identifier = storefront.storefrontSlug || storefront.vendorUid || vendorUid;
+      const storefrontUrl =
+        storefront.storefrontUrl ||
+        buildStorefrontShareUrl(storefront.storefrontSlug) ||
+        buildApiStorefrontUrl(identifier);
+
       await Share.share({
         message: `Check out ${storefront.businessName} on YUSTAM Marketplace!\n${storefrontUrl}`,
         title: storefront.businessName,

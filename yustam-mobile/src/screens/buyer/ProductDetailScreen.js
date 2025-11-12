@@ -113,6 +113,13 @@ const EXCLUDED_SPEC_KEYS = new Set([
   'metadata',
 ]);
 const PLACEHOLDER_IMAGE = resolveMediaUrl('logo.jpeg');
+const PUBLIC_BASE_URL = (API_BASE_URL || '').replace(/\/api\/?$/, '') || API_BASE_URL;
+
+const buildPublicUrl = (path = '') => {
+  const base = (PUBLIC_BASE_URL || '').replace(/\/$/, '');
+  const normalisedPath = path.startsWith('/') ? path.slice(1) : path;
+  return `${base}/${normalisedPath}`;
+};
 
 const ProductDetailScreen = ({ navigation, route }) => {
   const { productId, product: initialProduct } = route.params || {};
@@ -152,14 +159,14 @@ const ProductDetailScreen = ({ navigation, route }) => {
       ? 'shield-half-outline'
       : 'shield-outline';
   const hasStorefront = Boolean(
-    vendorProfile.vendorUid || vendorProfile.vendorId || vendorProfile.storefrontUrl
+    vendorProfile.storefrontSlug || vendorProfile.vendorUid || vendorProfile.vendorId || vendorProfile.storefrontUrl
   );
 
   const vendorIdentifiers = useMemo(() => {
     if (!listing) {
       return [];
     }
-    return [listing.vendorUid, listing.vendorFirebaseUid, listing.vendorId]
+    return [listing.vendorSlug, listing.vendorUid, listing.vendorFirebaseUid, listing.vendorId]
       .map((value) => (value ? String(value).trim() : ''))
       .filter(Boolean);
   }, [listing]);
@@ -172,9 +179,9 @@ const ProductDetailScreen = ({ navigation, route }) => {
     setVendorLoading(true);
     for (const identifier of identifiers) {
       try {
-        const response = await vendorAPI.getStorefront(identifier);
-        if (response.data?.success && response.data?.vendor) {
-          setVendorRecord(transformVendorPayload(response.data.vendor));
+        const payload = await vendorAPI.getStorefront(identifier);
+        if (payload?.vendor) {
+          setVendorRecord(transformVendorPayload(payload.vendor));
           setVendorLoading(false);
           return;
         }
@@ -271,7 +278,7 @@ const ProductDetailScreen = ({ navigation, route }) => {
     if (!listing) {
       return;
     }
-    const shareUrl = `${API_BASE_URL}/product.php?id=${encodeURIComponent(listing.id || productId || '')}`;
+    const shareUrl = buildListingShareUrl(listing.id || productId);
     try {
       await Share.share({
         title: listing.title,
@@ -315,7 +322,7 @@ const ProductDetailScreen = ({ navigation, route }) => {
     if (listing?.price) {
       messageLines.push(`Displayed price: ${formatNaira(listing.price)}.`);
     }
-    const url = `${API_BASE_URL}/product.php?id=${encodeURIComponent(listing?.id || productId || '')}`;
+    const url = buildListingShareUrl(listing?.id || productId || '');
     messageLines.push(`Listing link: ${url}`);
     const encodedMessage = encodeURIComponent(messageLines.join('\n'));
     const whatsappUrl = `https://wa.me/${digits}?text=${encodedMessage}`;
@@ -329,17 +336,27 @@ const ProductDetailScreen = ({ navigation, route }) => {
   const handleOpenStorefront = useCallback(() => {
     const targetVendorUid = vendorProfile.vendorUid;
     const targetVendorId = vendorProfile.vendorId;
-    if (!targetVendorUid && !targetVendorId) {
+    const targetSlug = vendorProfile.storefrontSlug;
+    if (!targetVendorUid && !targetVendorId && !targetSlug) {
       showToast('Vendor storefront is not available yet.', 'info');
       return;
     }
     navigation.navigate('VendorStorefront', {
       vendorUid: targetVendorUid,
       vendorId: targetVendorId,
+      vendorSlug: targetSlug,
       vendorName: vendorProfile.name,
       initialVendorProfile: vendorProfile,
     });
-  }, [navigation, showToast, vendorProfile, vendorProfile.name, vendorProfile.vendorId, vendorProfile.vendorUid]);
+  }, [
+    navigation,
+    showToast,
+    vendorProfile,
+    vendorProfile.name,
+    vendorProfile.storefrontSlug,
+    vendorProfile.vendorId,
+    vendorProfile.vendorUid,
+  ]);
 
   const handleChatVendor = useCallback(async () => {
     if (!listing || !vendorProfile.vendorUid) {
@@ -369,14 +386,15 @@ const ProductDetailScreen = ({ navigation, route }) => {
         listing_title: listing.title,
         listing_image: coverImage,
       };
-      const response = await chatAPI.openChat(payload);
-      const chatId = response.data?.chat_id || response.data?.data?.chat_id;
+      const thread = await chatAPI.openChat(payload);
+      const chatId = thread?.id || thread?.threadId;
       if (!chatId) {
         throw new Error('Unable to start chat right now.');
       }
 
       navigation.navigate('ChatThread', {
         chatId,
+        firebaseThreadId: thread?.firebaseThreadId,
         vendorName: vendorProfile.name,
         vendorPhoto: vendorProfile.avatar,
         vendorPlanLabel: vendorProfile.planLabel,
@@ -1051,6 +1069,12 @@ const buildListingModel = (source = {}, fallbackId) => {
     vendorWhatsapp: pickFirstString(data.vendorWhatsapp, data.whatsapp),
     vendorEmail: pickFirstString(data.vendorEmail, data.email, data.contactEmail),
     vendorLocation: pickFirstString(data.vendorLocation, data.location),
+    vendorSlug: pickFirstString(
+      data.vendorSlug,
+      data.storefrontSlug,
+      data.storeSlug,
+      data.owner?.vendorProfile?.storefrontSlug
+    ),
     vendorAvatar: resolveMediaUrl(
       pickFirstString(
         data.vendorAvatar,
@@ -1067,7 +1091,7 @@ const buildListingModel = (source = {}, fallbackId) => {
   };
 };
 
-const buildStorefrontUrl = ({ vendorId, vendorUid } = {}) => {
+const buildStorefrontUrl = ({ slug, vendorId, vendorUid } = {}) => {
   const normalise = (value) => {
     if (value === null || value === undefined) {
       return '';
@@ -1078,16 +1102,28 @@ const buildStorefrontUrl = ({ vendorId, vendorUid } = {}) => {
     return String(value).trim();
   };
 
+  const slugValue = normalise(slug);
   const id = normalise(vendorId);
   const uid = normalise(vendorUid);
 
+  if (slugValue) {
+    return buildPublicUrl(`storefront/${encodeURIComponent(slugValue)}`);
+  }
   if (id) {
-    return `${API_BASE_URL}/vendor-storefront.php?vendorId=${encodeURIComponent(id)}`;
+    return `${API_BASE_URL}/vendor/storefront/${encodeURIComponent(id)}`;
   }
   if (uid) {
-    return `${API_BASE_URL}/vendor-storefront.php?vendorUid=${encodeURIComponent(uid)}`;
+    return `${API_BASE_URL}/vendor/storefront/${encodeURIComponent(uid)}`;
   }
   return '';
+};
+
+const buildListingShareUrl = (id) => {
+  const safeId = typeof id === 'string' ? id.trim() : id ? String(id).trim() : '';
+  if (!safeId) {
+    return '';
+  }
+  return buildPublicUrl(`listings/${encodeURIComponent(safeId)}`);
 };
 
 const buildVendorFromListing = (listing) => {
@@ -1107,7 +1143,9 @@ const buildVendorFromListing = (listing) => {
     vendorUid: listing.vendorUid,
     vendorId: listing.vendorId,
     avatar: listing.vendorAvatar,
+    storefrontSlug: listing.vendorSlug,
     storefrontUrl: buildStorefrontUrl({
+      slug: listing.vendorSlug,
       vendorId: listing.vendorId,
       vendorUid: listing.vendorUid || listing.vendorFirebaseUid,
     }),
@@ -1126,8 +1164,9 @@ const transformVendorPayload = (payload = {}) => {
     payload.verificationState || payload.verification || payload.status || payload.verificationStatus
   );
   const storefrontUrl = buildStorefrontUrl({
-    vendorId: payload.id,
-    vendorUid: payload.vendorUid || payload.firebaseUid,
+    slug: payload.storefrontSlug || payload.slug || payload.storeSlug,
+    vendorId: payload.userId || payload.id,
+    vendorUid: payload.vendorUid || payload.firebaseUid || payload.user?.firebaseUid,
   });
   const avatarCandidate = pickFirstString(
     payload.avatar,
@@ -1149,11 +1188,12 @@ const transformVendorPayload = (payload = {}) => {
     verificationLabel: payload.verificationLabel || buildVerificationLabel(verificationState),
     phone: payload.phone,
     whatsapp: payload.whatsapp,
-    email: payload.email,
+    email: payload.email || payload.user?.email,
     location,
     avatar: resolveMediaUrl(avatarCandidate),
-    vendorUid: payload.vendorUid || payload.firebaseUid,
-    vendorId: payload.id ? String(payload.id) : '',
+    vendorUid: payload.vendorUid || payload.firebaseUid || payload.user?.firebaseUid,
+    vendorId: payload.userId ? String(payload.userId) : payload.id ? String(payload.id) : '',
+    storefrontSlug: payload.storefrontSlug || payload.slug || payload.storeSlug,
     storefrontUrl,
   };
 };
@@ -1182,6 +1222,7 @@ const mergeVendorProfiles = (base = {}, override = {}) => {
     avatar: safeOverride.avatar || safeBase.avatar || '',
     vendorUid: safeOverride.vendorUid || safeBase.vendorUid || '',
     vendorId: safeOverride.vendorId || safeBase.vendorId || '',
+    storefrontSlug: safeOverride.storefrontSlug || safeBase.storefrontSlug || '',
     storefrontUrl: safeOverride.storefrontUrl || safeBase.storefrontUrl || '',
   };
 };

@@ -92,7 +92,13 @@ export const listProducts = async (params: ProductListParams = {}) => {
   const [items, total] = await Promise.all([
     prisma.product.findMany({
       where,
-      include: { media: true, category: true, owner: true },
+      include: {
+        media: true,
+        category: true,
+        owner: {
+          include: { vendorProfile: true },
+        },
+      },
       orderBy: [{ isFeatured: 'desc' }, { createdAt: 'desc' }],
       skip,
       take: pageSize,
@@ -114,7 +120,13 @@ export const listProducts = async (params: ProductListParams = {}) => {
 export const getProductById = async (productId: string) => {
   const product = await prisma.product.findUnique({
     where: { id: productId },
-    include: { media: true, category: true, owner: true },
+    include: {
+      media: true,
+      category: true,
+      owner: {
+        include: { vendorProfile: true },
+      },
+    },
   });
 
   if (!product) {

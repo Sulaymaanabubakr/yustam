@@ -1,4 +1,4 @@
-import { ProductStatus, Role, SubscriptionStatus } from '@prisma/client';
+import { Prisma, ProductStatus, Role, SubscriptionStatus } from '@prisma/client';
 import { prisma } from '../db/client';
 import { HttpError } from '../middleware/error-handler';
 
@@ -95,11 +95,20 @@ export const getVendorAnalytics = async (userId: string) => {
   };
 };
 
-export const getStorefrontBySlug = async (slug: string) => {
-  const vendor = await prisma.vendorProfile.findUnique({
-    where: { storefrontSlug: slug },
+const buildStorefrontWhere = (identifier: string): Prisma.VendorProfileWhereInput => ({
+  OR: [
+    { storefrontSlug: identifier },
+    { id: identifier },
+    { userId: identifier },
+    { user: { firebaseUid: identifier } },
+  ],
+});
+
+export const getStorefrontByIdentifier = async (identifier: string) => {
+  const vendor = await prisma.vendorProfile.findFirst({
+    where: buildStorefrontWhere(identifier),
     include: {
-      user: { select: { displayName: true, photoUrl: true } },
+      user: { select: { displayName: true, photoUrl: true, firebaseUid: true, email: true, id: true } },
       currentPlan: true,
     },
   });

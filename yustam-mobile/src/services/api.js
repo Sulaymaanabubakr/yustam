@@ -98,7 +98,13 @@ export const vendorAPI = {
     const response = await api.patch('/vendor/me', payload);
     return response.data?.profile ?? response.data;
   },
-  getStorefront: (slug) => api.get(`/vendor/storefront/${slug}`),
+  getStorefront: async (identifier) => {
+    if (!identifier) {
+      throw new Error('Storefront identifier is required');
+    }
+    const response = await api.get(`/vendor/storefront/${identifier}`);
+    return response.data;
+  },
   getListingsForOwner: (ownerId, params = {}) =>
     listingsAPI.getAll({ ownerId, includeDrafts: true, ...params }),
 };
@@ -116,6 +122,10 @@ export const planAPI = {
 };
 
 export const chatAPI = {
+  openChat: async (payload = {}) => {
+    const response = await api.post('/chats', payload);
+    return response.data?.thread ?? response.data;
+  },
   listThreads: async () => {
     const response = await api.get('/chats');
     return response.data?.threads ?? response.data ?? [];

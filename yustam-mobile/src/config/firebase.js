@@ -13,9 +13,10 @@ const firebaseConfig = {
   apiKey: 'AIzaSyBQ74sMmOiYEvkxa26Movh0DAnmc0Jz60g',
   authDomain: 'yustam-50819.firebaseapp.com',
   projectId: 'yustam-50819',
-  storageBucket: 'yustam-50819.appspot.com',
-  messagingSenderId: '1234567890',
-  appId: '1:1234567890:web:abcdef123456',
+  storageBucket: 'yustam-50819.firebasestorage.app',
+  messagingSenderId: '472601563195',
+  appId: '1:472601563195:web:4de5b5208650251ea20c1e',
+  measurementId: 'G-G9ZXVBPFYM',
 };
 
 // Initialise only once
