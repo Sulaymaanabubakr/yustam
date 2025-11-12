@@ -451,8 +451,6 @@ export const vendorAPI = {
     listingsAPI.getAll({ ownerId, includeDrafts: true, ...params }),
   createPlanCheckout: (slug, months = 1) =>
     api.post(`/plans/${slug}/checkout`, { months }),
-  submitPaystackCallback: (vendorRef, reference) =>
-    api.post(`/plans/${vendorRef}/callback`, { reference }),
 };
 
 export const planAPI = {

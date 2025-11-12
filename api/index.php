@@ -979,7 +979,12 @@ function yustam_api_plan_checkout(string $planSlug): array
     }
 
     $amountNaira = (float) ($planDetails['amount'] ?? $planDetails['monthlyPrice'] ?? 0);
-    $reference = 'YUSTAM-' . strtoupper(bin2hex(random_bytes(4))) . '-' . time();
+    $reference = sprintf(
+        'YUSTAM-V%d-%s-%d',
+        $vendorId,
+        strtoupper(bin2hex(random_bytes(4))),
+        time()
+    );
 
     $payload = [
         'email' => $email,
@@ -1025,23 +1030,44 @@ function yustam_api_plan_checkout(string $planSlug): array
 
 function yustam_api_plan_callback(): array
 {
-    $body = yustam_api_read_json_body();
-    $reference = trim((string) ($body['reference'] ?? $_POST['reference'] ?? $_GET['reference'] ?? ''));
+    $raw = file_get_contents('php://input') ?: '';
+    $parsed = json_decode($raw, true);
+    $body = [];
+    if (is_array($parsed)) {
+        $body = $parsed['data'] ?? $parsed;
+    } elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        $body = $_POST;
+    } else {
+        $body = $_GET;
+    }
+
+    $reference = trim((string) ($body['reference'] ?? $body['trxref'] ?? $_GET['reference'] ?? $_GET['trxref'] ?? ''));
     if ($reference === '') {
         yustam_api_error(400, 'Transaction reference is required.');
     }
 
-    $vendorRef = trim((string) ($body['vendor'] ?? $body['vendorId'] ?? ''));
     $vendorId = 0;
-    if ($vendorRef !== '') {
-        [$role, $id] = yustam_api_parse_user_reference($vendorRef);
-        if ($role === 'vendor') {
-            $vendorId = $id;
+    $metadata = $body['metadata'] ?? ($body['data']['metadata'] ?? null);
+    if (is_string($metadata)) {
+        $decoded = json_decode($metadata, true);
+        if (is_array($decoded)) {
+            $metadata = $decoded;
         }
     }
-    if ($vendorId <= 0 && isset($body['vendor_id'])) {
-        $vendorId = (int) $body['vendor_id'];
+    if (is_array($metadata)) {
+        $vendorId = (int) ($metadata['vendor_id'] ?? $metadata['vendorId'] ?? 0);
+        if ($vendorId <= 0 && isset($metadata['vendor'])) {
+            [$role, $id] = yustam_api_parse_user_reference((string) $metadata['vendor']);
+            if ($role === 'vendor') {
+                $vendorId = $id;
+            }
+        }
     }
+
+    if ($vendorId <= 0 && preg_match('/YUSTAM-V(\d+)-/i', $reference, $matches)) {
+        $vendorId = (int) $matches[1];
+    }
+
     if ($vendorId <= 0) {
         yustam_api_error(400, 'Vendor identifier missing.');
     }
@@ -1053,10 +1079,27 @@ function yustam_api_plan_callback(): array
         yustam_api_error(400, $exception->getMessage());
     }
 
-    return [
+    $payload = [
         'success' => true,
         'subscription' => $result['subscription'] ?? null,
     ];
+
+    if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+        header('Content-Type: text/html; charset=utf-8');
+        echo '<!doctype html><html><head>';
+        echo '<meta name="viewport" content="width=device-width, initial-scale=1">';
+        echo '<title>Payment Complete</title>';
+        echo '<style>body{font-family:Arial,sans-serif;padding:24px;text-align:center;color:#0F6A53;}button{margin-top:20px;padding:10px 20px;border:none;background:#0F6A53;color:#fff;border-radius:6px;font-size:16px;}p{font-size:16px;margin-top:16px;}</style>';
+        echo '</head><body>';
+        echo '<h1>Payment Verified</h1>';
+        echo '<p>You can close this window and return to the app.</p>';
+        echo '<button onclick="window.close()">Close</button>';
+        echo '<script>setTimeout(function(){window.close();},4000);</script>';
+        echo '</body></html>';
+        return $payload;
+    }
+
+    return $payload;
 }
 
 /**

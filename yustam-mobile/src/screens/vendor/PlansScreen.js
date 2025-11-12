@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -21,6 +21,8 @@ import { goBackOrNavigate } from '../../utils/navigation';
 import { formatNumber, formatNaira } from '../../utils/formatters';
 import { DEFAULT_VENDOR_PLANS, getPlanPreset } from '../../data/vendorPlans';
 import { WebView } from 'react-native-webview';
+
+const CALLBACK_URL = `${API_BASE_URL}/plans/callback`;
 
 const BILLING_LABELS = {
   1: 'Monthly',
@@ -65,6 +67,7 @@ const PlansScreen = ({ navigation }) => {
   const [discounts, setDiscounts] = useState(DEFAULT_DISCOUNT_MAP);
   const [processingPlan, setProcessingPlan] = useState(null);
   const [checkoutState, setCheckoutState] = useState({ visible: false, url: '', planName: '' });
+  const webviewRef = useRef(null);
 
   useEffect(() => {
     loadPlans();
@@ -261,6 +264,20 @@ const PlansScreen = ({ navigation }) => {
   const closeCheckout = () => {
     setCheckoutState({ visible: false, url: '', planName: '' });
     loadPlans();
+  };
+
+  const handleCheckoutNavigation = (navState) => {
+    const url = navState?.url || '';
+    if (!url) {
+      return;
+    }
+    if (
+      url.startsWith(CALLBACK_URL) ||
+      url.includes('paystack.co/close') ||
+      url.includes('status=success')
+    ) {
+      closeCheckout();
+    }
   };
 
   const handleDurationChange = (planSlug, months) => {
@@ -579,9 +596,11 @@ const PlansScreen = ({ navigation }) => {
             </View>
             {checkoutState.url ? (
               <WebView
+                ref={webviewRef}
                 style={styles.checkoutWebview}
                 source={{ uri: checkoutState.url }}
                 startInLoadingState
+                onNavigationStateChange={handleCheckoutNavigation}
               />
             ) : (
               <View style={styles.checkoutFallback}>
