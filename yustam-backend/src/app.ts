@@ -14,6 +14,14 @@ export const createApp = () => {
   app.use(express.urlencoded({ extended: true }));
   app.use(morgan('dev'));
 
+  app.get('/', (_req, res) => {
+    res.json({
+      status: 'ok',
+      service: 'Yustam API',
+      message: 'See /health for probes and /api for resources.',
+    });
+  });
+
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
