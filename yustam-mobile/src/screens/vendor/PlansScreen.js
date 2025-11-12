@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,8 +19,8 @@ import { API_BASE_URL } from '../../config/constants';
 import { vendorAPI } from '../../services/api';
 import { goBackOrNavigate } from '../../utils/navigation';
 import { formatNumber, formatNaira } from '../../utils/formatters';
-import * as WebBrowser from 'expo-web-browser';
 import { DEFAULT_VENDOR_PLANS, getPlanPreset } from '../../data/vendorPlans';
+import { WebView } from 'react-native-webview';
 
 const BILLING_LABELS = {
   1: 'Monthly',
@@ -59,10 +60,11 @@ const PlansScreen = ({ navigation }) => {
   const [plans, setPlans] = useState(DEFAULT_VENDOR_PLANS);
   const [currentPlan, setCurrentPlan] = useState('free');
   const [selectedDurations, setSelectedDurations] = useState({});
-  const [processingPlan, setProcessingPlan] = useState(null);
   const [toast, setToast] = useState({ visible: false, message: '', type: 'info' });
   const [currentPlanInfo, setCurrentPlanInfo] = useState(null);
   const [discounts, setDiscounts] = useState(DEFAULT_DISCOUNT_MAP);
+  const [processingPlan, setProcessingPlan] = useState(null);
+  const [checkoutState, setCheckoutState] = useState({ visible: false, url: '', planName: '' });
 
   useEffect(() => {
     loadPlans();
@@ -210,7 +212,7 @@ const PlansScreen = ({ navigation }) => {
     setToast({ ...toast, visible: false });
   };
 
-  const handleSelectPlan = (plan) => {
+  const handleSelectPlan = async (plan) => {
     if (plan.slug === currentPlan) {
       showToast('This is your current plan', 'info');
       return;
@@ -220,27 +222,45 @@ const PlansScreen = ({ navigation }) => {
       selectedDurations[plan.slug] ||
       plan.durationOptions?.[0]?.months ||
       1;
-    const openCheckout = async () => {
-      try {
-        setProcessingPlan(plan.slug);
-        const checkoutUrl = `${API_BASE_URL}/vendor-renew-plan.php?plan=${encodeURIComponent(
-          plan.slug,
-        )}&months=${encodeURIComponent(selectedMonths)}`;
-        await WebBrowser.openBrowserAsync(checkoutUrl);
-        showToast(
-          `Complete the ${getDurationLabel(selectedMonths)} payment in your browser and refresh to see updates.`,
-          'info',
-        );
-        await loadPlans();
-      } catch (error) {
-        console.error('Plan selection error:', error);
-        showToast(error.message || 'Unable to open payment page right now.', 'error');
-      } finally {
-        setProcessingPlan(null);
-      }
-    };
 
-    openCheckout();
+    const durationOptions = Array.isArray(plan.durationOptions) ? plan.durationOptions : [];
+    const chosenOption =
+      durationOptions.find((option) => option.months === selectedMonths) ||
+      durationOptions[0];
+
+    if (!chosenOption) {
+      showToast('This plan is currently unavailable. Please try again later.', 'error');
+      return;
+    }
+
+    try {
+      setProcessingPlan(plan.slug);
+      const response = await vendorAPI.createPlanCheckout(plan.slug, selectedMonths);
+      const checkout = response.data?.checkout ?? response.data;
+      if (!checkout?.authorizationUrl) {
+        throw new Error('Unable to obtain checkout link.');
+      }
+      setCheckoutState({
+        visible: true,
+        url: checkout.authorizationUrl,
+        planName: `${plan.name} · ${chosenOption.intervalLabel || getDurationLabel(chosenOption.months)}`,
+      });
+    } catch (error) {
+      console.error('Plan selection error:', error);
+      showToast(
+        error?.response?.data?.message ||
+          error.message ||
+          'Unable to open payment page right now.',
+        'error',
+      );
+    } finally {
+      setProcessingPlan(null);
+    }
+  };
+
+  const closeCheckout = () => {
+    setCheckoutState({ visible: false, url: '', planName: '' });
+    loadPlans();
   };
 
   const handleDurationChange = (planSlug, months) => {
@@ -540,6 +560,38 @@ const PlansScreen = ({ navigation }) => {
           </View>
         </View>
       </ScrollView>
+
+      <Modal
+        animationType="slide"
+        transparent
+        visible={checkoutState.visible}
+        onRequestClose={closeCheckout}
+      >
+        <View style={styles.checkoutBackdrop}>
+          <View style={styles.checkoutContainer}>
+            <View style={styles.checkoutHeader}>
+              <Text style={styles.checkoutTitle}>
+                {checkoutState.planName || 'Complete Payment'}
+              </Text>
+              <TouchableOpacity onPress={closeCheckout} style={styles.checkoutClose}>
+                <Ionicons name="close" size={22} color={theme.colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+            {checkoutState.url ? (
+              <WebView
+                style={styles.checkoutWebview}
+                source={{ uri: checkoutState.url }}
+                startInLoadingState
+              />
+            ) : (
+              <View style={styles.checkoutFallback}>
+                <ActivityIndicator color={theme.colors.primary} />
+                <Text style={styles.checkoutFallbackText}>Preparing checkout…</Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -887,6 +939,54 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.fontFamilyBody,
     fontSize: theme.typography.sizes.sm,
     color: theme.colors.textPrimary,
+  },
+  checkoutBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: theme.spacing.lg,
+  },
+  checkoutContainer: {
+    width: '100%',
+    maxHeight: '90%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: theme.borderRadius.lg,
+    overflow: 'hidden',
+    ...theme.shadows.large,
+  },
+  checkoutHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EFEFEF',
+  },
+  checkoutTitle: {
+    flex: 1,
+    fontFamily: theme.typography.fontFamilyHeading,
+    fontSize: theme.typography.sizes.lg,
+    color: theme.colors.textPrimary,
+  },
+  checkoutClose: {
+    padding: theme.spacing.xs,
+    marginLeft: theme.spacing.sm,
+  },
+  checkoutWebview: {
+    flex: 1,
+  },
+  checkoutFallback: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: theme.spacing.lg,
+  },
+  checkoutFallbackText: {
+    marginTop: theme.spacing.sm,
+    fontFamily: theme.typography.fontFamilyBody,
+    color: theme.colors.textSecondary,
   },
   selectButton: {
     marginTop: theme.spacing.sm,

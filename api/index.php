@@ -169,6 +169,12 @@ function yustam_api_handle_plans(string $method, array $segments): array
     if ($method === 'POST' && isset($segments[0], $segments[1]) && $segments[1] === 'subscribe') {
         return yustam_api_plan_subscribe($segments[0]);
     }
+    if ($method === 'POST' && isset($segments[0], $segments[1]) && $segments[1] === 'checkout') {
+        return yustam_api_plan_checkout($segments[0]);
+    }
+    if ($method === 'POST' && isset($segments[0], $segments[1]) && $segments[1] === 'callback') {
+        return yustam_api_plan_callback();
+    }
     yustam_api_error(404, 'Plans endpoint not found.');
 }
 
@@ -942,6 +948,114 @@ function yustam_api_plan_subscribe(string $planSlug): array
         'success' => true,
         'subscription' => $result['subscription'] ?? null,
         'reference' => $reference,
+    ];
+}
+
+function yustam_api_plan_checkout(string $planSlug): array
+{
+    $user = yustam_api_require_auth(['vendor', 'admin']);
+    $vendorId = $user['role'] === 'vendor'
+        ? (int) ($user['vendorId'] ?? 0)
+        : (int) ($_GET['vendor'] ?? 0);
+    if ($vendorId <= 0) {
+        yustam_api_error(404, 'Vendor profile not found.');
+    }
+
+    $body = yustam_api_read_json_body();
+    $months = isset($body['months']) ? max(1, (int) $body['months']) : 1;
+    $planDetails = yustam_vendor_subscription_plan_lookup($planSlug, $months);
+    if (!$planDetails) {
+        yustam_api_error(404, 'Plan or billing interval not found.');
+    }
+
+    $planCode = $planDetails['planCode'] ?? '';
+    if ($planCode === '') {
+        yustam_api_error(400, 'Selected plan is not configured for Paystack.');
+    }
+
+    $email = trim((string) ($user['email'] ?? ''));
+    if ($email === '') {
+        yustam_api_error(400, 'Vendor account does not have an email address.');
+    }
+
+    $amountNaira = (float) ($planDetails['amount'] ?? $planDetails['monthlyPrice'] ?? 0);
+    $reference = 'YUSTAM-' . strtoupper(bin2hex(random_bytes(4))) . '-' . time();
+
+    $payload = [
+        'email' => $email,
+        'plan' => $planCode,
+        'reference' => $reference,
+        'metadata' => [
+            'vendor_id' => $vendorId,
+            'plan_slug' => $planDetails['slug'] ?? $planSlug,
+            'duration_months' => (int) ($planDetails['durationMonths'] ?? $months),
+            'source' => 'mobile-app',
+        ],
+    ];
+
+    if ($amountNaira > 0) {
+        $payload['amount'] = (int) round($amountNaira * 100);
+    }
+
+    $callback = yustam_api_env('PAYSTACK_SUBSCRIPTION_CALLBACK');
+    if ($callback) {
+        $payload['callback_url'] = $callback;
+    }
+
+    try {
+        $response = yustam_paystack_request('POST', 'transaction/initialize', $payload);
+    } catch (Throwable $exception) {
+        yustam_api_error(502, $exception->getMessage());
+    }
+
+    $authorizationUrl = $response['authorization_url'] ?? null;
+    if (!$authorizationUrl) {
+        yustam_api_error(500, 'Unable to start Paystack checkout.');
+    }
+
+    return [
+        'success' => true,
+        'checkout' => [
+            'authorizationUrl' => $authorizationUrl,
+            'accessCode' => $response['access_code'] ?? null,
+            'reference' => $response['reference'] ?? $reference,
+        ],
+    ];
+}
+
+function yustam_api_plan_callback(): array
+{
+    $body = yustam_api_read_json_body();
+    $reference = trim((string) ($body['reference'] ?? $_POST['reference'] ?? $_GET['reference'] ?? ''));
+    if ($reference === '') {
+        yustam_api_error(400, 'Transaction reference is required.');
+    }
+
+    $vendorRef = trim((string) ($body['vendor'] ?? $body['vendorId'] ?? ''));
+    $vendorId = 0;
+    if ($vendorRef !== '') {
+        [$role, $id] = yustam_api_parse_user_reference($vendorRef);
+        if ($role === 'vendor') {
+            $vendorId = $id;
+        }
+    }
+    if ($vendorId <= 0 && isset($body['vendor_id'])) {
+        $vendorId = (int) $body['vendor_id'];
+    }
+    if ($vendorId <= 0) {
+        yustam_api_error(400, 'Vendor identifier missing.');
+    }
+
+    $db = get_db_connection();
+    try {
+        $result = yustam_vendor_subscription_process_payment($db, $vendorId, $reference);
+    } catch (Throwable $exception) {
+        yustam_api_error(400, $exception->getMessage());
+    }
+
+    return [
+        'success' => true,
+        'subscription' => $result['subscription'] ?? null,
     ];
 }
 
