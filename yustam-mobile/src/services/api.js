@@ -422,6 +422,15 @@ export const chatAPI = {
   createThread: (payload = {}) => api.post('/chats', payload),
   assignThread: (threadId) => api.post(`/chats/${threadId}/assign`),
   recordMessage: (threadId, payload = {}) => api.post(`/chats/${threadId}/messages`, payload),
+  sendMessage: (payload = {}) => {
+    const chatId = payload.chat_id || payload.chatId;
+    if (!chatId) {
+      throw new Error('chat_id is required.');
+    }
+    return api.post(`/chats/${chatId}/messages`, payload);
+  },
+  listMessages: (threadId) => api.get(`/chats/${threadId}/messages`),
+  markAsRead: (threadId, role) => api.post(`/chats/${threadId}/read`, { role }),
 };
 
 export const notificationsAPI = {

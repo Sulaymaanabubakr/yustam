@@ -1,0 +1,455 @@
+<?php
+require_once __DIR__ . '/session-path.php';
+session_start();
+
+require_once __DIR__ . '/buyer-storage.php';
+require_once __DIR__ . '/firebase-admin.php';
+
+/**
+ * After a successful login, persist the authentication UID to web storage and redirect.
+ */
+function yustam_emit_login_redirect(string $redirectUrl, string $uid): void
+{
+    $uidJson = json_encode($uid, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    $redirectJson = json_encode($redirectUrl, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    $escapedRedirect = htmlspecialchars($redirectUrl, ENT_QUOTES, 'UTF-8');
+
+    header('Content-Type: text/html; charset=UTF-8');
+    echo <<<HTML
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Redirecting…</title>
+    <meta http-equiv="refresh" content="0;url={$escapedRedirect}">
+</head>
+<body>
+<script>
+(function () {
+    try {
+        var uid = {$uidJson};
+        if (typeof uid === 'string' && uid.trim().length) {
+            try {
+                localStorage.setItem('firebase_uid', uid);
+                sessionStorage.setItem('firebase_uid', uid);
+            } catch (err) {
+                console.warn('Unable to persist sign-in UID in dedicated keys', err);
+            }
+            localStorage.setItem('yustam_uid', uid);
+            sessionStorage.setItem('yustam_uid', uid);
+        }
+    } catch (storageError) {
+        console.warn('Unable to persist sign-in UID', storageError);
+    }
+    window.location.replace({$redirectJson});
+})();
+</script>
+<noscript>
+    <p>Login successful. Continue to your dashboard: <a href="{$escapedRedirect}">Dashboard</a></p>
+</noscript>
+</body>
+</html>
+HTML;
+    exit;
+}
+
+if (isset($_SESSION['buyer_id'])) {
+    if (!empty($_SESSION['buyer_firebase_uid'])) {
+        $_SESSION['firebase_uid'] = $_SESSION['buyer_firebase_uid'];
+    } elseif (!empty($_SESSION['firebase_uid'])) {
+        $_SESSION['buyer_firebase_uid'] = $_SESSION['firebase_uid'];
+    }
+
+    if (!empty($_SESSION['firebase_uid'])) {
+        $_SESSION['yustam_uid'] = $_SESSION['firebase_uid'];
+    } elseif (!empty($_SESSION['buyer_uid'])) {
+        $_SESSION['yustam_uid'] = $_SESSION['buyer_uid'];
+    }
+
+    $_SESSION['yustam_role'] = 'buyer';
+    header('Location: buyer-dashboard.php');
+    exit;
+}
+
+$errorMessage = '';
+$emailValue = '';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $email = trim($_POST['email'] ?? '');
+    $password = (string)($_POST['password'] ?? '');
+    $emailValue = $email;
+
+    if ($email === '' || $password === '') {
+        $errorMessage = 'Enter both your email and password.';
+    } else {
+        try {
+            $authResponse = yustam_firebase_sign_in_with_password($email, $password);
+            $firebaseUid = (string) ($authResponse['localId'] ?? '');
+            if ($firebaseUid === '') {
+                throw new RuntimeException('Authentication service did not include a UID.');
+            }
+
+            $firebaseEmail = strtolower((string) ($authResponse['email'] ?? $email));
+            $displayName = trim((string) ($authResponse['displayName'] ?? ''));
+
+            $buyer = yustam_buyers_find_by_firebase_uid($firebaseUid);
+            if (!$buyer && $firebaseEmail !== '') {
+                $existingByEmail = yustam_buyers_find_by_email($firebaseEmail);
+                if ($existingByEmail) {
+                    yustam_buyers_set_firebase_uid((int) $existingByEmail['id'], $firebaseUid);
+                    $buyer = yustam_buyers_find((int) $existingByEmail['id']);
+                }
+            }
+
+            if (!$buyer) {
+                $fallbackName = $displayName !== '' ? $displayName : 'YUSTAM Buyer';
+                $passwordHash = password_hash($password, PASSWORD_DEFAULT);
+                $buyer = yustam_buyers_create($firebaseUid, $fallbackName, $firebaseEmail ?: $email, '', $passwordHash, 'email');
+            } else {
+                $desiredName = $displayName !== '' ? $displayName : ($buyer['name'] ?? 'Buyer');
+                $desiredEmail = $firebaseEmail ?: ($buyer['email'] ?? $email);
+                if ($desiredName !== ($buyer['name'] ?? '') || $desiredEmail !== ($buyer['email'] ?? '')) {
+                    $conn = yustam_buyers_connection();
+                    $update = $conn->prepare('UPDATE `buyers` SET `name` = ?, `email` = ? WHERE `id` = ? LIMIT 1');
+                    if ($update) {
+                        $update->bind_param('ssi', $desiredName, $desiredEmail, $buyer['id']);
+                        $update->execute();
+                        $update->close();
+                        $buyer = yustam_buyers_find((int) $buyer['id']);
+                    }
+                }
+            }
+
+            $buyer = yustam_buyers_ensure_uid($buyer);
+            $_SESSION['buyer_id'] = (int) ($buyer['id'] ?? 0);
+            $_SESSION['buyer_name'] = $buyer['name'] ?? ($displayName !== '' ? $displayName : 'Buyer');
+            $_SESSION['buyer_uid'] = $buyer['buyer_uid'] ?? null;
+            $_SESSION['buyer_email'] = $buyer['email'] ?? $firebaseEmail ?: $email;
+            $_SESSION['buyer_firebase_uid'] = $firebaseUid;
+            $_SESSION['firebase_uid'] = $firebaseUid;
+            $_SESSION['yustam_uid'] = $firebaseUid;
+            $_SESSION['yustam_role'] = 'buyer';
+
+            yustam_emit_login_redirect('buyer-dashboard.php', $firebaseUid);
+        } catch (YustamFirebaseAuthException $authError) {
+            $code = strtoupper($authError->getErrorCode());
+            if (in_array($code, ['INVALID_PASSWORD', 'EMAIL_NOT_FOUND', 'USER_NOT_FOUND', 'INVALID_LOGIN_CREDENTIALS'], true)) {
+                $errorMessage = 'Incorrect email or password';
+            } else {
+                $errorMessage = $authError->getMessage();
+            }
+        } catch (Throwable $authError) {
+            error_log('Buyer login failed: ' . $authError->getMessage());
+            $errorMessage = 'Unable to sign in. Please try again.';
+        }
+    }
+}
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign in to YUSTAM | Buyer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --emerald: #004D40;
+            --orange: #F3731E;
+            --beige: #EADCCF;
+            --glass: rgba(255, 255, 255, 0.82);
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Inter', system-ui, sans-serif;
+            background: radial-gradient(circle at top, rgba(234, 220, 207, 0.94), rgba(255, 255, 255, 0.9));
+            padding: clamp(24px, 6vw, 48px);
+            color: rgba(17, 17, 17, 0.85);
+        }
+
+        .auth-shell {
+            width: min(100%, 420px);
+            background: var(--glass);
+            border-radius: 18px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(18px);
+            overflow: hidden;
+        }
+
+        .auth-header {
+            background: linear-gradient(135deg, rgba(0, 77, 64, 0.95), rgba(0, 77, 64, 0.85));
+            padding: clamp(28px, 8vw, 36px) clamp(24px, 6vw, 32px);
+            color: #fff;
+            border-bottom: 4px solid rgba(243, 115, 30, 0.7);
+        }
+
+        .auth-header h1 {
+            margin: 0;
+            font-family: 'Anton', sans-serif;
+            letter-spacing: 0.06em;
+            font-size: clamp(1.8rem, 5vw, 2.4rem);
+            text-transform: uppercase;
+        }
+
+        .auth-body {
+            padding: clamp(24px, 6vw, 36px);
+            display: grid;
+            gap: 18px;
+        }
+
+        .divider {
+            position: relative;
+            text-align: center;
+            font-size: 0.9rem;
+            color: rgba(17, 17, 17, 0.55);
+            margin: 4px 0;
+        }
+
+        .divider span {
+            position: relative;
+            padding: 0 12px;
+            background: transparent;
+        }
+
+        .divider::before,
+        .divider::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            width: 38%;
+            height: 1px;
+            background: rgba(17, 17, 17, 0.12);
+        }
+
+        .divider::before {
+            left: 0;
+        }
+
+        .divider::after {
+            right: 0;
+        }
+
+        .field-group {
+            display: grid;
+            gap: 8px;
+        }
+
+        label {
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: rgba(0, 77, 64, 0.9);
+        }
+
+        input[type="email"],
+        input[type="password"] {
+            width: 100%;
+            padding: 14px 16px;
+            border-radius: 16px;
+            border: 1px solid rgba(0, 77, 64, 0.18);
+            background: rgba(255, 255, 255, 0.86);
+            font-size: 1rem;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: rgba(243, 115, 30, 0.8);
+            box-shadow: 0 0 0 4px rgba(243, 115, 30, 0.2);
+        }
+
+        .auth-footer {
+            display: grid;
+            gap: 16px;
+            padding: 0 clamp(24px, 6vw, 36px) clamp(28px, 8vw, 36px);
+        }
+
+        .ghost-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 12px 18px;
+            border-radius: 18px;
+            border: 1px solid rgba(0, 77, 64, 0.24);
+            background: rgba(255, 255, 255, 0.92);
+            color: rgba(0, 77, 64, 0.9);
+            font-weight: 600;
+            font-size: 0.95rem;
+            text-decoration: none;
+            transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+        }
+
+        .ghost-button:hover {
+            transform: translateY(-1px);
+            background: rgba(0, 77, 64, 0.08);
+            box-shadow: 0 12px 22px rgba(0, 0, 0, 0.08);
+        }
+
+        .action-button {
+            border: none;
+            border-radius: 18px;
+            padding: 14px 18px;
+            background: linear-gradient(135deg, #F3731E, #FF8A3D);
+            color: #fff;
+            font-weight: 600;
+            font-size: 1rem;
+            letter-spacing: 0.02em;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .action-button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 16px 24px rgba(243, 115, 30, 0.3);
+        }
+
+        .google-btn {
+            border: 1px solid rgba(17, 17, 17, 0.08);
+            border-radius: 18px;
+            padding: 12px 18px;
+            background: #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            font-weight: 600;
+            font-size: 0.98rem;
+            color: rgba(17, 17, 17, 0.85);
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+        }
+
+        .google-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 12px 22px rgba(0, 0, 0, 0.12);
+        }
+
+        .google-btn.loading {
+            opacity: 0.75;
+            pointer-events: none;
+        }
+
+        .google-icon {
+            width: 20px;
+            height: 20px;
+        }
+
+        .google-label {
+            position: relative;
+        }
+
+        .auth-switch {
+            text-align: center;
+            font-size: 0.92rem;
+            margin: 0;
+        }
+
+        .auth-switch a {
+            color: var(--emerald);
+            font-weight: 600;
+            text-decoration: none;
+        }
+
+        .auth-switch a:hover {
+            text-decoration: underline;
+        }
+
+        .toast {
+            position: fixed;
+            left: 50%;
+            bottom: 32px;
+            transform: translateX(-50%) translateY(120%);
+            min-width: 260px;
+            padding: 14px 18px;
+            border-radius: 18px;
+            background: rgba(217, 48, 37, 0.9);
+            color: #fff;
+            font-weight: 600;
+            text-align: center;
+            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(12px);
+            opacity: 0;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            z-index: 60;
+        }
+
+        .toast.is-visible {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+    </style>
+</head>
+<body>
+    <div class="auth-shell" id="buyerLogin">
+        <div class="auth-header">
+            <h1>Welcome Back</h1>
+            <p style="margin: 8px 0 0; font-size: 0.95rem; font-weight: 500; letter-spacing: 0.01em; color: rgba(255,255,255,0.85);">Sign in to continue exploring YUSTAM Marketplace.</p>
+        </div>
+        <form method="post" novalidate>
+            <div class="auth-body">
+                <div class="field-group">
+                    <label for="email">Email Address</label>
+                    <input type="email" id="email" name="email" value="<?= htmlspecialchars($emailValue) ?>" required>
+                </div>
+                <div class="field-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" name="password" required>
+                </div>
+            </div>
+            <div class="auth-footer">
+                <a class="ghost-button" href="index.html" aria-label="Back to YUSTAM homepage">← Back to Homepage</a>
+                <button type="submit" class="action-button">Sign In</button>
+                <div class="divider"><span>or</span></div>
+                <button type="button" class="google-btn" id="googleBtn">
+                    <svg
+                        class="google-icon"
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 533.5 544.3"
+                        aria-hidden="true"
+                    >
+                        <path
+                            fill="#4285f4"
+                            d="M533.5 278.4c0-17.4-1.6-34.1-4.6-50.4H272.1v95.3h146.9c-6.3 34-25.2 62.8-53.6 82.1v68.2h86.7c50.8-46.8 81.4-115.6 81.4-195.2z"
+                        />
+                        <path
+                            fill="#34a853"
+                            d="M272.1 544.3c72.9 0 134-24.1 178.6-65.7l-86.7-68.2c-24.1 16.3-55 26-91.9 26-70.5 0-130.3-47.6-151.6-111.4H31.6v69.9c44.7 88.5 136.8 148 240.5 148z"
+                        />
+                        <path
+                            fill="#fbbc04"
+                            d="M120.5 325c-10.9-32.5-10.9-67.6 0-100.1V155H31.6c-44.7 88.5-44.7 193.7 0 282.2L120.5 325z"
+                        />
+                        <path
+                            fill="#ea4335"
+                            d="M272.1 107.7c39.6 0 75.3 13.6 103.4 40.2l77.6-77.6C405.9 24.1 345 0 272.1 0 168.4 0 76.3 59.5 31.6 148l88.9 69.9c21.3-63.8 81.1-110.2 151.6-110.2z"
+                        />
+                    </svg>
+                    <span class="google-label">Sign in with Google</span>
+                </button>
+                <p class="auth-switch">Don't have an account? <a href="buyer-register.php">Sign up now</a></p>
+            </div>
+        </form>
+    </div>
+    <div class="toast" id="authToast">Incorrect email or password</div>
+    <script>
+        window.__BUYER_AUTH_ERROR__ = <?= json_encode($errorMessage) ?>;
+    </script>
+    <script src="theme-manager.js" defer></script>
+    <script type="module" src="buyer-login.js"></script>
+</body>
+</html>
+
+
+
+
+

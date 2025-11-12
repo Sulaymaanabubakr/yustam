@@ -1,7 +1,0 @@
-services:
-  - type: web
-    name: yustam-backend
-    rootDir: yustam-backend
-    env: node
-    buildCommand: npm install && npm run build
-    startCommand: npm run start

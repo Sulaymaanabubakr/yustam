@@ -1,0 +1,1465 @@
+<?php
+require_once __DIR__ . '/session-path.php';
+session_start();
+
+require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/api/chat/firebase.php';
+require_once __DIR__ . '/vendor-subscriptions.php';
+
+if (!isset($_SESSION['vendor_id'])) {
+    if (isset($_GET['format']) && $_GET['format'] === 'json') {
+        header('Content-Type: application/json');
+        http_response_code(401);
+        echo json_encode(['success' => false, 'message' => 'Please sign in to access your dashboard.']);
+        exit;
+    }
+    header('Location: vendor-login.html');
+    exit;
+}
+
+$vendorId = (int)$_SESSION['vendor_id'];
+$db = get_db_connection();
+
+yustam_listings_ensure_table($db);
+
+$vendorTable = 'vendors';
+if (defined('YUSTAM_VENDORS_TABLE') && preg_match('/^[A-Za-z0-9_]+$/', YUSTAM_VENDORS_TABLE)) {
+    $vendorTable = YUSTAM_VENDORS_TABLE;
+}
+$stmt = $db->prepare(sprintf('SELECT * FROM %s WHERE id = ? LIMIT 1', $vendorTable));
+$stmt->bind_param('i', $vendorId);
+$stmt->execute();
+$result = $stmt->get_result();
+$vendor = $result->fetch_assoc();
+$stmt->close();
+
+if (!$vendor) {
+    if (isset($_GET['format']) && $_GET['format'] === 'json') {
+        header('Content-Type: application/json');
+        http_response_code(404);
+        echo json_encode(['success' => false, 'message' => 'We could not find your vendor account.']);
+        exit;
+    }
+    header('Location: logout.php');
+    exit;
+}
+
+$vendorData = is_array($vendor) ? $vendor : [];
+$subscriptionState = yustam_vendor_subscription_format_state($vendorData);
+try {
+    $expiryResult = yustam_vendor_subscription_handle_expiry($db, $vendorData);
+    if (!empty($expiryResult['changed'])) {
+        $subscriptionState = $expiryResult['subscription'] ?? $subscriptionState;
+        $vendorData = yustam_vendor_subscription_fetch_vendor($db, $vendorId) ?: $vendorData;
+    } elseif (isset($expiryResult['subscription']) && is_array($expiryResult['subscription'])) {
+        $subscriptionState = $expiryResult['subscription'];
+    }
+} catch (Throwable $subscriptionException) {
+    // ignore expiry sync errors on dashboard load
+}
+if (!empty($subscriptionState['planName'])) {
+    $_SESSION['vendor_plan_name'] = $subscriptionState['planName'];
+}
+$vendorUid = yustam_vendor_assign_uid_if_missing($db, $vendorData);
+$_SESSION['vendor_uid'] = $vendorUid;
+
+$vendorFirebaseUid = '';
+if (!empty($vendorData['firebase_uid'])) {
+    $vendorFirebaseUid = trim((string) $vendorData['firebase_uid']);
+    $_SESSION['vendor_firebase_uid'] = $vendorFirebaseUid;
+}
+if ($vendorFirebaseUid === '' && !empty($_SESSION['vendor_firebase_uid'])) {
+    $vendorFirebaseUid = trim((string) $_SESSION['vendor_firebase_uid']);
+}
+if (isset($vendorData['email']) && $vendorData['email'] !== '') {
+    $_SESSION['vendor_email'] = $vendorData['email'];
+}
+$nameColumn = yustam_vendor_name_column();
+$vendorName = $vendorData[$nameColumn] ?? '';
+$businessName = yustam_vendor_table_has_column('business_name') ? ($vendorData['business_name'] ?? '') : '';
+$phone = yustam_vendor_table_has_column('phone') ? ($vendorData['phone'] ?? '') : '';
+$location = yustam_vendor_table_has_column('state') ? ($vendorData['state'] ?? '') : '';
+if ($location === '' && yustam_vendor_table_has_column('category')) {
+    $location = $vendorData['category'] ?? '';
+}
+$plan = yustam_vendor_table_has_column('plan') ? ($vendorData['plan'] ?? 'Free') : 'Free';
+$planDisplay = yustam_vendor_subscription_display_label($plan);
+$createdAt = yustam_vendor_table_has_column('created_at') ? ($vendorData['created_at'] ?? '') : '';
+$createdDisplay = $createdAt ? date('j M Y', strtotime($createdAt)) : '-';
+$profilePhoto = '';
+if (yustam_vendor_table_has_column('profile_photo')) {
+    $profilePhoto = (string)($vendorData['profile_photo'] ?? '');
+} elseif (yustam_vendor_table_has_column('avatar_url')) {
+    $profilePhoto = (string)($vendorData['avatar_url'] ?? '');
+}
+$avatarFallback = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz1cImh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnXCIg'
+    . 'dmlld0JveD1cIjAgMCAxMjggMTI4XCI+PHJlY3QgZmlsbD1cIiNF'
+    . 'OEY1RjJcIiB3aWR0aD1cIjEyOFwiIGhlaWdodD1cIjEyOFwiLz48Y2ly'
+    . 'Y2xlIGN4PVw2NFwgY3k9XDQ4XCByPVwyOFwgZmlsbD1cIiMwRjZBNTNc'
+    . 'Ii8+PHBhdGggZmlsbD1cIiMwRjZBNTNcIiBkPVwiTTIwIDExOGMwLTI0'
+    . 'IDIwLTQ0IDQ0LTQ0czQ0IDIwIDQ0IDQ0XCIvPjwvc3ZnPg==';
+$profilePhotoUrl = $profilePhoto !== '' ? $profilePhoto : $avatarFallback;
+if ($profilePhotoUrl !== '' && stripos($profilePhotoUrl, 'http') !== 0 && strpos($profilePhotoUrl, 'data:') !== 0) {
+    $profilePhotoUrl = '/' . ltrim($profilePhotoUrl, '/');
+}
+
+$listings = [];
+$stats = [
+    'total_listings' => 0,
+    'active_listings' => 0,
+    'total_views' => 0,
+];
+
+try {
+    $listingsColumns = [];
+    try {
+        $columnsResult = $db->query('SHOW COLUMNS FROM `listings`');
+        if ($columnsResult instanceof mysqli_result) {
+            while ($col = $columnsResult->fetch_assoc()) {
+                if (isset($col['Field'])) {
+                    $listingsColumns[] = $col['Field'];
+                }
+            }
+            $columnsResult->free();
+        }
+    } catch (Throwable $exception) {
+        $listingsColumns = [];
+    }
+
+    $columnFirestoreId = in_array('firestore_id', $listingsColumns, true) ? 'firestore_id' : 'id';
+    $columnPrimaryImage = null;
+    foreach (['primary_image', 'primaryImage'] as $candidate) {
+        if (in_array($candidate, $listingsColumns, true)) {
+            $columnPrimaryImage = $candidate;
+            break;
+        }
+    }
+
+    $columnImageUrls = null;
+    foreach (['image_urls', 'imageUrls'] as $candidate) {
+        if (in_array($candidate, $listingsColumns, true)) {
+            $columnImageUrls = $candidate;
+            break;
+        }
+    }
+
+    $selectParts = [sprintf('%s AS listing_id', $columnFirestoreId), 'title', 'price', 'status', 'created_at', 'views'];
+    if ($columnPrimaryImage !== null) {
+        $selectParts[] = sprintf('%s AS listing_image', $columnPrimaryImage);
+    }
+    if ($columnImageUrls !== null) {
+        $selectParts[] = sprintf('%s AS listing_gallery', $columnImageUrls);
+    }
+    if (in_array('description', $listingsColumns, true)) {
+        $selectParts[] = 'description';
+    }
+    if (in_array('category', $listingsColumns, true)) {
+        $selectParts[] = 'category';
+    }
+    if (in_array('subcategory', $listingsColumns, true)) {
+        $selectParts[] = 'subcategory';
+    }
+    if (in_array('location', $listingsColumns, true)) {
+        $selectParts[] = 'location';
+    }
+    if (in_array('city', $listingsColumns, true)) {
+        $selectParts[] = 'city';
+    }
+    if (in_array('state', $listingsColumns, true)) {
+        $selectParts[] = 'state';
+    }
+    if (in_array('country', $listingsColumns, true)) {
+        $selectParts[] = 'country';
+    }
+
+    $listingSql = sprintf(
+        'SELECT %s FROM listings WHERE vendor_id = ? ORDER BY created_at DESC LIMIT 25',
+        implode(', ', $selectParts)
+    );
+
+    $listingStmt = $db->prepare($listingSql);
+    $listingStmt->bind_param('i', $vendorId);
+    $listingStmt->execute();
+    $listingResult = $listingStmt->get_result();
+    while ($row = $listingResult->fetch_assoc()) {
+        $statusValue = strtolower(trim((string)($row['status'] ?? '')));
+        $isActive = in_array($statusValue, ['active', 'published', 'approved', 'live', 'available'], true);
+        $imageValue = $columnPrimaryImage !== null ? ($row['listing_image'] ?? '') : '';
+        $galleryRaw = $columnImageUrls !== null ? ($row['listing_gallery'] ?? '') : '';
+        $gallery = [];
+        if (is_string($galleryRaw) && $galleryRaw !== '') {
+            $decoded = json_decode($galleryRaw, true);
+            if (is_array($decoded)) {
+                $gallery = array_values(array_filter(
+                    array_map(static fn($value) => is_string($value) ? trim($value) : '', $decoded)
+                ));
+            }
+        }
+
+        $listings[] = [
+            'id' => (string) ($row['listing_id'] ?? ''),
+            'title' => $row['title'] ?? 'Untitled',
+            'description' => $row['description'] ?? '',
+            'price' => isset($row['price']) ? (float)$row['price'] : 0.0,
+            'status' => $row['status'] ?? 'Draft',
+            'status_raw' => $statusValue,
+            'category' => $row['category'] ?? '',
+            'subcategory' => $row['subcategory'] ?? '',
+            'location' => $row['location'] ?? '',
+            'city' => $row['city'] ?? '',
+            'state' => $row['state'] ?? '',
+            'country' => $row['country'] ?? '',
+            'added_on' => isset($row['created_at']) ? date('j M Y', strtotime($row['created_at'])) : '-',
+            'link' => 'product.php?id=' . urlencode((string) ($row['listing_id'] ?? '')),
+            'views' => (int)($row['views'] ?? 0),
+            'image' => $imageValue !== '' ? $imageValue : ($gallery[0] ?? ''),
+            'images' => $gallery,
+            'image_alt' => isset($row['title']) && trim((string)$row['title']) !== '' ? trim((string)$row['title']) : 'Listing image',
+        ];
+        $stats['total_listings']++;
+        if ($isActive) {
+            $stats['active_listings']++;
+        }
+        $stats['total_views'] += (int)($row['views'] ?? 0);
+    }
+    $listingStmt->close();
+} catch (Throwable $e) {
+    error_log('Dashboard listing query failed: ' . $e->getMessage());
+}
+
+$firestoreVendorKey = $vendorFirebaseUid !== '' ? $vendorFirebaseUid : $vendorUid;
+
+if ($firestoreVendorKey !== '') {
+    try {
+        $firestoreListings = [];
+        $firestoreTotal = 0;
+        $firestoreActive = 0;
+        $firestoreViews = 0;
+
+        $fireQuery = [
+            'from' => [
+                ['collectionId' => 'listings'],
+            ],
+            'where' => [
+                'fieldFilter' => [
+                    'field' => ['fieldPath' => 'vendorUid'],
+                    'op' => 'EQUAL',
+                    'value' => yustam_firestore_string($firestoreVendorKey),
+                ],
+            ],
+            'limit' => 200,
+        ];
+
+        $fireResults = yustam_firestore_run_query($fireQuery);
+        $activeStatuses = ['active', 'published', 'approved', 'live', 'available'];
+
+        $modelOtherLabels = ['other / custom model', 'custom model', 'other'];
+        foreach ($fireResults as $result) {
+            if (!isset($result['document']['fields'])) {
+                continue;
+            }
+            $fields = [];
+            foreach ($result['document']['fields'] as $key => $value) {
+                $fields[$key] = yustam_firestore_decode($value);
+            }
+
+            $firestoreTotal++;
+
+            $statusValue = strtolower((string)($fields['status'] ?? ''));
+            if (in_array($statusValue, $activeStatuses, true)) {
+                $firestoreActive++;
+            }
+
+            $viewsCandidate = $fields['views'] ?? ($fields['viewCount'] ?? 0);
+            $viewsCount = 0;
+            if (is_array($viewsCandidate)) {
+                $viewsCount = (int)($viewsCandidate['total'] ?? 0);
+            } else {
+                $viewsCount = (int)$viewsCandidate;
+            }
+            $firestoreViews += $viewsCount;
+
+            $docName = $result['document']['name'] ?? '';
+            $docId = $fields['id'] ?? ($docName !== '' ? basename($docName) : '');
+
+            $titleCandidates = [];
+            $pushCandidate = static function (?string $value) use (&$titleCandidates): void {
+                $trimmed = trim((string)($value ?? ''));
+                if ($trimmed !== '') {
+                    $titleCandidates[] = preg_replace('/\s+/', ' ', $trimmed);
+                }
+            };
+
+            $pushCandidate($fields['title'] ?? null);
+            $pushCandidate($fields['name'] ?? null);
+            $pushCandidate($fields['productName'] ?? null);
+            $pushCandidate($fields['serviceName'] ?? null);
+            $pushCandidate($fields['itemType'] ?? null);
+            $pushCandidate($fields['propertyType'] ?? null);
+            $pushCandidate($fields['listingTitle'] ?? null);
+            $pushCandidate($fields['listingName'] ?? null);
+
+            $brand = trim((string)($fields['brand'] ?? ''));
+            $model = trim((string)($fields['model'] ?? ''));
+            $modelLower = strtolower($model);
+            if ($brand !== '' && $model !== '' && !in_array($modelLower, $modelOtherLabels, true)) {
+                $pushCandidate($brand . ' ' . $model);
+            }
+            if ($brand !== '') {
+                $pushCandidate($brand);
+            }
+            if ($model !== '' && !in_array($modelLower, $modelOtherLabels, true)) {
+                $pushCandidate($model);
+            }
+
+            $title = '';
+            foreach ($titleCandidates as $candidate) {
+                $title = $candidate;
+                break;
+            }
+
+            $categoryLabel = trim((string)($fields['subcategory'] ?? $fields['category'] ?? ''));
+            if ($title === '' && $categoryLabel !== '') {
+                $title = $categoryLabel;
+            }
+
+            if ($title === '' && $brand !== '') {
+                $title = $brand;
+            }
+
+            if ($title === '' && $categoryLabel !== '') {
+                $title = $categoryLabel . ' listing';
+            }
+
+            if ($title === '') {
+                $fallbackCandidates = [];
+                foreach ($fields as $fieldKey => $fieldValue) {
+                    if (!is_string($fieldValue)) {
+                        continue;
+                    }
+                    $normalizedKey = strtolower((string)$fieldKey);
+                    if (preg_match('/image|photo|vendor|uid|status|description|location|created|updated|price|amount|views|plan|category|subcategory|link|url|http/', $normalizedKey)) {
+                        continue;
+                    }
+                    $cleanValue = trim(preg_replace('/\s+/', ' ', $fieldValue));
+                    if ($cleanValue === '') {
+                        continue;
+                    }
+                    $fallbackCandidates[] = $cleanValue;
+                }
+                if ($fallbackCandidates) {
+                    $title = $fallbackCandidates[0];
+                }
+            }
+
+            if ($title === '') {
+                $title = 'Untitled';
+            }
+
+            $priceCandidate = $fields['price'] ?? ($fields['amount'] ?? 0);
+            if (is_string($priceCandidate)) {
+                $priceCandidate = preg_replace('/[^0-9.]/', '', $priceCandidate);
+            }
+            $price = is_numeric($priceCandidate) ? (float)$priceCandidate : 0.0;
+
+            $imageCollection = [];
+            if (isset($fields['imageUrls']) && is_array($fields['imageUrls'])) {
+                foreach ($fields['imageUrls'] as $candidateImage) {
+                    if (is_string($candidateImage) && trim($candidateImage) !== '') {
+                        $imageCollection[] = trim($candidateImage);
+                    } elseif (is_array($candidateImage)) {
+                        $nestedUrl = $candidateImage['url'] ?? ($candidateImage['secure_url'] ?? '');
+                        if (is_string($nestedUrl) && trim($nestedUrl) !== '') {
+                            $imageCollection[] = trim($nestedUrl);
+                        }
+                    }
+                }
+            }
+
+            if (empty($imageCollection) && isset($fields['primaryImage'])) {
+                $fallbackImage = $fields['primaryImage'];
+                if (is_string($fallbackImage) && trim($fallbackImage) !== '') {
+                    $imageCollection[] = trim($fallbackImage);
+                } elseif (is_array($fallbackImage)) {
+                    $nestedUrl = $fallbackImage['url'] ?? ($fallbackImage['secure_url'] ?? '');
+                    if (is_string($nestedUrl) && trim($nestedUrl) !== '') {
+                        $imageCollection[] = trim($nestedUrl);
+                    }
+                }
+            }
+
+            if (empty($imageCollection)) {
+                $imageCandidates = [];
+                foreach (['images', 'photos', 'photoUrls', 'gallery', 'thumbnails'] as $imageField) {
+                    if (isset($fields[$imageField])) {
+                        $imageCandidates[] = $fields[$imageField];
+                    }
+                }
+                foreach ($imageCandidates as $candidateSet) {
+                    if (is_string($candidateSet) && trim($candidateSet) !== '') {
+                        $imageCollection[] = trim($candidateSet);
+                        break;
+                    }
+                    if (is_array($candidateSet)) {
+                        foreach ($candidateSet as $candidateImage) {
+                            if (is_string($candidateImage) && trim($candidateImage) !== '') {
+                                $imageCollection[] = trim($candidateImage);
+                                break 2;
+                            }
+                            if (is_array($candidateImage)) {
+                                $nestedUrl = $candidateImage['url'] ?? ($candidateImage['secure_url'] ?? '');
+                                if (is_string($nestedUrl) && trim($nestedUrl) !== '') {
+                                    $imageCollection[] = trim($nestedUrl);
+                                    break 2;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            $imageUrl = $imageCollection[0] ?? '';
+
+            $createdRaw = $fields['createdAt'] ?? ($fields['created_at'] ?? '');
+            if (is_array($createdRaw) && isset($createdRaw['seconds'])) {
+                $createdRaw = '@' . (int)$createdRaw['seconds'];
+            }
+            $addedOn = '-';
+            $addedTimestamp = 0;
+            if (is_string($createdRaw) && $createdRaw !== '') {
+                $timestamp = strtotime($createdRaw);
+                if ($timestamp !== false) {
+                    $addedOn = date('j M Y', $timestamp);
+                    $addedTimestamp = $timestamp;
+                }
+            }
+
+            $firestoreListings[] = [
+                'id' => $docId,
+                'title' => $title,
+                'description' => $fields['description'] ?? ($fields['details'] ?? ''),
+                'price' => $price,
+                'status' => $statusValue !== '' ? ucwords($statusValue) : 'Pending',
+                'status_raw' => $statusValue,
+                'category' => $fields['category'] ?? '',
+                'subcategory' => $fields['subcategory'] ?? '',
+                'location' => $fields['vendorLocation'] ?? ($fields['location'] ?? ''),
+                'city' => $fields['city'] ?? '',
+                'state' => $fields['state'] ?? '',
+                'country' => $fields['country'] ?? '',
+                'added_on' => $addedOn,
+                'link' => $docId !== '' ? 'product.php?id=' . urlencode($docId) : '#',
+                'views' => $viewsCount,
+                'image' => $imageUrl,
+                'images' => $imageCollection,
+                'image_alt' => $title !== 'Untitled' ? $title : 'Listing image',
+                'sort_ts' => $addedTimestamp,
+            ];
+        }
+
+        if ($firestoreTotal > 0) {
+            usort(
+                $firestoreListings,
+                static function (array $left, array $right): int {
+                    return ($right['sort_ts'] ?? 0) <=> ($left['sort_ts'] ?? 0);
+                }
+            );
+            $firestoreListings = array_slice($firestoreListings, 0, 25);
+            foreach ($firestoreListings as &$listingRow) {
+                unset($listingRow['sort_ts']);
+            }
+            unset($listingRow);
+
+            $stats['total_listings'] = $firestoreTotal;
+            $stats['active_listings'] = $firestoreActive;
+            $stats['total_views'] = $firestoreViews;
+            $listings = $firestoreListings;
+        }
+    } catch (Throwable $fireException) {
+        error_log('Vendor dashboard Firestore query failed: ' . $fireException->getMessage());
+    }
+}
+
+if (isset($_GET['format']) && $_GET['format'] === 'json') {
+    header('Content-Type: application/json');
+    echo json_encode([
+        'success' => true,
+        'data' => [
+            'profile' => [
+                'id' => $vendorId,
+                'uid' => $vendorUid,
+                'firebaseUid' => $vendorFirebaseUid,
+            'email' => $vendorData['email'] ?? '',
+            'name' => $vendorName,
+            'businessName' => $businessName,
+            'phone' => $phone,
+            'location' => $location,
+            'plan' => $subscriptionState['displayName'] ?? $planDisplay,
+            'planRaw' => $subscriptionState['planName'] ?? $plan,
+            'planStatus' => $subscriptionState['status'] ?? '',
+            'planRenewal' => $subscriptionState['nextBillingDisplay'] ?? '',
+            'joined' => $createdDisplay,
+        ],
+        'stats' => $stats,
+        'listings' => $listings,
+        'session' => [
+            'vendorId' => $vendorId,
+            'vendorUid' => $vendorUid,
+            'firebaseUid' => $vendorFirebaseUid,
+        ],
+        'subscription' => $subscriptionState,
+    ],
+    ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    exit;
+}
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YUSTAM Vendor Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet">
+    <style>
+        :root {
+            --emerald: #004D40;
+            --orange: #F3731E;
+            --beige: #EADCCF;
+            --white: #FFFFFF;
+            --ink: #111111;
+            --shadow-soft: 0 18px 38px rgba(17, 17, 17, 0.12);
+            --radius-large: 20px;
+            --radius-medium: 18px;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: radial-gradient(circle at top left, rgba(234, 220, 207, 0.9), rgba(255, 255, 255, 0.92));
+            color: var(--ink);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        h1, h2, h3, h4 {
+            font-family: 'Anton', sans-serif;
+            letter-spacing: 0.02em;
+            color: var(--emerald);
+        }
+
+        a {
+            color: inherit;
+        }
+
+        .dashboard-header {
+            position: sticky;
+            top: 0;
+            z-index: 60;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.95rem clamp(1.2rem, 4vw, 2.4rem);
+            backdrop-filter: blur(16px);
+            background: rgba(0, 77, 64, 0.94);
+            box-shadow: 0 14px 26px rgba(0, 0, 0, 0.22);
+            border-bottom: 2px solid rgba(243, 115, 30, 0.35);
+            color: var(--white);
+        }
+
+        .header-brand {
+            display: flex;
+            align-items: center;
+            gap: 0.9rem;
+        }
+
+        .logo-area {
+            cursor: pointer;
+        }
+
+        .avatar-link {
+            display: inline-flex;
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.65);
+            padding: 2px;
+            background: rgba(255, 255, 255, 0.18);
+            box-shadow: 0 10px 18px rgba(0, 0, 0, 0.22);
+            transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
+        }
+
+        .avatar-link:hover,
+        .avatar-link:focus-visible {
+            transform: translateY(-1px);
+            border-color: rgba(243, 115, 30, 0.9);
+            box-shadow: 0 16px 28px rgba(243, 115, 30, 0.35);
+        }
+
+        .header-avatar {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+
+        .brand-text {
+            display: flex;
+            flex-direction: column;
+            gap: 0.15rem;
+        }
+
+        .brand-title {
+            font-size: clamp(1.45rem, 4vw, 1.9rem);
+            font-family: 'Anton', sans-serif;
+            letter-spacing: 0.08em;
+        }
+
+        .brand-subtitle {
+            font-size: 0.85rem;
+            opacity: 0.78;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: clamp(0.55rem, 2vw, 0.85rem);
+        }
+
+        .icon-button {
+            width: 46px;
+            height: 46px;
+            border-radius: 50%;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.15);
+            color: var(--white);
+            cursor: pointer;
+            transition: transform 200ms ease, box-shadow 200ms ease, background 200ms ease;
+        }
+
+        .icon-button:hover,
+        .icon-button:focus-visible {
+            transform: translateY(-2px);
+            background: rgba(243, 115, 30, 0.35);
+            box-shadow: 0 12px 24px rgba(243, 115, 30, 0.35);
+        }
+
+        main {
+            flex: 1;
+            width: min(1180px, calc(100% - clamp(2rem, 6vw, 6.5rem)));
+            margin: 0 auto;
+            padding: clamp(2rem, 5vw, 3.4rem) 0 clamp(3.6rem, 6vw, 4.2rem);
+            display: flex;
+            flex-direction: column;
+            gap: clamp(2rem, 5vw, 3rem);
+        }
+
+        .intro-card {
+            background: rgba(255, 255, 255, 0.78);
+            border-radius: var(--radius-large);
+            padding: clamp(1.3rem, 4vw, 2rem);
+            box-shadow: var(--shadow-soft);
+            backdrop-filter: blur(18px);
+            display: flex;
+            flex-direction: column;
+            gap: 0.6rem;
+            animation: fadeUp 600ms ease 120ms both;
+        }
+
+        .intro-card h1 {
+            margin: 0;
+            font-size: clamp(1.6rem, 5vw, 2.2rem);
+        }
+
+        .intro-card p {
+            margin: 0;
+            color: rgba(17, 17, 17, 0.64);
+            font-size: clamp(0.92rem, 2.6vw, 1rem);
+        }
+
+        .kpi-section {
+            animation: fadeUp 600ms ease 220ms both;
+        }
+
+        .kpi-grid {
+            display: grid;
+            gap: clamp(1.5rem, 5vw, 2.3rem);
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        }
+
+        .kpi-card {
+            background: rgba(255, 255, 255, 0.82);
+            border-radius: var(--radius-medium);
+            padding: clamp(1.05rem, 2.6vw, 1.6rem);
+            box-shadow: var(--shadow-soft);
+            backdrop-filter: blur(16px);
+            position: relative;
+            overflow: hidden;
+            transition: transform 250ms ease, box-shadow 250ms ease;
+        }
+
+        .kpi-card::after {
+            content: '';
+            position: absolute;
+            inset: auto -30% -45% 30%;
+            background: linear-gradient(135deg, rgba(243, 115, 30, 0.16), rgba(0, 77, 64, 0.08));
+            pointer-events: none;
+        }
+
+        .kpi-card:hover {
+            transform: translateY(-6px);
+            box-shadow: 0 24px 38px rgba(17, 17, 17, 0.14);
+        }
+
+        .kpi-icon {
+            font-size: 1.9rem;
+            color: var(--orange);
+            margin-bottom: 0.55rem;
+        }
+
+        .kpi-title {
+            margin: 0;
+            font-size: 0.95rem;
+            color: rgba(17, 17, 17, 0.6);
+        }
+
+        .kpi-value {
+            margin: 0.35rem 0 0;
+            font-size: clamp(1.5rem, 3vw, 2.1rem);
+            font-weight: 700;
+            color: var(--emerald);
+        }
+        .kpi-meta {
+            margin: 0.25rem 0 0;
+            font-size: 0.85rem;
+            color: rgba(17, 17, 17, 0.6);
+        }
+
+        .glass-section {
+            background: rgba(255, 255, 255, 0.82);
+            border-radius: var(--radius-large);
+            padding: clamp(1.6rem, 4vw, 2.3rem);
+            box-shadow: var(--shadow-soft);
+            backdrop-filter: blur(18px);
+            display: flex;
+            flex-direction: column;
+            gap: clamp(1.3rem, 4vw, 2rem);
+        }
+
+        .section-header {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.8rem;
+        }
+
+        .section-header h2 {
+            margin: 0;
+            font-size: clamp(1.35rem, 4vw, 1.65rem);
+        }
+
+        .section-subtitle {
+            margin: 0;
+            color: rgba(17, 17, 17, 0.58);
+            font-size: 0.95rem;
+        }
+
+        .section-actions {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+        }
+
+        .section-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            font-weight: 600;
+            color: var(--orange);
+            background: rgba(243, 115, 30, 0.14);
+            padding: 0.55rem 1rem;
+            border-radius: 999px;
+            text-decoration: none;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .section-link:hover,
+        .section-link:focus-visible {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 24px rgba(243, 115, 30, 0.22);
+        }
+
+        .badge {
+            background: rgba(0, 77, 64, 0.12);
+            color: var(--emerald);
+            border-radius: 999px;
+            padding: 0.35rem 0.9rem;
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+
+        .listings-grid {
+            display: grid;
+            gap: clamp(1rem, 3vw, 1.6rem);
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        }
+
+        .listing-card {
+            background: rgba(255, 255, 255, 0.88);
+            border-radius: var(--radius-medium);
+            padding: clamp(1rem, 3vw, 1.4rem);
+            box-shadow: 0 16px 34px rgba(17, 17, 17, 0.12);
+            backdrop-filter: blur(18px);
+            display: grid;
+            gap: 0.75rem;
+            transition: transform 220ms ease, box-shadow 220ms ease;
+        }
+
+        .listing-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 24px 44px rgba(17, 17, 17, 0.16);
+        }
+
+        .listing-top {
+            display: flex;
+            align-items: center;
+            gap: 0.85rem;
+        }
+
+        .listing-thumb {
+            width: 72px;
+            height: 72px;
+            border-radius: 18px;
+            background: linear-gradient(140deg, rgba(0, 77, 64, 0.16), rgba(243, 115, 30, 0.25));
+            display: grid;
+            place-items: center;
+            font-size: 2rem;
+            color: rgba(255, 255, 255, 0.92);
+            box-shadow: 0 12px 24px rgba(243, 115, 30, 0.18);
+        }
+
+        .listing-thumb-image {
+            background: rgba(255, 255, 255, 0.08);
+            box-shadow: 0 10px 22px rgba(17, 17, 17, 0.18);
+            overflow: hidden;
+        }
+
+        .listing-thumb img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .listing-info h3 {
+            margin: 0;
+            font-size: 1.05rem;
+            color: var(--emerald);
+        }
+
+        .listing-info p {
+            margin: 0.15rem 0 0;
+            font-size: 0.9rem;
+            color: rgba(17, 17, 17, 0.58);
+        }
+
+        .listing-meta {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 0.6rem;
+            font-size: 0.85rem;
+            color: rgba(17, 17, 17, 0.6);
+        }
+
+        .listing-views {
+            font-weight: 500;
+            color: rgba(17, 17, 17, 0.55);
+        }
+
+        .status-pill {
+            padding: 0.35rem 0.75rem;
+            border-radius: 999px;
+            font-weight: 600;
+            text-transform: capitalize;
+        }
+
+        .status-active { background: rgba(0, 77, 64, 0.15); color: var(--emerald); }
+        .status-draft { background: rgba(234, 220, 207, 0.55); color: rgba(17, 17, 17, 0.7); }
+        .status-pending { background: rgba(243, 115, 30, 0.15); color: var(--orange); }
+
+        .listing-actions {
+            display: flex;
+            gap: 0.6rem;
+            flex-wrap: wrap;
+        }
+
+        .listing-actions a,
+        .listing-actions button {
+            border-radius: 999px;
+            padding: 0.55rem 1.1rem;
+            background: rgba(0, 77, 64, 0.12);
+            color: var(--emerald);
+            font-weight: 600;
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: transform 200ms ease, box-shadow 200ms ease;
+            border: none;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+
+        .listing-actions button {
+            background: rgba(243, 115, 30, 0.16);
+            color: var(--orange);
+        }
+
+        .listing-actions a:hover,
+        .listing-actions button:hover,
+        .listing-actions a:focus-visible,
+        .listing-actions button:focus-visible {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 22px rgba(0, 0, 0, 0.12);
+        }
+
+        .empty-state {
+            text-align: center;
+            color: rgba(17, 17, 17, 0.58);
+            font-size: 0.95rem;
+            padding: 1.4rem 0;
+        }
+
+        .empty-state i {
+            font-size: 2.1rem;
+            display: block;
+            margin-bottom: 0.6rem;
+            color: rgba(0, 77, 64, 0.3);
+        }
+
+        .boost-section {
+            animation: fadeUp 600ms ease 320ms both;
+        }
+
+        .boost-body {
+            display: grid;
+            gap: 1rem;
+            color: rgba(17, 17, 17, 0.62);
+            font-size: 0.95rem;
+            line-height: 1.6;
+        }
+
+        .boost-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.8rem;
+        }
+
+        .btn {
+            border: none;
+            border-radius: 999px;
+            padding: 0.78rem 1.6rem;
+            font-weight: 600;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: transform 200ms ease, box-shadow 200ms ease, background 200ms ease;
+        }
+
+        .btn-primary {
+            background: var(--emerald);
+            color: var(--white);
+        }
+
+        .btn-accent {
+            background: var(--orange);
+            color: var(--white);
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 1px solid rgba(0, 77, 64, 0.4);
+            color: var(--emerald);
+        }
+
+        .btn:hover,
+        .btn:focus-visible {
+            transform: translateY(-2px);
+            box-shadow: 0 16px 28px rgba(0, 0, 0, 0.14);
+        }
+
+        .fab {
+            position: fixed;
+            right: clamp(1.1rem, 5vw, 3rem);
+            bottom: clamp(1.2rem, 6vw, 3.4rem);
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            border: none;
+            background: linear-gradient(145deg, #F3731E, #ff8d3d);
+            color: var(--white);
+            font-size: 1.8rem;
+            box-shadow: 0 18px 34px rgba(243, 115, 30, 0.35);
+            cursor: pointer;
+            display: grid;
+            place-items: center;
+            transition: transform 200ms ease, box-shadow 200ms ease;
+            z-index: 70;
+        }
+
+        .fab:hover,
+        .fab:focus-visible {
+            transform: translateY(-3px) scale(1.02);
+            box-shadow: 0 26px 45px rgba(243, 115, 30, 0.45);
+        }
+
+        footer {
+            margin-top: auto;
+            text-align: center;
+            padding: 1.6rem 1rem 2.4rem;
+            color: var(--emerald);
+            font-size: 0.92rem;
+            background: rgba(234, 220, 207, 0.6);
+            backdrop-filter: blur(12px);
+        }
+
+        footer a {
+            color: var(--emerald);
+            font-weight: 600;
+            text-decoration: none;
+        }
+
+        .loader-wrapper {
+            min-height: 100vh;
+            display: grid;
+            place-items: center;
+            padding: 2rem;
+        }
+
+        .loader-card {
+            background: rgba(255, 255, 255, 0.78);
+            border-radius: var(--radius-large);
+            padding: 2.3rem 2rem;
+            box-shadow: var(--shadow-soft);
+            backdrop-filter: blur(14px);
+            text-align: center;
+            width: min(320px, 100%);
+        }
+
+        .loader-spinner {
+            width: 52px;
+            height: 52px;
+            border-radius: 50%;
+            border: 4px solid rgba(0, 77, 64, 0.18);
+            border-top-color: var(--orange);
+            margin: 0 auto 1.4rem;
+            animation: spin 1s linear infinite;
+        }
+
+        .listing-editor {
+            position: fixed;
+            inset: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            z-index: 140;
+        }
+
+        .listing-editor.is-open {
+            display: flex;
+        }
+
+        .listing-editor[hidden] {
+            display: none !important;
+        }
+
+        .listing-editor__overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(17, 17, 17, 0.48);
+            backdrop-filter: blur(2px);
+        }
+
+        .listing-editor__dialog {
+            position: relative;
+            background: #ffffff;
+            border-radius: 20px;
+            width: min(540px, 100%);
+            max-height: min(90vh, 640px);
+            overflow: hidden auto;
+            box-shadow: 0 28px 60px rgba(0, 0, 0, 0.16);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .listing-editor__form {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            padding: 1.5rem;
+        }
+
+        .listing-editor__header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+        }
+
+        .listing-editor__header h2 {
+            margin: 0;
+            font-size: 1.25rem;
+        }
+
+        .listing-editor__close {
+            border: none;
+            background: rgba(0, 0, 0, 0.06);
+            border-radius: 50%;
+            width: 36px;
+            height: 36px;
+            display: grid;
+            place-items: center;
+            cursor: pointer;
+        }
+
+        .listing-editor__status {
+            min-height: 1.2rem;
+            font-size: 0.85rem;
+            color: rgba(17, 17, 17, 0.6);
+        }
+
+        .listing-editor__field {
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+        }
+
+        .listing-editor__field label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: rgba(17, 17, 17, 0.72);
+        }
+
+        .listing-editor__field input,
+        .listing-editor__field select,
+        .listing-editor__field textarea {
+            width: 100%;
+            border: 1px solid rgba(17, 17, 17, 0.12);
+            border-radius: 12px;
+            padding: 0.65rem 0.75rem;
+            font-size: 0.95rem;
+            font-family: inherit;
+            transition: border 160ms ease, box-shadow 160ms ease;
+        }
+
+        .listing-editor__field input:focus,
+        .listing-editor__field select:focus,
+        .listing-editor__field textarea:focus {
+            outline: none;
+            border-color: rgba(0, 77, 64, 0.4);
+            box-shadow: 0 0 0 4px rgba(0, 77, 64, 0.12);
+        }
+
+        .listing-editor__grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.75rem;
+        }
+
+        .listing-editor__preview {
+            border-radius: 14px;
+            background: rgba(0, 77, 64, 0.08);
+            padding: 0.75rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .listing-editor__preview[hidden] {
+            display: none !important;
+        }
+
+        .listing-editor__preview-label {
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: rgba(17, 17, 17, 0.62);
+        }
+
+        .listing-editor__preview img {
+            width: 100%;
+            border-radius: 12px;
+            object-fit: cover;
+            max-height: 220px;
+        }
+
+        .listing-editor__actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.85rem;
+            margin-top: 0.5rem;
+        }
+
+        .listing-editor__secondary {
+            border: none;
+            background: rgba(17, 17, 17, 0.08);
+            color: rgba(17, 17, 17, 0.82);
+            padding: 0.65rem 1.3rem;
+            border-radius: 999px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .listing-editor__submit {
+            border: none;
+            background: linear-gradient(135deg, var(--orange), #ff8845);
+            color: #fff;
+            padding: 0.7rem 1.6rem;
+            border-radius: 999px;
+            cursor: pointer;
+            font-weight: 700;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.6rem;
+        }
+
+        .listing-editor__submit[disabled] {
+            opacity: 0.7;
+            cursor: wait;
+        }
+
+        .listing-editor__spinner {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.4);
+            border-top-color: #fff;
+            animation: spin 720ms linear infinite;
+            display: none;
+        }
+
+        .listing-editor__submit[disabled] .listing-editor__spinner {
+            display: inline-block;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .listing-editor__dialog {
+                width: min(480px, 100%);
+            }
+
+            .listing-editor__form {
+                padding: 1.25rem;
+            }
+            .dashboard-header {
+                padding: 0.85rem clamp(1rem, 4vw, 1.4rem);
+            }
+
+            .brand-subtitle {
+                display: none;
+            }
+
+            .intro-card {
+                padding: 1.2rem;
+            }
+
+            .boost-actions {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .btn,
+            .boost-actions .btn {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+
+        @media (max-width: 600px) {
+            .listing-editor {
+                align-items: flex-end;
+                padding: 0;
+            }
+
+            .listing-editor__dialog {
+                width: 100%;
+                max-height: 94vh;
+                border-radius: 24px 24px 0 0;
+            }
+
+            .listing-editor__form {
+                padding: 1.25rem 1.15rem 1.5rem;
+            }
+
+            .listing-editor__grid {
+                grid-template-columns: 1fr;
+            }
+            main {
+                width: calc(100% - 2.8rem);
+                padding: 1.8rem 0 3.6rem;
+                gap: 2.6rem;
+            }
+
+            .intro-card,
+            .glass-section,
+            .kpi-card {
+                padding: 1.5rem 1.25rem;
+            }
+
+            .section-header {
+                align-items: flex-start;
+                gap: 1rem;
+            }
+        }
+
+        @keyframes fadeUp {
+            from {
+                opacity: 0;
+                transform: translateY(18px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="loader-wrapper" id="loader">
+        <div class="loader-card" role="status" aria-live="polite">
+            <div class="loader-spinner" aria-hidden="true"></div>
+            <p style="margin:0; font-weight:600; color: var(--emerald);">Preparing your dashboard…</p>
+            <p style="margin:0.4rem 0 0; color: rgba(17,17,17,0.62); font-size:0.92rem;">Hold on while we fetch your listings and stats.</p>
+        </div>
+    </div>
+
+    <header id="dashboardHeader" class="dashboard-header" style="display:none;">
+        <div class="header-brand logo-area" role="banner" tabindex="0">
+            <a href="vendor-profile.php" class="avatar-link" aria-label="View profile">
+                <img src="<?php echo htmlspecialchars($profilePhotoUrl, ENT_QUOTES, 'UTF-8'); ?>" alt="Vendor profile photo" class="header-avatar">
+            </a>
+            <div class="brand-text">
+                <span class="brand-title">Vendor</span>
+                <span class="brand-subtitle" id="headerGreeting">Curated commerce, crafted by you.</span>
+            </div>
+        </div>
+        <div class="header-actions" aria-label="Dashboard navigation">
+            <button class="icon-button notif-icon" type="button" id="notificationsBtn" aria-label="Notifications" title="Notifications">
+                <i class="ri-notification-3-line"></i>
+            </button>
+            <button class="icon-button" type="button" id="settingsBtn" aria-label="Vendor settings">
+                <i class="ri-settings-4-line"></i>
+            </button>
+            <button class="icon-button" type="button" id="chatBtn" aria-label="Chats" title="Chats">
+                <i class="ri-chat-3-line"></i>
+            </button>
+            <button class="icon-button" type="button" id="logoutBtn" aria-label="Logout">
+                <i class="ri-logout-circle-r-line"></i>
+            </button>
+        </div>
+    </header>
+
+    <main id="dashboard" style="display:none;" aria-live="polite">
+        <section class="intro-card" aria-labelledby="welcomeTitle">
+            <h1 id="welcomeTitle">Welcome back, <span id="welcomeName">Vendor</span>!</h1>
+            <p>Your marketplace performance updates in real-time. Keep your catalog vibrant to stay ahead.</p>
+        </section>
+
+        <section class="kpi-section" aria-labelledby="snapshotTitle">
+            <div class="section-header">
+                <div>
+                    <h2 id="snapshotTitle">Performance Snapshot</h2>
+                    <p class="section-subtitle">Fresh insights from your latest activity.</p>
+                </div>
+            </div>
+            <div class="kpi-grid" id="kpiGrid">
+                <article class="kpi-card" aria-live="polite">
+                    <i class="ri-stack-line kpi-icon" aria-hidden="true"></i>
+                    <p class="kpi-title">Total Listings</p>
+                    <p class="kpi-value" id="totalListings">0</p>
+                </article>
+                <article class="kpi-card" aria-live="polite">
+                    <i class="ri-checkbox-circle-line kpi-icon" aria-hidden="true"></i>
+                    <p class="kpi-title">Active Listings</p>
+                    <p class="kpi-value" id="activeListings">0</p>
+                </article>
+                <article class="kpi-card" aria-live="polite">
+                    <i class="ri-eye-line kpi-icon" aria-hidden="true"></i>
+                    <p class="kpi-title">Total Views</p>
+                    <p class="kpi-value" id="totalViews">0</p>
+                </article>
+                <article class="kpi-card" aria-live="polite">
+                    <i class="ri-vip-crown-line kpi-icon" aria-hidden="true"></i>
+                    <p class="kpi-title">Current Plan</p>
+                    <p class="kpi-value" id="currentPlan">Free</p>
+                    <p class="kpi-meta" id="currentPlanStatus">Status: --</p>
+                    <p class="kpi-meta" id="currentPlanRenewal">Renews: --</p>
+                </article>
+            </div>
+        </section>
+
+        <section class="glass-section" aria-labelledby="listingsTitle">
+            <div class="section-header">
+                <div>
+                    <h2 id="listingsTitle">Your Listings</h2>
+                    <p class="section-subtitle">Manage the gems currently shining in the marketplace.</p>
+                </div>
+                <div class="section-actions">
+                    <a href="vendor-listings.php" class="section-link">
+                        Manage all
+                        <i class="ri-arrow-right-up-line" aria-hidden="true"></i>
+                    </a>
+                    <div class="badge" id="listingsBadge">0 Active</div>
+                </div>
+            </div>
+            <div class="empty-state" id="emptyState" hidden>
+                <i class="ri-inbox-archive-line" aria-hidden="true"></i>
+                You haven’t added any listings yet. Tap the orange plus button to get started.
+            </div>
+            <div class="listings-grid" id="listingGrid" aria-live="polite"></div>
+        </section>
+
+        <section class="glass-section boost-section" aria-labelledby="boostTitle">
+            <div class="section-header">
+                <div>
+                    <h2 id="boostTitle">Boost Your Reach</h2>
+                    <p class="section-subtitle">Unlock premium placement to reach more ready-to-buy customers.</p>
+                </div>
+            </div>
+            <div class="boost-body">
+                Elevate your storefront with curated campaigns, homepage features, and smart insights tuned for Nigerian shoppers. Ready when you are.
+            </div>
+            <div class="boost-actions">
+                <button class="btn btn-accent" type="button" id="renewPlan">Renew Current Plan</button>
+                <button class="btn btn-outline" type="button" id="viewPricing">View Pricing Deck</button>
+            </div>
+        </section>
+    </main>
+
+    <button class="fab" id="fab" aria-label="Add a new listing">
+        <i class="ri-add-line" aria-hidden="true"></i>
+    </button>
+
+    <footer>
+        © 2025 YUSTAM Marketplace — <a href="contact.html">Support</a>
+    </footer>
+    <?php require __DIR__ . '/vendor-listing-editor-modal.php'; ?>
+  <script src="theme-manager.js" defer></script>
+<script type="module" src="vendor-dashboard.js"></script>
+</body>
+</html>

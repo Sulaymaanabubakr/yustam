@@ -5,8 +5,8 @@ const expoBaseUrl =
   Constants?.manifest?.extra?.apiBaseUrl ??
   process.env.EXPO_PUBLIC_API_BASE_URL;
 
-const LOCAL_BASE = 'http://localhost:4000/api';
-const PROD_BASE = 'https://yustam-backend.vercel.app/api';
+const LOCAL_BASE = 'http://localhost/api';
+const PROD_BASE = 'https://yustam.com.ng/api';
 
 const inferredRuntimeBase =
   typeof window !== 'undefined' && window.location
@@ -15,7 +15,7 @@ const inferredRuntimeBase =
       : PROD_BASE
     : undefined;
 
-// API Base URL (point to the new Node/Express backend)
+// API Base URL (points to the unified PHP API)
 // Priority: Expo extra/ENV override -> inferred runtime -> production fallback
 export const API_BASE_URL = expoBaseUrl || inferredRuntimeBase || PROD_BASE;
 

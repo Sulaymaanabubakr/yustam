@@ -1,8 +1,7 @@
 import { auth, db } from './firebase.js';
-import { displayPlanLabel, normalisePlanSlug } from './plan-utils.js';
-import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js';
-import { collection, doc, getDoc, setDoc, query, orderBy, limit, onSnapshot, updateDoc, addDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
-import { adminAPI, clearAdminSession } from './admin-api.js';
+        import { displayPlanLabel, normalisePlanSlug } from './plan-utils.js';
+        import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js';
+        import { collection, doc, getDoc, setDoc, query, orderBy, limit, onSnapshot, updateDoc, addDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
 
         const dashboardContent = document.getElementById('dashboardContent');
         const loader = document.getElementById('loader');
@@ -351,67 +350,46 @@ import { adminAPI, clearAdminSession } from './admin-api.js';
             statsElements.revenue.textContent = formatCurrency(revenue);
         };
 
-        const normaliseVendorRecords = (vendors) => {
-            if (!Array.isArray(vendors)) return [];
-            return vendors.map((vendor) => {
-                const planName = vendor.currentPlan?.name || vendor.plan || 'Free';
-                const planLabel = formatPlanLabel(planName);
-                const joinedAt = vendor.createdAt || vendor.joined;
-                const joinedDisplay = joinedAt ? new Date(joinedAt).toLocaleDateString() : '';
-                const record = {
-                    id: vendor.id ?? '',
-                    uid: vendor.user?.id || vendor.vendorUid || vendor.uid || '',
-                    firebaseUid: vendor.user?.firebaseUid || vendor.firebaseUid || '',
-                    name: vendor.user?.displayName || vendor.name || vendor.businessName || 'Vendor',
-                    businessName: vendor.businessName || vendor.name || '',
-                    email: vendor.user?.email || vendor.email || '',
-                    plan: planLabel,
-                    planSlug: vendor.planSlug || normalisePlanSlug(planName),
-                    status: vendor.verificationStatus || vendor.status || '',
-                    profilePhoto: vendor.user?.photoUrl || vendor.profilePhoto || '',
-                    joined: joinedDisplay,
-                };
-                storeVendorRecord(record);
-                return record;
-            });
-        };
+        const normaliseVendorRecords = (vendors) => {
+            if (!Array.isArray(vendors)) return [];
+            return vendors.map((vendor) => {
+                const planLabel = formatPlanLabel(vendor.plan);
+                const joinedDisplay = (vendor.joined && vendor.joined !== '-') ? vendor.joined : '';
+                const record = {
+                    id: vendor.id ?? '',
+                    uid: vendor.vendorUid || vendor.uid || '',
+                    vendorUid: vendor.vendorUid || vendor.uid || '',
+                    firebaseUid: vendor.firebaseUid || '',
+                    name: vendor.name || vendor.businessName || 'Vendor',
+                    businessName: vendor.businessName || '',
+                    email: vendor.email || '',
+                    plan: planLabel,
+                    planSlug: vendor.planSlug || slugifyPlan(planLabel),
+                    status: vendor.status || '',
+                    profilePhoto: vendor.profilePhoto || '',
+                    joined: joinedDisplay,
+                };
                 storeVendorRecord(record);
                 return record;
             });
         };
 
-        const buildPlanSummary = (vendors) => {
-            const base = { free: 0, starter: 0, pro: 0, elite: 0, power: 0 };
-            vendors.forEach((vendor) => {
-                const key = vendor.planSlug || normalisePlanSlug(vendor.plan) || 'free';
-                if (base[key] !== undefined) {
-                    base[key] += 1;
-                } else {
-                    base[key] = 1;
-                }
-            });
-            const activePlans = base.starter + base.pro + base.elite + base.power;
-            const revenue =
-                (base.starter * (PLAN_PRICING.starter || 0)) +
-                (base.pro * (PLAN_PRICING.pro || 0)) +
-                (base.elite * (PLAN_PRICING.elite || 0)) +
-                (base.power * (PLAN_PRICING.power || 0));
-            return {
-                total: vendors.length,
-                activePlans,
-                revenue,
-                planCounts: base,
-            };
-        };
-
         const fetchVendorSummary = async () => {
             try {
-                const payload = await adminAPI.vendors();
-                const vendors = normaliseVendorRecords(payload?.vendors || []);
+                const response = await fetch('admin-vendors-summary.php', {
+                    method: 'GET',
+                    credentials: 'same-origin',
+                    headers: { Accept: 'application/json' },
+                });
+                const payload = await response.json();
+                if (!response.ok || !payload?.success) {
+                    throw new Error(payload?.message || 'Unable to load vendor summary.');
+                }
+                const vendors = normaliseVendorRecords(payload.vendors || []);
                 renderVendors(vendors);
-                const summary = buildPlanSummary(vendors);
-                applyPlanSummary(summary);
-                statsElements.vendors.textContent = summary.total.toString();
+                applyPlanSummary(payload.summary || {});
+                const total = payload.summary?.total ?? vendors.length;
+                statsElements.vendors.textContent = total.toString();
                 vendorSummaryErrorShown = false;
                 refreshListingVendorLabels();
             } catch (error) {
@@ -423,9 +401,19 @@ import { adminAPI, clearAdminSession } from './admin-api.js';
             }
         };
 
-        const performListingAction = async (listingId, action) => {
-            const status = action === 'approve' ? 'ACTIVE' : 'ARCHIVED';
-            return adminAPI.updateProductStatus(listingId, { status });
+        const performListingAction = async (listingId, action, extra = {}) => {
+            const body = new URLSearchParams({ listingId, action });
+            if (extra.reason) body.append('reason', extra.reason);
+            const response = await fetch('admin-listing-action.php', {
+                method: 'POST',
+                credentials: 'same-origin',
+                body,
+            });
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok || !payload?.success) {
+                throw new Error(payload?.message || 'Unable to process listing action.');
+            }
+            return payload;
         };
 
         const approveListing = async (listingId) => {
@@ -461,22 +449,7 @@ import { adminAPI, clearAdminSession } from './admin-api.js';
             }
             sendFeedback.disabled = true;
             try {
-                await performListingAction(selectedListingId, 'reject');
-                if (selectedListingVendor) {
-                    try {
-                        await addDoc(collection(db, 'notifications'), {
-                            type: 'listing-rejected',
-                            title: 'Listing rejected',
-                            message: reason,
-                            vendorId: selectedListingVendor,
-                            listingId: selectedListingId,
-                            read: false,
-                            createdAt: serverTimestamp(),
-                        });
-                    } catch (notificationError) {
-                        console.error('Failed to create rejection notification', notificationError);
-                    }
-                }
+                await performListingAction(selectedListingId, 'reject', { reason });
                 showToast('Feedback sent to vendor.');
                 removeListingCard(selectedListingId);
                 closeRejectModal();
@@ -614,18 +587,18 @@ import { adminAPI, clearAdminSession } from './admin-api.js';
             return null;
         };
 
-        const requireBackendAdmin = async () => {
+        const ensureSession = async () => {
             try {
-                const response = await adminAPI.me();
-                const user = response?.user ?? response;
-                if (!user || user.role !== 'ADMIN') {
-                    throw new Error('Not authorised');
-                }
-                return user;
+                const response = await fetch('admin-session-status.php', {
+                    method: 'GET',
+                    credentials: 'same-origin'
+                });
+                if (!response.ok) throw new Error('Session invalid');
+                return await response.json();
             } catch (error) {
-                console.error('Backend admin validation failed:', error);
-                clearAdminSession();
-                throw error;
+                console.error('Admin session validation failed:', error);
+                window.location.href = 'admin-login.php';
+                return null;
             }
         };
 
@@ -633,21 +606,22 @@ import { adminAPI, clearAdminSession } from './admin-api.js';
 
         const initAuth = () => {
             onAuthStateChanged(auth, async (user) => {
+                const session = await ensureSession();
+                if (!session) {
+                    return;
+                }
+
                 try {
-                    await requireBackendAdmin();
+                    if (user) {
+                        const adminSnap = await withRetries(() => ensureAdminRecord(user), 3, 900);
 
-                    if (!user) {
-                        console.warn('Firebase admin user not available; redirecting to login.');
-                        window.location.href = 'admin-login.php';
-                        return;
-                    }
-
-                    const adminSnap = await withRetries(() => ensureAdminRecord(user), 3, 900);
-
-                    if (!adminSnap || !adminSnap.exists()) {
-                        console.warn('Admin record still missing after retries, redirecting to homepage.');
-                        window.location.href = 'index.html';
-                        return;
+                        if (!adminSnap || !adminSnap.exists()) {
+                            console.warn('Admin record still missing after retries, redirecting to homepage.');
+                            window.location.href = 'index.html';
+                            return;
+                        }
+                    } else {
+                        console.warn('Auth admin user not available; continuing with PHP session only.');
                     }
 
                     loader.hidden = true;
@@ -656,9 +630,7 @@ import { adminAPI, clearAdminSession } from './admin-api.js';
                     hydrateData();
                 } catch (error) {
                     console.error('auth guard error', error);
-                    await signOut(auth).catch(() => undefined);
-                    clearAdminSession();
-                    window.location.href = 'admin-login.php';
+                    window.location.href = 'index.html';
                 }
             });
         };
@@ -705,7 +677,11 @@ import { adminAPI, clearAdminSession } from './admin-api.js';
             } catch (error) {
                 console.error('logout error', error);
             } finally {
-                clearAdminSession();
+                try {
+                    await fetch('admin-logout.php', { method: 'GET', credentials: 'same-origin' });
+                } catch (logoutError) {
+                    console.error('Admin session logout failed:', logoutError);
+                }
                 window.location.href = 'admin-login.php';
             }
         });

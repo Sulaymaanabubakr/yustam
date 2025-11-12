@@ -1,5 +1,5 @@
-const PROD_BASE = 'https://yustam-backend.vercel.app/api';
-const LOCAL_BASE = 'http://localhost:4000/api';
+const PROD_BASE = 'https://yustam.com.ng/api';
+const LOCAL_BASE = 'http://localhost/api';
 
 const DEFAULT_BASE =
   typeof window !== 'undefined' && window.location
