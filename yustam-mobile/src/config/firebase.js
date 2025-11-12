@@ -1,14 +1,14 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
+import { Platform } from 'react-native';
 import {
   getAuth,
   initializeAuth,
-  getReactNativePersistence
+  getReactNativePersistence,
 } from 'firebase/auth';
 import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
-// Firebase config (same as before)
 const firebaseConfig = {
   apiKey: 'AIzaSyBQ74sMmOiYEvkxa26Movh0DAnmc0Jz60g',
   authDomain: 'yustam-50819.firebaseapp.com',
@@ -19,13 +19,25 @@ const firebaseConfig = {
   measurementId: 'G-G9ZXVBPFYM',
 };
 
-// Initialise only once
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
-// ✅ Persistent Auth (this line fixes it)
-const auth = initializeAuth(app, {
-  persistence: getReactNativePersistence(ReactNativeAsyncStorage),
-});
+let auth;
+if (Platform.OS === 'web') {
+  auth = getAuth(app);
+} else {
+  try {
+    const persistence =
+      typeof getReactNativePersistence === 'function'
+        ? getReactNativePersistence(ReactNativeAsyncStorage)
+        : undefined;
+    auth = persistence
+      ? initializeAuth(app, { persistence })
+      : initializeAuth(app);
+  } catch (error) {
+    console.warn('Falling back to default Firebase auth', error);
+    auth = getAuth(app);
+  }
+}
 
 const db = getFirestore(app);
 const storage = getStorage(app);

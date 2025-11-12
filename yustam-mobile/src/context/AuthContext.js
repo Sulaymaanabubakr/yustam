@@ -147,8 +147,24 @@ export const AuthProvider = ({ children }) => {
 
       return { token, backendUser };
     } catch (error) {
-      console.error('Session error', error?.response?.data || error);
-      throw error;
+      const status = error?.response?.status;
+      const payload = error?.response?.data;
+      console.error('Session error status:', status);
+      console.error('Session error payload:', payload);
+      console.error('Session error message:', error?.message);
+      if (error?.toJSON) {
+        console.error('Session error toJSON:', error.toJSON());
+      } else {
+        console.error('Session error raw:', error);
+      }
+
+      if (payload?.message) {
+        throw new Error(payload.message);
+      }
+      if (error instanceof Error && error.message) {
+        throw error;
+      }
+      throw new Error('Failed to create backend session');
     }
   };
 
