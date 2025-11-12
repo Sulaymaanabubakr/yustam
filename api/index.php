@@ -172,7 +172,10 @@ function yustam_api_handle_plans(string $method, array $segments): array
     if ($method === 'POST' && isset($segments[0], $segments[1]) && $segments[1] === 'checkout') {
         return yustam_api_plan_checkout($segments[0]);
     }
-    if ($method === 'POST' && empty($segments)) {
+    if (
+        ($method === 'POST' && empty($segments)) ||
+        ($method === 'GET' && isset($segments[0]) && $segments[0] === 'callback')
+    ) {
         return yustam_api_plan_callback();
     }
     yustam_api_error(404, 'Plans endpoint not found.');
