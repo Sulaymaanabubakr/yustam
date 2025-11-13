@@ -1072,6 +1072,30 @@ function yustam_api_plan_callback(): array
     }
 
     if ($vendorId <= 0) {
+        try {
+            $transaction = yustam_paystack_verify_transaction($reference);
+            $meta = $transaction['metadata'] ?? ($transaction['data']['metadata'] ?? null);
+            if (is_string($meta)) {
+                $decoded = json_decode($meta, true);
+                if (is_array($decoded)) {
+                    $meta = $decoded;
+                }
+            }
+            if (is_array($meta)) {
+                $vendorId = (int) ($meta['vendor_id'] ?? $meta['vendorId'] ?? 0);
+                if ($vendorId <= 0 && isset($meta['vendor'])) {
+                    [$role, $id] = yustam_api_parse_user_reference((string) $meta['vendor']);
+                    if ($role === 'vendor') {
+                        $vendorId = $id;
+                    }
+                }
+            }
+        } catch (Throwable $exception) {
+            yustam_api_error(400, 'Unable to verify transaction reference.');
+        }
+    }
+
+    if ($vendorId <= 0) {
         yustam_api_error(400, 'Vendor identifier missing.');
     }
 
