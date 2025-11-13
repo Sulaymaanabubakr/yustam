@@ -1,3 +1,20 @@
+  // Verify plan payment by calling backend callback endpoint
+  verifyPlanPayment: async (reference) => {
+    if (!reference) throw new Error('Missing payment reference');
+    // POST or GET to /plans/callback?reference=...
+    try {
+      const response = await api.get(`/plans/callback?reference=${encodeURIComponent(reference)}`);
+      return response;
+    } catch (err) {
+      // fallback to POST if GET fails (for webhook style)
+      try {
+        const response = await api.post('/plans/callback', { reference });
+        return response;
+      } catch (err2) {
+        throw err2;
+      }
+    }
+  },
 import axios from 'axios';
 import { API_BASE_URL } from '../config/constants';
 

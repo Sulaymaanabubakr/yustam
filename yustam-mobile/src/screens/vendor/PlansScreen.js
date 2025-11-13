@@ -20,8 +20,8 @@ import { vendorAPI } from '../../services/api';
 import { goBackOrNavigate } from '../../utils/navigation';
 import { formatNumber, formatNaira } from '../../utils/formatters';
 import { DEFAULT_VENDOR_PLANS, getPlanPreset } from '../../data/vendorPlans';
-import { WebView } from 'react-native-webview';
-
+import PaystackWebView from 'react-native-paystack-webview';
+import { PAYSTACK_PUBLIC_KEY } from '@env';
 const CALLBACK_URL = `${API_BASE_URL}/plans/callback`;
 
 const BILLING_LABELS = {
@@ -66,8 +66,7 @@ const PlansScreen = ({ navigation }) => {
   const [currentPlanInfo, setCurrentPlanInfo] = useState(null);
   const [discounts, setDiscounts] = useState(DEFAULT_DISCOUNT_MAP);
   const [processingPlan, setProcessingPlan] = useState(null);
-  const [checkoutState, setCheckoutState] = useState({ visible: false, url: '', planName: '' });
-  const webviewRef = useRef(null);
+  const [paystackModal, setPaystackModal] = useState({ visible: false, plan: null, option: null });
 
   useEffect(() => {
     loadPlans();
@@ -215,6 +214,7 @@ const PlansScreen = ({ navigation }) => {
     setToast({ ...toast, visible: false });
   };
 
+  // Real Paystack payment integration
   const handleSelectPlan = async (plan) => {
     if (plan.slug === currentPlan) {
       showToast('This is your current plan', 'info');
@@ -236,49 +236,69 @@ const PlansScreen = ({ navigation }) => {
       return;
     }
 
+    // Get checkout info from backend (amount, planCode, etc.)
     try {
       setProcessingPlan(plan.slug);
       const response = await vendorAPI.createPlanCheckout(plan.slug, selectedMonths);
       const checkout = response.data?.checkout ?? response.data;
-      if (!checkout?.authorizationUrl) {
-        throw new Error('Unable to obtain checkout link.');
+      if (!checkout?.amount || !user?.email) {
+        throw new Error('Unable to get payment details.');
       }
-      setCheckoutState({
-        visible: true,
-        url: checkout.authorizationUrl,
-        planName: `${plan.name} · ${chosenOption.intervalLabel || getDurationLabel(chosenOption.months)}`,
-      });
+      setPaystackModal({ visible: true, plan, option: { ...chosenOption, amount: checkout.amount, planCode: checkout.planCode } });
     } catch (error) {
-      console.error('Plan selection error:', error);
-      showToast(
-        error?.response?.data?.message ||
-          error.message ||
-          'Unable to open payment page right now.',
-        'error',
-      );
+      setProcessingPlan(null);
+      showToast(error?.response?.data?.message || error.message || 'Unable to start payment.', 'error');
+    }
+  };
+  // Handle Paystack payment success
+  const handlePaystackSuccess = async (response) => {
+    setPaystackModal({ visible: false, plan: null, option: null });
+    setProcessingPlan(paystackModal.plan?.slug || null);
+    try {
+      const reference = response?.transactionRef?.reference || response?.reference || response?.transactionRef || response?.trxref;
+      if (!reference) throw new Error('Missing payment reference');
+      const callbackRes = await vendorAPI.verifyPlanPayment(reference);
+      if (callbackRes.data?.success) {
+        showToast('Subscription successful! Your plan has been updated.', 'success');
+        await loadPlans();
+      } else {
+        showToast('Payment verified, but plan update failed.', 'error');
+      }
+    } catch (error) {
+      showToast(error?.response?.data?.message || error.message || 'Unable to verify payment.', 'error');
     } finally {
       setProcessingPlan(null);
     }
   };
-
-  const closeCheckout = () => {
-    setCheckoutState({ visible: false, url: '', planName: '' });
-    loadPlans();
+  // Handle Paystack payment cancel
+  const handlePaystackCancel = () => {
+    setPaystackModal({ visible: false, plan: null, option: null });
+    setProcessingPlan(null);
+    showToast('Payment cancelled.', 'info');
   };
+  // Add PaystackWebView modal to the render
+  {paystackModal.visible && paystackModal.plan && paystackModal.option && (
+    <PaystackWebView
+      buttonText="Pay Now"
+      paystackKey={PAYSTACK_PUBLIC_KEY}
+      amount={paystackModal.option.amount}
+      billingEmail={user?.email}
+      billingName={user?.displayName || ''}
+      activityIndicatorColor={theme.colors.primary}
+      onSuccess={handlePaystackSuccess}
+      onCancel={handlePaystackCancel}
+      autoStart={true}
+      currency={paystackModal.plan.currency || 'NGN'}
+      channels={["card", "bank"]}
+      plan={paystackModal.option.planCode || undefined}
+      refNumber={undefined}
+      renderButton={() => null}
+      showPayButton={false}
+      style={{ margin: 0, padding: 0, flex: 1, backgroundColor: 'white' }}
+    />
+  )}
 
-  const handleCheckoutNavigation = (navState) => {
-    const url = navState?.url || '';
-    if (!url) {
-      return;
-    }
-    if (
-      url.startsWith(CALLBACK_URL) ||
-      url.includes('paystack.co/close') ||
-      url.includes('status=success')
-    ) {
-      closeCheckout();
-    }
-  };
+  // Remove checkout and navigation handlers
 
   const handleDurationChange = (planSlug, months) => {
     setSelectedDurations((prev) => ({
