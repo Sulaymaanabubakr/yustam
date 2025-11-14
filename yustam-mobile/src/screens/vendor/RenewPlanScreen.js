@@ -127,7 +127,10 @@ const VendorRenewPlanScreen = ({ navigation }) => {
           <View style={styles.planMeta}>
             <Ionicons name="time-outline" size={18} color={theme.colors.textSecondary} />
             <Text style={styles.planMetaText}>
-              Expires {plan?.expiresOn ? new Date(plan.expiresOn).toDateString() : 'soon'}
+              Expires{' '}
+              {plan?.expiresOn && !Number.isNaN(Date.parse(plan.expiresOn))
+                ? new Date(plan.expiresOn).toDateString()
+                : plan?.expiresOn || 'soon'}
             </Text>
           </View>
           {typeof plan?.remainingListings === 'number' && (

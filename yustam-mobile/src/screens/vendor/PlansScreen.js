@@ -598,9 +598,6 @@ const PlansScreen = ({ navigation }) => {
         )}
 
         <View style={styles.subscriptionSummary}>
-          <Text style={styles.subscriptionSummaryText}>
-            Current Plan: {currentPlanInfo?.name || getPlanLabel(currentPlan)}
-          </Text>
           <Button
             variant="outline"
             size="small"
@@ -710,13 +707,9 @@ const styles = StyleSheet.create({
   subscriptionSummary: {
     width: '100%',
     marginTop: theme.spacing.lg,
+    marginBottom: theme.spacing.xl,
     gap: theme.spacing.sm,
     alignItems: 'center',
-  },
-  subscriptionSummaryText: {
-    fontFamily: theme.typography.fontFamily.interMedium,
-    fontSize: theme.typography.fontSize.base,
-    color: theme.colors.textPrimary,
   },
   summaryCard: {
     width: '100%',
@@ -784,6 +777,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: theme.borderRadius.lg,
     padding: theme.spacing.lg,
+    marginBottom: theme.spacing.xl,
+    alignItems: 'center',
     gap: theme.spacing.sm,
     ...theme.shadows.soft,
   },
@@ -791,10 +786,12 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.fontFamily.interSemiBold,
     fontSize: theme.typography.fontSize.base,
     color: theme.colors.textPrimary,
+    textAlign: 'center',
   },
   discountRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: theme.spacing.sm,
   },
   discountDot: {
@@ -804,10 +801,10 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.accent,
   },
   discountText: {
-    flex: 1,
     fontFamily: theme.typography.fontFamilyBody,
     fontSize: theme.typography.sizes.sm,
     color: theme.colors.textSecondary,
+    textAlign: 'center',
   },
   introTitle: {
     fontFamily: theme.typography.fontFamilyHeading,
