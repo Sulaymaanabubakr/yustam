@@ -33,6 +33,7 @@
     ],
     "extra": {
       "apiBaseUrl": "https://yustam.com.ng/api",
+      "paystackPublicKey": "pk_live_21106eb17dafe8fbdca6708b57cef484d8a125ef",
       "googleAuth": {
         "expoClientId": "90080814337-23s48plm9jo0o545h9m5b5c6ut8e5ami.apps.googleusercontent.com",
         "androidClientId": "90080814337-3k0s5u9pne7i5vnfgalu5sddj8uc9jj3.apps.googleusercontent.com",

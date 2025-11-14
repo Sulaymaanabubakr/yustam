@@ -12,6 +12,9 @@ import {
   Inter_600SemiBold,
   Inter_700Bold,
 } from '@expo-google-fonts/inter';
+import Constants from 'expo-constants';
+import { PaystackProvider } from 'react-native-paystack-webview';
+import { PAYSTACK_PUBLIC_KEY as ENV_PAYSTACK_PUBLIC_KEY } from '@env';
 import { AuthProvider } from './src/context/AuthContext';
 import AppNavigator from './src/navigation/AppNavigator';
 import theme from './src/theme';
@@ -19,8 +22,17 @@ import theme from './src/theme';
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync();
 
+const resolvePaystackKey = () => {
+  const configKey =
+    Constants?.expoConfig?.extra?.paystackPublicKey ??
+    Constants?.manifest?.extra?.paystackPublicKey ??
+    '';
+  return ENV_PAYSTACK_PUBLIC_KEY || configKey || '';
+};
+
 export default function App() {
   const [appIsReady, setAppIsReady] = useState(false);
+  const paystackPublicKey = resolvePaystackKey();
 
   let [fontsLoaded] = useFonts({
     Anton_400Regular,
@@ -62,9 +74,11 @@ export default function App() {
   }
 
   return (
-    <AuthProvider>
-      <StatusBar style="dark" />
-      <AppNavigator />
-    </AuthProvider>
+    <PaystackProvider publicKey={paystackPublicKey} currency="NGN" defaultChannels={['card', 'bank']}>
+      <AuthProvider>
+        <StatusBar style="dark" />
+        <AppNavigator />
+      </AuthProvider>
+    </PaystackProvider>
   );
 }

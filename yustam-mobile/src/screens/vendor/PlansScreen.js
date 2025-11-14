@@ -1,4 +1,28 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
+
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error, info) {
+    console.log('ErrorBoundary caught:', error, info);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 }}>
+          <Text style={{ color: 'red', fontSize: 18, marginBottom: 12 }}>Something went wrong:</Text>
+          <Text style={{ color: 'red', fontSize: 14 }}>{String(this.state.error)}</Text>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
 import {
   View,
   Text,
@@ -7,7 +31,6 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
-  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,9 +43,7 @@ import { vendorAPI } from '../../services/api';
 import { goBackOrNavigate } from '../../utils/navigation';
 import { formatNumber, formatNaira } from '../../utils/formatters';
 import { DEFAULT_VENDOR_PLANS, getPlanPreset } from '../../data/vendorPlans';
-import { PaystackWebView } from 'react-native-paystack-webview/production/lib/PaystackProvider';
-import { PAYSTACK_PUBLIC_KEY } from '@env';
-const CALLBACK_URL = `${API_BASE_URL}/plans/callback`;
+import { usePaystack } from 'react-native-paystack-webview';
 
 const BILLING_LABELS = {
   1: 'Monthly',
@@ -35,6 +56,36 @@ const DEFAULT_DISCOUNT_MAP = {
   3: 0.07,
   6: 0.12,
   12: 0.17,
+};
+
+const resolveVendorId = (profile) => {
+  if (!profile) {
+    return null;
+  }
+  const candidates = [
+    profile.vendorId,
+    profile.vendor_id,
+    profile.vendorID,
+    profile.vendor?.id,
+    profile.vendor?.vendorId,
+    profile.id,
+  ];
+
+  for (const value of candidates) {
+    if (value === undefined || value === null) {
+      continue;
+    }
+    const numeric = parseInt(String(value).replace(/[^\d]/g, ''), 10);
+    if (Number.isFinite(numeric) && numeric > 0) {
+      return numeric;
+    }
+  }
+  return null;
+};
+
+const buildPlanReference = (vendorId) => {
+  const randomPart = Math.random().toString(36).substring(2, 8).toUpperCase();
+  return `YUSTAM-V${vendorId}-${randomPart}-${Date.now()}`;
 };
 
 const getPlanLabel = (slug) => getPlanPreset(slug)?.name || 'Free Plan';
@@ -69,7 +120,7 @@ const PlansScreen = ({ navigation }) => {
   const [currentPlanInfo, setCurrentPlanInfo] = useState(null);
   const [discounts, setDiscounts] = useState(DEFAULT_DISCOUNT_MAP);
   const [processingPlan, setProcessingPlan] = useState(null);
-  const [paystackModal, setPaystackModal] = useState({ visible: false, plan: null, option: null });
+  const { popup } = usePaystack();
 
   useEffect(() => {
     loadPlans();
@@ -217,57 +268,23 @@ const PlansScreen = ({ navigation }) => {
     setToast({ ...toast, visible: false });
   };
 
-  // Real Paystack payment integration
-  const handleSelectPlan = async (plan) => {
-    if (plan.slug === currentPlan) {
-      showToast('This is your current plan', 'info');
-      return;
-    }
-
-    const selectedMonths =
-      selectedDurations[plan.slug] ||
-      plan.durationOptions?.[0]?.months ||
-      1;
-
-    const durationOptions = Array.isArray(plan.durationOptions) ? plan.durationOptions : [];
-    const chosenOption =
-      durationOptions.find((option) => option.months === selectedMonths) ||
-      durationOptions[0];
-
-    if (!chosenOption) {
-      showToast('This plan is currently unavailable. Please try again later.', 'error');
-      return;
-    }
-
-    // Get checkout info from backend (amount, planCode, etc.)
-    try {
-      setProcessingPlan(plan.slug);
-      const response = await vendorAPI.createPlanCheckout(plan.slug, selectedMonths);
-      console.log('Plan checkout response:', response.data);
-      const checkout = response.data?.checkout ?? response.data;
-      // Use amount and planCode from chosenOption, not backend response
-      if (!chosenOption?.amount || !chosenOption?.planCode || !user?.email) {
-        console.log('Missing payment details:', chosenOption);
-        throw new Error('Unable to get payment details.');
-      }
-      console.log('Opening Paystack modal with:', { plan, chosenOption });
-      setPaystackModal({ visible: true, plan, option: { ...chosenOption } });
-      setTimeout(() => {
-        console.log('Paystack modal state:', paystackModal);
-      }, 500);
-      setProcessingPlan(null); // Reset loading state after opening modal
-    } catch (error) {
-      setProcessingPlan(null);
-      showToast(error?.response?.data?.message || error.message || 'Unable to start payment.', 'error');
-    }
+  const handlePaystackCancel = () => {
+    setProcessingPlan(null);
+    showToast('Payment cancelled.', 'info');
   };
-  // Handle Paystack payment success
-  const handlePaystackSuccess = async (response) => {
-    setPaystackModal({ visible: false, plan: null, option: null });
-    setProcessingPlan(null); // Always reset loading state after payment
+
+  const handlePaystackSuccess = async (response, fallbackReference) => {
     try {
-      const reference = response?.transactionRef?.reference || response?.reference || response?.transactionRef || response?.trxref;
-      if (!reference) throw new Error('Missing payment reference');
+      const reference =
+        response?.transactionRef?.reference ||
+        response?.reference ||
+        response?.transactionRef ||
+        response?.data?.reference ||
+        response?.trxref ||
+        fallbackReference;
+      if (!reference) {
+        throw new Error('Missing payment reference.');
+      }
       const callbackRes = await vendorAPI.verifyPlanPayment(reference);
       if (callbackRes.data?.success) {
         showToast('Subscription successful! Your plan has been updated.', 'success');
@@ -281,47 +298,70 @@ const PlansScreen = ({ navigation }) => {
       setProcessingPlan(null);
     }
   };
-  // Handle Paystack payment cancel
-  const handlePaystackCancel = () => {
-    setPaystackModal({ visible: false, plan: null, option: null });
-    setProcessingPlan(null);
-    showToast('Payment cancelled.', 'info');
-  };
-  // Add PaystackWebView modal to the render
-  return (
-    <>
-      {paystackModal.visible && paystackModal.plan && paystackModal.option && (
-        <Modal
-          visible={true}
-          animationType="slide"
-          transparent={false}
-          onRequestClose={handlePaystackCancel}
-        >
-          <PaystackWebView
-            buttonText="Pay Now"
-            paystackKey={PAYSTACK_PUBLIC_KEY}
-            amount={paystackModal.option.amount}
-            billingEmail={user?.email}
-            billingName={user?.displayName || ''}
-            activityIndicatorColor={theme.colors.primary}
-            onSuccess={handlePaystackSuccess}
-            onCancel={handlePaystackCancel}
-            autoStart={true}
-            currency={paystackModal.plan.currency || 'NGN'}
-            channels={["card", "bank"]}
-            plan={paystackModal.option.planCode || undefined}
-            refNumber={undefined}
-            renderButton={() => null}
-            showPayButton={false}
-            style={{ margin: 0, padding: 0, flex: 1, backgroundColor: 'white' }}
-          />
-        </Modal>
-      )}
-      {/* ...existing main render code... */}
-    </>
-  );
 
-  // Remove checkout and navigation handlers
+  const handleSelectPlan = (plan) => {
+    if (plan.slug === currentPlan) {
+      showToast('This is your current plan', 'info');
+      return;
+    }
+
+    const durationOptions = Array.isArray(plan.durationOptions) ? plan.durationOptions : [];
+    const selectedMonths =
+      selectedDurations[plan.slug] ||
+      durationOptions[0]?.months ||
+      1;
+    const chosenOption =
+      durationOptions.find((option) => option.months === selectedMonths) || durationOptions[0];
+
+    if (!chosenOption) {
+      showToast('This plan is currently unavailable. Please try again later.', 'error');
+      return;
+    }
+
+    const vendorId = resolveVendorId(user);
+    if (!vendorId) {
+      showToast('We could not match your vendor profile. Please reload the app and try again.', 'error');
+      return;
+    }
+    if (!user?.email) {
+      showToast('Please add an email address to your profile to continue.', 'error');
+      return;
+    }
+    if (!popup?.checkout) {
+      showToast('Payment module is not ready yet. Please try again shortly.', 'error');
+      return;
+    }
+    if (!chosenOption?.planCode || !Number(chosenOption?.amount)) {
+      showToast('Selected plan is missing Paystack configuration.', 'error');
+      return;
+    }
+
+    const reference = buildPlanReference(vendorId);
+    try {
+      setProcessingPlan(plan.slug);
+      popup.checkout({
+        email: user.email,
+        amount: Number(chosenOption.amount),
+        plan: chosenOption.planCode,
+        reference,
+        metadata: {
+          vendor_id: vendorId,
+          vendorId,
+          vendor: `vendor:${vendorId}`,
+          plan_slug: plan.slug,
+          plan_code: chosenOption.planCode,
+          duration_months: chosenOption.months,
+          source: 'mobile-app',
+        },
+        onSuccess: (res) => handlePaystackSuccess(res, reference),
+        onCancel: handlePaystackCancel,
+      });
+    } catch (error) {
+      console.error('Paystack checkout error:', error);
+      setProcessingPlan(null);
+      showToast(error?.response?.data?.message || error.message || 'Unable to start payment.', 'error');
+    }
+  };
 
   const handleDurationChange = (planSlug, months) => {
     setSelectedDurations((prev) => ({
@@ -329,9 +369,6 @@ const PlansScreen = ({ navigation }) => {
       [planSlug]: months,
     }));
   };
-
-  const getPlanLabel = (slug) => getPlanPreset(slug)?.name || 'Free Plan';
-
   const PlanCard = ({ plan, isCurrentPlan }) => {
     const formattedPrice = formatNaira(plan.price || 0);
     const listingLabel =
@@ -500,46 +537,44 @@ const PlansScreen = ({ navigation }) => {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <Toast
-        visible={toast.visible}
-        message={toast.message}
-        type={toast.type}
-        onDismiss={hideToast}
-      />
-
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => goBackOrNavigate(navigation)} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={theme.colors.primary} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>PLANS & PRICING</Text>
-        <View style={styles.headerRight} />
-      </View>
-
-      <ScrollView
-        style={styles.content}
-        contentContainerStyle={styles.contentContainer}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={[theme.colors.primary]}
-            tintColor={theme.colors.primary}
-          />
-        }
-      >
-        {/* Intro Section */}
-        <View style={styles.introSection}>
-          <Text style={styles.introTitle}>Choose Your Plan</Text>
-          <Text style={styles.introText}>
-            Select the perfect plan for your business. Upgrade or downgrade anytime.
-          </Text>
+    <ErrorBoundary>
+      <SafeAreaView style={styles.container}>
+        <Toast
+          visible={toast.visible}
+          message={toast.message}
+          type={toast.type}
+          onDismiss={hideToast}
+        />
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => goBackOrNavigate(navigation)} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color={theme.colors.primary} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>PLANS & PRICING</Text>
+          <View style={styles.headerRight} />
         </View>
-
-        {currentPlanInfo && (
-          <View style={styles.summaryCard}>
-            <View style={styles.summaryHeader}>
+        <ScrollView
+          style={styles.content}
+          contentContainerStyle={styles.contentContainer}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[theme.colors.primary]}
+              tintColor={theme.colors.primary}
+            />
+          }
+        >
+          {/* Intro Section */}
+          <View style={styles.introSection}>
+            <Text style={styles.introTitle}>Choose Your Plan</Text>
+            <Text style={styles.introText}>
+              Select the perfect plan for your business. Upgrade or downgrade anytime.
+            </Text>
+          </View>
+          {currentPlanInfo && (
+            <View style={styles.summaryCard}>
+              <View style={styles.summaryHeader}>
               <Text style={styles.summaryLabel}>Current Plan</Text>
               <View
                 style={[
@@ -620,8 +655,6 @@ const PlansScreen = ({ navigation }) => {
           </View>
         </View>
       </ScrollView>
-
-      {/* Removed old checkoutState modal and WebView. PaystackWebView is now used for payment. */}
     </SafeAreaView>
   );
 };
@@ -969,55 +1002,6 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.fontFamilyBody,
     fontSize: theme.typography.sizes.sm,
     color: theme.colors.textPrimary,
-  },
-  checkoutBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: theme.spacing.lg,
-  },
-  checkoutContainer: {
-    width: '100%',
-    height: '85%',
-    maxHeight: '90%',
-    backgroundColor: '#FFFFFF',
-    borderRadius: theme.borderRadius.lg,
-    overflow: 'hidden',
-    ...theme.shadows.large,
-  },
-  checkoutHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: '#EFEFEF',
-  },
-  checkoutTitle: {
-    flex: 1,
-    fontFamily: theme.typography.fontFamilyHeading,
-    fontSize: theme.typography.sizes.lg,
-    color: theme.colors.textPrimary,
-  },
-  checkoutClose: {
-    padding: theme.spacing.xs,
-    marginLeft: theme.spacing.sm,
-  },
-  checkoutWebview: {
-    flex: 1,
-  },
-  checkoutFallback: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: theme.spacing.lg,
-  },
-  checkoutFallbackText: {
-    marginTop: theme.spacing.sm,
-    fontFamily: theme.typography.fontFamilyBody,
-    color: theme.colors.textSecondary,
   },
   selectButton: {
     marginTop: theme.spacing.sm,

@@ -460,8 +460,8 @@ export const vendorAPI = {
   },
   getListingsForOwner: (ownerId, params = {}) =>
     listingsAPI.getAll({ ownerId, includeDrafts: true, ...params }),
-  createPlanCheckout: (slug, months = 1) =>
-    api.post(`/plans/${slug}/checkout`, { months }),
+  verifyPlanPayment: (reference) =>
+    api.post('/plans/callback', { reference }),
 };
 
 export const planAPI = {
