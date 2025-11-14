@@ -16,6 +16,7 @@ import {
   Linking,
   TextInput,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
@@ -35,6 +36,7 @@ import { uploadImage } from '../../config/cloudinary';
 const { width } = Dimensions.get('window');
 const LISTING_WIDTH = (width - theme.spacing.lg * 3) / 2;
 const PUBLIC_BASE_URL = (API_BASE_URL || '').replace(/\/api\/?$/, '') || API_BASE_URL;
+const BANNER_CACHE_KEY = 'vendor_storefront_banner';
 const normaliseBase = (value = '') => (value.endsWith('/') ? value.slice(0, -1) : value);
 const buildStorefrontShareUrl = (slug) =>
   slug ? `${normaliseBase(PUBLIC_BASE_URL)}/storefront/${encodeURIComponent(slug)}` : '';
@@ -245,6 +247,25 @@ const buildPromoHighlight = (vendor = {}) => {
   };
 };
 
+const resolveBannerCacheKey = (identifier) => {
+  const suffix = identifier || 'self';
+  return `${BANNER_CACHE_KEY}:${suffix}`;
+};
+
+const persistBannerLocally = async (identifier, url) => {
+  const key = resolveBannerCacheKey(identifier);
+  if (!url) {
+    await AsyncStorage.removeItem(key);
+    return;
+  }
+  await AsyncStorage.setItem(key, url);
+};
+
+const readCachedBanner = async (identifier) => {
+  const key = resolveBannerCacheKey(identifier);
+  return AsyncStorage.getItem(key);
+};
+
 const StorefrontScreen = ({ navigation, route }) => {
   const { user } = useAuth();
   const vendorUid = resolveUserUid(user);
@@ -351,6 +372,17 @@ const StorefrontScreen = ({ navigation, route }) => {
         vendor.cover_photo ||
         '';
 
+      const bannerIdentifier = storefrontSlug || vendor.vendorUid || vendor.userId || identifier;
+      let coverImageResolved = resolveMediaUrl(bannerSource);
+      if (!coverImageResolved) {
+        const cachedBanner = await readCachedBanner(bannerIdentifier || vendorUid);
+        if (cachedBanner) {
+          coverImageResolved = cachedBanner;
+        }
+      } else {
+        await persistBannerLocally(bannerIdentifier || vendorUid, coverImageResolved);
+      }
+
       const storefrontData = {
         businessName: vendor.businessName || vendor.displayName || 'Your Storefront',
         description: vendor.description || vendor.about || '',
@@ -367,7 +399,7 @@ const StorefrontScreen = ({ navigation, route }) => {
           ? formatDate(vendor.createdAt, { month: 'long', year: 'numeric' })
           : '',
         profileImage: resolveMediaUrl(profileImageSource),
-        coverImage: resolveMediaUrl(bannerSource),
+        coverImage: coverImageResolved,
         vendorUid: vendor.user?.firebaseUid || vendor.vendorUid || vendorUid,
         storefrontSlug,
         storefrontUrl: shareUrl,
@@ -544,7 +576,7 @@ const StorefrontScreen = ({ navigation, route }) => {
       return null;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaType.IMAGE,
+      mediaTypes: 'images',
       allowsEditing: true,
       quality: 0.85,
       ...options,
@@ -572,6 +604,8 @@ const StorefrontScreen = ({ navigation, route }) => {
         banner_url: uploadResult.url,
         banner_image: uploadResult.url,
       });
+      const cacheIdentifier = storefront.vendorUid || storefront.storefrontSlug || vendorUid;
+      await persistBannerLocally(cacheIdentifier, uploadResult.url);
       setStorefront((prev) => ({ ...prev, coverImage: uploadResult.url }));
       showToast('Storefront banner updated!', 'success');
     } catch (error) {

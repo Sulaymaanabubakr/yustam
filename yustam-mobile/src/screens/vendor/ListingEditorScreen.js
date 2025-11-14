@@ -122,7 +122,7 @@ const ListingEditorScreen = ({ route, navigation }) => {
 
     try {
         const result = await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ImagePicker.MediaType.IMAGE,
+          mediaTypes: 'images',
         allowsMultipleSelection: false,
         quality: 0.8,
         aspect: [4, 3],
