@@ -58,7 +58,8 @@ try {
     }
 
     if ($action === 'cancel') {
-        $result = yustam_vendor_subscription_cancel($db, $vendorId);
+        $reason = isset($payload['reason']) ? trim((string) $payload['reason']) : '';
+        $result = yustam_vendor_subscription_cancel($db, $vendorId, $reason);
         $subscription = $result['subscription'] ?? [];
         $response = [
             'success' => true,

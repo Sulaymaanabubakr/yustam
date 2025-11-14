@@ -157,6 +157,7 @@ const fetchCurrentSubscription = async () => {
     const record = subscriptions[0];
     const metadata = record?.metadata || {};
     const planInfo = record?.plan;
+    const cancelled = Boolean(metadata.cancelled);
     const planName =
       metadata.planName ||
       (typeof planInfo === 'object' ? planInfo?.name ?? planInfo?.displayName : planInfo) ||
@@ -183,6 +184,8 @@ const fetchCurrentSubscription = async () => {
       nextBillingDisplay: metadata.nextBillingDisplay || expiryDisplay,
       nextBillingIso: metadata.nextBillingIso || null,
       notice: metadata.notice || '',
+      cancelled,
+      autoRenew: !cancelled,
     };
   } catch (error) {
     console.warn('Unable to fetch subscription state', error);
@@ -560,6 +563,8 @@ export const vendorAPI = {
     api.post('/plans', { reference }),
   setAutoRenew: (enabled) =>
     api.post('/plans/auto-renew', { enabled }),
+  cancelSubscription: (reason) =>
+    api.post('/plans/cancel', { reason }),
 };
 
 export const planAPI = {

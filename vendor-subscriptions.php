@@ -589,7 +589,28 @@ function yustam_vendor_subscription_set_autorenew(mysqli $db, int $vendorId, boo
     ];
 }
 
-function yustam_vendor_subscription_cancel(mysqli $db, int $vendorId): array {
+function yustam_vendor_subscription_record_cancellation(mysqli $db, int $vendorId, ?string $reason): void {
+    $createSql = <<<SQL
+CREATE TABLE IF NOT EXISTS `api_subscription_cancellations` (
+    `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `vendor_id` INT UNSIGNED NOT NULL,
+    `reason` TEXT NULL,
+    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_vendor_id` (`vendor_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+SQL;
+    $db->query($createSql);
+    $stmt = $db->prepare('INSERT INTO `api_subscription_cancellations` (vendor_id, reason, created_at) VALUES (?, ?, NOW())');
+    if ($stmt instanceof mysqli_stmt) {
+        $text = trim((string) $reason);
+        $stmt->bind_param('is', $vendorId, $text);
+        $stmt->execute();
+        $stmt->close();
+    }
+}
+
+function yustam_vendor_subscription_cancel(mysqli $db, int $vendorId, ?string $reason = null): array {
     yustam_vendor_subscription_ensure_columns($db);
     $vendor = yustam_vendor_subscription_fetch_vendor($db, $vendorId);
     if (!$vendor) {
@@ -601,6 +622,7 @@ function yustam_vendor_subscription_cancel(mysqli $db, int $vendorId): array {
         throw new RuntimeException('There is no active subscription to cancel.');
     }
     yustam_paystack_disable_subscription($subscriptionCode, $emailToken);
+    yustam_vendor_subscription_record_cancellation($db, $vendorId, $reason);
     $fields = [];
     $statusColumn = yustam_vendor_subscription_pick_column(['plan_status', 'subscription_status', 'plan_state', 'planstate']);
     if ($statusColumn) {

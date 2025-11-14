@@ -8,6 +8,8 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   Switch,
+  Modal,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,6 +19,13 @@ import Button from '../../components/Button';
 import { vendorAPI } from '../../services/api';
 import { goBackOrNavigate } from '../../utils/navigation';
 import { getPlanPreset } from '../../data/vendorPlans';
+
+const CANCELLATION_REASONS = [
+  { id: 'cost', label: 'It’s more expensive than I expected' },
+  { id: 'results', label: 'I’m not getting enough leads or sales' },
+  { id: 'temporary', label: 'I’m taking a break from selling' },
+  { id: 'experience', label: 'I had an issue with the app or support' },
+];
 
 const normalisePlanSlug = (value = '') => {
   const base = String(value || '').toLowerCase();
@@ -34,6 +43,11 @@ const VendorManageSubscriptionScreen = ({ navigation }) => {
   const [toast, setToast] = useState({ visible: false, message: '', type: 'info' });
   const [details, setDetails] = useState(null);
   const [updatingAutoRenew, setUpdatingAutoRenew] = useState(false);
+  const [cancelModalVisible, setCancelModalVisible] = useState(false);
+  const [selectedReasonId, setSelectedReasonId] = useState(null);
+  const [customReason, setCustomReason] = useState('');
+  const [isCancelling, setIsCancelling] = useState(false);
+  const isCancelPending = Boolean(details?.status && details.status.toLowerCase().includes('cancel'));
 
   const showToast = (message, type = 'success') => {
     setToast({ visible: true, message, type });
@@ -112,12 +126,36 @@ const VendorManageSubscriptionScreen = ({ navigation }) => {
     }
   };
 
-  const handleCancelSubscription = async () => {
+  const openCancelModal = () => {
+    setSelectedReasonId(null);
+    setCustomReason('');
+    setCancelModalVisible(true);
+  };
+
+  const closeCancelModal = () => {
+    if (!isCancelling) {
+      setCancelModalVisible(false);
+    }
+  };
+
+  const handleConfirmCancellation = async () => {
+    const reasonChoice = CANCELLATION_REASONS.find((reason) => reason.id === selectedReasonId)?.label;
+    const reasonText = (customReason || '').trim();
+    const finalReason = reasonText || reasonChoice || '';
+    if (!finalReason) {
+      showToast('Please tell us why you want to cancel before continuing.', 'error');
+      return;
+    }
+    setIsCancelling(true);
     try {
-      await vendorAPI.subscriptionAction({ action: 'cancel' });
-      showToast('Cancellation requested. Support will reach out shortly.');
+      await vendorAPI.cancelSubscription(finalReason);
+      showToast('Auto-renewal turned off. You keep benefits until this cycle ends.', 'success');
+      setCancelModalVisible(false);
+      await loadDetails();
     } catch (error) {
       showToast(error.message || 'Unable to process cancellation.', 'error');
+    } finally {
+      setIsCancelling(false);
     }
   };
 
@@ -146,6 +184,68 @@ const VendorManageSubscriptionScreen = ({ navigation }) => {
   return (
     <SafeAreaView style={styles.container}>
       <Toast visible={toast.visible} message={toast.message} type={toast.type} onDismiss={hideToast} />
+      <Modal
+        visible={cancelModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={closeCancelModal}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Thinking about cancelling?</Text>
+              <TouchableOpacity onPress={closeCancelModal} style={styles.modalClose}>
+                <Ionicons name="close" size={22} color={theme.colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.modalDescription}>
+              You’ll keep your{' '}
+              <Text style={{ fontWeight: '600' }}>{details?.planName || 'current plan'}</Text> benefits until{' '}
+              {details?.expiryDisplay || 'the end of this cycle'}. Let us know why you’d like to leave.
+            </Text>
+            {CANCELLATION_REASONS.map((reason) => {
+              const active = selectedReasonId === reason.id;
+              return (
+                <TouchableOpacity
+                  key={reason.id}
+                  style={[styles.reasonOption, active && styles.reasonOptionActive]}
+                  onPress={() => setSelectedReasonId(reason.id)}
+                >
+                  <Text style={[styles.reasonOptionText, active && styles.reasonOptionTextActive]}>
+                    {reason.label}
+                  </Text>
+                  {active && <Ionicons name="checkmark-circle" size={18} color={theme.colors.white} />}
+                </TouchableOpacity>
+              );
+            })}
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Anything else we should know?"
+              placeholderTextColor={theme.colors.textSecondary}
+              value={customReason}
+              onChangeText={setCustomReason}
+              multiline
+            />
+            <View style={styles.modalActions}>
+              <Button variant="outline" fullWidth onPress={closeCancelModal}>
+                Keep my subscription
+              </Button>
+              <Button
+                variant="primary"
+                fullWidth
+                loading={isCancelling}
+                onPress={handleConfirmCancellation}
+              >
+                Confirm cancellation
+              </Button>
+            </View>
+            <TouchableOpacity style={styles.modalSupportLink} onPress={handleContactSupport}>
+              <Ionicons name="help-circle-outline" size={18} color={theme.colors.accent} />
+              <Text style={styles.modalSupportText}>Need help? Chat with support</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => goBackOrNavigate(navigation)} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color={theme.colors.emerald} />
@@ -169,7 +269,11 @@ const VendorManageSubscriptionScreen = ({ navigation }) => {
               {details?.status}
             </Text>
           </View>
-          <Text style={styles.planExpiry}>Next billing: {details?.expiryDisplay || '--'}</Text>
+          <Text style={styles.planExpiry}>
+            {isCancelPending
+              ? `Auto-renew off. Access ends ${details?.expiryDisplay || '--'}`
+              : `Next billing: ${details?.expiryDisplay || '--'}`}
+          </Text>
           <View style={styles.usageRow}>
             <View style={styles.usageStat}>
               <Text style={styles.usageValue}>{details?.usage?.used ?? 0}</Text>
@@ -240,7 +344,7 @@ const VendorManageSubscriptionScreen = ({ navigation }) => {
           >
             Renew Now
           </Button>
-          <Button variant="outline" icon="close-circle-outline" fullWidth onPress={handleCancelSubscription}>
+          <Button variant="outline" icon="close-circle-outline" fullWidth onPress={openCancelModal}>
             Cancel Subscription
           </Button>
           <Button variant="text" icon="help-circle-outline" onPress={handleContactSupport}>
@@ -407,6 +511,86 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.fontFamily.inter,
     fontSize: theme.typography.fontSize.sm,
     color: theme.colors.textSecondary,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: theme.spacing.lg,
+  },
+  modalCard: {
+    width: '100%',
+    backgroundColor: theme.colors.white,
+    borderRadius: theme.radius['2xl'],
+    padding: theme.spacing.xl,
+    gap: theme.spacing.md,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  modalTitle: {
+    flex: 1,
+    fontFamily: theme.typography.fontFamily.anton,
+    fontSize: theme.typography.fontSize['2xl'],
+    color: theme.colors.textPrimary,
+  },
+  modalClose: {
+    padding: theme.spacing.xs,
+  },
+  modalDescription: {
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.textSecondary,
+    lineHeight: 20,
+  },
+  reasonOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.lg,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+  },
+  reasonOptionActive: {
+    backgroundColor: theme.colors.emerald,
+    borderColor: theme.colors.emerald,
+  },
+  reasonOptionText: {
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.textPrimary,
+  },
+  reasonOptionTextActive: {
+    color: theme.colors.white,
+  },
+  modalInput: {
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.lg,
+    padding: theme.spacing.md,
+    minHeight: 80,
+    textAlignVertical: 'top',
+    fontFamily: theme.typography.fontFamily.inter,
+    color: theme.colors.textPrimary,
+  },
+  modalActions: {
+    gap: theme.spacing.sm,
+  },
+  modalSupportLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+    justifyContent: 'center',
+  },
+  modalSupportText: {
+    fontFamily: theme.typography.fontFamily.interSemiBold,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.accent,
   },
 });
 
