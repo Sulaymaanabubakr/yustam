@@ -174,8 +174,8 @@ const VerificationScreen = ({ navigation }) => {
         return;
       }
 
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        const result = await ImagePicker.launchCameraAsync({
+          mediaTypes: ImagePicker.MediaType.IMAGE,
         quality: 0.8,
         aspect: [4, 3],
       });
@@ -196,8 +196,8 @@ const VerificationScreen = ({ navigation }) => {
 
   const pickFromGallery = async (docType) => {
     try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        const result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaType.IMAGE,
         quality: 0.8,
         aspect: [4, 3],
       });

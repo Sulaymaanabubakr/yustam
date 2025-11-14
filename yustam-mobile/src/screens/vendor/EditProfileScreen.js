@@ -117,8 +117,8 @@ const EditProfileScreen = ({ navigation }) => {
     if (!hasPermission) return;
 
     try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        const result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaType.IMAGE,
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,

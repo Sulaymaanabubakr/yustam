@@ -544,7 +544,7 @@ const StorefrontScreen = ({ navigation, route }) => {
       return null;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ImagePicker.MediaType.IMAGE,
       allowsEditing: true,
       quality: 0.85,
       ...options,

@@ -14,6 +14,7 @@ import {
 } from '@expo-google-fonts/inter';
 import Constants from 'expo-constants';
 import { PaystackProvider } from 'react-native-paystack-webview';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { PAYSTACK_PUBLIC_KEY as ENV_PAYSTACK_PUBLIC_KEY } from '@env';
 import { AuthProvider } from './src/context/AuthContext';
 import AppNavigator from './src/navigation/AppNavigator';
@@ -76,14 +77,16 @@ export default function App() {
   return (
     <PaystackProvider publicKey={paystackPublicKey} currency="NGN" defaultChannels={['card', 'bank']}>
       <AuthProvider>
-        <StatusBar style="dark" />
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-        >
-          <AppNavigator />
-        </KeyboardAvoidingView>
+        <SafeAreaProvider>
+          <StatusBar style="dark" />
+          <KeyboardAvoidingView
+            style={{ flex: 1 }}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+          >
+            <AppNavigator />
+          </KeyboardAvoidingView>
+        </SafeAreaProvider>
       </AuthProvider>
     </PaystackProvider>
   );

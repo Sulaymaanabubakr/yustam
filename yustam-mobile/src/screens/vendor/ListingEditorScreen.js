@@ -121,8 +121,8 @@ const ListingEditorScreen = ({ route, navigation }) => {
     if (!hasPermission) return;
 
     try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        const result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaType.IMAGE,
         allowsMultipleSelection: false,
         quality: 0.8,
         aspect: [4, 3],
