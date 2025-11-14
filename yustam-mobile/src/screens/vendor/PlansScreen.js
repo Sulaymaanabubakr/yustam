@@ -20,7 +20,7 @@ import { vendorAPI } from '../../services/api';
 import { goBackOrNavigate } from '../../utils/navigation';
 import { formatNumber, formatNaira } from '../../utils/formatters';
 import { DEFAULT_VENDOR_PLANS, getPlanPreset } from '../../data/vendorPlans';
-import PaystackWebView from 'react-native-paystack-webview';
+import { PaystackWebView } from 'react-native-paystack-webview/production/lib/PaystackProvider';
 import { PAYSTACK_PUBLIC_KEY } from '@env';
 const CALLBACK_URL = `${API_BASE_URL}/plans/callback`;
 
@@ -36,6 +36,9 @@ const DEFAULT_DISCOUNT_MAP = {
   6: 0.12,
   12: 0.17,
 };
+
+const getPlanLabel = (slug) => getPlanPreset(slug)?.name || 'Free Plan';
+
 const getDurationLabel = (months, fallback = 'Custom') => {
   if (!Number.isFinite(months)) {
     return fallback;
@@ -240,11 +243,19 @@ const PlansScreen = ({ navigation }) => {
     try {
       setProcessingPlan(plan.slug);
       const response = await vendorAPI.createPlanCheckout(plan.slug, selectedMonths);
+      console.log('Plan checkout response:', response.data);
       const checkout = response.data?.checkout ?? response.data;
-      if (!checkout?.amount || !user?.email) {
+      // Use amount and planCode from chosenOption, not backend response
+      if (!chosenOption?.amount || !chosenOption?.planCode || !user?.email) {
+        console.log('Missing payment details:', chosenOption);
         throw new Error('Unable to get payment details.');
       }
-      setPaystackModal({ visible: true, plan, option: { ...chosenOption, amount: checkout.amount, planCode: checkout.planCode } });
+      console.log('Opening Paystack modal with:', { plan, chosenOption });
+      setPaystackModal({ visible: true, plan, option: { ...chosenOption } });
+      setTimeout(() => {
+        console.log('Paystack modal state:', paystackModal);
+      }, 500);
+      setProcessingPlan(null); // Reset loading state after opening modal
     } catch (error) {
       setProcessingPlan(null);
       showToast(error?.response?.data?.message || error.message || 'Unable to start payment.', 'error');
@@ -253,7 +264,7 @@ const PlansScreen = ({ navigation }) => {
   // Handle Paystack payment success
   const handlePaystackSuccess = async (response) => {
     setPaystackModal({ visible: false, plan: null, option: null });
-    setProcessingPlan(paystackModal.plan?.slug || null);
+    setProcessingPlan(null); // Always reset loading state after payment
     try {
       const reference = response?.transactionRef?.reference || response?.reference || response?.transactionRef || response?.trxref;
       if (!reference) throw new Error('Missing payment reference');
@@ -277,26 +288,38 @@ const PlansScreen = ({ navigation }) => {
     showToast('Payment cancelled.', 'info');
   };
   // Add PaystackWebView modal to the render
-  {paystackModal.visible && paystackModal.plan && paystackModal.option && (
-    <PaystackWebView
-      buttonText="Pay Now"
-      paystackKey={PAYSTACK_PUBLIC_KEY}
-      amount={paystackModal.option.amount}
-      billingEmail={user?.email}
-      billingName={user?.displayName || ''}
-      activityIndicatorColor={theme.colors.primary}
-      onSuccess={handlePaystackSuccess}
-      onCancel={handlePaystackCancel}
-      autoStart={true}
-      currency={paystackModal.plan.currency || 'NGN'}
-      channels={["card", "bank"]}
-      plan={paystackModal.option.planCode || undefined}
-      refNumber={undefined}
-      renderButton={() => null}
-      showPayButton={false}
-      style={{ margin: 0, padding: 0, flex: 1, backgroundColor: 'white' }}
-    />
-  )}
+  return (
+    <>
+      {paystackModal.visible && paystackModal.plan && paystackModal.option && (
+        <Modal
+          visible={true}
+          animationType="slide"
+          transparent={false}
+          onRequestClose={handlePaystackCancel}
+        >
+          <PaystackWebView
+            buttonText="Pay Now"
+            paystackKey={PAYSTACK_PUBLIC_KEY}
+            amount={paystackModal.option.amount}
+            billingEmail={user?.email}
+            billingName={user?.displayName || ''}
+            activityIndicatorColor={theme.colors.primary}
+            onSuccess={handlePaystackSuccess}
+            onCancel={handlePaystackCancel}
+            autoStart={true}
+            currency={paystackModal.plan.currency || 'NGN'}
+            channels={["card", "bank"]}
+            plan={paystackModal.option.planCode || undefined}
+            refNumber={undefined}
+            renderButton={() => null}
+            showPayButton={false}
+            style={{ margin: 0, padding: 0, flex: 1, backgroundColor: 'white' }}
+          />
+        </Modal>
+      )}
+      {/* ...existing main render code... */}
+    </>
+  );
 
   // Remove checkout and navigation handlers
 
@@ -598,39 +621,7 @@ const PlansScreen = ({ navigation }) => {
         </View>
       </ScrollView>
 
-      <Modal
-        animationType="slide"
-        transparent
-        visible={checkoutState.visible}
-        onRequestClose={closeCheckout}
-      >
-        <View style={styles.checkoutBackdrop}>
-          <View style={styles.checkoutContainer}>
-            <View style={styles.checkoutHeader}>
-              <Text style={styles.checkoutTitle}>
-                {checkoutState.planName || 'Complete Payment'}
-              </Text>
-              <TouchableOpacity onPress={closeCheckout} style={styles.checkoutClose}>
-                <Ionicons name="close" size={22} color={theme.colors.textPrimary} />
-              </TouchableOpacity>
-            </View>
-            {checkoutState.url ? (
-              <WebView
-                ref={webviewRef}
-                style={styles.checkoutWebview}
-                source={{ uri: checkoutState.url }}
-                startInLoadingState
-                onNavigationStateChange={handleCheckoutNavigation}
-              />
-            ) : (
-              <View style={styles.checkoutFallback}>
-                <ActivityIndicator color={theme.colors.primary} />
-                <Text style={styles.checkoutFallbackText}>Preparing checkout…</Text>
-              </View>
-            )}
-          </View>
-        </View>
-      </Modal>
+      {/* Removed old checkoutState modal and WebView. PaystackWebView is now used for payment. */}
     </SafeAreaView>
   );
 };
