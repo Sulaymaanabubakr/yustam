@@ -172,6 +172,9 @@ function yustam_api_handle_plans(string $method, array $segments): array
     if ($method === 'POST' && isset($segments[0], $segments[1]) && $segments[1] === 'checkout') {
         return yustam_api_plan_checkout($segments[0]);
     }
+    if ($method === 'POST' && isset($segments[0]) && $segments[0] === 'auto-renew') {
+        return yustam_api_plan_auto_renew();
+    }
     if (
         ($method === 'POST' && empty($segments)) ||
         ($method === 'GET' && isset($segments[0]) && $segments[0] === 'callback')
@@ -1028,6 +1031,39 @@ function yustam_api_plan_checkout(string $planSlug): array
             'accessCode' => $response['access_code'] ?? null,
             'reference' => $response['reference'] ?? $reference,
         ],
+    ];
+}
+
+function yustam_api_plan_auto_renew(): array
+{
+    $user = yustam_api_require_auth(['vendor', 'admin']);
+    $vendorId = $user['role'] === 'vendor'
+        ? (int) ($user['vendorId'] ?? 0)
+        : (int) ($_GET['vendor'] ?? 0);
+    if ($vendorId <= 0) {
+        yustam_api_error(404, 'Vendor profile not found.');
+    }
+
+    $body = yustam_api_read_json_body();
+    $rawValue = $body['enabled'] ?? ($body['enable'] ?? $body['value'] ?? null);
+    if ($rawValue === null) {
+        yustam_api_error(400, 'enabled flag is required.');
+    }
+    $normalized = is_bool($rawValue)
+        ? $rawValue
+        : in_array(strtolower((string) $rawValue), ['1', 'true', 'yes', 'on'], true);
+
+    $db = get_db_connection();
+    try {
+        $result = yustam_vendor_subscription_set_autorenew($db, $vendorId, $normalized);
+    } catch (Throwable $exception) {
+        yustam_api_error(400, $exception->getMessage());
+    }
+
+    return [
+        'success' => true,
+        'autoRenew' => $result['autoRenew'],
+        'subscription' => $result['subscription'],
     ];
 }
 

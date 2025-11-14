@@ -146,6 +146,89 @@ const fetchPlanCatalog = async () => {
   return buildPlanCatalog(planArray);
 };
 
+const fetchCurrentSubscription = async () => {
+  try {
+    const response = await api.get('/plans/subscriptions/me');
+    const subscriptions = Array.isArray(response.data?.subscriptions) ? response.data.subscriptions : [];
+    if (!subscriptions.length) {
+      return null;
+    }
+
+    const record = subscriptions[0];
+    const metadata = record?.metadata || {};
+    const planInfo = record?.plan;
+    const planName =
+      metadata.planName ||
+      (typeof planInfo === 'object' ? planInfo?.name ?? planInfo?.displayName : planInfo) ||
+      'Free Plan';
+    const slugSource =
+      metadata.slug ||
+      metadata.planSlug ||
+      (typeof planInfo === 'object' ? planInfo?.slug : planInfo) ||
+      planName ||
+      'plan';
+    const slug = normalisePlanSlug(slugSource, slugSource);
+    const status = metadata.status || record?.status || 'Active';
+    const statusLabel = metadata.statusLabel || record?.status || status;
+    const expiryDisplay = metadata.nextBillingDisplay || metadata.expiryDisplay || record?.endsAt || '--';
+
+    return {
+      slug,
+      planSlug: slug,
+      name: planName,
+      displayName: metadata.displayName || planName,
+      status,
+      statusLabel,
+      expiryDisplay,
+      nextBillingDisplay: metadata.nextBillingDisplay || expiryDisplay,
+      nextBillingIso: metadata.nextBillingIso || null,
+      notice: metadata.notice || '',
+    };
+  } catch (error) {
+    console.warn('Unable to fetch subscription state', error);
+    return null;
+  }
+};
+
+const enrichSubscriptionWithPlan = (subscription, catalog = {}) => {
+  if (!subscription) {
+    return null;
+  }
+  const slugSource =
+    subscription.slug ||
+    subscription.planSlug ||
+    subscription.planName ||
+    subscription.name ||
+    subscription.displayName ||
+    'free';
+  const slug = normalisePlanSlug(slugSource, 'free');
+  const planDefinition =
+    catalog[slug] ||
+    catalog[`${slug}-plan`] ||
+    catalog[slugSource] ||
+    null;
+  const displayName =
+    subscription.displayName ||
+    planDefinition?.displayName ||
+    planDefinition?.name ||
+    subscription.name ||
+    subscription.planName ||
+    'Free Plan';
+
+  return {
+    ...subscription,
+    slug,
+    planSlug: slug,
+    displayName,
+    name: displayName,
+    price: planDefinition?.price ?? subscription.price ?? subscription.amount ?? 0,
+    currency: planDefinition?.currency ?? subscription.currency ?? 'NGN',
+    listings: planDefinition?.listings ?? subscription.listings ?? null,
+    features: planDefinition?.features ?? subscription.features ?? [],
+    durationLabel: planDefinition?.duration ?? subscription.durationLabel ?? 'Monthly',
+  };
+};
+
 export const authAPI = {
   createSession: (idToken) => api.post('/auth/session', { idToken }),
   getCurrentUser: () => api.get('/auth/me'),
@@ -367,7 +450,8 @@ export const vendorAPI = {
     };
   },
   getPlans: async () => {
-    const catalog = await fetchPlanCatalog();
+    const [catalog, currentSubscription] = await Promise.all([fetchPlanCatalog(), fetchCurrentSubscription()]);
+    const enrichedPlan = enrichSubscriptionWithPlan(currentSubscription, catalog);
     return {
       data: {
         success: true,
@@ -375,33 +459,18 @@ export const vendorAPI = {
           plans: catalog,
           currency: 'NGN',
           currencySymbol: '₦',
-          paystackKey: 'redirect',
+          paystackKey: 'inline',
           discounts: LONG_TERM_DISCOUNTS,
+          subscription: enrichedPlan,
+          currentPlan: enrichedPlan,
         },
       },
     };
   },
-  getRenewPlan: async (slug) => {
-    const catalog = await fetchPlanCatalog();
-    const plan =
-      catalog[slug] ||
-      Object.values(catalog).find((definition) => definition.slug === slug || definition.name?.toLowerCase() === slug?.toLowerCase());
-    if (!plan) {
-      throw new Error('Plan not found');
-    }
-    return {
-      data: {
-        success: true,
-        data: plan,
-      },
-    };
-  },
-  getSubscriptionDetails: async () => {
-    const response = await api.get('/plans/subscriptions/me');
-    const subscription = Array.isArray(response.data?.subscriptions)
-      ? response.data.subscriptions[0]
-      : null;
-    if (!subscription) {
+  getRenewPlan: async () => {
+    const [catalog, subscription] = await Promise.all([fetchPlanCatalog(), fetchCurrentSubscription()]);
+    const currentPlan = enrichSubscriptionWithPlan(subscription, catalog);
+    if (!currentPlan) {
       return {
         data: {
           success: true,
@@ -409,23 +478,50 @@ export const vendorAPI = {
         },
       };
     }
-    const data = {
-      planName: subscription.plan?.name ?? 'Free Plan',
-      status: subscription.status ?? 'ACTIVE',
-      expiryDisplay: subscription.endsAt,
-      autoRenew: false,
-      usage: {
-        allowed: subscription.plan?.listingLimit ?? 0,
-        used: subscription.listingsUsed ?? 0,
-        pending: 0,
+    return {
+      data: {
+        success: true,
+        data: {
+          planName: currentPlan.displayName,
+          planBadge: currentPlan.statusLabel || currentPlan.status,
+          monthlyPrice: currentPlan.price || 0,
+          currency: currentPlan.currency || 'NGN',
+          expiresOn: currentPlan.nextBillingDisplay || currentPlan.expiryDisplay || '--',
+          remainingListings: currentPlan.listings ?? null,
+          contactEmail: 'support@yustam.com.ng',
+          vendorName: currentPlan.vendorName || 'Yustam Vendor',
+        },
       },
-      features: subscription.plan?.features ?? [],
-      slug: subscription.plan?.name?.toLowerCase().replace(/[^a-z0-9]+/g, '-') ?? subscription.planId,
+    };
+  },
+  getSubscriptionDetails: async () => {
+    const [catalog, subscription] = await Promise.all([fetchPlanCatalog(), fetchCurrentSubscription()]);
+    const currentPlan = enrichSubscriptionWithPlan(subscription, catalog);
+    if (!currentPlan) {
+      return {
+        data: {
+          success: true,
+          data: null,
+        },
+      };
+    }
+    const usage = {
+      allowed: currentPlan.listings ?? 0,
+      used: subscription?.listingsUsed ?? 0,
+      pending: subscription?.pendingListings ?? 0,
     };
     return {
       data: {
         success: true,
-        data,
+        data: {
+          ...currentPlan,
+          planName: currentPlan.displayName,
+          status: currentPlan.status || currentPlan.statusLabel || 'Active',
+          expiryDisplay: currentPlan.nextBillingDisplay || currentPlan.expiryDisplay || '--',
+          autoRenew: Boolean(subscription?.autoRenew ?? subscription?.renewalStatus === 'auto'),
+          usage,
+          notice: currentPlan.notice || subscription?.notice || '',
+        },
       },
     };
   },
@@ -462,6 +558,8 @@ export const vendorAPI = {
     listingsAPI.getAll({ ownerId, includeDrafts: true, ...params }),
   verifyPlanPayment: (reference) =>
     api.post('/plans', { reference }),
+  setAutoRenew: (enabled) =>
+    api.post('/plans/auto-renew', { enabled }),
 };
 
 export const planAPI = {

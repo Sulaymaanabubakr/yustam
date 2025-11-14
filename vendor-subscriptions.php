@@ -295,6 +295,15 @@ function yustam_paystack_fetch_subscription(string $code): array {
     return yustam_paystack_request('GET', 'subscription/' . rawurlencode($code));
 }
 
+function yustam_paystack_enable_subscription(string $code, string $token): void {
+    $code = trim($code);
+    $token = trim($token);
+    if ($code === '' || $token === '') {
+        throw new RuntimeException('Missing subscription credentials.');
+    }
+    yustam_paystack_request('POST', 'subscription/enable', ['code' => $code, 'token' => $token]);
+}
+
 function yustam_paystack_disable_subscription(string $code, string $token): void {
     $code = trim($code);
     $token = trim($token);
@@ -524,6 +533,59 @@ function yustam_vendor_subscription_process_payment(mysqli $db, int $vendorId, s
         'subscription' => yustam_vendor_subscription_format_state($vendor),
         'amountKobo' => $amountKobo,
         'currency' => $transaction['currency'] ?? 'NGN',
+    ];
+}
+
+function yustam_vendor_subscription_set_autorenew(mysqli $db, int $vendorId, bool $enabled): array {
+    yustam_vendor_subscription_ensure_columns($db);
+    $vendor = yustam_vendor_subscription_fetch_vendor($db, $vendorId);
+    if (!$vendor) {
+        throw new RuntimeException('Vendor account was not found.');
+    }
+
+    $subscriptionCode = trim((string) ($vendor['paystack_subscription_code'] ?? ''));
+    $emailToken = trim((string) ($vendor['paystack_email_token'] ?? ''));
+    if ($subscriptionCode === '' || $emailToken === '') {
+        throw new RuntimeException('There is no active subscription to manage.');
+    }
+
+    if ($enabled) {
+        yustam_paystack_enable_subscription($subscriptionCode, $emailToken);
+    } else {
+        yustam_paystack_disable_subscription($subscriptionCode, $emailToken);
+    }
+
+    $fields = [];
+    $statusColumn = yustam_vendor_subscription_pick_column(['plan_status', 'subscription_status', 'plan_state', 'planstate']);
+    if ($statusColumn) {
+        $fields[] = sprintf('`%s` = ?', $statusColumn);
+    }
+    if (yustam_vendor_table_has_column('plan_cancelled_at')) {
+        $fields[] = $enabled ? '`plan_cancelled_at` = NULL' : '`plan_cancelled_at` = NOW()';
+    }
+    if (yustam_vendor_table_has_column('updated_at')) {
+        $fields[] = '`updated_at` = NOW()';
+    }
+    if ($fields) {
+        $sql = sprintf('UPDATE `%s` SET %s WHERE id = ?', YUSTAM_VENDORS_TABLE, implode(', ', $fields));
+        $stmt = $db->prepare($sql);
+        if (!$stmt instanceof mysqli_stmt) {
+            throw new RuntimeException('Unable to update vendor subscription state.');
+        }
+        if ($statusColumn) {
+            $statusValue = $enabled ? 'Active' : 'Cancel Pending';
+            $stmt->bind_param('si', $statusValue, $vendorId);
+        } else {
+            $stmt->bind_param('i', $vendorId);
+        }
+        $stmt->execute();
+        $stmt->close();
+    }
+
+    $updated = yustam_vendor_subscription_fetch_vendor($db, $vendorId);
+    return [
+        'subscription' => yustam_vendor_subscription_format_state($updated ?: $vendor),
+        'autoRenew' => $enabled,
     ];
 }
 

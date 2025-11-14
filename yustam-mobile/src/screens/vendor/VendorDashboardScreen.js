@@ -46,8 +46,9 @@ const VendorDashboardScreen = ({ navigation }) => {
     try {
       setLoading(true);
 
-      const [dashboardResponse, verificationResponse, notificationsResponse, chatsResponse] =
+      const [plansResponse, dashboardResponse, verificationResponse, notificationsResponse, chatsResponse] =
         await Promise.all([
+          vendorAPI.getPlans(),
           vendorAPI.getDashboard(),
           vendorAPI.getVerificationStatus().catch(() => null),
           vendorAPI.getNotifications().catch(() => null),
@@ -60,6 +61,7 @@ const VendorDashboardScreen = ({ navigation }) => {
       }
 
       const stats = payload.stats || {};
+      const planSummary = plansResponse?.data?.data?.currentPlan;
       const subscription = payload.subscription || {};
       const profile = payload.profile || {};
 
@@ -94,9 +96,20 @@ const VendorDashboardScreen = ({ navigation }) => {
         totalViews: stats.total_views || 0,
         unreadMessages,
         unreadNotifications,
-        planName: subscription.displayName || profile.plan || 'Free',
-        planStatus: subscription.statusLabel || subscription.status || profile.planStatus || 'Active',
-        planRenewal: subscription.nextBillingDisplay || profile.planRenewal || '--',
+        planName: planSummary?.displayName || subscription.displayName || profile.plan || 'Free',
+        planStatus:
+          planSummary?.statusLabel ||
+          planSummary?.status ||
+          subscription.statusLabel ||
+          subscription.status ||
+          profile.planStatus ||
+          'Active',
+        planRenewal:
+          planSummary?.nextBillingDisplay ||
+          planSummary?.expiryDisplay ||
+          subscription.nextBillingDisplay ||
+          profile.planRenewal ||
+          '--',
         verificationStatus,
       });
     } catch (error) {

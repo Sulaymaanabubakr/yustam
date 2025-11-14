@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -14,12 +14,36 @@ import { useAuth } from '../../context/AuthContext';
 import theme from '../../theme';
 import Button from '../../components/Button';
 import Toast from '../../components/Toast';
+import { vendorAPI } from '../../services/api';
 
 const VendorProfileScreen = ({ navigation }) => {
   const { user, logout } = useAuth();
   const [toast, setToast] = useState({ visible: false, message: '', type: 'info' });
+  const [planSummary, setPlanSummary] = useState(null);
 
-  const planLabel = useMemo(() => user?.planLabel || 'Free Plan', [user?.planLabel]);
+  useEffect(() => {
+    let isMounted = true;
+    vendorAPI
+      .getPlans()
+      .then((response) => {
+        if (!isMounted) {
+          return;
+        }
+        const summary = response.data?.data?.currentPlan;
+        if (summary) {
+          setPlanSummary(summary);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const planLabel = useMemo(
+    () => planSummary?.displayName || user?.planLabel || 'Free Plan',
+    [planSummary?.displayName, user?.planLabel]
+  );
 
   const showToast = (message, type = 'success') => {
     setToast({ visible: true, message, type });

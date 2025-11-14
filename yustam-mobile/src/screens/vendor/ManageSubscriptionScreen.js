@@ -101,11 +101,9 @@ const VendorManageSubscriptionScreen = ({ navigation }) => {
     setDetails((prev) => ({ ...prev, autoRenew: nextValue }));
     setUpdatingAutoRenew(true);
     try {
-      await vendorAPI.subscriptionAction({
-        action: 'setAutoRenew',
-        value: nextValue ? 'on' : 'off',
-      });
+      await vendorAPI.setAutoRenew(nextValue);
       showToast(nextValue ? 'Auto-renew enabled' : 'Auto-renew disabled');
+      await loadDetails();
     } catch (error) {
       setDetails((prev) => ({ ...prev, autoRenew: !nextValue }));
       showToast(error.message || 'Unable to update auto-renew.', 'error');
