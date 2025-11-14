@@ -158,7 +158,8 @@ const RegisterForm = ({ navigation }) => {
         navigation.replace('MainTabs');
       }, 500);
     } catch (error) {
-      showToast(error.message);
+      const message = error?.message || 'Unable to create your account. Please try again.';
+      showToast(message);
     } finally {
       setLoading(false);
     }

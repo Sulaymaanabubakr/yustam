@@ -22,7 +22,8 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.yustam.marketplace"
+      "package": "com.yustam.marketplace",
+      "softwareKeyboardLayoutMode": "resize"
     },
     "scheme": "yustam",
     "web": {
@@ -42,6 +43,11 @@
       },
       "eas": {
         "projectId": "90d55016-8f70-4e40-926d-2643f95548cd"
+      },
+      "appDownload": {
+        "landing": "https://yustam.com.ng/app",
+        "android": "https://play.google.com/store/apps/details?id=com.yustam.marketplace",
+        "ios": "https://apps.apple.com/app/id0000000000"
       }
     }
   }

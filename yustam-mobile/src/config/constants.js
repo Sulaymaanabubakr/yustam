@@ -1,8 +1,9 @@
 import Constants from 'expo-constants';
 
+const expoExtra = Constants?.expoConfig?.extra ?? Constants?.manifest?.extra ?? {};
+
 const expoBaseUrl =
-  Constants?.expoConfig?.extra?.apiBaseUrl ??
-  Constants?.manifest?.extra?.apiBaseUrl ??
+  expoExtra?.apiBaseUrl ??
   process.env.EXPO_PUBLIC_API_BASE_URL;
 
 const LOCAL_BASE = 'http://localhost/api';
@@ -18,6 +19,25 @@ const inferredRuntimeBase =
 // API Base URL (points to the unified PHP API)
 // Priority: Expo extra/ENV override -> inferred runtime -> production fallback
 export const API_BASE_URL = expoBaseUrl || inferredRuntimeBase || PROD_BASE;
+
+const downloadConfig = expoExtra?.appDownload ?? {};
+const androidPackageId =
+  Constants?.expoConfig?.android?.package ??
+  Constants?.manifest?.android?.package ??
+  'com.yustam.marketplace';
+
+const defaultAndroidStoreUrl =
+  downloadConfig.android ||
+  (androidPackageId ? `https://play.google.com/store/apps/details?id=${androidPackageId}` : '');
+const defaultIosStoreUrl = downloadConfig.ios || '';
+const defaultUniversalDownloadUrl =
+  downloadConfig.landing || downloadConfig.universal || 'https://yustam.com.ng/app';
+
+export const APP_DOWNLOAD_LINKS = {
+  android: defaultAndroidStoreUrl,
+  ios: defaultIosStoreUrl,
+  universal: defaultUniversalDownloadUrl,
+};
 
 // Categories from web app
 export const CATEGORIES = [

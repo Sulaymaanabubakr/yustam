@@ -11,6 +11,7 @@ import {
 import { auth } from '../config/firebase';
 import { authAPI, vendorAPI, setApiAuthToken } from '../services/api';
 import { USER_ROLES } from '../config/constants';
+import resolveAuthErrorMessage from '../utils/authErrors';
 
 const AuthContext = createContext();
 
@@ -196,10 +197,15 @@ export const AuthProvider = ({ children }) => {
       return { success: true, user: profile };
     } catch (error) {
       console.error('Login error:', error);
-      if (error instanceof Error && error.message) {
-        throw error;
+      const message = resolveAuthErrorMessage(
+        error,
+        'Unable to sign you in right now. Please try again.'
+      );
+      const friendlyError = new Error(message);
+      if (error && typeof error === 'object' && 'code' in error) {
+        friendlyError.code = error.code;
       }
-      throw new Error(getAuthErrorMessage(error.code));
+      throw friendlyError;
     }
   };
 
@@ -234,10 +240,15 @@ export const AuthProvider = ({ children }) => {
       return { success: true, user: profile };
     } catch (error) {
       console.error('Registration error:', error);
-      if (error instanceof Error && !error.code && error.message) {
-        throw error;
+      const message = resolveAuthErrorMessage(
+        error,
+        'Unable to create your account right now. Please try again.'
+      );
+      const friendlyError = new Error(message);
+      if (error && typeof error === 'object' && 'code' in error) {
+        friendlyError.code = error.code;
       }
-      throw new Error(getAuthErrorMessage(error.code));
+      throw friendlyError;
     }
   };
 
@@ -298,30 +309,6 @@ export const AuthProvider = ({ children }) => {
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-};
-
-// Helper function to get user-friendly error messages
-const getAuthErrorMessage = (errorCode) => {
-  switch (errorCode) {
-    case 'auth/email-already-in-use':
-      return 'This email is already registered. Please login instead.';
-    case 'auth/invalid-email':
-      return 'Invalid email address. Please check and try again.';
-    case 'auth/user-not-found':
-      return 'No account found with this email. Please register first.';
-    case 'auth/invalid-credential':
-      return 'Incorrect email or password. Please try again.';
-    case 'auth/wrong-password':
-      return 'Incorrect password. Please try again.';
-    case 'auth/weak-password':
-      return 'Password is too weak. Use at least 6 characters.';
-    case 'auth/network-request-failed':
-      return 'Network error. Please check your connection.';
-    case 'auth/too-many-requests':
-      return 'Too many attempts. Please try again later.';
-    default:
-      return 'Authentication failed. Please try again.';
-  }
 };
 
 export default AuthContext;

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import {
   useFonts,
@@ -77,7 +77,13 @@ export default function App() {
     <PaystackProvider publicKey={paystackPublicKey} currency="NGN" defaultChannels={['card', 'bank']}>
       <AuthProvider>
         <StatusBar style="dark" />
-        <AppNavigator />
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        >
+          <AppNavigator />
+        </KeyboardAvoidingView>
       </AuthProvider>
     </PaystackProvider>
   );

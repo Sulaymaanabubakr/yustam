@@ -96,7 +96,8 @@ const LoginForm = ({ navigation }) => {
         navigation.replace('MainTabs');
       }, 500);
     } catch (error) {
-      showToast(error.message);
+      const message = error?.message || 'Unable to login. Please try again.';
+      showToast(message);
     } finally {
       setLoading(false);
     }
