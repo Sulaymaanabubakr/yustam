@@ -56,7 +56,8 @@ const AnalyticsScreen = ({ navigation }) => {
     try {
       setLoading(true);
 
-      const [dashboardResponse, verificationResponse] = await Promise.all([
+      const [plansResponse, dashboardResponse, verificationResponse] = await Promise.all([
+        vendorAPI.getPlans(),
         vendorAPI.getDashboard(),
         vendorAPI.getVerificationStatus().catch(() => null),
       ]);
@@ -67,7 +68,7 @@ const AnalyticsScreen = ({ navigation }) => {
       }
 
       const stats = payload.stats || {};
-      const subscription = payload.subscription || {};
+      const subscription = plansResponse?.data?.data?.currentPlan || payload.subscription || {};
       const listings = Array.isArray(payload.listings) ? payload.listings : [];
 
       const totalListings = stats.total_listings || listings.length;
@@ -87,7 +88,7 @@ const AnalyticsScreen = ({ navigation }) => {
         ['rejected', 'archived'].includes(getStatus(listing))
       ).length;
 
-      const slug = (subscription.slug || subscription.planName || '').toLowerCase();
+      const slug = (subscription.slug || subscription.planSlug || subscription.planName || '').toLowerCase();
       const listingsAllowed =
         PLAN_LIMITS[slug] || PLAN_LIMITS[slug.replace('-plan', '')] || PLAN_LIMITS.free;
 
@@ -140,28 +141,28 @@ const AnalyticsScreen = ({ navigation }) => {
     setToast({ ...toast, visible: false });
   };
 
-  const MetricCard = ({ icon, label, value, subtitle, color }) => {
-    const displayValue =
-      typeof value === 'number' ? formatNumber(value) : value ?? '-';
+const MetricCard = ({ icon, label, value, subtitle, color }) => {
+  const displayValue =
+    typeof value === 'number' ? formatNumber(value) : value ?? '-';
 
-    return (
-      <View style={[styles.metricCard, { borderLeftColor: color || theme.colors.orange }]}>
-        <View style={styles.metricHeader}>
-          <View
-            style={[
-              styles.iconContainer,
-              { backgroundColor: color ? `${color}20` : theme.colors.orangeLight },
-            ]}
-          >
-            <Ionicons name={icon} size={24} color={color || theme.colors.orange} />
-          </View>
-          <Text style={styles.metricLabel}>{label}</Text>
+  return (
+    <View style={[styles.metricCard, { borderLeftColor: color || theme.colors.orange }]}>
+      <View style={styles.metricHeader}>
+        <View
+          style={[
+            styles.metricIcon,
+            { backgroundColor: color ? `${color}20` : `${theme.colors.orange}20` },
+          ]}
+        >
+          <Ionicons name={icon} size={20} color={color || theme.colors.orange} />
         </View>
-        <Text style={[styles.metricValue, color && { color }]}>{displayValue}</Text>
-        {subtitle && <Text style={styles.metricSubtitle}>{subtitle}</Text>}
+        <Text style={styles.metricLabel}>{label}</Text>
       </View>
-    );
-  };
+      <Text style={[styles.metricValue, color && { color }]}>{displayValue}</Text>
+      <Text style={styles.metricSubtitle}>{subtitle || 'Last 30 days'}</Text>
+    </View>
+  );
+};
 
   const ProgressBar = ({ progress, color }) => (
     <View style={styles.progressBarContainer}>
@@ -220,7 +221,7 @@ const AnalyticsScreen = ({ navigation }) => {
         </View>
 
         {/* Listing Metrics */}
-        <View style={styles.cardsContainer}>
+        <View style={styles.cardsGrid}>
           <MetricCard
             icon="layers-outline"
             label="Total Listings"
@@ -401,15 +402,20 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.sm,
     color: theme.colors.textSecondary,
   },
-  cardsContainer: {
+  cardsGrid: {
     paddingHorizontal: theme.spacing.lg,
-    gap: theme.spacing.base,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
   },
   metricCard: {
     backgroundColor: theme.colors.white,
     borderRadius: theme.borderRadius.lg,
     padding: theme.spacing.lg,
     borderLeftWidth: 4,
+    flexBasis: '48%',
+    maxWidth: '48%',
+    marginBottom: theme.spacing.base,
     ...theme.shadows.medium,
   },
   metricHeader: {

@@ -193,6 +193,19 @@ const fetchCurrentSubscription = async () => {
   }
 };
 
+const mapPlanDurationOptions = (definition = {}) => {
+  const durations = definition?.durations || {};
+  return Object.values(durations)
+    .map((option) => ({
+      months: Number(option.months) || 0,
+      amount: Number(option.amount) || 0,
+      intervalLabel: option.intervalLabel || '',
+      planCode: option.planCode || null,
+    }))
+    .filter((entry) => entry.months > 0 && entry.planCode)
+    .sort((a, b) => a.months - b.months);
+};
+
 const enrichSubscriptionWithPlan = (subscription, catalog = {}) => {
   if (!subscription) {
     return null;
@@ -481,6 +494,8 @@ export const vendorAPI = {
         },
       };
     }
+    const catalogEntry = catalog[currentPlan.slug] || catalog[`${currentPlan.slug}-plan`] || {};
+    const durations = mapPlanDurationOptions(catalogEntry);
     return {
       data: {
         success: true,
@@ -493,6 +508,8 @@ export const vendorAPI = {
           remainingListings: currentPlan.listings ?? null,
           contactEmail: 'support@yustam.com.ng',
           vendorName: currentPlan.vendorName || 'Yustam Vendor',
+          slug: currentPlan.slug,
+          durationOptions: durations,
         },
       },
     };

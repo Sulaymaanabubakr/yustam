@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import * as WebBrowser from 'expo-web-browser';
+import { useAuth } from '../../context/AuthContext';
+import { usePaystack } from 'react-native-paystack-webview';
 import theme from '../../theme';
 import { vendorAPI } from '../../services/api';
 import Toast from '../../components/Toast';
@@ -18,11 +19,56 @@ import Button from '../../components/Button';
 import { goBackOrNavigate } from '../../utils/navigation';
 import { formatNaira } from '../../utils/formatters';
 
+const resolveVendorId = (profile) => {
+  if (!profile) {
+    return null;
+  }
+  const candidates = [
+    profile.vendorId,
+    profile.vendor_id,
+    profile.vendorID,
+    profile.vendor?.id,
+    profile.vendor?.vendorId,
+    profile.id,
+  ];
+  for (const value of candidates) {
+    if (value === undefined || value === null) continue;
+    const numeric = parseInt(String(value).replace(/[^\d]/g, ''), 10);
+    if (Number.isFinite(numeric) && numeric > 0) {
+      return numeric;
+    }
+  }
+  return null;
+};
+
+const buildPlanReference = (vendorId) => {
+  const randomPart = Math.random().toString(36).substring(2, 8).toUpperCase();
+  return `YUSTAM-V${vendorId}-${randomPart}-${Date.now()}`;
+};
+
 const VendorRenewPlanScreen = ({ navigation }) => {
+  const { user } = useAuth();
+  const { popup } = usePaystack();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [toast, setToast] = useState({ visible: false, message: '', type: 'info' });
   const [plan, setPlan] = useState(null);
+  const [selectedDuration, setSelectedDuration] = useState(null);
+  const [processingPayment, setProcessingPayment] = useState(false);
+  const durationOptions = useMemo(
+    () => (Array.isArray(plan?.durations) ? plan.durations : []),
+    [plan]
+  );
+  const selectedOption = useMemo(() => {
+    if (!durationOptions.length) {
+      return null;
+    }
+    return (
+      durationOptions.find((option) => option.months === selectedDuration) ||
+      durationOptions[0] ||
+      null
+    );
+  }, [durationOptions, selectedDuration]);
 
   const showToast = (message, type = 'success') => {
     setToast({ visible: true, message, type });
@@ -37,6 +83,7 @@ const VendorRenewPlanScreen = ({ navigation }) => {
       }
       const response = await vendorAPI.getRenewPlan();
       const payload = response.data?.data || {};
+      const durations = Array.isArray(payload.durationOptions) ? payload.durationOptions : [];
       setPlan({
         name: payload.planName || 'Current Plan',
         badge: payload.planBadge || '',
@@ -46,7 +93,10 @@ const VendorRenewPlanScreen = ({ navigation }) => {
         remainingListings: payload.remainingListings ?? null,
         contactEmail: payload.contactEmail || 'support@yustam.com.ng',
         vendorName: payload.vendorName || 'Yustam Vendor',
+        slug: payload.slug || '',
+        durations,
       });
+      setSelectedDuration(durations[0]?.months || durations[0]?.durationMonths || 1);
     } catch (error) {
       console.error('Failed to load renewal plan', error);
       showToast(error.message || 'Unable to load renewal details', 'error');
@@ -65,15 +115,82 @@ const VendorRenewPlanScreen = ({ navigation }) => {
     loadPlan();
   };
 
-  const handleRenew = async () => {
-    if (!plan) {
+  const handlePaystackSuccess = async (response, fallbackReference) => {
+    try {
+      const reference =
+        response?.transactionRef?.reference ||
+        response?.reference ||
+        response?.transactionRef ||
+        response?.trxref ||
+        fallbackReference;
+      if (!reference) {
+        throw new Error('Missing payment reference.');
+      }
+      const verification = await vendorAPI.verifyPlanPayment(reference);
+      if (verification.data?.success) {
+        showToast('Renewal successful! Your plan has been updated.', 'success');
+        await loadPlan();
+      } else {
+        showToast('Payment verified, but plan update failed.', 'error');
+      }
+    } catch (error) {
+      showToast(error?.message || 'Unable to verify payment.', 'error');
+    } finally {
+      setProcessingPayment(false);
+    }
+  };
+
+  const handlePaystackCancel = () => {
+    setProcessingPayment(false);
+    showToast('Renewal cancelled.', 'info');
+  };
+
+  const handleRenew = () => {
+    if (!plan || !plan.slug) {
+      showToast('Plan details are missing. Please refresh and try again.', 'error');
       return;
     }
+    if (!popup?.checkout) {
+      showToast('Payment module is not ready yet. Please try again shortly.', 'error');
+      return;
+    }
+    if (!selectedOption?.planCode || !Number(selectedOption?.amount)) {
+      showToast('Select a billing duration before renewing.', 'error');
+      return;
+    }
+    if (!user?.email) {
+      showToast('Please add an email address to your profile to continue.', 'error');
+      return;
+    }
+    const vendorId = resolveVendorId(user);
+    if (!vendorId) {
+      showToast('We could not match your vendor profile. Please reload the app and try again.', 'error');
+      return;
+    }
+    const reference = buildPlanReference(vendorId);
     try {
-      showToast('Redirecting to secure checkout...', 'info');
-      await WebBrowser.openBrowserAsync('https://paystack.com/pay/yustam-plan');
+      setProcessingPayment(true);
+      popup.checkout({
+        email: user.email,
+        amount: Number(selectedOption.amount),
+        plan: selectedOption.planCode,
+        reference,
+        metadata: {
+          vendor_id: vendorId,
+          vendorId,
+          vendor: `vendor:${vendorId}`,
+          plan_slug: plan.slug,
+          plan_code: selectedOption.planCode,
+          duration_months: selectedOption.months,
+          source: 'mobile-app',
+        },
+        onSuccess: (res) => handlePaystackSuccess(res, reference),
+        onCancel: handlePaystackCancel,
+      });
     } catch (error) {
-      showToast('Unable to open checkout. Please try again.', 'error');
+      console.error('Paystack renewal error:', error);
+      setProcessingPayment(false);
+      showToast(error?.message || 'Unable to start payment. Please try again.', 'error');
     }
   };
 
@@ -143,6 +260,42 @@ const VendorRenewPlanScreen = ({ navigation }) => {
           )}
         </View>
 
+        {durationOptions.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Renewal Options</Text>
+            <View style={styles.durationSection}>
+              {durationOptions.map((option) => {
+                const isActive = selectedOption?.months === option.months;
+                return (
+                  <TouchableOpacity
+                    key={`${plan?.slug || 'plan'}-${option.months}`}
+                    style={[styles.durationOption, isActive && styles.durationOptionActive]}
+                    onPress={() => setSelectedDuration(option.months)}
+                  >
+                    <View>
+                      <Text style={[styles.durationLabel, isActive && styles.durationLabelActive]}>
+                        {option.intervalLabel || `${option.months} month${option.months === 1 ? '' : 's'}`}
+                      </Text>
+                      <Text style={[styles.durationPrice, isActive && styles.durationPriceActive]}>
+                        {formatNaira(option.amount)} total
+                      </Text>
+                    </View>
+                    {isActive && (
+                      <Ionicons name="checkmark-circle" size={20} color={theme.colors.emerald} />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            {selectedOption && (
+              <Text style={styles.summaryText}>
+                You’ll pay {formatNaira(selectedOption.amount)} for{' '}
+                {selectedOption.intervalLabel || `${selectedOption.months} months`}.
+              </Text>
+            )}
+          </View>
+        )}
+
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Renewal Benefits</Text>
           {[
@@ -163,6 +316,8 @@ const VendorRenewPlanScreen = ({ navigation }) => {
           fullWidth
           icon="sparkles-outline"
           onPress={handleRenew}
+          loading={processingPayment}
+          disabled={processingPayment}
         >
           Proceed to Renew
         </Button>
@@ -252,6 +407,46 @@ const styles = StyleSheet.create({
     gap: theme.spacing.xs,
   },
   planMetaText: {
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.textSecondary,
+  },
+  durationSection: {
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.md,
+  },
+  durationOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.lg,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+  },
+  durationOptionActive: {
+    borderColor: theme.colors.emerald,
+    backgroundColor: `${theme.colors.emerald}15`,
+  },
+  durationLabel: {
+    fontFamily: theme.typography.fontFamily.interSemiBold,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.textPrimary,
+  },
+  durationLabelActive: {
+    color: theme.colors.emerald,
+  },
+  durationPrice: {
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.textSecondary,
+  },
+  durationPriceActive: {
+    color: theme.colors.emerald,
+  },
+  summaryText: {
+    marginTop: theme.spacing.sm,
     fontFamily: theme.typography.fontFamily.inter,
     fontSize: theme.typography.fontSize.sm,
     color: theme.colors.textSecondary,
