@@ -38,7 +38,6 @@ import { useAuth } from '../../context/AuthContext';
 import theme from '../../theme';
 import Toast from '../../components/Toast';
 import Button from '../../components/Button';
-import { API_BASE_URL } from '../../config/constants';
 import { vendorAPI } from '../../services/api';
 import { goBackOrNavigate } from '../../utils/navigation';
 import { formatNumber, formatNaira } from '../../utils/formatters';
@@ -656,6 +655,7 @@ const PlansScreen = ({ navigation }) => {
         </View>
       </ScrollView>
     </SafeAreaView>
+    </ErrorBoundary>
   );
 };
 
