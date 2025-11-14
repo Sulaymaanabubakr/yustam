@@ -10,9 +10,10 @@ import {
   Image,
   Share,
   Dimensions,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import theme from '../../theme';
 import Toast from '../../components/Toast';
@@ -23,6 +24,7 @@ import resolveMediaUrl from '../../utils/url';
 import { API_BASE_URL } from '../../config/constants';
 import { formatDate, formatNaira } from '../../utils/formatters';
 import { resolveUserUid } from '../../utils/user';
+import { getPlanPreset } from '../../data/vendorPlans';
 
 const { width } = Dimensions.get('window');
 const LISTING_WIDTH = (width - theme.spacing.lg * 3) / 2;
@@ -32,6 +34,20 @@ const buildStorefrontShareUrl = (slug) =>
   slug ? `${normaliseBase(PUBLIC_BASE_URL)}/storefront/${encodeURIComponent(slug)}` : '';
 const buildApiStorefrontUrl = (identifier) =>
   identifier ? `${API_BASE_URL}/vendor/storefront/${encodeURIComponent(identifier)}` : '';
+const PLAN_BADGES = {
+  free: { background: '#E0E0E0', tick: '#757575', border: '#C5C5C5' },
+  starter: { background: '#1877F2', tick: '#FFFFFF', border: '#145DB2' },
+  pro: { background: '#CD7F32', tick: '#FFFFFF', border: '#A85B1F' },
+  elite: { background: '#C0C0C0', tick: '#FFFFFF', border: '#9E9E9E' },
+  power: { background: '#D4AF37', tick: '#FFFFFF', border: '#B78E1D' },
+};
+
+const normalisePlanSlug = (value = '') =>
+  (value || '')
+    .toLowerCase()
+    .replace(/plan$/i, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'free';
 
 const StorefrontScreen = ({ navigation, route }) => {
   const { user } = useAuth();
@@ -46,6 +62,10 @@ const StorefrontScreen = ({ navigation, route }) => {
     description: '',
     location: '',
     verified: false,
+    verificationStatus: '',
+    planSlug: 'free',
+    planName: 'Free Plan',
+    planFeatures: [],
     rating: 0,
     totalReviews: 0,
     totalListings: 0,
@@ -57,6 +77,7 @@ const StorefrontScreen = ({ navigation, route }) => {
     storefrontUrl: '',
   });
   const [listings, setListings] = useState([]);
+  const [badgeModalVisible, setBadgeModalVisible] = useState(false);
 
   useEffect(() => {
     fetchStorefront();
@@ -79,6 +100,12 @@ const StorefrontScreen = ({ navigation, route }) => {
           : [];
 
       const locationParts = [vendor.city, vendor.state, vendor.country].filter(Boolean);
+      const verificationStatus = (vendor.verificationStatus || '').toLowerCase();
+      const isVerified = verificationStatus === 'approved' || verificationStatus === 'verified' || vendor.verified;
+      const planSlug = normalisePlanSlug(
+        vendor.planSlug || vendor.plan?.slug || vendor.planId || vendor.plan || 'free'
+      );
+      const planDefinition = getPlanPreset(planSlug);
       const storefrontSlug = vendor.storefrontSlug;
       const shareUrl =
         buildStorefrontShareUrl(storefrontSlug) ||
@@ -88,7 +115,11 @@ const StorefrontScreen = ({ navigation, route }) => {
         businessName: vendor.businessName || vendor.displayName || 'Your Storefront',
         description: vendor.description || vendor.about || '',
         location: locationParts.join(', '),
-        verified: (vendor.verificationStatus || '').toLowerCase() === 'approved',
+        verified: isVerified,
+        verificationStatus,
+        planSlug,
+        planName: planDefinition.name,
+        planFeatures: planDefinition.features,
         rating: vendor.averageRating || vendor.rating || 0,
         totalReviews: vendor.reviewCount || vendor.totalReviews || 0,
         totalListings: listingData.length,
@@ -167,11 +198,13 @@ const StorefrontScreen = ({ navigation, route }) => {
       }}
       activeOpacity={0.7}
     >
-      <Image
-        source={{ uri: listing.image }}
-        style={styles.listingImage}
-        resizeMode="cover"
-      />
+      {listing.image ? (
+        <Image source={{ uri: listing.image }} style={styles.listingImage} resizeMode="cover" />
+      ) : (
+        <View style={[styles.listingImage, styles.listingImagePlaceholder]}>
+          <Ionicons name="image-outline" size={32} color={theme.colors.textSecondary} />
+        </View>
+      )}
       <View style={styles.listingInfo}>
         <Text style={styles.listingTitle} numberOfLines={2}>
           {listing.title}
@@ -229,28 +262,35 @@ const StorefrontScreen = ({ navigation, route }) => {
         }
       >
         {/* Cover Image */}
-        <Image
-          source={{ uri: storefront.coverImage }}
-          style={styles.coverImage}
-          resizeMode="cover"
-        />
+        {storefront.coverImage ? (
+          <Image source={{ uri: storefront.coverImage }} style={styles.coverImage} resizeMode="cover" />
+        ) : (
+          <View style={[styles.coverImage, styles.coverPlaceholder]}>
+            <Ionicons name="image-outline" size={28} color={theme.colors.textSecondary} />
+            <Text style={styles.coverPlaceholderText}>Add a storefront banner</Text>
+          </View>
+        )}
 
         {/* Profile Section */}
         <View style={styles.profileSection}>
           <View style={styles.profileImageContainer}>
-            <Image
-              source={{ uri: storefront.profileImage }}
-              style={styles.profileImage}
-              resizeMode="cover"
-            />
-            {storefront.verified && (
-              <View style={styles.verifiedBadge}>
-                <Ionicons name="checkmark-circle" size={24} color="#0F9D58" />
+            {storefront.profileImage ? (
+              <Image source={{ uri: storefront.profileImage }} style={styles.profileImage} resizeMode="cover" />
+            ) : (
+              <View style={[styles.profileImage, styles.profilePlaceholder]}>
+                <Ionicons name="storefront" size={32} color={theme.colors.white} />
               </View>
             )}
           </View>
 
-          <Text style={styles.businessName}>{storefront.businessName}</Text>
+          <View style={styles.nameRow}>
+            <Text style={styles.businessName}>{storefront.businessName}</Text>
+            <PlanBadge
+              planSlug={storefront.planSlug}
+              verified={storefront.verified}
+              onPress={() => setBadgeModalVisible(true)}
+            />
+          </View>
           
           {/* Rating */}
           <View style={styles.ratingContainer}>
@@ -269,8 +309,8 @@ const StorefrontScreen = ({ navigation, route }) => {
           {/* Description */}
           <Text style={styles.description}>{storefront.description}</Text>
 
-          {/* Stats */}
-          <View style={styles.statsContainer}>
+        {/* Stats */}
+        <View style={styles.statsContainer}>
             <View style={styles.statItem}>
               <Text style={styles.statValue}>{storefront.totalListings}</Text>
               <Text style={styles.statLabel}>Listings</Text>
@@ -285,10 +325,27 @@ const StorefrontScreen = ({ navigation, route }) => {
               <Text style={styles.statValue}>{storefront.joinedDate}</Text>
               <Text style={styles.statLabel}>Joined</Text>
             </View>
-          </View>
+        </View>
 
-          {/* Share Button */}
-          <Button
+        {storefront.planFeatures?.length > 0 && (
+          <View style={styles.planSection}>
+            <Text style={styles.sectionTitle}>{storefront.planName} Perks</Text>
+            <View style={styles.planFeatureList}>
+              {storefront.planFeatures.slice(0, 6).map((feature) => (
+                <View key={feature} style={styles.planFeatureItem}>
+                  <Ionicons name="checkmark-circle" size={16} color={theme.colors.emerald} />
+                  <Text style={styles.planFeatureText}>{feature}</Text>
+                </View>
+              ))}
+            </View>
+            {storefront.planFeatures.length > 6 && (
+              <Text style={styles.planFeatureNote}>…and {storefront.planFeatures.length - 6} more benefits.</Text>
+            )}
+          </View>
+        )}
+
+        {/* Share Button */}
+        <Button
             title="Share Storefront"
             onPress={handleShareStorefront}
             variant="outline"
@@ -317,6 +374,39 @@ const StorefrontScreen = ({ navigation, route }) => {
 
         <View style={styles.bottomPadding} />
       </ScrollView>
+
+      <Modal
+        visible={badgeModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setBadgeModalVisible(false)}
+      >
+        <View style={styles.badgeModalBackdrop}>
+          <View style={styles.badgeModalCard}>
+            <View style={styles.badgeModalHeader}>
+              <Text style={styles.badgeModalTitle}>{storefront.planName}</Text>
+              <TouchableOpacity onPress={() => setBadgeModalVisible(false)}>
+                <Ionicons name="close" size={20} color={theme.colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.badgeModalSubtitle}>
+              {storefront.verified ? 'Verified vendor' : 'Not verified yet'}
+            </Text>
+            <View style={styles.badgeModalFeatures}>
+              {(storefront.planFeatures || []).slice(0, 6).map((feature) => (
+                <View key={feature} style={styles.planFeatureItem}>
+                  <Ionicons name="checkmark-circle" size={16} color={theme.colors.emerald} />
+                  <Text style={styles.planFeatureText}>{feature}</Text>
+                </View>
+              ))}
+            </View>
+            <Text style={styles.badgeModalHint}>
+              Badge colors change with your subscription plan. Upgrade for stronger recognition across the
+              marketplace.
+            </Text>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -368,6 +458,16 @@ const styles = StyleSheet.create({
     height: 180,
     backgroundColor: theme.colors.beige,
   },
+  coverPlaceholder: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+  },
+  coverPlaceholderText: {
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.textSecondary,
+  },
   profileSection: {
     backgroundColor: theme.colors.white,
     paddingHorizontal: theme.spacing.lg,
@@ -385,21 +485,25 @@ const styles = StyleSheet.create({
     borderWidth: 4,
     borderColor: theme.colors.white,
     backgroundColor: theme.colors.beige,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  verifiedBadge: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    backgroundColor: theme.colors.white,
-    borderRadius: theme.borderRadius.full,
+  profilePlaceholder: {
+    backgroundColor: theme.colors.emerald,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.base,
   },
   businessName: {
     fontFamily: theme.typography.fontFamily.anton,
     fontSize: theme.typography.fontSize['2xl'],
     color: theme.colors.emerald,
     letterSpacing: theme.typography.letterSpacing.wide,
-    marginTop: theme.spacing.base,
     textAlign: 'center',
+    flexShrink: 1,
   },
   ratingContainer: {
     flexDirection: 'row',
@@ -459,6 +563,35 @@ const styles = StyleSheet.create({
     width: 1,
     backgroundColor: theme.colors.border,
   },
+  planSection: {
+    width: '100%',
+    paddingHorizontal: theme.spacing.lg,
+    marginTop: theme.spacing.xl,
+  },
+  planFeatureList: {
+    backgroundColor: theme.colors.white,
+    borderRadius: theme.borderRadius.lg,
+    padding: theme.spacing.lg,
+    gap: theme.spacing.sm,
+    ...theme.shadows.small,
+  },
+  planFeatureItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+  },
+  planFeatureText: {
+    flex: 1,
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.textPrimary,
+  },
+  planFeatureNote: {
+    marginTop: theme.spacing.sm,
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.textSecondary,
+  },
   shareButtonFull: {
     width: '100%',
     marginTop: theme.spacing.xl,
@@ -491,6 +624,10 @@ const styles = StyleSheet.create({
     height: 150,
     backgroundColor: theme.colors.beige,
   },
+  listingImagePlaceholder: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   listingInfo: {
     padding: theme.spacing.base,
   },
@@ -520,6 +657,90 @@ const styles = StyleSheet.create({
   bottomPadding: {
     height: theme.spacing['2xl'],
   },
+  badgeCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  badgePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+    backgroundColor: theme.colors.border,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: theme.spacing.xs / 2,
+    borderRadius: theme.borderRadius.full,
+  },
+  badgePillText: {
+    fontFamily: theme.typography.fontFamily.interSemiBold,
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.textSecondary,
+  },
+  badgeModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: theme.spacing.lg,
+  },
+  badgeModalCard: {
+    width: '100%',
+    backgroundColor: theme.colors.white,
+    borderRadius: theme.borderRadius.lg,
+    padding: theme.spacing.lg,
+    gap: theme.spacing.sm,
+  },
+  badgeModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  badgeModalTitle: {
+    fontFamily: theme.typography.fontFamily.anton,
+    fontSize: theme.typography.fontSize.xl,
+    color: theme.colors.textPrimary,
+  },
+  badgeModalSubtitle: {
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.textSecondary,
+  },
+  badgeModalFeatures: {
+    gap: theme.spacing.sm,
+  },
+  badgeModalHint: {
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.textSecondary,
+  },
+  planBadgeIcon: {
+    marginLeft: theme.spacing.xs,
+  },
 });
+
+const PlanBadge = ({ planSlug, verified, onPress }) => {
+  const config = PLAN_BADGES[planSlug] || PLAN_BADGES.free;
+  if (!verified) {
+    return (
+      <TouchableOpacity style={styles.badgePill} onPress={onPress} activeOpacity={0.8}>
+        <Ionicons name="close-circle" size={14} color={theme.colors.textSecondary} />
+        <Text style={styles.badgePillText}>Not verified</Text>
+      </TouchableOpacity>
+    );
+  }
+  return (
+    <TouchableOpacity onPress={onPress} activeOpacity={0.8}>
+      <MaterialCommunityIcons
+        name="check-decagram"
+        size={18}
+        color={config.background}
+        style={styles.planBadgeIcon}
+      />
+    </TouchableOpacity>
+  );
+};
 
 export default StorefrontScreen;
