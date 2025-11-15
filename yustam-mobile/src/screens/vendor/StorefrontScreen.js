@@ -72,6 +72,20 @@ const normalisePlanSlug = (value = '') =>
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '') || 'free';
 
+const normaliseVerificationStatus = (value = '') => {
+  const normalised = String(value || '').trim().toLowerCase();
+  if (['verified', 'approved', 'active'].includes(normalised)) {
+    return 'verified';
+  }
+  if (['pending', 'inreview', 'underreview'].includes(normalised)) {
+    return 'pending';
+  }
+  if (['rejected', 'declined', 'failed'].includes(normalised)) {
+    return 'rejected';
+  }
+  return 'not_submitted';
+};
+
 const pickMediaUrl = (entry = {}) =>
   entry?.url ||
   entry?.secure_url ||
@@ -336,8 +350,14 @@ const StorefrontScreen = ({ navigation, route }) => {
           : [];
 
       const locationParts = [vendor.city, vendor.state, vendor.country].filter(Boolean);
-      const verificationStatus = (vendor.verificationStatus || '').toLowerCase();
-      const isVerified = verificationStatus === 'approved' || verificationStatus === 'verified' || vendor.verified;
+      const verificationStatus = normaliseVerificationStatus(
+        vendor.verificationStatus ||
+          vendor.verification_state ||
+          vendor.verificationStage ||
+          vendor.status ||
+          vendor.verified
+      );
+      const isVerified = verificationStatus === 'verified';
       const planSlug = normalisePlanSlug(
         vendor.planSlug || vendor.plan?.slug || vendor.planId || vendor.plan || 'free'
       );

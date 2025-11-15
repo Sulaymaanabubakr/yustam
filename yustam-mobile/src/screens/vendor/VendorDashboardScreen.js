@@ -19,6 +19,20 @@ import { vendorAPI } from '../../services/api';
 import { formatNumber } from '../../utils/formatters';
 import { resolveUserUid } from '../../utils/user';
 
+const formatVerificationStatusLabel = (value) => {
+  const normalised = String(value || '').trim().toLowerCase();
+  if (['verified', 'approved', 'active'].includes(normalised)) {
+    return 'Verified';
+  }
+  if (['pending', 'inreview', 'underreview'].includes(normalised)) {
+    return 'Pending';
+  }
+  if (['rejected', 'declined', 'failed'].includes(normalised)) {
+    return 'Needs attention';
+  }
+  return 'Not submitted';
+};
+
 const VendorDashboardScreen = ({ navigation }) => {
   const { user } = useAuth();
   const vendorUid = resolveUserUid(user);
@@ -83,11 +97,9 @@ const VendorDashboardScreen = ({ navigation }) => {
         : 0;
 
       const verificationData = verificationResponse?.data?.data;
-      const verificationStatus =
-        verificationData?.statusDisplay ||
-        (verificationData?.status
-          ? verificationData.status.charAt(0).toUpperCase() + verificationData.status.slice(1)
-          : 'Pending');
+      const verificationStatus = formatVerificationStatusLabel(
+        verificationData?.statusDisplay || verificationData?.status
+      );
 
       setDashboard({
         totalListings,

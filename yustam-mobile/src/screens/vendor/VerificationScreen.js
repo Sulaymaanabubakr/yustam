@@ -88,6 +88,20 @@ const STATUS_CONFIG = {
   },
 };
 
+const normaliseVerificationState = (value) => {
+  const normalised = String(value || '').trim().toLowerCase();
+  if (['approved', 'verified', 'active'].includes(normalised)) {
+    return 'verified';
+  }
+  if (['pending', 'inreview', 'underreview'].includes(normalised)) {
+    return 'pending';
+  }
+  if (['rejected', 'declined', 'failed'].includes(normalised)) {
+    return 'rejected';
+  }
+  return 'not_submitted';
+};
+
 const VerificationScreen = ({ navigation }) => {
   const { user } = useAuth();
   const vendorUid = resolveUserUid(user, 'vendor');
@@ -112,9 +126,9 @@ const VerificationScreen = ({ navigation }) => {
       }
 
       const data = response.data?.data || {};
-      const normalizedStatus = (data.status || 'not_submitted').toLowerCase();
+      const normalizedStatus = normaliseVerificationState(data.status);
       setStatus(normalizedStatus);
-      setRejectionReason(data.feedback || '');
+      setRejectionReason(normalizedStatus === 'rejected' ? data.feedback || '' : '');
     } catch (error) {
       console.error('Error loading verification status:', error);
       showToast('Failed to load verification status', 'error');
@@ -287,7 +301,7 @@ const VerificationScreen = ({ navigation }) => {
 
       const response = await vendorAPI.submitVerification({
         action: 'submit',
-        documents: JSON.stringify(documentPayload),
+        documents: documentPayload,
       });
 
       if (!response.data?.success) {
