@@ -25,13 +25,13 @@ const VendorProfileScreen = ({ navigation }) => {
 
   const loadSummary = useCallback(async () => {
     try {
-      const response = await vendorAPI.getPlans();
-      const summary = response.data?.data?.currentPlan;
+      const response = await vendorAPI.getDashboard();
+      const summary = response.data?.data?.subscription;
       if (summary) {
         setPlanSummary(summary);
       }
     } catch (error) {
-      console.warn('Unable to load vendor plan summary', error);
+      console.warn('Unable to load vendor dashboard summary', error);
     }
   }, []);
 
