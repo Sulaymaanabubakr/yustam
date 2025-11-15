@@ -34,7 +34,10 @@ api.interceptors.response.use(
   (error) => {
     if (error.response) {
       const message = error.response.data?.message || error.response.data?.error || 'An error occurred';
-      return Promise.reject(new Error(message));
+      const enhancedError = new Error(message);
+      enhancedError.response = error.response;
+      enhancedError.status = error.response.status;
+      return Promise.reject(enhancedError);
     }
     if (error.request) {
       return Promise.reject(new Error('Network error. Please check your connection.'));

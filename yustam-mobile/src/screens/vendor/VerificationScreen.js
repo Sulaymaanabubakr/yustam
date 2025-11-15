@@ -287,7 +287,7 @@ const VerificationScreen = ({ navigation }) => {
 
       const response = await vendorAPI.submitVerification({
         action: 'submit',
-        documents: documentPayload,
+        documents: JSON.stringify(documentPayload),
       });
 
       if (!response.data?.success) {
@@ -302,7 +302,7 @@ const VerificationScreen = ({ navigation }) => {
       );
       await loadVerificationStatus();
     } catch (error) {
-      console.error('Error submitting verification:', error);
+      console.error('Error submitting verification:', error, error?.response?.data);
       showToast(error.message || 'Failed to submit verification', 'error');
     } finally {
       setSubmitting(false);
