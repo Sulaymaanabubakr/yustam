@@ -170,6 +170,23 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const upgradeUserToVendorIfNeeded = async (firebaseUser, backendUser, metadata = {}) => {
+    if (!firebaseUser || !backendUser) {
+      return backendUser;
+    }
+
+    const ensuredUser = await ensureVendorRoleForUser(firebaseUser, backendUser, metadata);
+    const previousRole = backendUser?.role?.toLowerCase();
+    const ensuredRole = ensuredUser?.role?.toLowerCase();
+
+    if (previousRole !== USER_ROLES.VENDOR && ensuredRole === USER_ROLES.VENDOR) {
+      const { backendUser: refreshedBackendUser } = await syncBackendSession(firebaseUser);
+      return refreshedBackendUser;
+    }
+
+    return ensuredUser ?? backendUser;
+  };
+
 
 
 
@@ -186,7 +203,7 @@ export const AuthProvider = ({ children }) => {
       let { backendUser } = await syncBackendSession(firebaseUser);
 
       if (targetRole === USER_ROLES.VENDOR) {
-        backendUser = await ensureVendorRoleForUser(firebaseUser, backendUser);
+        backendUser = await upgradeUserToVendorIfNeeded(firebaseUser, backendUser);
       }
 
       const resolvedRole = backendUser?.role?.toLowerCase() ?? targetRole;
@@ -227,15 +244,16 @@ export const AuthProvider = ({ children }) => {
       let { backendUser } = await syncBackendSession(firebaseUser);
 
       if (targetRole === USER_ROLES.VENDOR) {
-        backendUser = await ensureVendorRoleForUser(firebaseUser, backendUser, userData);
+        backendUser = await upgradeUserToVendorIfNeeded(firebaseUser, backendUser, userData);
       }
 
+      const resolvedRole = backendUser?.role?.toLowerCase() ?? targetRole;
       const profile = composeUserProfile(firebaseUser, backendUser, {
         ...userData,
-        role: targetRole,
+        role: resolvedRole,
       });
 
-      await saveUserData(profile, targetRole, backendUser);
+      await saveUserData(profile, resolvedRole, backendUser);
 
       return { success: true, user: profile };
     } catch (error) {
@@ -264,13 +282,14 @@ export const AuthProvider = ({ children }) => {
 
       let { backendUser } = await syncBackendSession(firebaseUser);
       if (targetRole === USER_ROLES.VENDOR) {
-        backendUser = await ensureVendorRoleForUser(firebaseUser, backendUser, {
+        backendUser = await upgradeUserToVendorIfNeeded(firebaseUser, backendUser, {
           businessName: firebaseUser.displayName,
         });
       }
 
-      const profile = composeUserProfile(firebaseUser, backendUser, { role: targetRole });
-      await saveUserData(profile, targetRole, backendUser);
+      const resolvedRole = backendUser?.role?.toLowerCase() ?? targetRole;
+      const profile = composeUserProfile(firebaseUser, backendUser, { role: resolvedRole });
+      await saveUserData(profile, resolvedRole, backendUser);
 
       return { success: true, user: profile };
     } catch (error) {
