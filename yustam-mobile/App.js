@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { View, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, ActivityIndicator } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import {
   useFonts,
@@ -79,13 +79,7 @@ export default function App() {
       <AuthProvider>
         <SafeAreaProvider>
           <StatusBar style="dark" />
-          <KeyboardAvoidingView
-            style={{ flex: 1 }}
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-          >
-            <AppNavigator />
-          </KeyboardAvoidingView>
+          <AppNavigator />
         </SafeAreaProvider>
       </AuthProvider>
     </PaystackProvider>

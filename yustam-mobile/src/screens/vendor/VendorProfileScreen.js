@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Image,
   Alert,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,25 +21,29 @@ const VendorProfileScreen = ({ navigation }) => {
   const { user, logout } = useAuth();
   const [toast, setToast] = useState({ visible: false, message: '', type: 'info' });
   const [planSummary, setPlanSummary] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadSummary = useCallback(async () => {
+    try {
+      const response = await vendorAPI.getPlans();
+      const summary = response.data?.data?.currentPlan;
+      if (summary) {
+        setPlanSummary(summary);
+      }
+    } catch (error) {
+      console.warn('Unable to load vendor plan summary', error);
+    }
+  }, []);
 
   useEffect(() => {
-    let isMounted = true;
-    vendorAPI
-      .getPlans()
-      .then((response) => {
-        if (!isMounted) {
-          return;
-        }
-        const summary = response.data?.data?.currentPlan;
-        if (summary) {
-          setPlanSummary(summary);
-        }
-      })
-      .catch(() => {});
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+    loadSummary();
+  }, [loadSummary]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadSummary();
+    setRefreshing(false);
+  }, [loadSummary]);
 
   const planLabel = useMemo(
     () => planSummary?.displayName || user?.planLabel || 'Free Plan',
@@ -93,7 +98,12 @@ const VendorProfileScreen = ({ navigation }) => {
   return (
     <SafeAreaView style={styles.container}>
       <Toast visible={toast.visible} message={toast.message} type={toast.type} onDismiss={hideToast} />
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.orange} />
+        }
+      >
         <View style={styles.profileHeader}>
           <View style={styles.avatarContainer}>
             {user?.photoURL ? (

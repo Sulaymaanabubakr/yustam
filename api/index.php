@@ -857,7 +857,10 @@ function yustam_api_vendor_profile_payload(array $vendor): array
         'state' => $vendor['state'] ?? null,
         'city' => $vendor['city'] ?? null,
         'category' => $vendor['category'] ?? null,
+        'address' => $vendor['address'] ?? null,
+        'businessAddress' => $vendor['address'] ?? null,
         'photoUrl' => $vendor['profile_photo'] ?? ($vendor['avatar_url'] ?? null),
+        'profilePhoto' => $vendor['profile_photo'] ?? ($vendor['avatar_url'] ?? null),
         'createdAt' => $vendor['created_at'] ?? null,
     ];
 }

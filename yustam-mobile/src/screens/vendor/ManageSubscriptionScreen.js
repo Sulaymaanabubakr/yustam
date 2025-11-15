@@ -10,6 +10,8 @@ import {
   Switch,
   Modal,
   TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -165,25 +167,36 @@ const VendorManageSubscriptionScreen = ({ navigation }) => {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => goBackOrNavigate(navigation)} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color={theme.colors.emerald} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Manage Subscription</Text>
-          <View style={styles.headerSpacer} />
-        </View>
-        <View style={styles.loadingState}>
-          <ActivityIndicator size="large" color={theme.colors.emerald} />
-          <Text style={styles.loadingText}>Loading subscription...</Text>
-        </View>
-      </SafeAreaView>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 0}
+      >
+        <SafeAreaView style={styles.container}>
+          <View style={styles.header}>
+            <TouchableOpacity onPress={() => goBackOrNavigate(navigation)} style={styles.backButton}>
+              <Ionicons name="arrow-back" size={24} color={theme.colors.emerald} />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Manage Subscription</Text>
+            <View style={styles.headerSpacer} />
+          </View>
+          <View style={styles.loadingState}>
+            <ActivityIndicator size="large" color={theme.colors.emerald} />
+            <Text style={styles.loadingText}>Loading subscription...</Text>
+          </View>
+        </SafeAreaView>
+      </KeyboardAvoidingView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <Toast visible={toast.visible} message={toast.message} type={toast.type} onDismiss={hideToast} />
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 0}
+    >
+      <SafeAreaView style={styles.container}>
+        <Toast visible={toast.visible} message={toast.message} type={toast.type} onDismiss={hideToast} />
       <Modal
         visible={cancelModalVisible}
         transparent
@@ -353,6 +366,7 @@ const VendorManageSubscriptionScreen = ({ navigation }) => {
         </View>
       </ScrollView>
     </SafeAreaView>
+    </KeyboardAvoidingView>
   );
 };
 

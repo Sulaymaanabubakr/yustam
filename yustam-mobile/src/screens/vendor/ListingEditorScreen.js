@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Alert,
   Platform,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -297,13 +298,18 @@ const ListingEditorScreen = ({ route, navigation }) => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <Toast
-        visible={toast.visible}
-        message={toast.message}
-        type={toast.type}
-        onDismiss={hideToast}
-      />
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 0}
+    >
+      <SafeAreaView style={styles.container}>
+        <Toast
+          visible={toast.visible}
+          message={toast.message}
+          type={toast.type}
+          onDismiss={hideToast}
+        />
 
       {/* Header */}
       <View style={styles.header}>
@@ -474,6 +480,7 @@ const ListingEditorScreen = ({ route, navigation }) => {
         )}
       </ScrollView>
     </SafeAreaView>
+    </KeyboardAvoidingView>
   );
 };
 

@@ -334,11 +334,25 @@ export const vendorAPI = {
   },
   getProfile: async () => {
     const response = await api.get('/vendor/me');
-    return response.data?.profile ?? response.data;
+    const profile = response.data?.profile ?? response.data ?? {};
+    const success = response.data?.success ?? true;
+    return {
+      data: {
+        success,
+        data: profile,
+      },
+    };
   },
   updateProfile: async (payload = {}) => {
     const response = await api.patch('/vendor/me', payload);
-    return response.data?.profile ?? response.data;
+    const profile = response.data?.profile ?? response.data ?? {};
+    const success = response.data?.success ?? true;
+    return {
+      data: {
+        success,
+        data: profile,
+      },
+    };
   },
   getVerificationStatus: async () => {
     const response = await api.get('/verification');

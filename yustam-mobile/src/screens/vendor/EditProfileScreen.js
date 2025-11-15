@@ -19,9 +19,9 @@ import { useAuth } from '../../context/AuthContext';
 import theme from '../../theme';
 import Toast from '../../components/Toast';
 import Button from '../../components/Button';
-import { API_BASE_URL, STATES } from '../../config/constants';
+import { STATES } from '../../config/constants';
 import { uploadImage } from '../../config/cloudinary';
-import { vendorAPI } from '../../services/api';
+import { vendorAPI, authAPI } from '../../services/api';
 import { goBackOrNavigate } from '../../utils/navigation';
 import resolveMediaUrl from '../../utils/url';
 import { resolveUserUid } from '../../utils/user';
@@ -52,6 +52,25 @@ const EditProfileScreen = ({ navigation }) => {
 
   const [newPhotoUri, setNewPhotoUri] = useState(null);
 
+  const formatStatusLabel = (value) => {
+    const normalised = String(value || '').trim().toLowerCase();
+    if (!normalised) {
+      return 'Active';
+    }
+    if (['active', 'approved', 'verified'].includes(normalised)) {
+      return 'Active';
+    }
+    if (['pending', 'processing', 'in_review', 'in-review', 'under review'].includes(normalised)) {
+      return 'Pending';
+    }
+    if (['rejected', 'declined', 'failed'].includes(normalised)) {
+      return 'Needs Review';
+    }
+    return String(value)
+      .replace(/_/g, ' ')
+      .replace(/\b\w/g, (letter) => letter.toUpperCase());
+  };
+
   useEffect(() => {
     loadProfile();
   }, []);
@@ -64,21 +83,25 @@ const EditProfileScreen = ({ navigation }) => {
         throw new Error(response.data?.message || 'Unable to load profile data.');
       }
 
-      const profile = response.data?.profile || {};
+      const profile = response.data?.data || {};
+      const resolvedPhoto =
+        resolveMediaUrl(profile.photoUrl || profile.profilePhoto) ||
+        user?.photoURL ||
+        '';
 
       setFormData({
-        name: profile.name || user?.displayName || '',
+        name: user?.displayName || profile.businessName || '',
         email: profile.email || user?.email || '',
         phone: profile.phone || user?.phone || '',
-        businessName: profile.businessName || '',
+        businessName: profile.businessName || user?.businessName || '',
         businessAddress: profile.address || profile.businessAddress || '',
-        state: profile.state || '',
-        profilePhoto: resolveMediaUrl(profile.profilePhoto) || user?.photoURL || '',
+        state: profile.state || user?.state || '',
+        profilePhoto: resolvedPhoto,
       });
 
       setProfileData({
         plan: profile.plan || 'Free',
-        planStatus: profile.verification?.statusDisplay || 'Active',
+        planStatus: formatStatusLabel(profile.verificationStatus),
         planExpiry: profile.planRenewal || '',
       });
     } catch (error) {
@@ -190,20 +213,30 @@ const EditProfileScreen = ({ navigation }) => {
         profilePhotoUrl = await uploadProfilePhoto();
       }
 
-      const payload = new FormData();
-      payload.append('name', formData.name.trim());
-      payload.append('business_name', formData.businessName.trim());
-      payload.append('phone', formData.phone.trim());
-      payload.append('state', formData.state);
-      payload.append('business_address', formData.businessAddress.trim());
-      if (profilePhotoUrl) {
-        payload.append('profile_photo_url', profilePhotoUrl);
-      }
+      const payload = {
+        businessName: formData.businessName.trim(),
+        phone: formData.phone.trim(),
+        email: formData.email.trim(),
+        state: formData.state,
+        address: formData.businessAddress.trim(),
+      };
 
       const response = await vendorAPI.updateProfile(payload);
 
       if (!response.data?.success) {
         throw new Error(response.data?.message || 'Failed to update profile');
+      }
+
+      const updatedProfile = response.data?.data || {};
+
+      try {
+        await authAPI.updateProfile({
+          displayName: formData.name.trim(),
+          phone: formData.phone.trim(),
+          photoUrl: profilePhotoUrl,
+        });
+      } catch (authError) {
+        console.warn('Failed to update auth profile', authError);
       }
 
       if (updateUserProfile) {
@@ -216,6 +249,17 @@ const EditProfileScreen = ({ navigation }) => {
           state: formData.state,
         });
       }
+
+      setFormData(prev => ({
+        ...prev,
+        profilePhoto: profilePhotoUrl || prev.profilePhoto,
+      }));
+      setNewPhotoUri(null);
+      setProfileData(prev => ({
+        ...prev,
+        plan: updatedProfile.plan || prev.plan,
+        planStatus: formatStatusLabel(updatedProfile.verificationStatus) || prev.planStatus,
+      }));
 
       showToast('Profile updated successfully');
       setTimeout(() => {
@@ -231,30 +275,41 @@ const EditProfileScreen = ({ navigation }) => {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => goBackOrNavigate(navigation)} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color={theme.colors.primary} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>EDIT PROFILE</Text>
-          <View style={styles.headerRight} />
-        </View>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={theme.colors.primary} />
-          <Text style={styles.loadingText}>Loading profile...</Text>
-        </View>
-      </SafeAreaView>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 0}
+      >
+        <SafeAreaView style={styles.container}>
+          <View style={styles.header}>
+            <TouchableOpacity onPress={() => goBackOrNavigate(navigation)} style={styles.backButton}>
+              <Ionicons name="arrow-back" size={24} color={theme.colors.primary} />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>EDIT PROFILE</Text>
+            <View style={styles.headerRight} />
+          </View>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={theme.colors.primary} />
+            <Text style={styles.loadingText}>Loading profile...</Text>
+          </View>
+        </SafeAreaView>
+      </KeyboardAvoidingView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <Toast
-        visible={toast.visible}
-        message={toast.message}
-        type={toast.type}
-        onDismiss={hideToast}
-      />
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 0}
+    >
+      <SafeAreaView style={styles.container}>
+        <Toast
+          visible={toast.visible}
+          message={toast.message}
+          type={toast.type}
+          onDismiss={hideToast}
+        />
 
       {/* Header */}
       <View style={styles.header}>
@@ -406,6 +461,7 @@ const EditProfileScreen = ({ navigation }) => {
         )}
       </ScrollView>
     </SafeAreaView>
+    </KeyboardAvoidingView>
   );
 };
 
