@@ -345,7 +345,10 @@ const VendorDashboardScreen = ({ navigation }) => {
                   Get verified to unlock more features and build trust with buyers
                 </Text>
               </View>
-              <TouchableOpacity style={styles.verificationButton}>
+              <TouchableOpacity
+                style={styles.verificationButton}
+                onPress={() => navigation.navigate('Verification')}
+              >
                 <Text style={styles.verificationButtonText}>Verify</Text>
               </TouchableOpacity>
             </View>

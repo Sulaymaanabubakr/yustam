@@ -280,14 +280,14 @@ const VerificationScreen = ({ navigation }) => {
       const uploadedDocs = await uploadDocuments();
       setDocuments(uploadedDocs);
 
-      const documentPayload = Object.entries(uploadedDocs).reduce((acc, [key, doc]) => {
-        acc[key] = doc.uri;
-        return acc;
-      }, {});
+      const documentPayload = Object.entries(uploadedDocs).map(([key, doc]) => ({
+        type: key,
+        url: doc.uri,
+      }));
 
       const response = await vendorAPI.submitVerification({
         action: 'submit',
-        documents: JSON.stringify(documentPayload),
+        documents: documentPayload,
       });
 
       if (!response.data?.success) {

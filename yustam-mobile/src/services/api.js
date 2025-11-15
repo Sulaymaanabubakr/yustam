@@ -356,11 +356,15 @@ export const vendorAPI = {
       },
     };
   },
-  submitVerification: async (payload) => {
-    const formData = payload instanceof FormData ? payload : buildFormData(payload);
-    const response = await api.post('/verification', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+  submitVerification: async (payload = {}) => {
+    let response;
+    if (payload instanceof FormData) {
+      response = await api.post('/verification', payload, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+    } else {
+      response = await api.post('/verification', payload);
+    }
     return {
       data: {
         success: true,
