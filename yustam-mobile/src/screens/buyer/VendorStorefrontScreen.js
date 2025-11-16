@@ -11,7 +11,7 @@ import {
   Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import Toast from '../../components/Toast';
 import Button from '../../components/Button';
 import theme from '../../theme';
@@ -23,6 +23,21 @@ import { formatDate, formatNaira } from '../../utils/formatters';
 import { db } from '../../config/firebase';
 
 const sanitizePhoneNumber = (value = '') => value.replace(/[^0-9]/g, '');
+
+const PLAN_BADGES = {
+  free: { background: '#E0E0E0' },
+  starter: { background: '#1877F2' },
+  pro: { background: '#CD7F32' },
+  elite: { background: '#C0C0C0' },
+  power: { background: '#D4AF37' },
+};
+
+const normalisePlanSlug = (value = '') =>
+  (value || '')
+    .toLowerCase()
+    .replace(/plan$/i, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'free';
 
 const normaliseVerificationState = (value) => {
   if (value === true || value === 1 || value === '1') {
@@ -96,6 +111,7 @@ const buildStorefrontFromProfile = (profile) => {
   return {
     businessName: profile.businessName || profile.name || 'Marketplace Vendor',
     planLabel: profile.planLabel || buildPlanLabel(profile.plan),
+    planSlug: normalisePlanSlug(profile.planSlug || profile.plan || 'free'),
     verificationState,
     verificationLabel: profile.verificationLabel || buildVerificationLabel(verificationState),
     location: profile.location || '',
@@ -127,6 +143,7 @@ const mergeStorefrontData = (base, update) => {
   merged.verificationState = normaliseVerificationState(verificationState);
   merged.verificationLabel =
     merged.verificationLabel || buildVerificationLabel(merged.verificationState);
+  merged.planSlug = normalisePlanSlug(merged.planSlug || merged.plan || merged.planLabel);
   return merged;
 };
 
@@ -233,7 +250,7 @@ const VendorStorefrontScreen = ({ navigation, route }) => {
 
   useEffect(() => {
     if (initialStorefront) {
-      setStorefront((prev) => prev || initialStorefront);
+      setStorefront((prev) => mergeStorefrontData(prev, initialStorefront));
     }
   }, [initialStorefront]);
 
@@ -265,9 +282,11 @@ const VendorStorefrontScreen = ({ navigation, route }) => {
             normaliseVerificationState(
               vendor.verificationState || vendor.verificationLabel || vendor.status || vendor.verification
             ) || 'unverified';
+          const planSlug = normalisePlanSlug(vendor.planSlug || vendor.plan || vendor.planId || 'free');
           const nextStorefront = {
             businessName: vendor.businessName || vendor.displayName || vendorName || 'Marketplace Vendor',
             planLabel: vendor.planLabel || buildPlanLabel(vendor.plan),
+            planSlug,
             verificationState,
             verificationLabel: vendor.verificationLabel || buildVerificationLabel(verificationState),
             location: vendor.location || vendor.city || vendor.state || vendor.country || '',
@@ -389,18 +408,6 @@ const VendorStorefrontScreen = ({ navigation, route }) => {
   }, [storefront?.website]);
 
   const verificationState = storefront?.verificationState || 'unverified';
-  const verificationColor =
-    verificationState === 'verified'
-      ? theme.colors.emerald
-      : verificationState === 'pending'
-      ? theme.colors.orange
-      : theme.colors.textSecondary;
-  const verificationIcon =
-    verificationState === 'verified'
-      ? 'shield-checkmark'
-      : verificationState === 'pending'
-      ? 'shield-half-outline'
-      : 'shield-outline';
 
   const blockingError = !loading && !storefront && error;
   const noDataAvailable = !loading && !storefront && !error;
@@ -467,10 +474,11 @@ const VendorStorefrontScreen = ({ navigation, route }) => {
           <View style={styles.infoCard}>
             <Text style={styles.businessName}>{storefront.businessName}</Text>
             <Text style={styles.planBadge}>{storefront.planLabel}</Text>
-            <View style={styles.metaRow}>
-              <Ionicons name={verificationIcon} size={16} color={verificationColor} />
-              <Text style={[styles.metaText, { color: verificationColor }]}>{storefront.verificationLabel}</Text>
-            </View>
+            <VerificationBadge
+              verificationState={verificationState}
+              planSlug={storefront.planSlug}
+              label={storefront.verificationLabel}
+            />
             {storefront.location ? (
               <View style={styles.metaRow}>
                 <Ionicons name="location-outline" size={16} color={theme.colors.textSecondary} />
@@ -636,6 +644,32 @@ const VendorStorefrontScreen = ({ navigation, route }) => {
   );
 };
 
+const VerificationBadge = ({ verificationState, planSlug, label }) => {
+  const state = normaliseVerificationState(verificationState);
+  const planPalette = PLAN_BADGES[normalisePlanSlug(planSlug || 'free')] || PLAN_BADGES.free;
+  if (state === 'verified') {
+    return (
+      <View style={styles.badgeRow}>
+        <MaterialCommunityIcons name="check-decagram" size={18} color={planPalette.background} />
+        <Text style={[styles.metaText, styles.badgeVerifiedText, { color: planPalette.background }]}>
+          {label || 'Verified vendor'}
+        </Text>
+      </View>
+    );
+  }
+  const pending = state === 'pending';
+  const color = pending ? theme.colors.orange : theme.colors.textSecondary;
+  const icon = pending ? 'shield-half-outline' : 'shield-outline';
+  return (
+    <View style={styles.badgeRow}>
+      <Ionicons name={icon} size={16} color={color} />
+      <Text style={[styles.metaText, styles.badgePillText, { color }]}>
+        {label || buildVerificationLabel(state)}
+      </Text>
+    </View>
+  );
+};
+
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
@@ -738,6 +772,18 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.fontFamily.inter,
     fontSize: theme.typography.fontSize.sm,
     color: theme.colors.textSecondary,
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+  },
+  badgePillText: {
+    fontFamily: theme.typography.fontFamily.interSemiBold,
+    fontSize: theme.typography.fontSize.xs,
+  },
+  badgeVerifiedText: {
+    fontFamily: theme.typography.fontFamily.interSemiBold,
   },
   description: {
     fontFamily: theme.typography.fontFamily.inter,

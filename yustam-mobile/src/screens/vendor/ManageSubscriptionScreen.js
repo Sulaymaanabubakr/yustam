@@ -49,7 +49,6 @@ const VendorManageSubscriptionScreen = ({ navigation }) => {
   const [selectedReasonId, setSelectedReasonId] = useState(null);
   const [customReason, setCustomReason] = useState('');
   const [isCancelling, setIsCancelling] = useState(false);
-  const [syncingSubscription, setSyncingSubscription] = useState(false);
   const isCancelPending = Boolean(details?.status && details.status.toLowerCase().includes('cancel'));
 
   const showToast = (message, type = 'success') => {
@@ -57,16 +56,6 @@ const VendorManageSubscriptionScreen = ({ navigation }) => {
   };
 
   const hideToast = () => setToast({ ...toast, visible: false });
-
-  const renderMetaRow = (icon, label, value, accent) => (
-    <View style={styles.metaRow} key={label}>
-      <Ionicons name={icon} size={18} color={accent || theme.colors.textSecondary} />
-      <View style={{ flex: 1 }}>
-        <Text style={styles.metaLabel}>{label}</Text>
-        <Text style={styles.metaValue}>{value || '--'}</Text>
-      </View>
-    </View>
-  );
 
   const loadDetails = useCallback(async () => {
     try {
@@ -148,19 +137,32 @@ const VendorManageSubscriptionScreen = ({ navigation }) => {
       return;
     }
     if (details.slug === 'free') {
-      showToast('Auto-renewal is not applicable to the free plan.', 'info');
+      showToast('Auto-renewal is not available on the free plan.', 'info');
       return;
     }
     const nextValue = !details.autoRenew;
     setDetails((prev) => ({ ...prev, autoRenew: nextValue }));
     setUpdatingAutoRenew(true);
-    try {
+    const performUpdate = async () => {
       await vendorAPI.setAutoRenew(nextValue);
       showToast(nextValue ? 'Auto-renew enabled' : 'Auto-renew disabled');
       await loadDetails();
+    };
+    try {
+      await performUpdate();
     } catch (error) {
+      const message = error?.message || '';
+      if (/no active subscription/i.test(message)) {
+        try {
+          await vendorAPI.refreshSubscription({ subscriptionCode: details?.subscriptionCode });
+          await performUpdate();
+          return;
+        } catch (refreshError) {
+          console.warn('Auto-renew refresh failed', refreshError);
+        }
+      }
       setDetails((prev) => ({ ...prev, autoRenew: !nextValue }));
-      showToast(error.message || 'Unable to update auto-renew.', 'error');
+      showToast(message || 'Unable to update auto-renew.', 'error');
     } finally {
       setUpdatingAutoRenew(false);
     }
@@ -191,13 +193,26 @@ const VendorManageSubscriptionScreen = ({ navigation }) => {
       return;
     }
     setIsCancelling(true);
-    try {
+    const performCancel = async () => {
       await vendorAPI.cancelSubscription(finalReason);
       showToast('Auto-renewal turned off. You keep benefits until this cycle ends.', 'success');
       setCancelModalVisible(false);
       await loadDetails();
+    };
+    try {
+      await performCancel();
     } catch (error) {
-      showToast(error.message || 'Unable to process cancellation.', 'error');
+      const message = error?.message || '';
+      if (/no active subscription/i.test(message)) {
+        try {
+          await vendorAPI.refreshSubscription({ subscriptionCode: details?.subscriptionCode });
+          await performCancel();
+          return;
+        } catch (refreshError) {
+          console.warn('Cancellation refresh failed', refreshError);
+        }
+      }
+      showToast(message || 'Unable to process cancellation.', 'error');
     } finally {
       setIsCancelling(false);
     }
@@ -303,18 +318,20 @@ const VendorManageSubscriptionScreen = ({ navigation }) => {
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Billing Summary</Text>
-          {renderMetaRow(
-            'calendar-outline',
-            isCancelPending ? 'Access ends' : 'Next billing',
-            details?.expiryDisplay || '--',
-            theme.colors.accent
-          )}
-          {renderMetaRow('cash-outline', 'Last payment', details?.lastPaymentDisplay || 'Awaiting payment')}
-          {renderMetaRow(
-            'speedometer-outline',
-            'Status',
-            isCancelPending ? 'Cancellation scheduled' : details?.status || 'Active'
-          )}
+          <View style={styles.metaRow}>
+            <Ionicons name="calendar-outline" size={18} color={theme.colors.accent} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.metaLabel}>{isCancelPending ? 'Access ends' : 'Next billing'}</Text>
+              <Text style={styles.metaValue}>{details?.expiryDisplay || '--'}</Text>
+            </View>
+          </View>
+          <View style={styles.metaRow}>
+            <Ionicons name="speedometer-outline" size={18} color={theme.colors.accent} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.metaLabel}>Status</Text>
+              <Text style={styles.metaValue}>{isCancelPending ? 'Cancellation scheduled' : details?.status || 'Active'}</Text>
+            </View>
+          </View>
         </View>
       </Modal>
       <View style={styles.header}>
@@ -364,46 +381,15 @@ const VendorManageSubscriptionScreen = ({ navigation }) => {
           </View>
         ) : null}
 
-        <View style={styles.infoCard}>
-          <View style={styles.infoRow}>
-            <Ionicons name="card-outline" size={18} color={theme.colors.accent} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.infoLabel}>Subscription Source</Text>
-              <Text style={styles.infoValue}>
-                {details?.managementSource === 'yustam' ? 'Yustam (in-app)' : 'External payment'}
-              </Text>
-            </View>
+        {!details?.canCancel && !details?.subscriptionCode && details?.slug !== 'free' ? (
+          <View style={styles.warningCard}>
+            <Ionicons name="alert-circle-outline" size={18} color={theme.colors.warning} />
+            <Text style={styles.warningText}>
+              This subscription was not created through our payment system and cannot be managed here.
+              Please contact support for assistance.
+            </Text>
           </View>
-          <View style={styles.infoRow}>
-            <Ionicons name="pricetag-outline" size={18} color={theme.colors.accent} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.infoLabel}>Billing Cycle</Text>
-              <Text style={styles.infoValue}>
-                {details?.billingCycle || 'Monthly'}
-                {details?.priceDisplay ? ` • ${details.priceDisplay}` : ''}
-              </Text>
-            </View>
-          </View>
-          {details?.subscriptionCode ? (
-            <View style={styles.infoRow}>
-              <Ionicons name="key-outline" size={18} color={theme.colors.accent} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.infoLabel}>Subscription Reference</Text>
-                <Text style={styles.infoValue}>{details.subscriptionCode}</Text>
-              </View>
-            </View>
-          ) : null}
-          {details?.paymentMethod ? (
-            <View style={styles.infoRow}>
-              <Ionicons name="card-outline" size={18} color={theme.colors.accent} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.infoLabel}>Payment Method</Text>
-                <Text style={styles.infoValue}>{details.paymentMethod}</Text>
-              </View>
-            </View>
-          ) : null}
-        </View>
-
+        ) : null}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Auto-Renewal</Text>
           <View style={styles.autoRenewRow}>
@@ -461,19 +447,10 @@ const VendorManageSubscriptionScreen = ({ navigation }) => {
           </Button>
           <Button
             variant="outline"
-            icon="sync-outline"
-            fullWidth
-            onPress={refreshSubscriptionState}
-            disabled={syncingSubscription}
-          >
-            {syncingSubscription ? 'Syncing with Paystack…' : 'Refresh from Paystack'}
-          </Button>
-          <Button
-            variant="outline"
             icon="close-circle-outline"
             fullWidth
             onPress={openCancelModal}
-            disabled={isCancelling || !details || details.slug === 'free'}
+            disabled={isCancelling}
           >
             Cancel Subscription
           </Button>
@@ -553,27 +530,22 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.sm,
     color: theme.colors.textPrimary,
   },
-  infoCard: {
-    backgroundColor: theme.colors.white,
-    borderRadius: theme.radius['2xl'],
-    padding: theme.spacing.lg,
-    gap: theme.spacing.md,
-    ...theme.shadows.card,
-  },
-  infoRow: {
+  warningCard: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing.md,
+    alignItems: 'flex-start',
+    gap: theme.spacing.sm,
+    backgroundColor: '#FFF3CD',
+    borderRadius: theme.radius['2xl'],
+    padding: theme.spacing.md,
+    borderWidth: 1,
+    borderColor: '#FFE69C',
   },
-  infoLabel: {
+  warningText: {
+    flex: 1,
     fontFamily: theme.typography.fontFamily.inter,
-    fontSize: theme.typography.fontSize.xs,
-    color: theme.colors.textSecondary,
-  },
-  infoValue: {
-    fontFamily: theme.typography.fontFamily.interSemiBold,
     fontSize: theme.typography.fontSize.sm,
-    color: theme.colors.textPrimary,
+    color: '#856404',
+    lineHeight: 20,
   },
   planHeader: {
     flexDirection: 'row',
@@ -764,18 +736,3 @@ const styles = StyleSheet.create({
 });
 
 export default VendorManageSubscriptionScreen;
-  const refreshSubscriptionState = async () => {
-    if (syncingSubscription) {
-      return;
-    }
-    setSyncingSubscription(true);
-    try {
-      await vendorAPI.refreshSubscription();
-      showToast('Synced subscription with Paystack.', 'success');
-      await loadDetails();
-    } catch (error) {
-      showToast(error?.message || 'Unable to refresh subscription.', 'error');
-    } finally {
-      setSyncingSubscription(false);
-    }
-  };
