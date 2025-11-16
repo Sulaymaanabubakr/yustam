@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -50,6 +50,21 @@ const VendorManageSubscriptionScreen = ({ navigation }) => {
   const [customReason, setCustomReason] = useState('');
   const [isCancelling, setIsCancelling] = useState(false);
   const isCancelPending = Boolean(details?.status && details.status.toLowerCase().includes('cancel'));
+  const canManageSubscription = useMemo(() => {
+    if (!details) {
+      return false;
+    }
+    if (details.slug === 'free') {
+      return false;
+    }
+    if (details.canCancel) {
+      return true;
+    }
+    if (details.subscriptionCode) {
+      return true;
+    }
+    return false;
+  }, [details]);
 
   const showToast = (message, type = 'success') => {
     setToast({ visible: true, message, type });
@@ -116,7 +131,7 @@ const VendorManageSubscriptionScreen = ({ navigation }) => {
     if (!details) {
       return;
     }
-    if (!details.canCancel) {
+    if (!canManageSubscription) {
       showToast('This subscription cannot be modified. Please contact support.', 'error');
       return;
     }
@@ -136,7 +151,7 @@ const VendorManageSubscriptionScreen = ({ navigation }) => {
   };
 
   const openCancelModal = () => {
-    if (!details?.canCancel) {
+    if (!canManageSubscription) {
       showToast('This subscription cannot be cancelled. Please contact support if you need assistance.', 'error');
       return;
     }
@@ -317,7 +332,7 @@ const VendorManageSubscriptionScreen = ({ navigation }) => {
           </View>
         ) : null}
 
-        {!details?.canCancel && !details?.subscriptionCode && details?.slug !== 'free' ? (
+        {!canManageSubscription ? (
           <View style={styles.warningCard}>
             <Ionicons name="alert-circle-outline" size={18} color={theme.colors.warning} />
             <Text style={styles.warningText}>
@@ -333,7 +348,7 @@ const VendorManageSubscriptionScreen = ({ navigation }) => {
             <View style={{ flex: 1 }}>
               <Text style={styles.autoRenewLabel}>Auto-renew subscription</Text>
               <Text style={styles.autoRenewHint}>
-                {!details?.canCancel
+                {!canManageSubscription
                   ? 'Auto-renewal is not available for this subscription.'
                   : details?.autoRenew
                   ? 'We will charge your saved payment method at renewal.'
@@ -343,7 +358,7 @@ const VendorManageSubscriptionScreen = ({ navigation }) => {
             <Switch
               value={details?.autoRenew}
               onValueChange={toggleAutoRenew}
-              disabled={updatingAutoRenew || !details?.canCancel}
+              disabled={updatingAutoRenew || !canManageSubscription}
               thumbColor={details?.autoRenew ? theme.colors.emerald : '#ccc'}
             />
           </View>
@@ -380,12 +395,12 @@ const VendorManageSubscriptionScreen = ({ navigation }) => {
           >
             Renew Now
           </Button>
-          <Button 
-            variant="outline" 
-            icon="close-circle-outline" 
-            fullWidth 
+          <Button
+            variant="outline"
+            icon="close-circle-outline"
+            fullWidth
             onPress={openCancelModal}
-            disabled={!details?.canCancel}
+            disabled={!canManageSubscription}
           >
             Cancel Subscription
           </Button>
