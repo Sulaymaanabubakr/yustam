@@ -653,6 +653,112 @@ function yustam_vendor_subscription_cancel(mysqli $db, int $vendorId, ?string $r
     ];
 }
 
+function yustam_vendor_subscription_refresh(mysqli $db, int $vendorId, ?string $subscriptionCode = null): array {
+    yustam_vendor_subscription_ensure_columns($db);
+    $vendor = yustam_vendor_subscription_fetch_vendor($db, $vendorId);
+    if (!$vendor) {
+        throw new RuntimeException('Vendor account was not found.');
+    }
+    $code = trim((string) ($subscriptionCode ?? ($vendor['paystack_subscription_code'] ?? '')));
+    if ($code === '') {
+        throw new RuntimeException('This vendor does not have a Paystack subscription reference to refresh.');
+    }
+
+    $subscription = yustam_paystack_fetch_subscription($code);
+    if (!$subscription) {
+        throw new RuntimeException('Unable to load subscription from Paystack.');
+    }
+
+    $plan = $subscription['plan'] ?? [];
+    $planName = (string) ($plan['name'] ?? $subscription['plan_name'] ?? 'Plan');
+    $planCode = (string) ($plan['plan_code'] ?? $plan['code'] ?? $subscription['plan_code'] ?? '');
+    $emailToken = (string) ($subscription['email_token'] ?? '');
+    $status = strtolower((string) ($subscription['status'] ?? 'active'));
+    $nextPayment = $subscription['next_payment_date'] ?? $subscription['next_payment'] ?? ($subscription['expiration'] ?? null);
+    $amount = isset($plan['amount']) ? (int) $plan['amount'] : (int) ($subscription['amount'] ?? 0);
+
+    $expiryValue = null;
+    if (is_string($nextPayment) && trim($nextPayment) !== '') {
+        try {
+            $expiryValue = (new DateTimeImmutable($nextPayment))->format('Y-m-d H:i:s');
+        } catch (Throwable $exception) {
+            $expiryValue = $nextPayment;
+        }
+    }
+
+    $columns = yustam_vendor_table_columns();
+    $assignments = [];
+    $types = '';
+    $values = [];
+
+    $setColumn = function (?string $column, $value, string $type = 's') use (&$assignments, &$types, &$values, $columns): void {
+        if (!$column || !in_array($column, $columns, true)) {
+            return;
+        }
+        $assignments[] = "`{$column}` = ?";
+        $types .= $type;
+        $values[] = $value;
+    };
+
+    if (in_array('plan', $columns, true)) {
+        $setColumn('plan', $planName);
+    }
+    $statusColumn = yustam_vendor_subscription_pick_column(['plan_status', 'subscription_status', 'plan_state', 'planstate']);
+    if ($statusColumn) {
+        $setColumn($statusColumn, strtoupper($status));
+    }
+    $expiryColumn = yustam_vendor_subscription_pick_column(['plan_expires_at', 'plan_expiry', 'subscription_expires_at']);
+    if ($expiryColumn && $expiryValue !== null) {
+        $setColumn($expiryColumn, $expiryValue);
+    }
+    $amountColumn = yustam_vendor_subscription_pick_column(['plan_amount', 'subscription_amount', 'last_plan_amount']);
+    if ($amountColumn && $amount > 0) {
+        $setColumn($amountColumn, $amount, 'i');
+    }
+    if (in_array('paystack_plan_code', $columns, true)) {
+        $setColumn('paystack_plan_code', $planCode);
+    }
+    if (in_array('paystack_subscription_code', $columns, true)) {
+        $setColumn('paystack_subscription_code', $code);
+    }
+    if ($emailToken !== '' && in_array('paystack_email_token', $columns, true)) {
+        $setColumn('paystack_email_token', $emailToken);
+    }
+
+    $cancelColumn = yustam_vendor_subscription_pick_column(['plan_cancelled_at', 'subscription_cancelled_at']);
+    if ($cancelColumn) {
+        if (strpos($status, 'cancel') !== false || strpos($status, 'disable') !== false) {
+            $assignments[] = "`{$cancelColumn}` = NOW()";
+        } else {
+            $assignments[] = "`{$cancelColumn}` = NULL";
+        }
+    }
+    if (in_array('updated_at', $columns, true)) {
+        $assignments[] = '`updated_at` = NOW()';
+    }
+
+    if ($assignments) {
+        $sql = sprintf('UPDATE `%s` SET %s WHERE id = ? LIMIT 1', YUSTAM_VENDORS_TABLE, implode(', ', $assignments));
+        $stmt = $db->prepare($sql);
+        if ($stmt instanceof mysqli_stmt) {
+            if ($types !== '') {
+                $types .= 'i';
+                $values[] = $vendorId;
+                $stmt->bind_param($types, ...$values);
+            } else {
+                $stmt->bind_param('i', $vendorId);
+            }
+            $stmt->execute();
+            $stmt->close();
+        }
+    }
+
+    $updated = yustam_vendor_subscription_fetch_vendor($db, $vendorId);
+    return [
+        'subscription' => yustam_vendor_subscription_format_state($updated ?: $vendor),
+    ];
+}
+
 function yustam_vendor_subscription_handle_expiry(mysqli $db, array $vendor): array {
     $plan = strtolower(trim((string) ($vendor['plan'] ?? '')));
     if ($plan === '' || strpos($plan, 'free') !== false) {

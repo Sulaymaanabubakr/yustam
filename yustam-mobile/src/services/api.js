@@ -308,6 +308,7 @@ export const vendorAPI = {
   resendVerification: (payload = {}) => api.post('/vendor/resend-verification', payload),
   verifyToken: (payload = {}) => api.post('/vendor/verify', payload),
   activate: (payload = {}) => api.post('/vendor/activate', payload),
+  refreshSubscription: (payload = {}) => api.post('/vendor/subscription/refresh', payload),
   getDashboard: async () => {
     const response = await api.get('/vendor/me/dashboard');
     const dashboard = response.data ?? {};

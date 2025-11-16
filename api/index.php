@@ -164,6 +164,9 @@ function yustam_api_handle_vendor(string $method, array $segments): array
             return yustam_api_vendor_analytics();
         }
     }
+    if ($action === 'subscription' && strtolower($segments[1] ?? '') === 'refresh' && $method === 'POST') {
+        return yustam_api_vendor_refresh_subscription();
+    }
     yustam_api_error(404, 'Vendor endpoint not found.');
 }
 
@@ -1446,6 +1449,32 @@ function yustam_api_plan_cancel(): array
     return [
         'success' => true,
         'message' => 'Auto-renewal has been cancelled. You keep your benefits until this cycle ends.',
+        'subscription' => $result['subscription'],
+    ];
+}
+
+function yustam_api_vendor_refresh_subscription(): array
+{
+    $user = yustam_api_require_auth(['vendor', 'admin']);
+    $body = yustam_api_read_json_body();
+    $vendorId = $user['role'] === 'vendor'
+        ? (int) ($user['vendorId'] ?? 0)
+        : (int) ($body['vendorId'] ?? $body['vendor'] ?? 0);
+    if ($vendorId <= 0) {
+        yustam_api_error(404, 'Vendor profile not found.');
+    }
+
+    $providedCode = trim((string) ($body['subscriptionCode'] ?? $body['code'] ?? ''));
+
+    $db = get_db_connection();
+    try {
+        $result = yustam_vendor_subscription_refresh($db, $vendorId, $providedCode !== '' ? $providedCode : null);
+    } catch (Throwable $exception) {
+        yustam_api_error(400, $exception->getMessage());
+    }
+
+    return [
+        'success' => true,
         'subscription' => $result['subscription'],
     ];
 }
