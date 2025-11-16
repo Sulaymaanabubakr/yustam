@@ -21,7 +21,6 @@ import {
   GOOGLE_OAUTH_SCOPES,
   hasGoogleOAuthConfig,
 } from '../../config/googleAuth';
-import { vendorAPI } from '../../services/api';
 
 const LoginForm = ({ navigation }) => {
   const { login, signInWithGoogle, role: currentRole } = useAuth();
@@ -29,9 +28,6 @@ const LoginForm = ({ navigation }) => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
-  const [pendingVerificationEmail, setPendingVerificationEmail] = useState(null);
-  const [pendingVerificationRole, setPendingVerificationRole] = useState(null);
-  const [resendLoading, setResendLoading] = useState(false);
   const [errors, setErrors] = useState({});
   const [toast, setToast] = useState({ visible: false, message: '', type: 'info' });
   const nativeRedirectUri = Platform.select({
@@ -94,8 +90,6 @@ const LoginForm = ({ navigation }) => {
 
       await login(email.trim(), password, role);
       showToast('Login successful!', 'success');
-      setPendingVerificationEmail(null);
-      setPendingVerificationRole(null);
       
       // Navigate to main app
       setTimeout(() => {
@@ -104,35 +98,8 @@ const LoginForm = ({ navigation }) => {
     } catch (error) {
       const message = error?.message || 'Unable to login. Please try again.';
       showToast(message);
-      const storedRole = await AsyncStorage.getItem('role');
-      const role = storedRole || currentRole || 'buyer';
-      const shouldTrackVerification =
-        role === 'vendor' && (error?.code === 'vendor-verification-required' || /verify/i.test(message));
-      if (shouldTrackVerification) {
-        setPendingVerificationEmail(email.trim().toLowerCase());
-        setPendingVerificationRole('vendor');
-      } else {
-        setPendingVerificationEmail(null);
-        setPendingVerificationRole(null);
-      }
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleResendVerification = async () => {
-    if (!pendingVerificationEmail || pendingVerificationRole !== 'vendor' || resendLoading) {
-      return;
-    }
-    setResendLoading(true);
-    try {
-      await vendorAPI.resendVerification({ email: pendingVerificationEmail });
-      showToast('Verification email sent. Please check your inbox.', 'success');
-    } catch (error) {
-      const message = error?.message || 'Unable to resend verification email. Please try again.';
-      showToast(message);
-    } finally {
-      setResendLoading(false);
     }
   };
 
@@ -264,19 +231,6 @@ const LoginForm = ({ navigation }) => {
       >
         Login
       </Button>
-
-      {pendingVerificationEmail && pendingVerificationRole === 'vendor' && (
-        <TouchableOpacity
-          style={styles.resendContainer}
-          onPress={handleResendVerification}
-          disabled={resendLoading}
-        >
-          <Text style={styles.resendText}>
-            {resendLoading ? 'Sending verification email…' : 'Didn\'t get the email? Resend activation link'}
-          </Text>
-        </TouchableOpacity>
-      )}
-
       <View style={styles.divider}>
         <View style={styles.dividerLine} />
         <Text style={styles.dividerText}>OR</Text>
@@ -352,15 +306,6 @@ const styles = StyleSheet.create({
   },
   googleButtonDisabled: {
     opacity: 0.6,
-  },
-  resendContainer: {
-    marginTop: theme.spacing.sm,
-  },
-  resendText: {
-    fontFamily: theme.typography.fontFamily.interMedium,
-    fontSize: theme.typography.fontSize.sm,
-    color: theme.colors.orange,
-    textAlign: 'center',
   },
   googleIcon: {
     width: 24,

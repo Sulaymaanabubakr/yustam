@@ -165,10 +165,7 @@ export const AuthProvider = ({ children }) => {
       if (typeof status === 'number') {
         friendly.status = status;
       }
-      if (status === 403) {
-        friendly.code = 'vendor-verification-required';
-        friendly.email = firebaseUser.email ?? firebaseUser?.providerData?.[0]?.email ?? null;
-      } else if (error && typeof error === 'object' && 'code' in error && error.code) {
+      if (error && typeof error === 'object' && 'code' in error && error.code) {
         friendly.code = error.code;
       }
       throw friendly;

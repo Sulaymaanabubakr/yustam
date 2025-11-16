@@ -23,8 +23,6 @@ import {
   GOOGLE_OAUTH_SCOPES,
   hasGoogleOAuthConfig,
 } from '../../config/googleAuth';
-import { vendorAPI } from '../../services/api';
-
 const RegisterForm = ({ navigation }) => {
   const { register: registerUser, signInWithGoogle, role: currentRole } = useAuth();
   const [role, setRole] = useState('buyer'); // Default role
@@ -141,39 +139,28 @@ const RegisterForm = ({ navigation }) => {
 
     setLoading(true);
     try {
-      if (role === 'vendor') {
-        await vendorAPI.register({
-          name: fullName.trim(),
-          email: email.trim().toLowerCase(),
-          phone: phone.trim(),
-          password,
-          businessName: businessName.trim(),
-          category,
-        });
-        showToast(
-          'Account created! Check your email for the activation link. A welcome email follows once you verify.',
-          'success'
-        );
-        setFullName('');
-        setEmail('');
-        setPhone('');
-        setPassword('');
-        setConfirmPassword('');
-        setBusinessName('');
-        setCategory('');
-        setAgreeTerms(false);
-        return;
-      }
-
       const userData = {
         fullName: fullName.trim(),
         phone: phone.trim(),
       };
 
+      if (role === 'vendor') {
+        userData.businessName = businessName.trim();
+        userData.category = category;
+      }
+
       await registerUser(email.trim(), password, userData, role);
       showToast('Registration successful!', 'success');
-      
-      // Navigate to main app
+
+      setFullName('');
+      setEmail('');
+      setPhone('');
+      setPassword('');
+      setConfirmPassword('');
+      setBusinessName('');
+      setCategory('');
+      setAgreeTerms(false);
+
       setTimeout(() => {
         navigation.replace('MainTabs');
       }, 500);
