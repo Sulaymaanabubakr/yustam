@@ -465,7 +465,7 @@ function yustam_api_sync_backend_user(array $firebaseUser): array
 
     if ($role === 'vendor' && $vendor) {
         if (!yustam_vendor_is_verified($vendor)) {
-            yustam_api_error(403, 'Please verify your email before logging in.');
+            $vendor = yustam_vendor_force_verify($vendor);
         }
         $vendorId = (int) $vendor['id'];
         $vendorUid = $vendor['vendor_uid'] ?? yustam_vendor_assign_uid_if_missing(get_db_connection(), $vendor);
@@ -509,6 +509,60 @@ function yustam_vendor_is_verified(array $vendor): bool
         return in_array($status, ['verified', 'approved', 'active', 'completed', 'complete'], true);
     }
     return true;
+}
+
+function yustam_vendor_force_verify(array $vendor): array
+{
+    $vendorId = (int) ($vendor['id'] ?? 0);
+    if ($vendorId <= 0) {
+        return $vendor;
+    }
+
+    $db = get_db_connection();
+    $columns = yustam_vendor_table_columns();
+    $table = YUSTAM_VENDORS_TABLE;
+
+    $assignments = [];
+    $types = '';
+    $values = [];
+
+    if (in_array('verified', $columns, true)) {
+        $assignments[] = '`verified` = ?';
+        $types .= 'i';
+        $values[] = 1;
+    }
+    if (in_array('verification_status', $columns, true)) {
+        $assignments[] = "`verification_status` = 'verified'";
+    }
+    if (in_array('verificationStatus', $columns, true)) {
+        $assignments[] = "`verificationStatus` = 'verified'";
+    }
+    if (in_array('verification_token', $columns, true)) {
+        $assignments[] = '`verification_token` = NULL';
+    }
+    if (in_array('updated_at', $columns, true)) {
+        $assignments[] = '`updated_at` = NOW()';
+    }
+
+    if (!$assignments) {
+        return $vendor;
+    }
+
+    $assignmentsSql = implode(', ', $assignments);
+    $sql = sprintf('UPDATE `%s` SET %s WHERE id = ? LIMIT 1', $table, $assignmentsSql);
+    $stmt = $db->prepare($sql);
+    if ($stmt instanceof mysqli_stmt) {
+        $types .= 'i';
+        $values[] = $vendorId;
+        if ($types !== '') {
+            $stmt->bind_param($types, ...$values);
+        }
+        $stmt->execute();
+        $stmt->close();
+    }
+
+    $updated = yustam_vendor_find_by_id($vendorId, $db);
+    return $updated ?? $vendor;
 }
 
 function yustam_api_random_string(int $length = 12): string
