@@ -153,12 +153,17 @@ const VendorManageSubscriptionScreen = ({ navigation }) => {
     } catch (error) {
       const message = error?.message || '';
       if (/no active subscription/i.test(message)) {
-        try {
-          await vendorAPI.refreshSubscription({ subscriptionCode: details?.subscriptionCode });
-          await performUpdate();
-          return;
-        } catch (refreshError) {
-          console.warn('Auto-renew refresh failed', refreshError);
+        const subscriptionCode = (details?.subscriptionCode || '').trim();
+        if (!subscriptionCode) {
+          console.warn('Auto-renew refresh skipped because there is no subscription reference on record.');
+        } else {
+          try {
+            await vendorAPI.refreshSubscription({ subscriptionCode });
+            await performUpdate();
+            return;
+          } catch (refreshError) {
+            console.warn('Auto-renew refresh failed', refreshError);
+          }
         }
       }
       setDetails((prev) => ({ ...prev, autoRenew: !nextValue }));
@@ -204,12 +209,17 @@ const VendorManageSubscriptionScreen = ({ navigation }) => {
     } catch (error) {
       const message = error?.message || '';
       if (/no active subscription/i.test(message)) {
-        try {
-          await vendorAPI.refreshSubscription({ subscriptionCode: details?.subscriptionCode });
-          await performCancel();
-          return;
-        } catch (refreshError) {
-          console.warn('Cancellation refresh failed', refreshError);
+        const subscriptionCode = (details?.subscriptionCode || '').trim();
+        if (!subscriptionCode) {
+          console.warn('Cancellation refresh skipped because there is no subscription reference on record.');
+        } else {
+          try {
+            await vendorAPI.refreshSubscription({ subscriptionCode });
+            await performCancel();
+            return;
+          } catch (refreshError) {
+            console.warn('Cancellation refresh failed', refreshError);
+          }
         }
       }
       showToast(message || 'Unable to process cancellation.', 'error');

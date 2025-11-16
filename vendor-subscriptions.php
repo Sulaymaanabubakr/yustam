@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/subscriptions/vendor-subscription-store.php';
 
 function yustam_paystack_load_env(): void {
     static $loaded = false;
@@ -528,6 +529,17 @@ function yustam_vendor_subscription_process_payment(mysqli $db, int $vendorId, s
     call_user_func_array([$stmt, 'bind_param'], $bind);
     $stmt->execute();
     $stmt->close();
+
+    try {
+        yustam_vendor_subscription_record_sync_from_paystack($db, $vendorId, $transaction, [
+            'plan_name' => $planName,
+            'reference' => $reference,
+            'event' => 'transaction.verify',
+        ]);
+    } catch (Throwable $syncError) {
+        error_log('Subscription record sync failed: ' . $syncError->getMessage());
+    }
+
     $vendor = yustam_vendor_subscription_fetch_vendor($db, $vendorId);
     return [
         'subscription' => yustam_vendor_subscription_format_state($vendor),
@@ -545,6 +557,17 @@ function yustam_vendor_subscription_set_autorenew(mysqli $db, int $vendorId, boo
 
     $subscriptionCode = trim((string) ($vendor['paystack_subscription_code'] ?? ''));
     $emailToken = trim((string) ($vendor['paystack_email_token'] ?? ''));
+    if ($subscriptionCode === '' || $emailToken === '') {
+        $record = yustam_vendor_subscription_record_fetch($db, $vendorId);
+        if ($record) {
+            if ($subscriptionCode === '' && !empty($record['subscription_code'])) {
+                $subscriptionCode = $record['subscription_code'];
+            }
+            if ($emailToken === '' && !empty($record['email_token'])) {
+                $emailToken = $record['email_token'];
+            }
+        }
+    }
     if ($subscriptionCode === '' || $emailToken === '') {
         throw new RuntimeException('There is no active subscription to manage.');
     }
@@ -580,6 +603,18 @@ function yustam_vendor_subscription_set_autorenew(mysqli $db, int $vendorId, boo
         }
         $stmt->execute();
         $stmt->close();
+    }
+
+    try {
+        yustam_vendor_subscription_record_save($db, $vendorId, [
+            'subscription_code' => $subscriptionCode,
+            'email_token' => $emailToken,
+            'auto_renew' => $enabled,
+            'status' => $enabled ? 'ACTIVE' : 'CANCELLED',
+            'last_event' => $enabled ? 'subscription.enable' : 'subscription.disable',
+        ]);
+    } catch (Throwable $syncError) {
+        error_log('Unable to sync auto-renew state: ' . $syncError->getMessage());
     }
 
     $updated = yustam_vendor_subscription_fetch_vendor($db, $vendorId);
@@ -619,6 +654,17 @@ function yustam_vendor_subscription_cancel(mysqli $db, int $vendorId, ?string $r
     $subscriptionCode = trim((string) ($vendor['paystack_subscription_code'] ?? ''));
     $emailToken = trim((string) ($vendor['paystack_email_token'] ?? ''));
     if ($subscriptionCode === '' || $emailToken === '') {
+        $record = yustam_vendor_subscription_record_fetch($db, $vendorId);
+        if ($record) {
+            if ($subscriptionCode === '' && !empty($record['subscription_code'])) {
+                $subscriptionCode = $record['subscription_code'];
+            }
+            if ($emailToken === '' && !empty($record['email_token'])) {
+                $emailToken = $record['email_token'];
+            }
+        }
+    }
+    if ($subscriptionCode === '' || $emailToken === '') {
         throw new RuntimeException('There is no active subscription to cancel.');
     }
     yustam_paystack_disable_subscription($subscriptionCode, $emailToken);
@@ -647,6 +693,19 @@ function yustam_vendor_subscription_cancel(mysqli $db, int $vendorId, ?string $r
     }
     $stmt->execute();
     $stmt->close();
+    try {
+        yustam_vendor_subscription_record_save($db, $vendorId, [
+            'subscription_code' => $subscriptionCode,
+            'email_token' => $emailToken,
+            'status' => 'CANCELLED',
+            'auto_renew' => 0,
+            'next_payment_at' => null,
+            'last_event' => 'subscription.disable',
+        ]);
+    } catch (Throwable $syncError) {
+        error_log('Unable to record cancellation state: ' . $syncError->getMessage());
+    }
+
     $vendor = yustam_vendor_subscription_fetch_vendor($db, $vendorId);
     return [
         'subscription' => yustam_vendor_subscription_format_state($vendor),
@@ -659,7 +718,11 @@ function yustam_vendor_subscription_refresh(mysqli $db, int $vendorId, ?string $
     if (!$vendor) {
         throw new RuntimeException('Vendor account was not found.');
     }
+    $record = yustam_vendor_subscription_record_fetch($db, $vendorId);
     $code = trim((string) ($subscriptionCode ?? ($vendor['paystack_subscription_code'] ?? '')));
+    if ($code === '' && $record && !empty($record['subscription_code'])) {
+        $code = $record['subscription_code'];
+    }
     if ($code === '') {
         throw new RuntimeException('This vendor does not have a Paystack subscription reference to refresh.');
     }
@@ -751,6 +814,14 @@ function yustam_vendor_subscription_refresh(mysqli $db, int $vendorId, ?string $
             $stmt->execute();
             $stmt->close();
         }
+    }
+
+    try {
+        yustam_vendor_subscription_record_sync_from_paystack($db, $vendorId, $subscription, [
+            'event' => 'subscription.refresh',
+        ]);
+    } catch (Throwable $syncError) {
+        error_log('Unable to sync refreshed subscription: ' . $syncError->getMessage());
     }
 
     $updated = yustam_vendor_subscription_fetch_vendor($db, $vendorId);

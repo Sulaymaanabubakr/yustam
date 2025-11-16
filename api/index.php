@@ -65,6 +65,10 @@ function yustam_api_dispatch(): array
             return yustam_api_handle_chats($method, $subSegments);
         case 'admin':
             return yustam_api_handle_admin($method, $subSegments);
+        case 'subscription':
+            return yustam_api_handle_subscription($method, $subSegments);
+        case 'paystack':
+            return yustam_api_handle_paystack($method, $subSegments);
         default:
             yustam_api_error(404, 'Endpoint not found.');
     }
@@ -1575,6 +1579,179 @@ function yustam_api_plan_callback(): array
     }
 
     return $payload;
+}
+
+function yustam_api_handle_subscription(string $method, array $segments): array
+{
+    $action = strtolower($segments[0] ?? 'status');
+    if ($action === '' && $method === 'GET') {
+        $action = 'status';
+    }
+    if ($action === 'status' && $method === 'GET') {
+        return yustam_api_subscription_status();
+    }
+    if ($action === 'toggle-autorenew' && $method === 'POST') {
+        return yustam_api_subscription_toggle_autorenew();
+    }
+    if ($action === 'cancel' && $method === 'POST') {
+        return yustam_api_subscription_cancel();
+    }
+    yustam_api_error(404, 'Subscription endpoint not found.');
+}
+
+function yustam_api_subscription_status(): array
+{
+    $user = yustam_api_require_auth(['vendor', 'admin']);
+    $vendorId = $user['role'] === 'vendor'
+        ? (int) ($user['vendorId'] ?? 0)
+        : (int) ($_GET['vendor'] ?? 0);
+    if ($vendorId <= 0) {
+        yustam_api_error(404, 'Vendor profile not found.');
+    }
+    $db = get_db_connection();
+    $record = yustam_vendor_subscription_record_fetch($db, $vendorId);
+    $vendor = yustam_vendor_subscription_fetch_vendor($db, $vendorId);
+    $status = yustam_vendor_subscription_record_format_status($record, $vendor);
+    return [
+        'success' => true,
+        'subscription' => $status,
+    ];
+}
+
+function yustam_api_subscription_toggle_autorenew(): array
+{
+    $user = yustam_api_require_auth(['vendor', 'admin']);
+    $vendorId = $user['role'] === 'vendor'
+        ? (int) ($user['vendorId'] ?? 0)
+        : (int) ($_GET['vendor'] ?? 0);
+    if ($vendorId <= 0) {
+        yustam_api_error(404, 'Vendor profile not found.');
+    }
+    $body = yustam_api_read_json_body();
+    $rawValue = $body['enabled'] ?? ($body['enable'] ?? $body['value'] ?? null);
+    if ($rawValue === null) {
+        yustam_api_error(400, 'enabled flag is required.');
+    }
+    $normalized = is_bool($rawValue)
+        ? $rawValue
+        : in_array(strtolower((string) $rawValue), ['1', 'true', 'yes', 'on'], true);
+    $db = get_db_connection();
+    try {
+        yustam_vendor_subscription_set_autorenew($db, $vendorId, $normalized);
+    } catch (Throwable $exception) {
+        yustam_api_error(400, $exception->getMessage());
+    }
+    $record = yustam_vendor_subscription_record_fetch($db, $vendorId);
+    $vendor = yustam_vendor_subscription_fetch_vendor($db, $vendorId);
+    $status = yustam_vendor_subscription_record_format_status($record, $vendor);
+    return [
+        'success' => true,
+        'autoRenew' => (bool) ($status['auto_renew'] ?? false),
+        'subscription' => $status,
+    ];
+}
+
+function yustam_api_subscription_cancel(): array
+{
+    $user = yustam_api_require_auth(['vendor', 'admin']);
+    $vendorId = $user['role'] === 'vendor'
+        ? (int) ($user['vendorId'] ?? 0)
+        : (int) ($_GET['vendor'] ?? 0);
+    if ($vendorId <= 0) {
+        yustam_api_error(404, 'Vendor profile not found.');
+    }
+    $body = yustam_api_read_json_body();
+    $reason = trim((string) ($body['reason'] ?? $body['note'] ?? ''));
+    $db = get_db_connection();
+    try {
+        yustam_vendor_subscription_cancel($db, $vendorId, $reason);
+    } catch (Throwable $exception) {
+        yustam_api_error(400, $exception->getMessage());
+    }
+    $record = yustam_vendor_subscription_record_fetch($db, $vendorId);
+    $vendor = yustam_vendor_subscription_fetch_vendor($db, $vendorId);
+    $status = yustam_vendor_subscription_record_format_status($record, $vendor);
+    return [
+        'success' => true,
+        'message' => 'Auto-renewal has been cancelled. You keep your benefits until this cycle ends.',
+        'subscription' => $status,
+    ];
+}
+
+function yustam_api_handle_paystack(string $method, array $segments): array
+{
+    $action = strtolower($segments[0] ?? '');
+    if ($action === 'webhook' && $method === 'POST') {
+        return yustam_api_paystack_webhook();
+    }
+    yustam_api_error(404, 'Paystack endpoint not found.');
+}
+
+function yustam_api_paystack_webhook(): array
+{
+    $secret = yustam_api_env('PAYSTACK_SECRET_KEY');
+    if (!$secret) {
+        yustam_api_error(500, 'Paystack secret is not configured.');
+    }
+    $raw = file_get_contents('php://input') ?: '';
+    $signature = $_SERVER['HTTP_X_PAYSTACK_SIGNATURE'] ?? ($_SERVER['HTTP_PAYSTACK_SIGNATURE'] ?? '');
+    if ($signature === '') {
+        yustam_api_error(401, 'Missing Paystack signature.');
+    }
+    $expected = hash_hmac('sha512', $raw, $secret);
+    if (!hash_equals($expected, $signature)) {
+        yustam_api_error(401, 'Invalid Paystack signature.');
+    }
+    $payload = json_decode($raw, true);
+    if (!is_array($payload)) {
+        yustam_api_error(400, 'Invalid webhook payload.');
+    }
+    $event = strtolower((string) ($payload['event'] ?? ''));
+    $supported = [
+        'subscription.create',
+        'subscription.enable',
+        'subscription.disable',
+        'invoice.update',
+        'charge.success',
+    ];
+    if (!in_array($event, $supported, true)) {
+        return ['success' => true, 'message' => 'Event ignored.'];
+    }
+    $data = $payload['data'] ?? [];
+    if (!is_array($data)) {
+        $data = [];
+    }
+    $db = get_db_connection();
+    try {
+        yustam_api_paystack_process_subscription_event($db, $event, $data);
+    } catch (Throwable $exception) {
+        error_log('Paystack webhook processing failed: ' . $exception->getMessage());
+    }
+    return ['success' => true];
+}
+
+function yustam_api_paystack_process_subscription_event(mysqli $db, string $event, array $data): void
+{
+    $vendorId = yustam_vendor_subscription_record_detect_vendor_id($db, $data);
+    if ($vendorId <= 0) {
+        throw new RuntimeException('Unable to match subscription event to a vendor.');
+    }
+    yustam_vendor_subscription_record_sync_from_paystack($db, $vendorId, $data, [
+        'event' => $event,
+    ]);
+    $subscriptionCode = '';
+    if (isset($data['subscription_code'])) {
+        $subscriptionCode = trim((string) $data['subscription_code']);
+    } elseif (isset($data['subscription']) && is_array($data['subscription'])) {
+        $subscriptionCode = (string) ($data['subscription']['subscription_code'] ?? ($data['subscription']['code'] ?? ''));
+    }
+    if ($subscriptionCode) {
+        try {
+            yustam_vendor_subscription_refresh($db, $vendorId, $subscriptionCode);
+        } catch (Throwable $refreshError) {
+            error_log('Vendor refresh from webhook failed: ' . $refreshError->getMessage());
+        }
+    }
 }
 
 /**

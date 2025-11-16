@@ -151,14 +151,46 @@ const fetchPlanCatalog = async () => {
 
 const fetchCurrentSubscription = async () => {
   try {
-    const response = await api.get('/plans/subscriptions/me');
-    const subscriptions = Array.isArray(response.data?.subscriptions) ? response.data.subscriptions : [];
-    if (!subscriptions.length) {
+    const response = await api.get('/subscription/status');
+    const payload = response.data?.subscription || response.data?.data || null;
+    if (!payload) {
       return null;
     }
-
-    const record = subscriptions[0];
-    const metadata = record?.metadata || {};
+    const expires =
+      payload.expires ||
+      payload.next_payment_date ||
+      payload.nextBillingDate ||
+      null;
+    const status = (payload.status || 'inactive').toUpperCase();
+    const planName = payload.plan_name || payload.planName || 'Free Plan';
+    const subscriptionCode = payload.subscription_code || payload.subscriptionCode || '';
+    return {
+      id: subscriptionCode || 'vendor-' + String(payload.vendor_id || Date.now()),
+      plan: planName,
+      planName,
+      displayName: planName,
+      name: planName,
+      subscriptionCode,
+      planCode: payload.plan_code || payload.planCode || null,
+      status,
+      statusLabel: status.replace(/_/g, ' '),
+      nextBillingDisplay: expires,
+      expiryDisplay: expires,
+      autoRenew: Boolean(payload.auto_renew ?? payload.autoRenew),
+      renewalStatus: (payload.auto_renew ?? payload.autoRenew) ? 'auto' : 'manual',
+      externalSubscription: Boolean(payload.externalSubscription || payload.manageExternally),
+      canCancel: Boolean(subscriptionCode),
+      cancelled: !(payload.auto_renew ?? payload.autoRenew),
+      notice: payload.notice || '',
+      planAmount: payload.plan_amount || payload.planAmount || 0,
+      planInterval: payload.plan_interval || payload.planInterval || 'monthly',
+      metadata: payload,
+    };
+  } catch (error) {
+    console.warn('Unable to fetch subscription state', error);
+    return null;
+  }
+};
     const externalSubscription = Boolean(
       metadata.manageExternally ||
         metadata.externalSubscription ||
@@ -629,9 +661,9 @@ export const vendorAPI = {
   verifyPlanPayment: (reference) =>
     api.post('/plans', { reference }),
   setAutoRenew: (enabled) =>
-    api.post('/plans/auto-renew', { enabled }),
+    api.post('/subscription/toggle-autorenew', { enabled }),
   cancelSubscription: (reason) =>
-    api.post('/plans/cancel', { reason }),
+    api.post('/subscription/cancel', { reason }),
 };
 
 export const planAPI = {
