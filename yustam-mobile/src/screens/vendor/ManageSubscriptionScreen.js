@@ -317,7 +317,7 @@ const VendorManageSubscriptionScreen = ({ navigation }) => {
           </View>
         ) : null}
 
-        {!details?.canCancel && details?.slug !== 'free' ? (
+        {!details?.canCancel && !details?.subscriptionCode && details?.slug !== 'free' ? (
           <View style={styles.warningCard}>
             <Ionicons name="alert-circle-outline" size={18} color={theme.colors.warning} />
             <Text style={styles.warningText}>

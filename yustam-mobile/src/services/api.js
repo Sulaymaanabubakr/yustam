@@ -159,9 +159,26 @@ const fetchCurrentSubscription = async () => {
 
     const record = subscriptions[0];
     const metadata = record?.metadata || {};
+    const externalSubscription = Boolean(
+      metadata.manageExternally ||
+        metadata.externalSubscription ||
+        metadata.source === 'external'
+    );
+    const subscriptionCode =
+      metadata.subscriptionCode ||
+      metadata.subscription_code ||
+      metadata.paystack_subscription_code ||
+      record?.subscriptionCode ||
+      record?.subscription_code ||
+      '';
     const planInfo = record?.plan;
     const cancelled = Boolean(metadata.cancelled);
-    const canCancel = Boolean(metadata.canCancel);
+    const rawCanCancel = metadata.canCancel;
+    const canCancel = externalSubscription
+      ? false
+      : typeof rawCanCancel === 'boolean'
+        ? rawCanCancel
+        : Boolean(subscriptionCode);
     const planName =
       metadata.planName ||
       (typeof planInfo === 'object' ? planInfo?.name ?? planInfo?.displayName : planInfo) ||
@@ -190,7 +207,7 @@ const fetchCurrentSubscription = async () => {
       notice: metadata.notice || '',
       cancelled,
       canCancel,
-      subscriptionCode: metadata.subscriptionCode || '',
+      subscriptionCode,
       autoRenew: !cancelled,
     };
   } catch (error) {
@@ -566,7 +583,9 @@ export const vendorAPI = {
           status: currentPlan.status || currentPlan.statusLabel || 'Active',
           expiryDisplay: currentPlan.nextBillingDisplay || currentPlan.expiryDisplay || '--',
           autoRenew: Boolean(subscription?.autoRenew ?? subscription?.renewalStatus === 'auto'),
-          canCancel: Boolean(subscription?.canCancel),
+          canCancel: Boolean(
+            subscription?.canCancel ?? subscription?.subscriptionCode
+          ),
           cancelled: Boolean(subscription?.cancelled),
           subscriptionCode: subscription?.subscriptionCode || '',
           usage,
