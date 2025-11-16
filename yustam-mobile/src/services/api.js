@@ -161,6 +161,7 @@ const fetchCurrentSubscription = async () => {
     const metadata = record?.metadata || {};
     const planInfo = record?.plan;
     const cancelled = Boolean(metadata.cancelled);
+    const canCancel = Boolean(metadata.canCancel);
     const planName =
       metadata.planName ||
       (typeof planInfo === 'object' ? planInfo?.name ?? planInfo?.displayName : planInfo) ||
@@ -188,6 +189,8 @@ const fetchCurrentSubscription = async () => {
       nextBillingIso: metadata.nextBillingIso || null,
       notice: metadata.notice || '',
       cancelled,
+      canCancel,
+      subscriptionCode: metadata.subscriptionCode || '',
       autoRenew: !cancelled,
     };
   } catch (error) {
@@ -284,6 +287,9 @@ export const listingsAPI = {
 };
 
 export const vendorAPI = {
+  register: (payload = {}) => api.post('/vendor/register', payload),
+  resendVerification: (payload = {}) => api.post('/vendor/resend-verification', payload),
+  verifyToken: (payload = {}) => api.post('/vendor/verify', payload),
   activate: (payload = {}) => api.post('/vendor/activate', payload),
   getDashboard: async () => {
     const response = await api.get('/vendor/me/dashboard');
@@ -560,6 +566,9 @@ export const vendorAPI = {
           status: currentPlan.status || currentPlan.statusLabel || 'Active',
           expiryDisplay: currentPlan.nextBillingDisplay || currentPlan.expiryDisplay || '--',
           autoRenew: Boolean(subscription?.autoRenew ?? subscription?.renewalStatus === 'auto'),
+          canCancel: Boolean(subscription?.canCancel),
+          cancelled: Boolean(subscription?.cancelled),
+          subscriptionCode: subscription?.subscriptionCode || '',
           usage,
           notice: currentPlan.notice || subscription?.notice || '',
         },

@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../session-path.php';
 require_once __DIR__ . '/../db.php';
 require_once __DIR__ . '/../firebase-admin.php';
+require_once __DIR__ . '/../send-email.php';
 require_once __DIR__ . '/../buyer-storage.php';
 require_once __DIR__ . '/../vendor-subscriptions.php';
 require_once __DIR__ . '/../notifications-storage.php';
@@ -463,6 +464,9 @@ function yustam_api_sync_backend_user(array $firebaseUser): array
     }
 
     if ($role === 'vendor' && $vendor) {
+        if (!yustam_vendor_is_verified($vendor)) {
+            yustam_api_error(403, 'Please verify your email before logging in.');
+        }
         $vendorId = (int) $vendor['id'];
         $vendorUid = $vendor['vendor_uid'] ?? yustam_vendor_assign_uid_if_missing(get_db_connection(), $vendor);
         return [
@@ -489,6 +493,22 @@ function yustam_api_sync_backend_user(array $firebaseUser): array
         'photoUrl' => $photoUrl ?: null,
         'buyerId' => $buyerId,
     ];
+}
+
+function yustam_vendor_is_verified(array $vendor): bool
+{
+    if (array_key_exists('verified', $vendor)) {
+        return (int) $vendor['verified'] === 1;
+    }
+    if (array_key_exists('verification_status', $vendor)) {
+        $status = strtolower(trim((string) $vendor['verification_status']));
+        return in_array($status, ['verified', 'approved', 'active', 'completed', 'complete'], true);
+    }
+    if (array_key_exists('verificationStatus', $vendor)) {
+        $status = strtolower(trim((string) $vendor['verificationStatus']));
+        return in_array($status, ['verified', 'approved', 'active', 'completed', 'complete'], true);
+    }
+    return true;
 }
 
 function yustam_api_random_string(int $length = 12): string

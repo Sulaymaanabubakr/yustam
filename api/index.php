@@ -134,6 +134,15 @@ function yustam_api_handle_products(string $method, array $segments): array
 function yustam_api_handle_vendor(string $method, array $segments): array
 {
     $action = strtolower($segments[0] ?? '');
+    if ($action === 'register' && $method === 'POST') {
+        return yustam_api_vendor_register();
+    }
+    if ($action === 'resend-verification' && $method === 'POST') {
+        return yustam_api_vendor_resend_verification();
+    }
+    if ($action === 'verify') {
+        return yustam_api_vendor_verify($method);
+    }
     if ($action === 'activate' && $method === 'POST') {
         return yustam_api_vendor_activate();
     }
@@ -562,6 +571,347 @@ function yustam_api_auth_list_users(array $admin): array
  * Vendor
  * --------------------------------------------------------------------------
  */
+function yustam_api_vendor_register(): array
+{
+    $payload = yustam_api_read_json_body();
+    $name = trim((string) ($payload['name'] ?? $payload['fullName'] ?? ''));
+    $email = strtolower(trim((string) ($payload['email'] ?? '')));
+    $phone = trim((string) ($payload['phone'] ?? ''));
+    $password = (string) ($payload['password'] ?? '');
+    $businessName = trim((string) ($payload['businessName'] ?? $payload['storeName'] ?? ''));
+    $category = trim((string) ($payload['category'] ?? ''));
+
+    if ($name === '' || $email === '' || $phone === '' || $password === '' || $businessName === '' || $category === '') {
+        yustam_api_error(422, 'Please fill in all required fields.');
+    }
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        yustam_api_error(422, 'Invalid email address.');
+    }
+    if (strlen($password) < 6) {
+        yustam_api_error(422, 'Password must be at least 6 characters.');
+    }
+
+    $firebaseUid = '';
+    $firebaseIdToken = '';
+
+    try {
+        $db = get_db_connection();
+        if (yustam_vendor_find_by_email($email, $db)) {
+            yustam_api_error(409, 'This email is already registered as a vendor.');
+        }
+
+        try {
+            $firebaseUser = yustam_firebase_create_user($email, $password, $name);
+            $firebaseUid = (string) ($firebaseUser['localId'] ?? '');
+            $firebaseIdToken = isset($firebaseUser['idToken']) ? (string) $firebaseUser['idToken'] : '';
+            if ($firebaseUid === '') {
+                throw new RuntimeException('Authentication service did not return a UID.');
+            }
+        } catch (YustamFirebaseAuthException $authError) {
+            $code = strtoupper((string) $authError->getErrorCode());
+            if ($code === 'EMAIL_EXISTS') {
+                yustam_api_error(409, 'This email is already registered as a vendor.');
+            }
+            yustam_api_error(400, $authError->getMessage());
+        }
+
+        $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
+        $verificationToken = bin2hex(random_bytes(32));
+
+        try {
+            $vendor = yustam_vendor_create($db, [
+                'firebase_uid' => $firebaseUid,
+                'name' => $name,
+                'full_name' => $name,
+                'email' => $email,
+                'phone' => $phone,
+                'password_hash' => $hashedPassword,
+                'business_name' => $businessName,
+                'category' => $category,
+                'provider' => 'email',
+                'verification_token' => $verificationToken,
+                'verified' => 0,
+            ]);
+        } catch (RuntimeException $creationError) {
+            yustam_api_error(400, $creationError->getMessage());
+        }
+
+        if (empty($vendor)) {
+            throw new RuntimeException('Vendor record could not be created.');
+        }
+
+        $vendorUid = $vendor['vendor_uid'] ?? yustam_vendor_assign_uid_if_missing($db, $vendor);
+        $vendor['vendor_uid'] = $vendorUid;
+        $vendor['verification_token'] = $verificationToken;
+
+        yustam_api_vendor_send_verification_email($vendor, $verificationToken);
+
+        return [
+            'success' => true,
+            'message' => 'Account created! Please check your email to verify your account.',
+            'vendorUid' => $vendorUid,
+            'verificationStatus' => 'pending',
+        ];
+    } catch (YustamApiException $apiError) {
+        if ($firebaseUid !== '') {
+            yustam_api_vendor_cleanup_firebase_user($firebaseUid, $firebaseIdToken);
+        }
+        throw $apiError;
+    } catch (Throwable $unexpected) {
+        if ($firebaseUid !== '') {
+            yustam_api_vendor_cleanup_firebase_user($firebaseUid, $firebaseIdToken);
+        }
+        error_log('Vendor register failed: ' . $unexpected->getMessage());
+        yustam_api_error(500, 'We could not create your account right now. Please try again.');
+    }
+}
+
+function yustam_api_vendor_resend_verification(): array
+{
+    $payload = yustam_api_read_json_body();
+    $email = strtolower(trim((string) ($payload['email'] ?? '')));
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        yustam_api_error(422, 'A valid email address is required.');
+    }
+
+    $db = get_db_connection();
+    $vendor = yustam_vendor_find_by_email($email, $db);
+    if (!$vendor) {
+        yustam_api_error(404, 'No vendor account found for this email.');
+    }
+
+    if (yustam_vendor_is_verified($vendor)) {
+        return [
+            'success' => true,
+            'message' => 'Your account is already verified. You can log in now.',
+            'status' => 'verified',
+        ];
+    }
+
+    $token = bin2hex(random_bytes(32));
+    $table = YUSTAM_VENDORS_TABLE;
+    if (!preg_match('/^[A-Za-z0-9_]+$/', $table)) {
+        throw new RuntimeException('Invalid vendor table name.');
+    }
+    $stmt = $db->prepare(sprintf('UPDATE `%s` SET verification_token = ?, updated_at = NOW() WHERE id = ? LIMIT 1', $table));
+    if (!$stmt instanceof mysqli_stmt) {
+        throw new RuntimeException('Unable to prepare verification update statement.');
+    }
+    $vendorId = (int) $vendor['id'];
+    $stmt->bind_param('si', $token, $vendorId);
+    $stmt->execute();
+    $stmt->close();
+
+    $vendor['verification_token'] = $token;
+    yustam_api_vendor_send_verification_email($vendor, $token);
+
+    return [
+        'success' => true,
+        'message' => 'Verification email sent. Please check your inbox.',
+        'status' => 'pending',
+    ];
+}
+
+function yustam_api_vendor_verify(string $method): array
+{
+    if (strtoupper($method) === 'GET') {
+        $token = trim((string) ($_GET['token'] ?? ''));
+        $result = yustam_api_vendor_complete_verification($token);
+        yustam_api_vendor_render_verify_page($result);
+        exit;
+    }
+
+    $payload = yustam_api_read_json_body();
+    $token = trim((string) ($payload['token'] ?? ''));
+    if ($token === '') {
+        yustam_api_error(422, 'Verification token is required.');
+    }
+
+    $result = yustam_api_vendor_complete_verification($token);
+
+    if ($result['status'] === 'invalid') {
+        yustam_api_error(404, $result['message']);
+    }
+
+    return [
+        'success' => $result['status'] === 'verified' || $result['status'] === 'already-verified',
+        'status' => $result['status'],
+        'message' => $result['message'],
+    ];
+}
+
+function yustam_api_vendor_complete_verification(string $token): array
+{
+    if ($token === '') {
+        return [
+            'status' => 'invalid',
+            'message' => 'Verification link is missing or invalid.',
+            'type' => 'error',
+        ];
+    }
+
+    try {
+        $db = get_db_connection();
+        $table = YUSTAM_VENDORS_TABLE;
+        if (!preg_match('/^[A-Za-z0-9_]+$/', $table)) {
+            throw new RuntimeException('Invalid vendor table name.');
+        }
+
+        $stmt = $db->prepare(sprintf('SELECT * FROM `%s` WHERE verification_token = ? LIMIT 1', $table));
+        if (!$stmt instanceof mysqli_stmt) {
+            throw new RuntimeException('Unable to prepare verification lookup.');
+        }
+        $stmt->bind_param('s', $token);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $vendor = $result ? $result->fetch_assoc() : null;
+        $stmt->close();
+
+        if (!$vendor) {
+            return [
+                'status' => 'invalid',
+                'message' => 'This verification link is invalid or expired.',
+                'type' => 'error',
+            ];
+        }
+
+        if (yustam_vendor_is_verified($vendor)) {
+            return [
+                'status' => 'already-verified',
+                'message' => 'Your account is already verified. You can log in anytime.',
+                'type' => 'info',
+                'vendor' => $vendor,
+            ];
+        }
+
+        $stmt = $db->prepare(sprintf('UPDATE `%s` SET verified = 1, verification_token = NULL, updated_at = NOW() WHERE id = ? LIMIT 1', $table));
+        if (!$stmt instanceof mysqli_stmt) {
+            throw new RuntimeException('Unable to prepare verification update.');
+        }
+        $vendorId = (int) $vendor['id'];
+        $stmt->bind_param('i', $vendorId);
+        $stmt->execute();
+        $stmt->close();
+
+        $vendor['verified'] = 1;
+        $vendor['verification_token'] = null;
+        yustam_api_vendor_send_welcome_email($vendor);
+
+        return [
+            'status' => 'verified',
+            'message' => 'Your email has been verified successfully. Welcome to YUSTAM Marketplace!',
+            'type' => 'success',
+            'vendor' => $vendor,
+        ];
+    } catch (Throwable $error) {
+        error_log('Verification error: ' . $error->getMessage());
+        return [
+            'status' => 'error',
+            'message' => 'Something went wrong while verifying your account. Please try again later.',
+            'type' => 'error',
+        ];
+    }
+}
+
+function yustam_api_vendor_render_verify_page(array $result): void
+{
+    $brand = yustam_api_vendor_branding();
+    $title = $result['status'] === 'verified'
+        ? 'Verification Successful'
+        : ($result['status'] === 'already-verified' ? 'Already Verified' : 'Verification Error');
+    $message = $result['message'] ?? 'Verification complete.';
+    $status = $result['status'] ?? 'success';
+    $accent = $status === 'error' ? '#C62828' : $brand['brandColor'];
+
+    header('Content-Type: text/html; charset=utf-8');
+    http_response_code($status === 'error' ? 400 : 200);
+
+    echo "<html lang='en'><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0'><title>YUSTAM Marketplace | Account Verification</title><link href='https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap' rel='stylesheet'><style>body{font-family:'Inter',sans-serif;background:linear-gradient(145deg,{$brand['bgColor']},#fff);display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;color:#111;} .card{background:#fff;padding:40px 30px;border-radius:16px;box-shadow:0 8px 30px rgba(0,0,0,0.08);max-width:420px;text-align:center;} .logo{width:80px;border-radius:8px;margin-bottom:16px;} h2{color:{$accent};font-size:1.6rem;margin-bottom:10px;} p{color:#333;line-height:1.6;font-size:1rem;} a.btn{display:inline-block;background:{$brand['accentColor']};color:#fff;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:600;margin-top:20px;transition:background 0.3s ease;} a.btn:hover{background:#e4630b;} footer{margin-top:25px;font-size:0.85rem;color:rgba(0,0,0,0.5);} </style></head><body><div class='card'><img src='{$brand['logoUrl']}' alt='YUSTAM Logo' class='logo'><h2>{$title}</h2><p>{$message}</p><a href='https://yustam.com.ng/vendor-login.html' class='btn'>Go to Login</a><footer>© " . date('Y') . " YUSTAM Marketplace</footer></div></body></html>";
+}
+
+function yustam_api_vendor_branding(): array
+{
+    return [
+        'brandColor' => '#004D40',
+        'accentColor' => '#F3731E',
+        'bgColor' => '#F5EDE2',
+        'logoUrl' => 'https://yustam.com.ng/logo.jpeg',
+    ];
+}
+
+function yustam_api_vendor_verify_link(string $token): string
+{
+    $configured = rtrim((string) yustam_api_env('API_VERIFY_BASE_URL', ''), '/');
+    if ($configured !== '') {
+        return $configured . '/vendor/verify?token=' . urlencode($token);
+    }
+    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+    $host = $_SERVER['HTTP_HOST'] ?? 'yustam.com.ng';
+    return sprintf('%s://%s/api/vendor/verify?token=%s', $scheme, $host, urlencode($token));
+}
+
+function yustam_api_vendor_send_verification_email(array $vendor, string $token): void
+{
+    $email = $vendor['email'] ?? null;
+    if (!$email) {
+        return;
+    }
+    $link = yustam_api_vendor_verify_link($token);
+    $name = yustam_api_vendor_safe_name($vendor);
+    $body = yustam_api_vendor_build_verification_email($name, $link);
+    if (!sendEmail($email, 'Welcome to YUSTAM Marketplace - Verify Your Account', $body)) {
+        error_log('Unable to send verification email to ' . $email);
+    }
+}
+
+function yustam_api_vendor_send_welcome_email(array $vendor): void
+{
+    $email = $vendor['email'] ?? null;
+    if (!$email) {
+        return;
+    }
+    $name = yustam_api_vendor_safe_name($vendor);
+    $body = yustam_api_vendor_build_welcome_email($name);
+    if (!sendEmail($email, 'Welcome to YUSTAM Marketplace', $body)) {
+        error_log('Unable to send welcome email to ' . $email);
+    }
+}
+
+function yustam_api_vendor_build_verification_email(string $name, string $link): string
+{
+    $brand = yustam_api_vendor_branding();
+    $safeName = htmlspecialchars($name, ENT_QUOTES, 'UTF-8');
+    $safeLink = htmlspecialchars($link, ENT_QUOTES, 'UTF-8');
+    return "<div style='font-family:Inter,Arial,sans-serif;background:{$brand['bgColor']};padding:40px 20px;'><div style='max-width:600px;margin:auto;background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,0.07);border:1px solid #eee;'><div style='background:{$brand['brandColor']};padding:24px;text-align:center;'><img src='{$brand['logoUrl']}' alt='YUSTAM Logo' width='85' style='border-radius:8px;margin-bottom:10px;'><h2 style='color:#fff;margin:0;font-size:1.6rem;'>Welcome to YUSTAM Marketplace</h2></div><div style='padding:32px 24px;'><p style='font-size:1rem;color:#222;'>Hi <strong>{$safeName}</strong>,</p><p style='font-size:1rem;color:#333;line-height:1.6;'>We're thrilled to have you onboard as a vendor!<br><br>Before we get started, please verify your email address to activate your account.</p><div style='text-align:center;margin:30px 0;'><a href='{$safeLink}' style='background:{$brand['accentColor']};color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block;'>Verify My Account</a></div><p style='font-size:0.95rem;color:#555;line-height:1.6;'>Or copy this link into your browser:<br><span style='color:{$brand['brandColor']};word-break:break-all;'>{$safeLink}</span></p><hr style='margin:30px 0;border:none;border-top:1px solid #eee;'><p style='font-size:0.9rem;color:#666;text-align:center;'>After verification, you can log in and start uploading your listings immediately.<br>If you didn't create this account, simply ignore this email.</p></div><div style='background:{$brand['bgColor']};padding:16px;text-align:center;font-size:0.85rem;color:#777;'>© " . date('Y') . " YUSTAM Marketplace. All rights reserved.</div></div></div>";
+}
+
+function yustam_api_vendor_build_welcome_email(string $name): string
+{
+    $brand = yustam_api_vendor_branding();
+    $safeName = htmlspecialchars($name, ENT_QUOTES, 'UTF-8');
+    return "<div style='font-family:Poppins,Arial,sans-serif;background:#f8f8f8;padding:30px;border-radius:10px;'><div style='max-width:600px;margin:auto;background:white;border-radius:10px;padding:25px;border:1px solid #eee;'><div style='text-align:center;'><img src='{$brand['logoUrl']}' alt='YUSTAM Logo' width='80' style='margin-bottom:15px;border-radius:8px;'><h2 style='color:{$brand['brandColor']};'>Welcome to YUSTAM Marketplace!</h2></div><p>Hi <strong>{$safeName}</strong>,</p><p>Your vendor account has been successfully verified. You can now log in and start listing your products.</p><p style='text-align:center;margin:25px 0;'><a href='https://yustam.com.ng/vendor-login.html' style='background:{$brand['brandColor']};color:#fff;padding:12px 20px;text-decoration:none;border-radius:6px;'>Go to Login</a></p><hr style='margin:25px 0;border:none;border-top:1px solid #ddd;'><p style='font-size:13px;color:#999;text-align:center;margin-top:30px;'>© " . date('Y') . " YUSTAM Marketplace. All rights reserved.</p></div></div>";
+}
+
+function yustam_api_vendor_safe_name(array $vendor): string
+{
+    $name = $vendor['full_name'] ?? $vendor['name'] ?? $vendor['business_name'] ?? 'Vendor';
+    $trimmed = trim((string) $name);
+    return $trimmed !== '' ? $trimmed : 'Vendor';
+}
+
+function yustam_api_vendor_cleanup_firebase_user(string $firebaseUid, ?string $idToken = null): void
+{
+    $trimmed = trim($firebaseUid);
+    if ($trimmed === '') {
+        return;
+    }
+    try {
+        yustam_firebase_delete_user($trimmed, $idToken ?: null);
+    } catch (Throwable $cleanupError) {
+        error_log('Vendor signup cleanup failed: ' . $cleanupError->getMessage());
+    }
+}
+
 function yustam_api_vendor_activate(): array
 {
     $auth = yustam_api_require_auth();

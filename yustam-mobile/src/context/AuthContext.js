@@ -160,13 +160,18 @@ export const AuthProvider = ({ children }) => {
         console.error('Session error raw:', error);
       }
 
-      if (payload?.message) {
-        throw new Error(payload.message);
+      const fallbackMessage = payload?.message || (error instanceof Error ? error.message : null) || 'Failed to create backend session';
+      const friendly = new Error(fallbackMessage);
+      if (typeof status === 'number') {
+        friendly.status = status;
       }
-      if (error instanceof Error && error.message) {
-        throw error;
+      if (status === 403) {
+        friendly.code = 'vendor-verification-required';
+        friendly.email = firebaseUser.email ?? firebaseUser?.providerData?.[0]?.email ?? null;
+      } else if (error && typeof error === 'object' && 'code' in error && error.code) {
+        friendly.code = error.code;
       }
-      throw new Error('Failed to create backend session');
+      throw friendly;
     }
   };
 
@@ -221,6 +226,12 @@ export const AuthProvider = ({ children }) => {
       const friendlyError = new Error(message);
       if (error && typeof error === 'object' && 'code' in error) {
         friendlyError.code = error.code;
+      }
+      if (error && typeof error === 'object' && 'status' in error) {
+        friendlyError.status = error.status;
+      }
+      if (error && typeof error === 'object' && 'email' in error) {
+        friendlyError.email = error.email;
       }
       throw friendlyError;
     }

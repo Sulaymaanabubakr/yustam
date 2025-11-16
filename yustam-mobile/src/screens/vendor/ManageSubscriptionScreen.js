@@ -86,6 +86,9 @@ const VendorManageSubscriptionScreen = ({ navigation }) => {
         status: payload.status || payload.subscription?.status || 'Active',
         expiryDisplay: payload.expiryDisplay || payload.nextBillingDisplay || '--',
         autoRenew: Boolean(payload.autoRenew ?? payload.renewalStatus === 'auto'),
+        canCancel: Boolean(payload.canCancel),
+        cancelled: Boolean(payload.cancelled),
+        subscriptionCode: payload.subscriptionCode || '',
         usage,
         benefits,
         notice: payload.notice || payload.subscription?.notice || '',
@@ -113,6 +116,10 @@ const VendorManageSubscriptionScreen = ({ navigation }) => {
     if (!details) {
       return;
     }
+    if (!details.canCancel) {
+      showToast('This subscription cannot be modified. Please contact support.', 'error');
+      return;
+    }
     const nextValue = !details.autoRenew;
     setDetails((prev) => ({ ...prev, autoRenew: nextValue }));
     setUpdatingAutoRenew(true);
@@ -129,6 +136,10 @@ const VendorManageSubscriptionScreen = ({ navigation }) => {
   };
 
   const openCancelModal = () => {
+    if (!details?.canCancel) {
+      showToast('This subscription cannot be cancelled. Please contact support if you need assistance.', 'error');
+      return;
+    }
     setSelectedReasonId(null);
     setCustomReason('');
     setCancelModalVisible(true);
@@ -306,13 +317,25 @@ const VendorManageSubscriptionScreen = ({ navigation }) => {
           </View>
         ) : null}
 
+        {!details?.canCancel && details?.slug !== 'free' ? (
+          <View style={styles.warningCard}>
+            <Ionicons name="alert-circle-outline" size={18} color={theme.colors.warning} />
+            <Text style={styles.warningText}>
+              This subscription was not created through our payment system and cannot be managed here. 
+              Please contact support for assistance.
+            </Text>
+          </View>
+        ) : null}
+
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Auto-Renewal</Text>
           <View style={styles.autoRenewRow}>
             <View style={{ flex: 1 }}>
               <Text style={styles.autoRenewLabel}>Auto-renew subscription</Text>
               <Text style={styles.autoRenewHint}>
-                {details?.autoRenew
+                {!details?.canCancel
+                  ? 'Auto-renewal is not available for this subscription.'
+                  : details?.autoRenew
                   ? 'We will charge your saved payment method at renewal.'
                   : 'Keep auto-renew on to avoid interruptions.'}
               </Text>
@@ -320,7 +343,7 @@ const VendorManageSubscriptionScreen = ({ navigation }) => {
             <Switch
               value={details?.autoRenew}
               onValueChange={toggleAutoRenew}
-              disabled={updatingAutoRenew}
+              disabled={updatingAutoRenew || !details?.canCancel}
               thumbColor={details?.autoRenew ? theme.colors.emerald : '#ccc'}
             />
           </View>
@@ -357,7 +380,13 @@ const VendorManageSubscriptionScreen = ({ navigation }) => {
           >
             Renew Now
           </Button>
-          <Button variant="outline" icon="close-circle-outline" fullWidth onPress={openCancelModal}>
+          <Button 
+            variant="outline" 
+            icon="close-circle-outline" 
+            fullWidth 
+            onPress={openCancelModal}
+            disabled={!details?.canCancel}
+          >
             Cancel Subscription
           </Button>
           <Button variant="text" icon="help-circle-outline" onPress={handleContactSupport}>
@@ -435,6 +464,23 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.fontFamily.inter,
     fontSize: theme.typography.fontSize.sm,
     color: theme.colors.textPrimary,
+  },
+  warningCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: theme.spacing.sm,
+    backgroundColor: '#FFF3CD',
+    borderRadius: theme.radius['2xl'],
+    padding: theme.spacing.md,
+    borderWidth: 1,
+    borderColor: '#FFE69C',
+  },
+  warningText: {
+    flex: 1,
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.sm,
+    color: '#856404',
+    lineHeight: 20,
   },
   planHeader: {
     flexDirection: 'row',

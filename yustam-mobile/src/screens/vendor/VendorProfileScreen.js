@@ -121,10 +121,6 @@ const VendorProfileScreen = ({ navigation }) => {
               <Ionicons name="shield-checkmark" size={14} color={theme.colors.white} />
               <Text style={styles.badgeText}>Vendor</Text>
             </View>
-            <View style={[styles.badgePill, styles.planPill]}>
-              <Ionicons name="trophy-outline" size={14} color={theme.colors.orange} />
-              <Text style={[styles.badgeText, { color: theme.colors.orange }]}>{planLabel}</Text>
-            </View>
           </View>
         </View>
 
