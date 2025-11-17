@@ -23,6 +23,7 @@ import AnalyticsScreen from '../screens/vendor/AnalyticsScreen';
 import BillingHistoryScreen from '../screens/vendor/BillingHistoryScreen';
 import VendorNotificationsScreen from '../screens/vendor/VendorNotificationsScreen';
 import HelpSupportScreen from '../screens/vendor/HelpSupportScreen';
+import HelpResourceScreen from '../screens/vendor/HelpResourceScreen';
 import StorefrontScreen from '../screens/vendor/StorefrontScreen';
 import SettingsScreen from '../screens/vendor/SettingsScreen';
 import VendorListingsScreen from '../screens/vendor/VendorListingsScreen';
@@ -106,6 +107,7 @@ const AppNavigator = () => {
             <Stack.Screen name="BillingHistory" component={BillingHistoryScreen} />
             <Stack.Screen name="VendorNotifications" component={VendorNotificationsScreen} />
             <Stack.Screen name="HelpSupport" component={HelpSupportScreen} />
+            <Stack.Screen name="HelpResource" component={HelpResourceScreen} />
             <Stack.Screen name="Storefront" component={StorefrontScreen} />
             <Stack.Screen name="Settings" component={SettingsScreen} />
             <Stack.Screen name="VendorListings" component={VendorListingsScreen} />

@@ -344,17 +344,11 @@ export const listingsAPI = {
     return normaliseProduct(response.data);
   },
   create: async (payload = {}) => {
-    const formData = payload instanceof FormData ? payload : buildFormData(payload);
-    const response = await api.post('/products', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+    const response = await api.post('/products', payload);
     return normaliseProduct(response.data);
   },
   update: async (id, payload = {}) => {
-    const formData = payload instanceof FormData ? payload : buildFormData(payload);
-    const response = await api.patch(`/products/${id}`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+    const response = await api.patch(`/products/${id}`, payload);
     return normaliseProduct(response.data);
   },
   delete: (id) => api.delete(`/products/${id}`),
@@ -482,26 +476,25 @@ export const vendorAPI = {
     const mapped = Array.isArray(result.items)
       ? result.items.map((listing) => ({
           id: listing.id,
-          title: listing.name ?? listing.title ?? 'Untitled',
+          title: listing.title ?? listing.name ?? 'Untitled',
           description: listing.description ?? '',
           price: Number(listing.price) || 0,
-          status: listing.status ?? 'PENDING',
+          status: listing.status ?? 'pending',
           status_raw: (listing.status ?? 'pending').toLowerCase(),
           listing_id: listing.id,
-          listing_title: listing.name ?? listing.title,
-          listing_image:
-            Array.isArray(listing.media) && listing.media.length
-              ? listing.media.find((media) => media.isPrimary)?.url ?? listing.media[0].url
-              : null,
-          image:
-            Array.isArray(listing.media) && listing.media.length
-              ? listing.media.find((media) => media.isPrimary)?.url ?? listing.media[0].url
-              : null,
-          images: Array.isArray(listing.media) ? listing.media.map((media) => media.url) : [],
-          category: listing.category?.name ?? '',
-          location: listing.locationState ?? listing.locationCity ?? '',
-          added_on: listing.createdAt,
-          views: listing.viewCount ?? 0,
+          listing_title: listing.title ?? listing.name ?? 'Untitled',
+          listing_image: listing.primaryImage ?? listing.image ?? (Array.isArray(listing.images) ? listing.images[0] : null),
+          primaryImage: listing.primaryImage ?? listing.image ?? (Array.isArray(listing.images) ? listing.images[0] : null),
+          images: Array.isArray(listing.images) ? listing.images : [],
+          category: listing.category ?? '',
+          subcategory: listing.subcategory ?? '',
+          location: listing.location ?? '',
+          city: listing.city ?? '',
+          state: listing.state ?? '',
+          country: listing.country ?? '',
+          added_on: listing.createdAt ?? listing.added_on ?? '',
+          updated_on: listing.updatedAt ?? listing.updated_on ?? '',
+          views: Number(listing.views ?? listing.viewCount ?? 0),
         }))
       : [];
     return {
@@ -544,28 +537,24 @@ export const vendorAPI = {
     };
   },
   getNotifications: async () => {
-    const response = await api.get('/notifications');
-    const notifications = response.data?.notifications ?? response.data ?? [];
+    const response = await api.get('/vendor/notifications');
+    const payload = response.data?.data ?? response.data ?? {};
     return {
       data: {
-        success: true,
+        success: response.data?.success ?? true,
         data: {
-          notifications,
+          notifications: payload.notifications ?? [],
+          counts: payload.counts ?? null,
         },
       },
     };
   },
-  updateNotifications: async (action) => {
-    if (action === 'markAllRead') {
-      await api.post('/notifications/read-all');
-    } else if (action === 'clearAll') {
-      await api.post('/notifications/read', { ids: [] });
-    }
-    return {
-      data: {
-        success: true,
-      },
-    };
+  updateNotifications: async (action, extra = {}) => {
+    const response = await api.post('/vendor/notifications', {
+      action,
+      ...extra,
+    });
+    return response.data ?? { success: true };
   },
   getPlans: async () => {
     const [catalog, currentSubscription] = await Promise.all([fetchPlanCatalog(), fetchCurrentSubscription()]);
@@ -834,7 +823,14 @@ export const vendorAPI = {
 };
 
 export const profileAPI = {
-  getSettings: () => api.get('/vendor/settings'),
+  getSettings: () =>
+    api.get('/vendor/settings', {
+      params: { ts: Date.now() },
+      headers: {
+        'Cache-Control': 'no-cache',
+        Pragma: 'no-cache',
+      },
+    }),
   updateSettings: (payload = {}) => api.patch('/vendor/settings', payload),
   updatePassword: (payload = {}) => api.post('/vendor/password', payload),
   deleteAccount: (payload = {}) =>

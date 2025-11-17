@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
 import theme from '../../theme';
 import Toast from '../../components/Toast';
@@ -30,6 +31,19 @@ const VendorListingsScreen = ({ navigation }) => {
   const [toast, setToast] = useState({ visible: false, message: '', type: 'info' });
   const [selectedFilter, setSelectedFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const vendorId = useMemo(() => {
+    if (!user) {
+      return null;
+    }
+    if (user.vendorId) {
+      return user.vendorId;
+    }
+    if (user.vendor?.vendorId) {
+      return user.vendor.vendorId;
+    }
+    return null;
+  }, [user]);
+  const ownerRef = vendorId ? `vendor:${vendorId}` : null;
 
   const filters = [
     { key: 'all', label: 'All', count: 0 },
@@ -40,39 +54,60 @@ const VendorListingsScreen = ({ navigation }) => {
   ];
 
   useEffect(() => {
-    fetchListings();
-  }, []);
-
-  useEffect(() => {
     filterListings();
   }, [selectedFilter, searchQuery, listings]);
 
-  const fetchListings = async () => {
+  useFocusEffect(
+    useCallback(() => {
+      fetchListings();
+    }, [fetchListings])
+  );
+
+  const fetchListings = useCallback(async () => {
+    if (!ownerRef) {
+      setLoading(false);
+      showToast('Unable to load your vendor account. Please try again later.', 'error');
+      return;
+    }
     try {
       setLoading(true);
-      const response = await vendorAPI.getListings({ status: 'all', perPage: 50 });
+      const response = await vendorAPI.getListings({
+        status: 'all',
+        perPage: 50,
+        ownerId: ownerRef,
+        includeDrafts: true,
+      });
       const payload = response.data?.data;
       if (!response.data?.success || !payload) {
         throw new Error('Unable to load listings right now.');
       }
 
       const normalizedListings = Array.isArray(payload.listings)
-        ? payload.listings.map((listing) => ({
-            id: listing.id || listing.listing_id || listing.public_id || '',
-            title: listing.title || 'Untitled listing',
-            description: listing.description || '',
-            price: Number(listing.price) || 0,
-            status_raw: (listing.status_raw || listing.status || 'pending').toLowerCase(),
-            status_label: listing.status || 'Pending',
-            views: listing.views || 0,
-            added_on: listing.added_on || '',
-            image: resolveMediaUrl(listing.image),
-            images: Array.isArray(listing.images)
-              ? listing.images.map((img) => resolveMediaUrl(img))
-              : [],
-            category: listing.category || '',
-            location: listing.location || listing.state || '',
-          }))
+        ? payload.listings.map((listing) => {
+            const statusRaw = (listing.status_raw || listing.status || 'pending').toLowerCase();
+            const locationParts = [listing.city, listing.state].filter(Boolean);
+            const primaryImage =
+              listing.image ||
+              listing.primaryImage ||
+              listing.listing_image ||
+              (Array.isArray(listing.images) && listing.images.length ? listing.images[0] : null);
+            return {
+              id: listing.id || listing.listing_id || listing.public_id || '',
+              title: listing.title || 'Untitled listing',
+              description: listing.description || '',
+              price: Number(listing.price) || 0,
+              status_raw: statusRaw,
+              status_label: formatStatusLabel(statusRaw),
+              views: Number(listing.views ?? 0),
+              added_on: listing.added_on || listing.createdAt || '',
+              image: resolveMediaUrl(primaryImage),
+              images: Array.isArray(listing.images)
+                ? listing.images.map((img) => resolveMediaUrl(img))
+                : [],
+              category: listing.category || '',
+              location: locationParts.join(', ') || listing.location || listing.state || '',
+            };
+          })
         : [];
 
       setListings(normalizedListings);
@@ -82,7 +117,7 @@ const VendorListingsScreen = ({ navigation }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [ownerRef]);
 
   const filterListings = () => {
     let filtered = [...listings];
@@ -104,11 +139,38 @@ const VendorListingsScreen = ({ navigation }) => {
     setFilteredListings(filtered);
   };
 
+  const statusCounts = useMemo(() => {
+    const counts = {
+      all: listings.length,
+      approved: 0,
+      pending: 0,
+      draft: 0,
+      sold: 0,
+      unlisted: 0,
+    };
+    listings.forEach((listing) => {
+      const key = listing.status_raw;
+      counts[key] = (counts[key] || 0) + 1;
+    });
+    return counts;
+  }, [listings]);
+
+  const filterOptions = useMemo(
+    () => [
+      { key: 'all', label: 'All', count: statusCounts.all },
+      { key: 'approved', label: 'Live', count: statusCounts.approved || 0 },
+      { key: 'pending', label: 'Pending', count: statusCounts.pending || 0 },
+      { key: 'draft', label: 'Draft', count: statusCounts.draft || 0 },
+      { key: 'sold', label: 'Sold', count: statusCounts.sold || 0 },
+    ],
+    [statusCounts],
+  );
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await fetchListings();
     setRefreshing(false);
-  }, []);
+  }, [fetchListings]);
 
   const showToast = (message, type = 'success') => {
     setToast({ visible: true, message, type });
@@ -165,6 +227,8 @@ const VendorListingsScreen = ({ navigation }) => {
         return theme.colors.textSecondary;
       case 'sold':
         return theme.colors.error;
+      case 'unlisted':
+        return theme.colors.textSecondary;
       default:
         return theme.colors.textSecondary;
     }
@@ -172,14 +236,31 @@ const VendorListingsScreen = ({ navigation }) => {
 
   const formatPrice = (price) => formatNaira(price || 0);
 
-  const FilterChip = ({ filterKey, label, isSelected }) => (
+  const formatStatusLabel = (status) => {
+    switch (status) {
+      case 'approved':
+        return 'Live';
+      case 'pending':
+        return 'Pending';
+      case 'draft':
+        return 'Draft';
+      case 'sold':
+        return 'Sold';
+      case 'unlisted':
+        return 'Unlisted';
+      default:
+        return 'Pending';
+    }
+  };
+
+  const FilterChip = ({ filterKey, label, count, isSelected }) => (
     <TouchableOpacity
       style={[styles.filterChip, isSelected && styles.filterChipSelected]}
       onPress={() => setSelectedFilter(filterKey)}
       activeOpacity={0.7}
     >
       <Text style={[styles.filterChipText, isSelected && styles.filterChipTextSelected]}>
-        {label}
+        {`${label} (${count})`}
       </Text>
     </TouchableOpacity>
   );
@@ -244,24 +325,29 @@ const VendorListingsScreen = ({ navigation }) => {
     </TouchableOpacity>
   );
 
-  const EmptyState = () => (
-    <View style={styles.emptyState}>
-      <Ionicons name="cube-outline" size={64} color={theme.colors.textSecondary} />
-      <Text style={styles.emptyTitle}>
-        {selectedFilter === 'all' ? 'No Listings Yet' : `No ${filters.find(f => f.key === selectedFilter)?.label} Listings`}
-      </Text>
-      <Text style={styles.emptyMessage}>
-        {selectedFilter === 'all'
-          ? 'Start selling by creating your first listing'
-          : 'You don\'t have any listings in this category'}
-      </Text>
-      {selectedFilter === 'all' && (
-        <TouchableOpacity style={styles.addButton} onPress={handleAddListing}>
-          <Text style={styles.addButtonText}>Add Listing</Text>
-        </TouchableOpacity>
-      )}
-    </View>
-  );
+  const EmptyState = () => {
+    const activeFilter = filterOptions.find((filter) => filter.key === selectedFilter);
+    return (
+      <View style={styles.emptyState}>
+        <Ionicons name="cube-outline" size={64} color={theme.colors.textSecondary} />
+        <Text style={styles.emptyTitle}>
+          {selectedFilter === 'all'
+            ? 'No Listings Yet'
+            : `No ${activeFilter?.label ?? ''} Listings`}
+        </Text>
+        <Text style={styles.emptyMessage}>
+          {selectedFilter === 'all'
+            ? 'Start selling by creating your first listing'
+            : 'You don\'t have any listings in this category'}
+        </Text>
+        {selectedFilter === 'all' && (
+          <TouchableOpacity style={styles.addButton} onPress={handleAddListing}>
+            <Text style={styles.addButtonText}>Add Listing</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+  };
 
   if (loading) {
     return (
@@ -308,11 +394,12 @@ const VendorListingsScreen = ({ navigation }) => {
         style={styles.filterContainer}
         contentContainerStyle={styles.filterContent}
       >
-        {filters.map(filter => (
+        {filterOptions.map((filter) => (
           <FilterChip
             key={filter.key}
             filterKey={filter.key}
             label={filter.label}
+            count={filter.count}
             isSelected={selectedFilter === filter.key}
           />
         ))}

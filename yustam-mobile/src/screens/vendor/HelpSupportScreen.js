@@ -176,33 +176,64 @@ const HelpSupportScreen = ({ navigation }) => {
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.actionCard}
-              onPress={() => {
-                // TODO: Navigate to appropriate screen
-                showToast('Opening documentation...', 'info');
-              }}
+              onPress={() => navigation.navigate('HelpResource', { resource: 'docs' })}
+              activeOpacity={0.8}
             >
               <Ionicons name="document-text-outline" size={32} color={theme.colors.emerald} />
               <Text style={styles.actionText}>View Docs</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.actionCard}
-              onPress={() => {
-                // TODO: Navigate to tutorial/guides
-                showToast('Opening tutorials...', 'info');
-              }}
+              onPress={() => navigation.navigate('HelpResource', { resource: 'tutorials' })}
+              activeOpacity={0.8}
             >
               <Ionicons name="book-outline" size={32} color="#1976D2" />
               <Text style={styles.actionText}>Tutorials</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.actionCard}
-              onPress={() => {
-                // TODO: Open community/forum
-                showToast('Opening community...', 'info');
-              }}
+              onPress={() => navigation.navigate('HelpResource', { resource: 'community' })}
+              activeOpacity={0.8}
             >
               <Ionicons name="people-outline" size={32} color="#0F9D58" />
               <Text style={styles.actionText}>Community</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Policies & Data</Text>
+          <Text style={styles.sectionSubtitle}>
+            Understand how Yustam protects you and your buyers
+          </Text>
+          <View style={styles.actionsGrid}>
+            <TouchableOpacity
+              style={styles.actionCard}
+              onPress={() => navigation.navigate('HelpResource', { resource: 'privacy' })}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="shield-checkmark-outline" size={32} color={theme.colors.emerald} />
+              <Text style={styles.actionText}>Privacy & Policy</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.actionCard}
+              onPress={() => navigation.navigate('HelpResource', { resource: 'dataProtection' })}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="lock-closed-outline" size={32} color="#7C3AED" />
+              <Text style={styles.actionText}>Data Protection</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.actionCard}
+              onPress={() =>
+                Alert.alert(
+                  'Trust & Safety',
+                  'For partnerships, reach out to trust@yustam.com.'
+                )
+              }
+            >
+              <Ionicons name="briefcase-outline" size={32} color={theme.colors.orange} />
+              <Text style={styles.actionText}>Trust & Safety</Text>
             </TouchableOpacity>
           </View>
         </View>

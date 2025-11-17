@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
 import theme from '../../theme';
 import Toast from '../../components/Toast';
@@ -24,43 +25,58 @@ const VendorNotificationsScreen = ({ navigation }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [toast, setToast] = useState({ visible: false, message: '', type: 'info' });
   const [notifications, setNotifications] = useState([]);
-  const [filter, setFilter] = useState('all'); // all, unread, read
+  const [filter, setFilter] = useState('all');
+  const [summary, setSummary] = useState({ total: 0, unread: 0 });
 
-  useEffect(() => {
-    fetchNotifications();
-  }, []);
-
-  const fetchNotifications = async () => {
+  const fetchNotifications = useCallback(async () => {
     try {
       setLoading(true);
       const response = await vendorAPI.getNotifications();
       if (!response.data?.success) {
         throw new Error(response.data?.message || 'Unable to load notifications.');
       }
-      const items = response.data?.data?.notifications || [];
-      setNotifications(
-        items.map((notification) => ({
-          id: String(notification.id),
-          type: notification.type || 'general',
+      const payload = response.data?.data || {};
+      const items = Array.isArray(payload.notifications) ? payload.notifications : [];
+      const normalized = items.map((notification) => {
+        const status = (notification.status || '').toLowerCase() === 'read' ? 'read' : 'new';
+        return {
+          id: String(notification.id ?? notification.notificationId ?? notification.uid ?? Date.now()),
+          type: notification.type || 'bell',
           title: notification.title || 'Notification',
           message: notification.message || notification.detail || '',
-          timestamp: notification.createdAt,
-          read: (notification.status || '').toLowerCase() === 'read',
-        }))
-      );
+          detail: notification.detail || '',
+          timestamp: notification.createdAt || notification.timestamp || '',
+          createdLabel: notification.createdLabel || '',
+          read: status === 'read',
+        };
+      });
+      setNotifications(normalized);
+      const counts = payload.counts || {};
+      const total = typeof counts.total === 'number' ? counts.total : normalized.length;
+      const unread =
+        typeof counts.unread === 'number'
+          ? counts.unread
+          : normalized.filter((notif) => !notif.read).length;
+      setSummary({ total, unread });
     } catch (error) {
       console.error('Error fetching notifications:', error);
       showToast(error.message || 'Failed to load notifications', 'error');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   const onRefresh = async () => {
     setRefreshing(true);
     await fetchNotifications();
     setRefreshing(false);
   };
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchNotifications();
+    }, [fetchNotifications])
+  );
 
   const showToast = (message, type = 'success') => {
     setToast({ visible: true, message, type });
@@ -70,18 +86,38 @@ const VendorNotificationsScreen = ({ navigation }) => {
     setToast({ ...toast, visible: false });
   };
 
-  const markAsRead = (notificationId) => {
-    setNotifications(
-      notifications.map((notif) =>
+  const markAsRead = async (notificationId) => {
+    setNotifications((current) =>
+      current.map((notif) =>
         notif.id === notificationId ? { ...notif, read: true } : notif
       )
     );
+    try {
+      await vendorAPI.updateNotifications('markRead', { notificationId });
+      setSummary((prev) => ({
+        total: prev.total,
+        unread: Math.max(0, prev.unread - 1),
+      }));
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+      setNotifications((current) =>
+        current.map((notif) =>
+          notif.id === notificationId ? { ...notif, read: false } : notif
+        )
+      );
+      showToast(error.message || 'Unable to update notification', 'error');
+    }
   };
 
   const markAllAsRead = async () => {
+    if (!summary.unread) {
+      showToast('You are all caught up!');
+      return;
+    }
     try {
       await vendorAPI.updateNotifications('markAllRead');
       setNotifications((current) => current.map((notif) => ({ ...notif, read: true })));
+      setSummary((prev) => ({ ...prev, unread: 0 }));
       showToast('All notifications marked as read');
     } catch (error) {
       console.error('Error updating notifications:', error);
@@ -90,6 +126,10 @@ const VendorNotificationsScreen = ({ navigation }) => {
   };
 
   const clearAllNotifications = () => {
+    if (!notifications.length) {
+      showToast('No notifications to clear.');
+      return;
+    }
     Alert.alert(
       'Clear All Notifications',
       'Are you sure you want to clear all notifications? This action cannot be undone.',
@@ -105,6 +145,7 @@ const VendorNotificationsScreen = ({ navigation }) => {
             try {
               await vendorAPI.updateNotifications('clearAll');
               setNotifications([]);
+              setSummary({ total: 0, unread: 0 });
               showToast('All notifications cleared');
             } catch (error) {
               console.error('Error clearing notifications:', error);
@@ -135,13 +176,24 @@ const VendorNotificationsScreen = ({ navigation }) => {
     }
   };
 
-  const filteredNotifications = notifications.filter((notif) => {
-    if (filter === 'unread') return !notif.read;
-    if (filter === 'read') return notif.read;
-    return true;
-  });
+  const filterOptions = useMemo(
+    () => [
+      { key: 'all', label: 'All', count: summary.total },
+      { key: 'unread', label: 'Unread', count: summary.unread },
+      { key: 'read', label: 'Read', count: Math.max(0, summary.total - summary.unread) },
+    ],
+    [summary],
+  );
 
-  const unreadCount = notifications.filter((n) => !n.read).length;
+  const filteredNotifications = useMemo(() => {
+    if (filter === 'unread') {
+      return notifications.filter((notif) => !notif.read);
+    }
+    if (filter === 'read') {
+      return notifications.filter((notif) => notif.read);
+    }
+    return notifications;
+  }, [filter, notifications]);
 
   const NotificationCard = ({ notification }) => {
     const meta = getNotificationMeta(notification.type);
@@ -165,94 +217,46 @@ const VendorNotificationsScreen = ({ navigation }) => {
           <Text style={styles.notificationMessage} numberOfLines={2}>
             {notification.message}
           </Text>
+          {notification.detail ? (
+            <Text style={styles.notificationDetail} numberOfLines={2}>
+              {notification.detail}
+            </Text>
+          ) : null}
           {!notification.read && <View style={styles.unreadDot} />}
         </View>
       </TouchableOpacity>
     );
   };
 
-  if (loading) {
+  const renderEmptyState = () => {
+    const label =
+      filter === 'unread'
+        ? 'No unread notifications'
+        : filter === 'read'
+          ? 'No read notifications'
+          : 'No notifications yet';
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => goBackOrNavigate(navigation)} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color={theme.colors.emerald} />
-          </TouchableOpacity>
-          <Text style={styles.title}>Notifications</Text>
-        </View>
+      <View style={styles.emptyState}>
+        <Ionicons name="notifications-outline" size={64} color={theme.colors.textTertiary} />
+        <Text style={styles.emptyText}>{label}</Text>
+        <Text style={styles.emptySubtext}>
+          You'll see updates about your listings, plan, and account activity here.
+        </Text>
+      </View>
+    );
+  };
+
+  const renderContent = () => {
+    if (loading) {
+      return (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={theme.colors.orange} />
           <Text style={styles.loadingText}>Loading notifications...</Text>
         </View>
-      </SafeAreaView>
-    );
-  }
+      );
+    }
 
-  return (
-    <SafeAreaView style={styles.container}>
-      <Toast
-        visible={toast.visible}
-        message={toast.message}
-        type={toast.type}
-        onHide={hideToast}
-      />
-      
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => goBackOrNavigate(navigation)} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={theme.colors.emerald} />
-        </TouchableOpacity>
-        <Text style={styles.title}>Notifications</Text>
-        {unreadCount > 0 && (
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>{unreadCount}</Text>
-          </View>
-        )}
-      </View>
-
-      {/* Filter Tabs */}
-      <View style={styles.filterContainer}>
-        <TouchableOpacity
-          style={[styles.filterButton, filter === 'all' && styles.activeFilter]}
-          onPress={() => setFilter('all')}
-        >
-          <Text style={[styles.filterText, filter === 'all' && styles.activeFilterText]}>
-            All ({notifications.length})
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.filterButton, filter === 'unread' && styles.activeFilter]}
-          onPress={() => setFilter('unread')}
-        >
-          <Text style={[styles.filterText, filter === 'unread' && styles.activeFilterText]}>
-            Unread ({unreadCount})
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.filterButton, filter === 'read' && styles.activeFilter]}
-          onPress={() => setFilter('read')}
-        >
-          <Text style={[styles.filterText, filter === 'read' && styles.activeFilterText]}>
-            Read ({notifications.length - unreadCount})
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Actions */}
-      {notifications.length > 0 && (
-        <View style={styles.actionsBar}>
-          {unreadCount > 0 && (
-            <TouchableOpacity style={styles.actionLink} onPress={markAllAsRead}>
-              <Ionicons name="checkmark-done-outline" size={16} color={theme.colors.orange} />
-              <Text style={styles.actionLinkText}>Mark all as read</Text>
-            </TouchableOpacity>
-          )}
-          <TouchableOpacity style={styles.actionLink} onPress={clearAllNotifications}>
-            <Ionicons name="trash-outline" size={16} color={theme.colors.orange} />
-            <Text style={styles.actionLinkText}>Clear all</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
+    return (
       <ScrollView
         style={styles.content}
         refreshControl={
@@ -264,28 +268,104 @@ const VendorNotificationsScreen = ({ navigation }) => {
           />
         }
       >
-        {filteredNotifications.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Ionicons name="notifications-outline" size={64} color={theme.colors.textTertiary} />
-            <Text style={styles.emptyText}>
-              {filter === 'unread' ? 'No unread notifications' : 
-               filter === 'read' ? 'No read notifications' : 
-               'No notifications yet'}
-            </Text>
-            <Text style={styles.emptySubtext}>
-              You'll see updates about your listings, messages, and account activity here
+        <View style={styles.summaryCard}>
+          <View style={styles.summaryInfo}>
+            <Text style={styles.summaryEyebrow}>Notification Center</Text>
+            <Text style={styles.summaryHeadline}>{summary.unread} new</Text>
+            <Text style={styles.summarySubtext}>
+              {summary.total} total alerts
             </Text>
           </View>
-        ) : (
-          <View style={styles.notificationsContainer}>
-            {filteredNotifications.map((notification) => (
-              <NotificationCard key={notification.id} notification={notification} />
-            ))}
+          <View style={styles.summaryActions}>
+            <TouchableOpacity
+              style={[
+                styles.summaryButton,
+                summary.unread === 0 && styles.summaryButtonDisabled,
+              ]}
+              onPress={markAllAsRead}
+              disabled={!summary.unread}
+            >
+              <Ionicons name="checkmark-done-outline" size={18} color="#fff" />
+              <Text style={styles.summaryButtonText}>Mark all</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.summaryButton,
+                styles.summaryButtonSecondary,
+                notifications.length === 0 && styles.summaryButtonDisabled,
+              ]}
+              onPress={clearAllNotifications}
+              disabled={!notifications.length}
+            >
+              <Ionicons name="trash-outline" size={18} color={theme.colors.orange} />
+              <Text style={[styles.summaryButtonText, styles.summaryButtonSecondaryText]}>
+                Clear all
+              </Text>
+            </TouchableOpacity>
           </View>
-        )}
+        </View>
 
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterRow}
+        >
+          {filterOptions.map((option) => (
+            <TouchableOpacity
+              key={option.key}
+              style={[
+                styles.filterChip,
+                filter === option.key && styles.filterChipActive,
+              ]}
+              onPress={() => setFilter(option.key)}
+              activeOpacity={0.8}
+            >
+              <Text
+                style={[
+                  styles.filterChipText,
+                  filter === option.key && styles.filterChipTextActive,
+                ]}
+              >
+                {`${option.label} (${option.count})`}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
+        <View style={styles.notificationsContainer}>
+          {filteredNotifications.length === 0
+            ? renderEmptyState()
+            : filteredNotifications.map((notification) => (
+                <NotificationCard key={notification.id} notification={notification} />
+              ))}
+        </View>
         <View style={styles.bottomPadding} />
       </ScrollView>
+    );
+  };
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <Toast
+        visible={toast.visible}
+        message={toast.message}
+        type={toast.type}
+        onHide={hideToast}
+      />
+
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => goBackOrNavigate(navigation)} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color={theme.colors.emerald} />
+        </TouchableOpacity>
+        <Text style={styles.title}>Notifications</Text>
+        {summary.unread > 0 && (
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>{summary.unread}</Text>
+          </View>
+        )}
+      </View>
+
+      {renderContent()}
     </SafeAreaView>
   );
 };
@@ -329,54 +409,91 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.xs,
     color: theme.colors.white,
   },
-  filterContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.base,
+  summaryCard: {
+    marginHorizontal: theme.spacing.lg,
+    marginTop: theme.spacing.lg,
+    padding: theme.spacing.lg,
     backgroundColor: theme.colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-    gap: theme.spacing.sm,
+    borderRadius: theme.borderRadius.lg,
+    ...theme.shadows.medium,
   },
-  filterButton: {
-    paddingHorizontal: theme.spacing.base,
-    paddingVertical: theme.spacing.sm,
-    borderRadius: theme.borderRadius.full,
-    backgroundColor: theme.colors.background,
+  summaryInfo: {
+    gap: theme.spacing.xs,
   },
-  activeFilter: {
-    backgroundColor: theme.colors.orange,
+  summaryEyebrow: {
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.textSecondary,
+    textTransform: 'uppercase',
   },
-  filterText: {
-    fontFamily: theme.typography.fontFamily.interMedium,
+  summaryHeadline: {
+    fontFamily: theme.typography.fontFamily.anton,
+    fontSize: theme.typography.fontSize['2xl'],
+    color: theme.colors.emerald,
+  },
+  summarySubtext: {
+    fontFamily: theme.typography.fontFamily.inter,
     fontSize: theme.typography.fontSize.sm,
     color: theme.colors.textSecondary,
   },
-  activeFilterText: {
-    color: theme.colors.white,
-  },
-  actionsBar: {
+  summaryActions: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.sm,
-    gap: theme.spacing.base,
-    backgroundColor: theme.colors.white,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
+    flexWrap: 'wrap',
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.md,
   },
-  actionLink: {
+  summaryButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing.xs,
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.sm,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.orange,
   },
-  actionLinkText: {
-    fontFamily: theme.typography.fontFamily.interMedium,
+  summaryButtonSecondary: {
+    backgroundColor: `${theme.colors.orange}15`,
+  },
+  summaryButtonDisabled: {
+    opacity: 0.5,
+  },
+  summaryButtonText: {
+    fontFamily: theme.typography.fontFamily.interSemiBold,
     fontSize: theme.typography.fontSize.sm,
+    color: '#FFFFFF',
+  },
+  summaryButtonSecondaryText: {
     color: theme.colors.orange,
   },
   content: {
     flex: 1,
+    paddingBottom: theme.spacing.xl,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.md,
+  },
+  filterChip: {
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.sm,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.background,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  filterChipActive: {
+    backgroundColor: theme.colors.orange,
+    borderColor: theme.colors.orange,
+  },
+  filterChipText: {
+    fontFamily: theme.typography.fontFamily.interMedium,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.textSecondary,
+  },
+  filterChipTextActive: {
+    color: theme.colors.white,
   },
   loadingContainer: {
     flex: 1,
@@ -391,7 +508,7 @@ const styles = StyleSheet.create({
   },
   notificationsContainer: {
     paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.base,
+    paddingTop: theme.spacing.sm,
     gap: theme.spacing.base,
   },
   notificationCard: {
@@ -441,6 +558,12 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.sm,
     color: theme.colors.textSecondary,
     lineHeight: theme.typography.lineHeight.relaxed * theme.typography.fontSize.sm,
+  },
+  notificationDetail: {
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.textSecondary,
+    marginTop: theme.spacing.xs / 2,
   },
   unreadDot: {
     position: 'absolute',

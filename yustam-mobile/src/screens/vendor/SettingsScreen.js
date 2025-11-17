@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -7,9 +7,11 @@ import {
   TouchableOpacity,
   Switch,
   ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import theme from '../../theme';
 import Toast from '../../components/Toast';
 import { profileAPI } from '../../services/api';
@@ -32,19 +34,47 @@ const DEFAULT_SETTINGS = {
 
 const SETTINGS_KEYS = Object.keys(DEFAULT_SETTINGS);
 
+const COMING_SOON_MESSAGES = {
+  smsNotifications: 'SMS notifications',
+  twoFactorAuth: 'Two-factor authentication',
+  loginAlerts: 'Login alerts',
+};
+
+const parseBoolean = (value, fallback) => {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  if (typeof value === 'number') {
+    return value === 1;
+  }
+  if (typeof value === 'string') {
+    const lowered = value.trim().toLowerCase();
+    if (['1', 'true', 'yes', 'on', 'enabled'].includes(lowered)) {
+      return true;
+    }
+    if (['0', 'false', 'no', 'off', 'disabled'].includes(lowered)) {
+      return false;
+    }
+  }
+  return fallback;
+};
+
+const extractSettingsPayload = (payload = {}) =>
+  payload?.settings ??
+  payload?.data?.settings ??
+  payload?.data?.data?.settings ??
+  payload?.data ??
+  null;
+
 const mapServerSettingsToUI = (serverSettings = {}) =>
   SETTINGS_KEYS.reduce((acc, key) => {
-    if (Object.prototype.hasOwnProperty.call(serverSettings, key)) {
-      acc[key] = Boolean(serverSettings[key]);
-    }
+    acc[key] = parseBoolean(serverSettings[key], DEFAULT_SETTINGS[key]);
     return acc;
   }, {});
 
 const buildServerPayload = (state = {}) =>
   SETTINGS_KEYS.reduce((acc, key) => {
-    if (Object.prototype.hasOwnProperty.call(state, key)) {
-      acc[key] = Boolean(state[key]);
-    }
+    acc[key] = Boolean(state[key]);
     return acc;
   }, {});
 
@@ -52,6 +82,7 @@ const SettingsScreen = ({ navigation }) => {
   const [toast, setToast] = useState({ visible: false, message: '', type: 'info' });
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [savingKeys, setSavingKeys] = useState({});
 
   const showToast = (message, type = 'success') => {
@@ -64,45 +95,53 @@ const SettingsScreen = ({ navigation }) => {
 
   const isToggleDisabled = (key) => loading || Boolean(savingKeys[key]);
 
-  useEffect(() => {
-    let isMounted = true;
-
-    const fetchSettings = async () => {
+  const fetchSettings = useCallback(
+    async (silent = false) => {
       try {
+        if (!silent) {
+          setLoading(true);
+        }
         const response = await profileAPI.getSettings();
         const payload = response?.data ?? {};
-
-        if (!isMounted) {
-          return;
+        if (payload?.success === false) {
+          throw new Error(payload?.message || 'Unable to load settings.');
         }
-
-        if (payload?.settings) {
-          setSettings((prev) => ({
-            ...prev,
-            ...mapServerSettingsToUI(payload.settings),
-          }));
+        const serverSettings = extractSettingsPayload(payload);
+        if (serverSettings) {
+          setSettings(() => mapServerSettingsToUI(serverSettings));
         }
       } catch (error) {
-        if (isMounted) {
+        if (!silent) {
           showToast(error.message || 'Unable to load settings.', 'error');
         }
       } finally {
-        if (isMounted) {
+        if (!silent) {
           setLoading(false);
         }
       }
-    };
+    },
+    []
+  );
 
+  useEffect(() => {
     fetchSettings();
+  }, [fetchSettings]);
 
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      fetchSettings(true);
+    }, [fetchSettings])
+  );
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchSettings(true);
+    setRefreshing(false);
+  }, [fetchSettings]);
 
   const handleToggle = async (key) => {
-    if (key === 'smsNotifications') {
-      showToast('SMS notifications are coming soon.', 'info');
+    if (COMING_SOON_MESSAGES[key]) {
+      showToast(`${COMING_SOON_MESSAGES[key]} is coming soon.`, 'info');
       return;
     }
     let previousValue;
@@ -123,11 +162,14 @@ const SettingsScreen = ({ navigation }) => {
     try {
       const response = await profileAPI.updateSettings(buildServerPayload(updatedSettings));
       const payload = response?.data ?? {};
-      if (payload?.settings) {
-        setSettings((current) => ({
-          ...current,
-          ...mapServerSettingsToUI(payload.settings),
-        }));
+      if (payload?.success === false) {
+        throw new Error(payload?.message || 'Unable to update settings.');
+      }
+      const serverSettings = extractSettingsPayload(payload);
+      if (serverSettings) {
+        setSettings(() => mapServerSettingsToUI(serverSettings));
+      } else {
+        await fetchSettings(true);
       }
       showToast('Settings updated');
     } catch (error) {
@@ -218,7 +260,17 @@ const SettingsScreen = ({ navigation }) => {
         <Text style={styles.title}>Settings</Text>
       </View>
 
-      <ScrollView style={styles.content}>
+      <ScrollView
+        style={styles.content}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[theme.colors.orange]}
+            tintColor={theme.colors.orange}
+          />
+        }
+      >
         {loading && (
           <View style={styles.loadingState}>
             <ActivityIndicator size="small" color={theme.colors.emerald} />
@@ -248,7 +300,7 @@ const SettingsScreen = ({ navigation }) => {
             onToggle={() => handleToggle('smsNotifications')}
             disabled
             comingSoon
-            note="Stay tuned for SMS alerts"
+            note="SMS alerts are in development"
           />
         </SettingSection>
 
@@ -291,16 +343,18 @@ const SettingsScreen = ({ navigation }) => {
             label="Two-Factor Authentication"
             value={settings.twoFactorAuth}
             onToggle={() => handleToggle('twoFactorAuth')}
-            disabled={isToggleDisabled('twoFactorAuth')}
-            note={settings.twoFactorAuth ? 'Extra verification enabled' : 'Add a second step at sign-in'}
+            disabled
+            comingSoon
+            note="Protect your account with verification codes"
           />
           <SettingItem
             icon="alert-circle-outline"
             label="Login Alerts"
             value={settings.loginAlerts}
             onToggle={() => handleToggle('loginAlerts')}
-            disabled={isToggleDisabled('loginAlerts')}
-            note="Get notified when new logins happen"
+            disabled
+            comingSoon
+            note="We'll notify you when we spot new sign-ins"
           />
           <SettingItem
             icon="globe-outline"

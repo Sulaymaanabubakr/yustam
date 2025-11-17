@@ -179,6 +179,14 @@ function yustam_api_handle_vendor(string $method, array $segments): array
             return yustam_api_vendor_update_settings();
         }
     }
+    if ($action === 'notifications' && empty($segments[1])) {
+        if ($method === 'GET') {
+            return yustam_api_vendor_notifications_list();
+        }
+        if ($method === 'POST') {
+            return yustam_api_vendor_notifications_action();
+        }
+    }
     if ($action === 'password' && $method === 'POST') {
         return yustam_api_vendor_change_password();
     }
@@ -1800,6 +1808,190 @@ function yustam_api_vendor_change_password(): array
         'success' => true,
         'message' => 'Password updated successfully.',
     ];
+}
+
+function yustam_vendor_notifications_table_name(): string
+{
+    if (defined('YUSTAM_VENDOR_NOTIFICATIONS_TABLE')) {
+        $configured = (string) YUSTAM_VENDOR_NOTIFICATIONS_TABLE;
+        if (preg_match('/^[A-Za-z0-9_]+$/', $configured)) {
+            return $configured;
+        }
+    }
+    return 'vendor_notifications';
+}
+
+function yustam_vendor_notifications_bind(mysqli_stmt $stmt, string $types, array $values): void
+{
+    if ($types === '') {
+        return;
+    }
+    $params = [$types];
+    foreach ($values as $index => $value) {
+        $params[] = &$values[$index];
+    }
+    call_user_func_array([$stmt, 'bind_param'], $params);
+}
+
+function yustam_vendor_notifications_ensure(mysqli $db): void
+{
+    static $ensured = false;
+    if ($ensured) {
+        return;
+    }
+    $table = yustam_vendor_notifications_table_name();
+    $sql = sprintf(
+        'CREATE TABLE IF NOT EXISTS `%s` (
+            `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            `vendor_id` INT NOT NULL,
+            `title` VARCHAR(255) NOT NULL,
+            `message` VARCHAR(255) NOT NULL,
+            `detail` TEXT NULL,
+            `type` VARCHAR(32) NOT NULL DEFAULT \'bell\',
+            `status` VARCHAR(16) NOT NULL DEFAULT \'new\',
+            `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            `created_by` INT NULL,
+            INDEX `vendor_id_index` (`vendor_id`),
+            INDEX `status_index` (`status`),
+            INDEX `created_at_index` (`created_at`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;',
+        $table
+    );
+    try {
+        $db->query($sql);
+        $ensured = true;
+    } catch (Throwable $exception) {
+        error_log('Unable to ensure vendor notifications table: ' . $exception->getMessage());
+    }
+}
+
+function yustam_api_vendor_notifications_list(): array
+{
+    $vendor = yustam_api_require_auth('vendor');
+    $vendorId = (int) ($vendor['vendorId'] ?? 0);
+    if ($vendorId <= 0) {
+        yustam_api_error(404, 'Vendor profile not found.');
+    }
+
+    $db = get_db_connection();
+    yustam_vendor_notifications_ensure($db);
+    $table = yustam_vendor_notifications_table_name();
+    $stmt = $db->prepare(sprintf('SELECT id, title, message, detail, type, status, created_at FROM `%s` WHERE vendor_id = ? ORDER BY created_at DESC', $table));
+    if (!$stmt instanceof mysqli_stmt) {
+        yustam_api_error(500, 'Unable to load notifications.');
+    }
+    yustam_vendor_notifications_bind($stmt, 'i', [$vendorId]);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $notifications = [];
+    $unreadCount = 0;
+    if ($result instanceof mysqli_result) {
+        while ($row = $result->fetch_assoc()) {
+            $createdAt = (string) ($row['created_at'] ?? '');
+            $createdLabel = '';
+            if ($createdAt !== '') {
+                $timestamp = strtotime($createdAt);
+                if ($timestamp) {
+                    $createdLabel = date('M j, Y g:i A', $timestamp);
+                    $createdAt = date(DATE_ATOM, $timestamp);
+                }
+            }
+            $status = strtolower((string) ($row['status'] ?? 'new')) === 'read' ? 'read' : 'new';
+            if ($status === 'new') {
+                $unreadCount++;
+            }
+            $notifications[] = [
+                'id' => (int) ($row['id'] ?? 0),
+                'title' => (string) ($row['title'] ?? ''),
+                'message' => (string) ($row['message'] ?? ''),
+                'detail' => (string) ($row['detail'] ?? ''),
+                'type' => (string) ($row['type'] ?? 'bell'),
+                'status' => $status,
+                'createdAt' => $createdAt,
+                'createdLabel' => $createdLabel,
+            ];
+        }
+        $result->free();
+    }
+    $stmt->close();
+
+    $total = count($notifications);
+    $counts = [
+        'total' => $total,
+        'unread' => $unreadCount,
+        'read' => max(0, $total - $unreadCount),
+    ];
+
+    return [
+        'success' => true,
+        'data' => [
+            'notifications' => $notifications,
+            'counts' => $counts,
+        ],
+    ];
+}
+
+function yustam_api_vendor_notifications_action(): array
+{
+    $vendor = yustam_api_require_auth('vendor');
+    $vendorId = (int) ($vendor['vendorId'] ?? 0);
+    if ($vendorId <= 0) {
+        yustam_api_error(404, 'Vendor profile not found.');
+    }
+    $body = yustam_api_read_json_body();
+    $action = strtolower(trim((string) ($body['action'] ?? '')));
+    if ($action === '') {
+        yustam_api_error(400, 'Action is required.');
+    }
+
+    $db = get_db_connection();
+    yustam_vendor_notifications_ensure($db);
+    $table = yustam_vendor_notifications_table_name();
+
+    if ($action === 'markallread') {
+        $stmt = $db->prepare(sprintf('UPDATE `%s` SET `status` = \'read\' WHERE vendor_id = ? AND `status` = \'new\'', $table));
+        if ($stmt instanceof mysqli_stmt) {
+            yustam_vendor_notifications_bind($stmt, 'i', [$vendorId]);
+            $stmt->execute();
+            $stmt->close();
+        }
+        return [
+            'success' => true,
+            'message' => 'Notifications marked as read.',
+        ];
+    }
+
+    if ($action === 'clearall') {
+        $stmt = $db->prepare(sprintf('DELETE FROM `%s` WHERE vendor_id = ?', $table));
+        if ($stmt instanceof mysqli_stmt) {
+            yustam_vendor_notifications_bind($stmt, 'i', [$vendorId]);
+            $stmt->execute();
+            $stmt->close();
+        }
+        return [
+            'success' => true,
+            'message' => 'Notifications cleared.',
+        ];
+    }
+
+    if ($action === 'markread') {
+        $notificationId = (int) ($body['notificationId'] ?? $body['id'] ?? 0);
+        if ($notificationId <= 0) {
+            yustam_api_error(422, 'notificationId is required.');
+        }
+        $stmt = $db->prepare(sprintf('UPDATE `%s` SET `status` = \'read\' WHERE vendor_id = ? AND id = ? LIMIT 1', $table));
+        if ($stmt instanceof mysqli_stmt) {
+            yustam_vendor_notifications_bind($stmt, 'ii', [$vendorId, $notificationId]);
+            $stmt->execute();
+            $stmt->close();
+        }
+        return [
+            'success' => true,
+            'message' => 'Notification marked as read.',
+        ];
+    }
+
+    yustam_api_error(400, 'Unsupported notification action.');
 }
 
 function yustam_api_vendor_table_exists(mysqli $db, string $table): bool

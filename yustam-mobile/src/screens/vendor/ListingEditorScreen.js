@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -20,10 +20,10 @@ import { useAuth } from '../../context/AuthContext';
 import theme from '../../theme';
 import Toast from '../../components/Toast';
 import Button from '../../components/Button';
-import { API_BASE_URL } from '../../config/constants';
 import { CLOUDINARY_UPLOAD_PRESET, CLOUDINARY_CLOUD_NAME } from '../../config/cloudinary';
 import { goBackOrNavigate } from '../../utils/navigation';
 import { resolveUserUid } from '../../utils/user';
+import { listingsAPI } from '../../services/api';
 
 const NIGERIAN_STATES = [
   'Abia', 'Adamawa', 'Akwa Ibom', 'Anambra', 'Bauchi', 'Bayelsa', 'Benue', 'Borno',
@@ -31,12 +31,6 @@ const NIGERIAN_STATES = [
   'Imo', 'Jigawa', 'Kaduna', 'Kano', 'Katsina', 'Kebbi', 'Kogi', 'Kwara', 'Lagos',
   'Nasarawa', 'Niger', 'Ogun', 'Ondo', 'Osun', 'Oyo', 'Plateau', 'Rivers', 'Sokoto',
   'Taraba', 'Yobe', 'Zamfara'
-];
-
-const CATEGORIES = [
-  'Electronics', 'Fashion', 'Home & Garden', 'Vehicles', 'Beauty & Personal Care',
-  'Sports & Outdoors', 'Books & Media', 'Toys & Kids', 'Health & Wellness',
-  'Services', 'Real Estate', 'Other'
 ];
 
 const CONDITIONS = ['New', 'Used - Like New', 'Used - Good', 'Used - Fair', 'Refurbished'];
@@ -49,48 +43,96 @@ const STATUS_OPTIONS = [
   { value: 'sold', label: 'Sold / Out of Stock' },
 ];
 
+const CATEGORY_PRESETS = {
+  'Phones & Tablets': ['Smartphones', 'Feature Phones', 'Tablets', 'Smartwatches & Wearables', 'Accessories'],
+  Electronics: ['Computers', 'TV & Audio', 'Cameras', 'Accessories'],
+  Fashion: ['Men', 'Women', 'Kids', 'Accessories'],
+  'Home & Garden': ['Furniture', 'Appliances', 'Décor', 'Outdoor'],
+  Vehicles: ['Cars', 'Motorcycles', 'Auto Parts', 'Trucks & Buses'],
+  'Beauty & Personal Care': ['Skincare', 'Haircare', 'Fragrances', 'Makeup'],
+  'Sports & Outdoors': ['Fitness', 'Outdoor Gear', 'Sportswear', 'Accessories'],
+  'Books & Media': ['Books', 'Movies & Music', 'Educational'],
+  'Toys & Kids': ['Toys', 'Baby Gear', 'Kids Wear'],
+  'Health & Wellness': ['Supplements', 'Medical Devices', 'Wellness'],
+  Services: ['Repairs', 'Logistics', 'Events', 'Consulting'],
+  'Real Estate': ['Apartments', 'Houses', 'Land', 'Short Lets'],
+  Other: [],
+};
+
+const CATEGORY_OPTIONS = Object.keys(CATEGORY_PRESETS);
+const DEFAULT_COUNTRY = 'Nigeria';
+
+const createDefaultFormState = () => ({
+  title: '',
+  description: '',
+  price: '',
+  category: '',
+  subcategory: '',
+  condition: 'New',
+  location: '',
+  state: '',
+  country: DEFAULT_COUNTRY,
+  status: 'pending',
+});
+
 const ListingEditorScreen = ({ route, navigation }) => {
   const { listing } = route.params || {};
   const { user } = useAuth();
   const vendorUid = resolveUserUid(user, 'vendor');
+  const vendorId = useMemo(() => {
+    if (!user) {
+      return null;
+    }
+    if (user.vendorId) {
+      return user.vendorId;
+    }
+    if (user.vendor?.vendorId) {
+      return user.vendor.vendorId;
+    }
+    return null;
+  }, [user]);
   const isEditMode = !!listing;
 
-  const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    price: '',
-    category: '',
-    subcategory: '',
-    condition: 'New',
-    location: '',
-    state: '',
-    status: 'draft',
-  });
+  const [formData, setFormData] = useState(createDefaultFormState);
 
   const [images, setImages] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState({ visible: false, message: '', type: 'info' });
+  const subcategoryOptions = useMemo(() => {
+    if (!formData.category) {
+      return [];
+    }
+    const options = CATEGORY_PRESETS[formData.category];
+    return Array.isArray(options) ? options : [];
+  }, [formData.category]);
 
   useEffect(() => {
     if (listing) {
       setFormData({
+        ...createDefaultFormState(),
         title: listing.title || '',
         description: listing.description || '',
-        price: listing.price?.toString() || '',
+        price: listing.price !== undefined && listing.price !== null ? String(listing.price) : '',
         category: listing.category || '',
         subcategory: listing.subcategory || '',
         condition: listing.condition || 'New',
-        location: listing.location || '',
+        location: listing.city || listing.location || '',
         state: listing.state || '',
-        status: listing.status_raw || 'draft',
+        country: listing.country || DEFAULT_COUNTRY,
+        status: listing.status_raw || listing.status || 'pending',
       });
 
-      if (listing.images && listing.images.length > 0) {
-        setImages(listing.images.map(url => ({ uri: url, uploaded: true })));
-      } else if (listing.image) {
-        setImages([{ uri: listing.image, uploaded: true }]);
+      if (Array.isArray(listing.images) && listing.images.length > 0) {
+        setImages(listing.images.map((url) => ({ uri: url, uploaded: true })));
+      } else if (listing.image || listing.primaryImage) {
+        setImages([{ uri: listing.image || listing.primaryImage, uploaded: true }]);
+      } else {
+        setImages([]);
       }
+    } else {
+      setFormData(createDefaultFormState());
+      setImages([]);
     }
   }, [listing]);
 
@@ -103,7 +145,11 @@ const ListingEditorScreen = ({ route, navigation }) => {
   };
 
   const updateFormData = (key, value) => {
-    setFormData(prev => ({ ...prev, [key]: value }));
+    setFormData((prev) => ({
+      ...prev,
+      [key]: value,
+      ...(key === 'category' ? { subcategory: '' } : {}),
+    }));
   };
 
   const requestPermissions = async () => {
@@ -122,17 +168,21 @@ const ListingEditorScreen = ({ route, navigation }) => {
     if (!hasPermission) return;
 
     try {
-        const result = await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: 'images',
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: 'images',
         allowsMultipleSelection: false,
         quality: 0.8,
         aspect: [4, 3],
       });
 
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const asset = result.assets[0];
-        setImages(prev => [...prev, { uri: asset.uri, uploaded: false }]);
-        showToast('Image added. Remember to save the listing.');
+      if (!result.canceled && Array.isArray(result.assets)) {
+        const selections = result.assets
+          .filter((asset) => asset?.uri)
+          .map((asset) => ({ uri: asset.uri, uploaded: false }));
+        if (selections.length) {
+          setImages((prev) => [...prev, ...selections]);
+          showToast('Image added. Remember to save the listing.');
+        }
       }
     } catch (error) {
       console.error('Error picking image:', error);
@@ -160,7 +210,9 @@ const ListingEditorScreen = ({ route, navigation }) => {
   const uploadImagesToCloudinary = async () => {
     const imagesToUpload = images.filter(img => !img.uploaded);
     if (imagesToUpload.length === 0) {
-      return images.filter(img => img.uploaded).map(img => img.uri);
+      const uploaded = images.filter((img) => img.uploaded).map((img) => img.uri);
+      setImages(uploaded.map((url) => ({ uri: url, uploaded: true })));
+      return uploaded;
     }
 
     setUploading(true);
@@ -195,12 +247,14 @@ const ListingEditorScreen = ({ route, navigation }) => {
 
       // Add already uploaded images
       const existingUrls = images.filter(img => img.uploaded).map(img => img.uri);
-      setUploading(false);
-      return [...existingUrls, ...uploadedUrls];
+      const combined = [...existingUrls, ...uploadedUrls];
+      setImages(combined.map((url) => ({ uri: url, uploaded: true })));
+      return combined;
     } catch (error) {
       console.error('Error uploading images:', error);
-      setUploading(false);
       throw error;
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -213,7 +267,8 @@ const ListingEditorScreen = ({ route, navigation }) => {
       showToast('Please enter a description', 'error');
       return false;
     }
-    if (!formData.price || isNaN(parseFloat(formData.price))) {
+    const numericPrice = parseFloat(formData.price);
+    if (!formData.price || Number.isNaN(numericPrice) || numericPrice <= 0) {
       showToast('Please enter a valid price', 'error');
       return false;
     }
@@ -221,8 +276,16 @@ const ListingEditorScreen = ({ route, navigation }) => {
       showToast('Please select a category', 'error');
       return false;
     }
+    if (subcategoryOptions.length > 0 && !formData.subcategory) {
+      showToast('Please select a subcategory', 'error');
+      return false;
+    }
     if (!formData.state) {
       showToast('Please select a state', 'error');
+      return false;
+    }
+    if (!formData.location.trim()) {
+      showToast('Please enter your city or location', 'error');
       return false;
     }
     if (images.length === 0) {
@@ -235,15 +298,13 @@ const ListingEditorScreen = ({ route, navigation }) => {
   const handleSave = async () => {
     if (!validateForm()) return;
 
+    const listingIdentifier = listing?.id || listing?.listing_id || listing?.listingId || null;
+
     try {
       setSaving(true);
-
-      // Upload images to Cloudinary
       const imageUrls = await uploadImagesToCloudinary();
 
-      // Prepare payload
       const payload = {
-        listingId: listing?.id || null,
         title: formData.title.trim(),
         description: formData.description.trim(),
         price: parseFloat(formData.price),
@@ -251,47 +312,35 @@ const ListingEditorScreen = ({ route, navigation }) => {
         subcategory: formData.subcategory,
         condition: formData.condition,
         location: formData.location.trim(),
+        city: formData.location.trim(),
         state: formData.state,
-        status: formData.status,
+        country: formData.country || DEFAULT_COUNTRY,
+        status: isEditMode ? formData.status : 'pending',
         images: imageUrls,
-        image: imageUrls[0] || '',
+        primaryImage: imageUrls[0] || '',
       };
 
-      // Call API
-      const response = await fetch(`${API_BASE_URL}/vendor-listing-update.php`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to save listing');
+      if (vendorId) {
+        payload.ownerId = `vendor:${vendorId}`;
       }
 
-      const result = await response.json();
-
-      if (result.success) {
-        // Sync to Firestore
-        if (result.listingId || listing?.id) {
-          await fetch(`${API_BASE_URL}/vendor-listing-sync.php?listingId=${result.listingId || listing.id}`, {
-            method: 'POST',
-            credentials: 'include',
-          });
-        }
-
-        showToast(isEditMode ? 'Listing updated successfully' : 'Listing created successfully');
-        setTimeout(() => {
-          goBackOrNavigate(navigation);
-        }, 1000);
+      if (isEditMode && listingIdentifier) {
+        await listingsAPI.update(listingIdentifier, payload);
       } else {
-        throw new Error(result.message || 'Failed to save listing');
+        await listingsAPI.create(payload);
       }
+
+      showToast(isEditMode ? 'Listing updated successfully' : 'Listing created successfully');
+      setTimeout(() => {
+        goBackOrNavigate(navigation, 'VendorListings');
+      }, 700);
     } catch (error) {
       console.error('Error saving listing:', error);
-      showToast(error.message || 'Failed to save listing', 'error');
+      const message =
+        error?.response?.data?.message ||
+        error?.message ||
+        'Failed to save listing';
+      showToast(message, 'error');
     } finally {
       setSaving(false);
     }
@@ -393,11 +442,40 @@ const ListingEditorScreen = ({ route, navigation }) => {
               style={styles.picker}
             >
               <Picker.Item label="Select category..." value="" />
-              {CATEGORIES.map(cat => (
+              {CATEGORY_OPTIONS.map((cat) => (
                 <Picker.Item key={cat} label={cat} value={cat} />
               ))}
             </Picker>
           </View>
+        </View>
+
+        {/* Subcategory */}
+        <View style={styles.section}>
+          <Text style={styles.label}>
+            Subcategory {subcategoryOptions.length ? '*' : '(optional)'}
+          </Text>
+          {subcategoryOptions.length ? (
+            <View style={styles.pickerContainer}>
+              <Picker
+                selectedValue={formData.subcategory}
+                onValueChange={(value) => updateFormData('subcategory', value)}
+                style={styles.picker}
+              >
+                <Picker.Item label="Select subcategory..." value="" />
+                {subcategoryOptions.map((option) => (
+                  <Picker.Item key={option} label={option} value={option} />
+                ))}
+              </Picker>
+            </View>
+          ) : (
+            <TextInput
+              style={styles.input}
+              value={formData.subcategory}
+              onChangeText={(text) => updateFormData('subcategory', text)}
+              placeholder="Enter subcategory (optional)"
+              placeholderTextColor={theme.colors.textSecondary}
+            />
+          )}
         </View>
 
         {/* Condition */}
@@ -445,20 +523,38 @@ const ListingEditorScreen = ({ route, navigation }) => {
           />
         </View>
 
+        {/* Country */}
+        <View style={styles.section}>
+          <Text style={styles.label}>Country</Text>
+          <TextInput
+            style={styles.input}
+            value={formData.country}
+            onChangeText={(text) => updateFormData('country', text)}
+            placeholder="Nigeria"
+            placeholderTextColor={theme.colors.textSecondary}
+          />
+        </View>
+
         {/* Status */}
         <View style={styles.section}>
-          <Text style={styles.label}>Status</Text>
-          <View style={styles.pickerContainer}>
+          <Text style={styles.label}>Status {isEditMode ? '' : '(auto)'}</Text>
+          <View style={[styles.pickerContainer, !isEditMode && styles.pickerDisabled]}>
             <Picker
+              enabled={isEditMode}
               selectedValue={formData.status}
               onValueChange={(value) => updateFormData('status', value)}
               style={styles.picker}
             >
-              {STATUS_OPTIONS.map(opt => (
+              {STATUS_OPTIONS.map((opt) => (
                 <Picker.Item key={opt.value} label={opt.label} value={opt.value} />
               ))}
             </Picker>
           </View>
+          {!isEditMode && (
+            <Text style={styles.helperText}>
+              New listings are submitted for review before going live.
+            </Text>
+          )}
         </View>
 
         {/* Save Button */}
@@ -534,6 +630,12 @@ const styles = StyleSheet.create({
     color: theme.colors.textPrimary,
     marginBottom: theme.spacing.xs,
   },
+  helperText: {
+    fontFamily: theme.typography.fontFamilyBody,
+    fontSize: theme.typography.sizes.xs,
+    color: theme.colors.textSecondary,
+    marginTop: theme.spacing.xs,
+  },
   input: {
     fontFamily: theme.typography.fontFamilyBody,
     fontSize: theme.typography.sizes.base,
@@ -558,6 +660,9 @@ const styles = StyleSheet.create({
   },
   picker: {
     height: 50,
+  },
+  pickerDisabled: {
+    opacity: 0.6,
   },
   imagesContainer: {
     flexDirection: 'row',

@@ -89,10 +89,14 @@ const VendorDashboardScreen = ({ navigation }) => {
           ? stats.pending_listings
           : Math.max(0, totalListings - activeListings);
 
-      const notifications = notificationsResponse?.data?.data?.notifications;
-      const unreadNotifications = Array.isArray(notifications)
-        ? notifications.filter((notif) => (notif.status || '').toLowerCase() === 'new').length
-        : 0;
+      const notificationCounts = notificationsResponse?.data?.data?.counts;
+      const fallbackNotifications = notificationsResponse?.data?.data?.notifications;
+      const unreadNotifications =
+        (notificationCounts && typeof notificationCounts.unread === 'number'
+          ? notificationCounts.unread
+          : Array.isArray(fallbackNotifications)
+            ? fallbackNotifications.filter((notif) => (notif.status || '').toLowerCase() === 'new').length
+            : 0);
 
       const chats = chatsResponse?.data?.chats;
       const unreadMessages = Array.isArray(chats)

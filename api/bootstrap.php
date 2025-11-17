@@ -86,6 +86,9 @@ function yustam_api_headers(): void
     header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
     header('Access-Control-Allow-Headers: Authorization, Content-Type, X-Requested-With');
     header('Access-Control-Max-Age: 86400');
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+    header('Pragma: no-cache');
+    header('Expires: 0');
     header('Content-Type: application/json');
 }
 
