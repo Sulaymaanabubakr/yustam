@@ -296,6 +296,68 @@ function yustam_paystack_fetch_subscription(string $code): array {
     return yustam_paystack_request('GET', 'subscription/' . rawurlencode($code));
 }
 
+function yustam_paystack_pick_subscription_candidate($payload, ?string $planCode = null): array {
+    if (!is_array($payload)) {
+        return [];
+    }
+    if (isset($payload['subscription_code']) || isset($payload['plan'])) {
+        $items = [$payload];
+    } else {
+        $items = $payload;
+    }
+    if (!is_array($items) || !$items) {
+        return [];
+    }
+    $normalizedPlan = strtolower(trim((string) $planCode));
+    $candidates = [];
+    foreach ($items as $item) {
+        if (!is_array($item)) {
+            continue;
+        }
+        if ($normalizedPlan !== '') {
+            $candidatePlan = strtolower((string) ($item['plan']['plan_code'] ?? ($item['plan_code'] ?? '')));
+            if ($candidatePlan !== $normalizedPlan) {
+                continue;
+            }
+        }
+        $candidates[] = $item;
+    }
+    if (!$candidates) {
+        $candidates = $items;
+    }
+    foreach ($candidates as $candidate) {
+        $status = strtolower((string) ($candidate['status'] ?? 'active'));
+        if (!in_array($status, ['disabled', 'cancelled', 'expired'], true)) {
+            return $candidate;
+        }
+    }
+    return $candidates[0] ?? [];
+}
+
+function yustam_paystack_resolve_subscription_from_transaction(array $transaction): array {
+    $customer = $transaction['customer'] ?? [];
+    $customerCode = (string) ($customer['customer_code'] ?? ($transaction['customer_code'] ?? ''));
+    $email = (string) ($customer['email'] ?? ($transaction['customer_email'] ?? ''));
+    $planCode = (string) ($transaction['plan'] ?? ($transaction['plan_object']['plan_code'] ?? ''));
+    foreach ([['customer', $customerCode], ['email', $email]] as [$queryKey, $value]) {
+        $trimmed = trim($value);
+        if ($trimmed === '') {
+            continue;
+        }
+        try {
+            $result = yustam_paystack_request('GET', 'subscription?perPage=50&' . $queryKey . '=' . rawurlencode($trimmed));
+        } catch (Throwable $exception) {
+            error_log('Paystack subscription lookup failed: ' . $exception->getMessage());
+            continue;
+        }
+        $candidate = yustam_paystack_pick_subscription_candidate($result, $planCode);
+        if ($candidate) {
+            return $candidate;
+        }
+    }
+    return [];
+}
+
 function yustam_paystack_enable_subscription(string $code, string $token): void {
     $code = trim($code);
     $token = trim($token);
@@ -419,15 +481,44 @@ function yustam_vendor_subscription_process_payment(mysqli $db, int $vendorId, s
     if ($plan === null) {
         throw new RuntimeException('Unable to map this payment to a known plan.');
     }
-    $subscriptionCode = (string) ($transaction['subscription']['subscription_code'] ?? $transaction['subscription']['code'] ?? '');
-    $emailToken = (string) ($transaction['subscription']['email_token'] ?? '');
+    $subscription = is_array($transaction['subscription'] ?? null) ? $transaction['subscription'] : [];
+    $subscriptionCode = (string) ($subscription['subscription_code'] ?? ($subscription['code'] ?? ($transaction['subscription_code'] ?? '')));
+    $emailToken = (string) ($subscription['email_token'] ?? ($transaction['email_token'] ?? ''));
     $paidAt = $transaction['paid_at'] ?? ($transaction['paidAt'] ?? $transaction['created_at'] ?? '');
     $amountKobo = (int) ($transaction['amount'] ?? 0);
-    $nextPayment = '';
-    if ($subscriptionCode !== '') {
+    if ($subscriptionCode === '' || $emailToken === '' || !$subscription) {
         try {
-            $sub = yustam_paystack_fetch_subscription($subscriptionCode);
-            $nextPayment = (string) ($sub['next_payment_date'] ?? $sub['next_payment'] ?? '');
+            $resolvedSubscription = yustam_paystack_resolve_subscription_from_transaction($transaction);
+            if ($resolvedSubscription) {
+                $subscription = array_merge($resolvedSubscription, $subscription);
+                if ($subscriptionCode === '') {
+                    $subscriptionCode = (string) ($resolvedSubscription['subscription_code'] ?? ($resolvedSubscription['code'] ?? ''));
+                }
+                if ($emailToken === '') {
+                    $emailToken = (string) ($resolvedSubscription['email_token'] ?? '');
+                }
+                if ($planCode === '' && isset($resolvedSubscription['plan']['plan_code'])) {
+                    $planCode = (string) $resolvedSubscription['plan']['plan_code'];
+                }
+            }
+        } catch (Throwable $resolveError) {
+            error_log('Paystack subscription resolution failed: ' . $resolveError->getMessage());
+        }
+    }
+    $nextPayment = '';
+    if ($subscription) {
+        $nextPayment = (string) ($subscription['next_payment_date'] ?? $subscription['next_payment'] ?? $subscription['next_payment_at'] ?? '');
+    }
+    if ($nextPayment === '' && $subscriptionCode !== '') {
+        try {
+            $subDetails = yustam_paystack_fetch_subscription($subscriptionCode);
+            if ($subDetails) {
+                $subscription = array_merge($subDetails, $subscription);
+            }
+            $nextPayment = (string) ($subDetails['next_payment_date'] ?? $subDetails['next_payment'] ?? '');
+            if ($emailToken === '' && isset($subDetails['email_token'])) {
+                $emailToken = (string) $subDetails['email_token'];
+            }
         } catch (Throwable $e) {
             $nextPayment = '';
         }
@@ -530,6 +621,14 @@ function yustam_vendor_subscription_process_payment(mysqli $db, int $vendorId, s
     $stmt->execute();
     $stmt->close();
 
+    $transaction['subscription'] = $subscription;
+    if ($subscriptionCode !== '') {
+        $transaction['subscription_code'] = $subscriptionCode;
+    }
+    if ($emailToken !== '') {
+        $transaction['email_token'] = $emailToken;
+    }
+
     try {
         yustam_vendor_subscription_record_sync_from_paystack($db, $vendorId, $transaction, [
             'plan_name' => $planName,
@@ -565,6 +664,21 @@ function yustam_vendor_subscription_set_autorenew(mysqli $db, int $vendorId, boo
             }
             if ($emailToken === '' && !empty($record['email_token'])) {
                 $emailToken = $record['email_token'];
+            }
+        }
+    }
+    if ($subscriptionCode === '' || $emailToken === '') {
+        if (yustam_vendor_subscription_sync_remote_reference($db, $vendor)) {
+            $vendor = yustam_vendor_subscription_fetch_vendor($db, $vendorId);
+            $subscriptionCode = trim((string) ($vendor['paystack_subscription_code'] ?? ''));
+            $emailToken = trim((string) ($vendor['paystack_email_token'] ?? ''));
+            if (($subscriptionCode === '' || $emailToken === '') && ($record = yustam_vendor_subscription_record_fetch($db, $vendorId))) {
+                if ($subscriptionCode === '' && !empty($record['subscription_code'])) {
+                    $subscriptionCode = $record['subscription_code'];
+                }
+                if ($emailToken === '' && !empty($record['email_token'])) {
+                    $emailToken = $record['email_token'];
+                }
             }
         }
     }
@@ -661,6 +775,21 @@ function yustam_vendor_subscription_cancel(mysqli $db, int $vendorId, ?string $r
             }
             if ($emailToken === '' && !empty($record['email_token'])) {
                 $emailToken = $record['email_token'];
+            }
+        }
+    }
+    if ($subscriptionCode === '' || $emailToken === '') {
+        if (yustam_vendor_subscription_sync_remote_reference($db, $vendor)) {
+            $vendor = yustam_vendor_subscription_fetch_vendor($db, $vendorId);
+            $subscriptionCode = trim((string) ($vendor['paystack_subscription_code'] ?? ''));
+            $emailToken = trim((string) ($vendor['paystack_email_token'] ?? ''));
+            if (($subscriptionCode === '' || $emailToken === '') && ($record = yustam_vendor_subscription_record_fetch($db, $vendorId))) {
+                if ($subscriptionCode === '' && !empty($record['subscription_code'])) {
+                    $subscriptionCode = $record['subscription_code'];
+                }
+                if ($emailToken === '' && !empty($record['email_token'])) {
+                    $emailToken = $record['email_token'];
+                }
             }
         }
     }
@@ -881,5 +1010,70 @@ function yustam_vendor_subscription_handle_expiry(mysqli $db, array $vendor): ar
         'changed' => true,
         'subscription' => yustam_vendor_subscription_format_state($updated ?: $vendor),
     ];
+}
+
+function yustam_vendor_subscription_sync_remote_reference(mysqli $db, array $vendor): bool {
+    $vendorId = (int) ($vendor['id'] ?? 0);
+    if ($vendorId <= 0) {
+        return false;
+    }
+    $reference = [
+        'customer' => [
+            'customer_code' => $vendor['paystack_customer_code'] ?? ($vendor['customer_code'] ?? ''),
+            'email' => $vendor['email'] ?? '',
+        ],
+        'plan' => $vendor['paystack_plan_code'] ?? ($vendor['plan_code'] ?? ($vendor['plan'] ?? '')),
+    ];
+    try {
+        $resolved = yustam_paystack_resolve_subscription_from_transaction($reference);
+    } catch (Throwable $exception) {
+        error_log('Vendor subscription sync failed: ' . $exception->getMessage());
+        return false;
+    }
+    if (!$resolved) {
+        return false;
+    }
+    $subscriptionCode = (string) ($resolved['subscription_code'] ?? ($resolved['code'] ?? ''));
+    if ($subscriptionCode === '') {
+        return false;
+    }
+    $emailToken = (string) ($resolved['email_token'] ?? '');
+    $planCode = (string) ($resolved['plan']['plan_code'] ?? ($resolved['plan_code'] ?? ($vendor['paystack_plan_code'] ?? '')));
+
+    $columns = [];
+    $types = '';
+    $values = [];
+    foreach (['paystack_subscription_code' => $subscriptionCode, 'paystack_email_token' => $emailToken, 'paystack_plan_code' => $planCode] as $column => $value) {
+        if ($value === '' || !yustam_vendor_table_has_column($column)) {
+            continue;
+        }
+        $columns[] = sprintf('`%s` = ?', $column);
+        $types .= 's';
+        $values[] = $value;
+    }
+    if ($columns) {
+        if (yustam_vendor_table_has_column('updated_at')) {
+            $columns[] = '`updated_at` = NOW()';
+        }
+        $sql = sprintf('UPDATE `%s` SET %s WHERE id = ? LIMIT 1', YUSTAM_VENDORS_TABLE, implode(', ', $columns));
+        $stmt = $db->prepare($sql);
+        if ($stmt instanceof mysqli_stmt) {
+            $types .= 'i';
+            $values[] = $vendorId;
+            $stmt->bind_param($types, ...$values);
+            $stmt->execute();
+            $stmt->close();
+        }
+    }
+
+    yustam_vendor_subscription_record_save($db, $vendorId, [
+        'subscription_code' => $subscriptionCode,
+        'email_token' => $emailToken,
+        'plan_code' => $planCode,
+        'status' => strtoupper((string) ($resolved['status'] ?? '')),
+        'next_payment_at' => yustam_vendor_subscription_record_normalize_datetime($resolved['next_payment_date'] ?? $resolved['next_payment'] ?? null),
+        'raw_payload' => $resolved,
+    ]);
+    return true;
 }
 

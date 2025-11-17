@@ -1611,6 +1611,16 @@ function yustam_api_subscription_status(): array
     $db = get_db_connection();
     $record = yustam_vendor_subscription_record_fetch($db, $vendorId);
     $vendor = yustam_vendor_subscription_fetch_vendor($db, $vendorId);
+    if ((!$record || empty($record['subscription_code'])) && $vendor) {
+        try {
+            if (yustam_vendor_subscription_sync_remote_reference($db, $vendor)) {
+                $record = yustam_vendor_subscription_record_fetch($db, $vendorId);
+                $vendor = yustam_vendor_subscription_fetch_vendor($db, $vendorId);
+            }
+        } catch (Throwable $syncError) {
+            error_log('Subscription status sync failed: ' . $syncError->getMessage());
+        }
+    }
     $status = yustam_vendor_subscription_record_format_status($record, $vendor);
     return [
         'success' => true,
