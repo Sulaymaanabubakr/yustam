@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -21,6 +21,7 @@ import Toast from '../../components/Toast';
 import Button from '../../components/Button';
 import { CLOUDINARY_UPLOAD_PRESET, CLOUDINARY_CLOUD_NAME } from '../../config/cloudinary';
 import { STATES } from '../../config/constants';
+import { addDoc, collection, deleteDoc, doc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { goBackOrNavigate } from '../../utils/navigation';
 import { resolveUserUid } from '../../utils/user';
 import { homeAPI, listingsAPI } from '../../services/api';
@@ -30,6 +31,7 @@ import {
   buildOptionsFromLabels,
   getSubcategoriesForCategory,
 } from '../../data/categories';
+import { db } from '../../config/firebase';
 
 const CONDITIONS = ['New', 'Used - Like New', 'Used - Good', 'Used - Fair', 'Refurbished'];
 
@@ -47,28 +49,6 @@ const STATE_OPTIONS = STATES.map((label) => ({ label, value: label }));
 const DEFAULT_COUNTRY = 'Nigeria';
 const FALLBACK_CATEGORY_OPTIONS = CATEGORY_OPTION_LIST;
 
-const CATEGORY_SELECT_OPTIONS = CATEGORY_OPTIONS.map((label) => ({ label, value: label }));
-const CONDITION_OPTIONS = CONDITIONS.map((label) => ({ label, value: label }));
-const STATUS_SELECT_OPTIONS = STATUS_OPTIONS;
-const STATE_OPTIONS = NIGERIAN_STATES.map((label) => ({ label, value: label }));
-
-const CATEGORY_PRESETS = {
-  'Phones & Tablets': ['Smartphones', 'Feature Phones', 'Tablets', 'Smartwatches & Wearables', 'Accessories'],
-  Electronics: ['Computers', 'TV & Audio', 'Cameras', 'Accessories'],
-  Fashion: ['Men', 'Women', 'Kids', 'Accessories'],
-  'Home & Garden': ['Furniture', 'Appliances', 'Décor', 'Outdoor'],
-  Vehicles: ['Cars', 'Motorcycles', 'Auto Parts', 'Trucks & Buses'],
-  'Beauty & Personal Care': ['Skincare', 'Haircare', 'Fragrances', 'Makeup'],
-  'Sports & Outdoors': ['Fitness', 'Outdoor Gear', 'Sportswear', 'Accessories'],
-  'Books & Media': ['Books', 'Movies & Music', 'Educational'],
-  'Toys & Kids': ['Toys', 'Baby Gear', 'Kids Wear'],
-  'Health & Wellness': ['Supplements', 'Medical Devices', 'Wellness'],
-  Services: ['Repairs', 'Logistics', 'Events', 'Consulting'],
-  'Real Estate': ['Apartments', 'Houses', 'Land', 'Short Lets'],
-  Other: [],
-};
-
-
 const createDefaultFormState = () => ({
   title: '',
   description: '',
@@ -81,6 +61,14 @@ const createDefaultFormState = () => ({
   country: DEFAULT_COUNTRY,
   status: 'pending',
 });
+
+const normalisePriceValue = (value) => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  const numeric = Number(String(value).replace(/[^0-9.]/g, ''));
+  return Number.isFinite(numeric) ? numeric : null;
+};
 
 const ListingEditorScreen = ({ route, navigation }) => {
   const { listing } = route.params || {};
@@ -112,6 +100,109 @@ const ListingEditorScreen = ({ route, navigation }) => {
     [formData.category]
   );
   const hasPresetSubcategories = subcategoryOptions.length > 0;
+  const vendorProfile = user?.vendor || {};
+  const vendorFriendlyName =
+    vendorProfile.businessName ||
+    vendorProfile.name ||
+    user?.displayName ||
+    user?.email ||
+    'Marketplace Vendor';
+  const vendorPlanLabel =
+    vendorProfile.planLabel || vendorProfile.plan || user?.vendorPlan || 'Free';
+  const vendorEmail = vendorProfile.email || user?.email || '';
+  const vendorPhone = vendorProfile.phone || user?.phone || '';
+  const defaultVendorLocation =
+    vendorProfile.location ||
+    [vendorProfile.city, vendorProfile.state].filter(Boolean).join(', ');
+
+  const buildFirestoreDocument = useCallback(
+    (imageUrls) => {
+      const locationValue = (formData.location || '').trim();
+      const mergedLocation = [locationValue, formData.state].filter(Boolean).join(', ');
+      const trimmedTitle = formData.title.trim() || 'Marketplace Listing';
+      const priceValue = normalisePriceValue(formData.price) ?? 0;
+      return {
+        title: trimmedTitle,
+        productTitle: trimmedTitle,
+        listingTitle: trimmedTitle,
+        description: formData.description.trim(),
+        category: formData.category,
+        subcategory: formData.subcategory,
+        status: isEditMode ? formData.status : 'pending',
+        price: priceValue,
+        amount: priceValue,
+        listingPrice: priceValue,
+        imageUrls,
+        images: imageUrls,
+        coverImage: imageUrls[0] || '',
+        vendorUid: vendorUid || user?.uid || '',
+        vendorFirebaseUid: user?.uid || '',
+        vendorID: vendorId || null,
+        vendorId: vendorId || null,
+        vendorName: vendorFriendlyName,
+        vendorBusinessName: vendorFriendlyName,
+        vendorEmail,
+        vendorPlan: vendorPlanLabel,
+        vendorLocation: defaultVendorLocation || mergedLocation,
+        vendorPhone,
+        location: mergedLocation,
+        city: locationValue,
+        state: formData.state,
+        country: formData.country,
+      };
+    },
+    [
+      formData.category,
+      formData.country,
+      formData.description,
+      formData.location,
+      formData.state,
+      formData.status,
+      formData.subcategory,
+      formData.title,
+      formData.price,
+      isEditMode,
+      user?.uid,
+      vendorUid,
+      vendorId,
+      vendorFriendlyName,
+      vendorEmail,
+      vendorPlanLabel,
+      vendorPhone,
+      defaultVendorLocation,
+    ]
+  );
+
+  const syncListingWithFirestore = useCallback(
+    async (imageUrls) => {
+      const payload = buildFirestoreDocument(imageUrls);
+      if (isEditMode && listing?.firestoreId) {
+        const listingRef = doc(db, 'listings', listing.firestoreId);
+        await updateDoc(listingRef, {
+          ...payload,
+          updatedAt: serverTimestamp(),
+        });
+        return { firestoreId: listing.firestoreId, rollback: null };
+      }
+      const createPayload = {
+        ...payload,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      };
+      const docRef = await addDoc(collection(db, 'listings'), createPayload);
+      return {
+        firestoreId: docRef.id,
+        rollback: async () => {
+          try {
+            await deleteDoc(docRef);
+          } catch (error) {
+            console.warn('Failed to rollback listing document', error);
+          }
+        },
+      };
+    },
+    [buildFirestoreDocument, isEditMode, listing?.firestoreId]
+  );
 
   useEffect(() => {
     if (listing) {
@@ -337,11 +428,15 @@ const ListingEditorScreen = ({ route, navigation }) => {
     if (!validateForm()) return;
 
     const listingIdentifier = listing?.id || listing?.listing_id || listing?.listingId || null;
+    let rollbackFirestore;
 
     try {
       setSaving(true);
       const imageUrls = await uploadImagesToCloudinary();
-
+      const firestoreSyncResult = await syncListingWithFirestore(imageUrls);
+      rollbackFirestore = firestoreSyncResult?.rollback;
+      const resolvedFirestoreId =
+        firestoreSyncResult?.firestoreId || listing?.firestoreId || listingIdentifier || null;
       const payload = {
         title: formData.title.trim(),
         description: formData.description.trim(),
@@ -356,6 +451,7 @@ const ListingEditorScreen = ({ route, navigation }) => {
         status: isEditMode ? formData.status : 'pending',
         images: imageUrls,
         primaryImage: imageUrls[0] || '',
+        firestoreId: resolvedFirestoreId,
       };
 
       if (vendorId) {
@@ -373,6 +469,9 @@ const ListingEditorScreen = ({ route, navigation }) => {
         goBackOrNavigate(navigation, 'VendorListings');
       }, 700);
     } catch (error) {
+      if (typeof rollbackFirestore === 'function') {
+        await rollbackFirestore();
+      }
       console.error('Error saving listing:', error);
       const message =
         error?.response?.data?.message ||
@@ -731,3 +830,4 @@ const styles = StyleSheet.create({
 });
 
 export default ListingEditorScreen;
+

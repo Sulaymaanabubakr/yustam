@@ -3968,8 +3968,10 @@ function yustam_api_products_create(): array
     }
     $primaryImage = trim((string) ($payload['primaryImage'] ?? $imageUrls[0] ?? ''));
 
-    $listingId = 'lst_' . yustam_api_random_string(18);
-    $publicId = 'yustam-' . yustam_api_random_string(10);
+    $providedFirestoreId = trim((string) ($payload['firestoreId'] ?? $payload['firestore_id'] ?? ''));
+    $providedPublicId = trim((string) ($payload['publicId'] ?? $payload['public_id'] ?? ''));
+    $listingId = $providedFirestoreId !== '' ? $providedFirestoreId : 'lst_' . yustam_api_random_string(18);
+    $publicId = $providedPublicId !== '' ? $providedPublicId : 'yustam-' . yustam_api_random_string(10);
 
     yustam_listings_upsert($db, [
         'vendor_id' => $vendorId,
@@ -4037,6 +4039,14 @@ function yustam_api_products_update(string $productId): array
         'firestore_id' => $row['firestore_id'] ?? $row['public_id'] ?? $productId,
         'public_id' => $row['public_id'] ?? $productId,
     ];
+    $payloadFirestoreId = trim((string) ($payload['firestoreId'] ?? $payload['firestore_id'] ?? ''));
+    if ($payloadFirestoreId !== '') {
+        $updatePayload['firestore_id'] = $payloadFirestoreId;
+    }
+    $payloadPublicId = trim((string) ($payload['publicId'] ?? $payload['public_id'] ?? ''));
+    if ($payloadPublicId !== '') {
+        $updatePayload['public_id'] = $payloadPublicId;
+    }
 
     foreach (['title', 'description', 'status', 'category', 'subcategory', 'location', 'city', 'state', 'country'] as $field) {
         if (array_key_exists($field, $payload)) {

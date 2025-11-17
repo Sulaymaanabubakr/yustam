@@ -22,8 +22,34 @@ import { goBackOrNavigate } from '../../utils/navigation';
 import resolveMediaUrl from '../../utils/url';
 import { formatNaira } from '../../utils/formatters';
 
+const extractVendorId = (profile = {}) => {
+  if (!profile || typeof profile !== 'object') {
+    return null;
+  }
+  if (profile.vendorId) {
+    return Number(profile.vendorId) || null;
+  }
+  if (profile.id) {
+    if (typeof profile.id === 'number') {
+      return profile.id;
+    }
+    const match = String(profile.id).match(/(\d+)/);
+    if (match) {
+      const numeric = Number(match[1]);
+      return Number.isFinite(numeric) ? numeric : null;
+    }
+  }
+  if (profile.vendorReference || profile.vendor_ref) {
+    const reference = String(profile.vendorReference || profile.vendor_ref);
+    const [, numeric] = reference.split(':');
+    const parsed = Number(numeric);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+};
+
 const VendorListingsScreen = ({ navigation }) => {
-  const { user } = useAuth();
+  const { user, updateUserProfile } = useAuth();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [listings, setListings] = useState([]);
@@ -45,6 +71,40 @@ const VendorListingsScreen = ({ navigation }) => {
   }, [user]);
   const ownerRef = vendorId ? `vendor:${vendorId}` : null;
 
+  const hydrateVendorAccount = useCallback(async () => {
+    try {
+      const response = await vendorAPI.getProfile();
+      const profilePayload = response?.data?.data ?? response?.data ?? response ?? null;
+      if (!profilePayload) {
+        return null;
+      }
+
+      const vendorIdFromProfile = extractVendorId(profilePayload);
+      if (!vendorIdFromProfile) {
+        return null;
+      }
+
+      const enrichedProfile = {
+        ...(user?.vendor || {}),
+        ...profilePayload,
+        vendorId: vendorIdFromProfile,
+        vendorUid: profilePayload.vendorUid || profilePayload.vendor_uid || user?.vendor?.vendorUid || null,
+      };
+
+      if (typeof updateUserProfile === 'function') {
+        await updateUserProfile({
+          vendorId: vendorIdFromProfile,
+          vendor: enrichedProfile,
+        });
+      }
+
+      return `vendor:${vendorIdFromProfile}`;
+    } catch (error) {
+      console.warn('Failed to hydrate vendor account', error);
+      return null;
+    }
+  }, [updateUserProfile, user?.vendor]);
+
   const filters = [
     { key: 'all', label: 'All', count: 0 },
     { key: 'approved', label: 'Live', count: 0 },
@@ -64,17 +124,21 @@ const VendorListingsScreen = ({ navigation }) => {
   );
 
   const fetchListings = useCallback(async () => {
-    if (!ownerRef) {
+    setLoading(true);
+    let targetOwnerRef = ownerRef;
+    if (!targetOwnerRef) {
+      targetOwnerRef = await hydrateVendorAccount();
+    }
+    if (!targetOwnerRef) {
       setLoading(false);
       showToast('Unable to load your vendor account. Please try again later.', 'error');
       return;
     }
     try {
-      setLoading(true);
       const response = await vendorAPI.getListings({
         status: 'all',
         perPage: 50,
-        ownerId: ownerRef,
+        ownerId: targetOwnerRef,
         includeDrafts: true,
       });
       const payload = response.data?.data;
@@ -93,6 +157,13 @@ const VendorListingsScreen = ({ navigation }) => {
               (Array.isArray(listing.images) && listing.images.length ? listing.images[0] : null);
             return {
               id: listing.id || listing.listing_id || listing.public_id || '',
+              firestoreId:
+                listing.firestoreId ||
+                listing.firestore_id ||
+                listing.fireStoreId ||
+                listing.public_id ||
+                '',
+              publicId: listing.public_id || listing.id || '',
               title: listing.title || 'Untitled listing',
               description: listing.description || '',
               price: Number(listing.price) || 0,
@@ -105,7 +176,11 @@ const VendorListingsScreen = ({ navigation }) => {
                 ? listing.images.map((img) => resolveMediaUrl(img))
                 : [],
               category: listing.category || '',
+              subcategory: listing.subcategory || '',
               location: locationParts.join(', ') || listing.location || listing.state || '',
+              city: listing.city || '',
+              state: listing.state || '',
+              country: listing.country || '',
             };
           })
         : [];
@@ -117,7 +192,7 @@ const VendorListingsScreen = ({ navigation }) => {
     } finally {
       setLoading(false);
     }
-  }, [ownerRef]);
+  }, [hydrateVendorAccount, ownerRef]);
 
   const filterListings = () => {
     let filtered = [...listings];
