@@ -414,12 +414,15 @@ function yustam_vendor_subscription_record_detect_vendor_id(mysqli $db, array $p
 function yustam_vendor_subscription_record_format_status(?array $record, ?array $vendor = null): array
 {
     $vendor = $vendor ?? [];
-    $status = 'INACTIVE';
     $planName = $vendor['plan'] ?? 'Free Plan';
     $planCode = $vendor['paystack_plan_code'] ?? null;
     $subscriptionCode = $vendor['paystack_subscription_code'] ?? '';
     $nextPayment = $vendor['plan_expires_at'] ?? ($vendor['plan_expiry'] ?? ($vendor['subscription_expires_at'] ?? null));
     $autoRenew = empty($vendor['plan_cancelled_at']);
+    $vendorStatus = $vendor['plan_status']
+        ?? ($vendor['subscription_status'] ?? ($vendor['plan_state'] ?? ($vendor['planstate'] ?? null)));
+    $status = strtoupper((string) ($vendorStatus ?? 'ACTIVE'));
+
     if ($record) {
         $status = strtoupper((string) ($record['status'] ?? $status));
         $planName = $record['plan_name'] ?? $planName;
@@ -428,10 +431,14 @@ function yustam_vendor_subscription_record_format_status(?array $record, ?array 
         $autoRenew = isset($record['auto_renew']) ? (bool) $record['auto_renew'] : $autoRenew;
         $nextPayment = $record['next_payment_at'] ?? $nextPayment;
     }
+
     $expiresDisplay = $nextPayment ? yustam_vendor_subscription_record_normalize_datetime($nextPayment) : null;
-    $statusValue = $status ?: 'INACTIVE';
-    $activeFlags = !in_array(strtolower($statusValue), ['inactive', 'disabled', 'cancelled', 'expired', 'cancel pending'], true);
-    $active = $subscriptionCode !== '' && $activeFlags;
+    $statusValue = $status !== '' ? $status : 'ACTIVE';
+    $inactiveStates = ['inactive', 'disabled', 'cancelled', 'expired', 'cancel pending'];
+    $activeFlags = !in_array(strtolower($statusValue), $inactiveStates, true);
+    $hasNamedPlan = trim((string) $planName) !== '';
+    $active = $activeFlags && ($subscriptionCode !== '' || $hasNamedPlan);
+
     return [
         'active' => $active,
         'status' => $statusValue,
