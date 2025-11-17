@@ -27,7 +27,6 @@ const BillingHistoryScreen = ({ navigation }) => {
   const [transactions, setTransactions] = useState([]);
   const [summary, setSummary] = useState({
     totalTransactions: 0,
-    totalSpent: 0,
     lastPayment: null,
   });
 
@@ -56,15 +55,27 @@ const BillingHistoryScreen = ({ navigation }) => {
       }
 
       const normalized = apiPayload.map((entry, index) => {
-        const amount = parseAmount(entry?.amount ?? entry?.plan?.price ?? entry?.plan?.amount ?? 0);
+        const amount = parseAmount(
+          entry?.amount ??
+            entry?.planAmount ??
+            entry?.paymentAmount ??
+            entry?.plan?.price ??
+            entry?.plan?.amount ??
+            0
+        );
         const status = String(entry?.status || 'completed').toLowerCase();
         const interval =
-          entry?.plan?.intervalLabel ||
+          entry?.interval ||
           entry?.intervalLabel ||
-          (entry?.plan?.durationMonths ? `${entry.plan.durationMonths} months` : 'Monthly');
+          entry?.planInterval ||
+          (entry?.plan?.intervalLabel ? entry.plan.intervalLabel : null) ||
+          (entry?.plan?.durationMonths ? `${entry.plan.durationMonths} months` : null) ||
+          'Monthly';
+        const planTypeLabel = entry?.planType ? entry.planType : null;
         return {
           id: entry?.id || entry?.reference || `txn-${index}`,
-          plan: cleanPlanDisplayName(entry?.plan?.name || entry?.plan || 'Plan'),
+          plan: cleanPlanDisplayName(entry?.planName || entry?.plan || 'Plan'),
+          planType: planTypeLabel,
           interval,
           amount,
           status,
@@ -75,22 +86,31 @@ const BillingHistoryScreen = ({ navigation }) => {
         };
       });
 
-      const totalTransactions = normalized.length;
-      const successStatuses = ['completed', 'success', 'active', 'paid'];
-      const totalSpent = normalized.reduce(
-        (sum, txn) => sum + (successStatuses.includes(txn.status) ? txn.amount : 0),
-        0
-      );
-      setTransactions(normalized);
+      const sortedTransactions = normalized.sort((a, b) => {
+        const aTime = new Date(a.date).getTime();
+        const bTime = new Date(b.date).getTime();
+        if (Number.isNaN(aTime) && Number.isNaN(bTime)) {
+          return 0;
+        }
+        if (Number.isNaN(aTime)) {
+          return 1;
+        }
+        if (Number.isNaN(bTime)) {
+          return -1;
+        }
+        return bTime - aTime;
+      });
+
+      const totalTransactions = sortedTransactions.length;
+      setTransactions(sortedTransactions);
       setSummary({
         totalTransactions,
-        totalSpent,
-        lastPayment: normalized[0]?.date || null,
+        lastPayment: sortedTransactions[0]?.date || null,
       });
     } catch (error) {
       console.error('Error fetching billing history:', error);
       setTransactions([]);
-      setSummary({ totalTransactions: 0, totalSpent: 0, lastPayment: null });
+      setSummary({ totalTransactions: 0, lastPayment: null });
       showToast(
         error.message || 'Billing history is not available right now. Please try again later.',
         'error'
@@ -126,29 +146,28 @@ const BillingHistoryScreen = ({ navigation }) => {
 
   const formatAmount = (amount) => formatNaira(amount || 0);
 
-  const getStatusColor = (status) => {
-    switch (status.toLowerCase()) {
-      case 'completed':
-      case 'success':
-      case 'active':
-        return theme.colors.emerald;
-      case 'pending':
-      case 'processing':
-        return theme.colors.orange;
-      case 'failed':
-      case 'cancelled':
-        return theme.colors.red || '#D93025';
-      default:
-        return theme.colors.textSecondary;
+  const getStatusColor = (status = '') => {
+    const value = status.toLowerCase();
+    if (['completed', 'success', 'active', 'paid', 'succeeded'].includes(value)) {
+      return theme.colors.success;
     }
+    if (['pending', 'processing', 'initiated', 'awaiting_payment'].includes(value)) {
+      return theme.colors.warning;
+    }
+    if (['failed', 'cancelled', 'declined', 'expired', 'error'].includes(value)) {
+      return theme.colors.error;
+    }
+    return theme.colors.textSecondary;
   };
 
   const TransactionCard = ({ transaction }) => (
     <View style={styles.transactionCard}>
       <View style={styles.transactionHeader}>
         <View style={styles.transactionLeft}>
-          <Text style={styles.planName}>{transaction.plan}</Text>
-          <Text style={styles.planInterval}>{transaction.interval}</Text>
+          <Text style={styles.planName}>{transaction.plan || 'Plan'}</Text>
+          <Text style={styles.planInterval}>
+            {[transaction.planType, transaction.interval].filter(Boolean).join(' / ') || 'Subscription'}
+          </Text>
         </View>
         <View style={styles.transactionAmountBlock}>
           <Text style={styles.amount}>{formatAmount(transaction.amount)}</Text>
@@ -246,10 +265,6 @@ const BillingHistoryScreen = ({ navigation }) => {
             <View style={styles.summaryItem}>
               <Text style={styles.summaryLabel}>Total transactions</Text>
               <Text style={styles.summaryValue}>{summary.totalTransactions}</Text>
-            </View>
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>Total spent</Text>
-              <Text style={styles.summaryValue}>{formatAmount(summary.totalSpent)}</Text>
             </View>
             <View style={styles.summaryItem}>
               <Text style={styles.summaryLabel}>Last payment</Text>

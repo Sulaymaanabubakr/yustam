@@ -167,6 +167,20 @@ function yustam_api_handle_vendor(string $method, array $segments): array
         if ($subAction === 'analytics' && $method === 'GET') {
             return yustam_api_vendor_analytics();
         }
+        if ($subAction === '' && $method === 'DELETE') {
+            return yustam_api_vendor_delete_account();
+        }
+    }
+    if ($action === 'settings') {
+        if ($method === 'GET') {
+            return yustam_api_vendor_get_settings();
+        }
+        if (in_array($method, ['POST', 'PATCH'], true)) {
+            return yustam_api_vendor_update_settings();
+        }
+    }
+    if ($action === 'password' && $method === 'POST') {
+        return yustam_api_vendor_change_password();
     }
     if ($action === 'subscription' && strtolower($segments[1] ?? '') === 'refresh' && $method === 'POST') {
         return yustam_api_vendor_refresh_subscription();
@@ -1480,6 +1494,472 @@ function yustam_api_vendor_refresh_subscription(): array
     return [
         'success' => true,
         'subscription' => $result['subscription'],
+    ];
+}
+
+function yustam_vendor_settings_directory(): string
+{
+    return dirname(__DIR__) . '/data/vendor-settings';
+}
+
+function yustam_vendor_settings_file(int $vendorId): string
+{
+    return rtrim(yustam_vendor_settings_directory(), '/\\') . '/vendor_' . $vendorId . '.json';
+}
+
+function yustam_vendor_settings_defaults(): array
+{
+    return [
+        'pushNotifications' => true,
+        'emailNotifications' => true,
+        'smsNotifications' => false,
+        'listingApprovals' => true,
+        'newMessages' => false,
+        'planExpiry' => true,
+        'marketingEmails' => true,
+        'twoFactorAuth' => false,
+        'loginAlerts' => true,
+        'publicProfile' => true,
+        'showEmail' => false,
+        'showPhone' => false,
+    ];
+}
+
+function yustam_vendor_settings_legacy_map(): array
+{
+    return [
+        'notifApproved' => 'listingApprovals',
+        'notifPlanExpiry' => 'planExpiry',
+        'notifBuyerMsg' => 'newMessages',
+        'notifUpdates' => 'marketingEmails',
+        'twoFactor' => 'twoFactorAuth',
+        'loginAlert' => 'loginAlerts',
+    ];
+}
+
+function yustam_vendor_settings_bool($value, bool $fallback): bool
+{
+    if (is_bool($value)) {
+        return $value;
+    }
+    if (is_numeric($value)) {
+        return (int) $value === 1;
+    }
+    if (is_string($value)) {
+        $normalized = strtolower(trim($value));
+        if (in_array($normalized, ['1', 'true', 'yes', 'on', 'enabled'], true)) {
+            return true;
+        }
+        if (in_array($normalized, ['0', 'false', 'no', 'off', 'disabled'], true)) {
+            return false;
+        }
+    }
+    return $fallback;
+}
+
+function yustam_vendor_settings_load(int $vendorId): array
+{
+    $defaults = yustam_vendor_settings_defaults();
+    $state = $defaults;
+    $file = yustam_vendor_settings_file($vendorId);
+    if (is_file($file)) {
+        $decoded = json_decode((string) @file_get_contents($file), true);
+        if (is_array($decoded)) {
+            foreach ($defaults as $key => $defaultValue) {
+                if (array_key_exists($key, $decoded)) {
+                    $state[$key] = yustam_vendor_settings_bool($decoded[$key], $defaultValue);
+                }
+            }
+            foreach (yustam_vendor_settings_legacy_map() as $legacy => $target) {
+                if (array_key_exists($legacy, $decoded) && !array_key_exists($target, $decoded)) {
+                    $state[$target] = yustam_vendor_settings_bool($decoded[$legacy], $state[$target]);
+                }
+            }
+        }
+    }
+    return $state;
+}
+
+function yustam_vendor_settings_save(int $vendorId, array $state): array
+{
+    $defaults = yustam_vendor_settings_defaults();
+    $normalized = $defaults;
+    foreach ($defaults as $key => $defaultValue) {
+        if (array_key_exists($key, $state)) {
+            $normalized[$key] = yustam_vendor_settings_bool($state[$key], $defaultValue);
+        }
+    }
+    $payload = $normalized;
+    foreach (yustam_vendor_settings_legacy_map() as $legacy => $target) {
+        $payload[$legacy] = $payload[$target];
+    }
+    $directory = yustam_vendor_settings_directory();
+    if (!is_dir($directory) && !mkdir($directory, 0755, true) && !is_dir($directory)) {
+        yustam_api_error(500, 'Unable to prepare settings directory.');
+    }
+    $file = yustam_vendor_settings_file($vendorId);
+    $json = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
+    if ($json === false || @file_put_contents($file, $json) === false) {
+        yustam_api_error(500, 'Unable to save your settings.');
+    }
+    return $normalized;
+}
+
+function yustam_api_vendor_get_settings(): array
+{
+    $vendor = yustam_api_require_auth('vendor');
+    $vendorId = (int) ($vendor['vendorId'] ?? 0);
+    if ($vendorId <= 0) {
+        yustam_api_error(404, 'Vendor profile not found.');
+    }
+    $settings = yustam_vendor_settings_load($vendorId);
+    return [
+        'success' => true,
+        'settings' => $settings,
+    ];
+}
+
+function yustam_api_vendor_update_settings(): array
+{
+    $vendor = yustam_api_require_auth('vendor');
+    $vendorId = (int) ($vendor['vendorId'] ?? 0);
+    if ($vendorId <= 0) {
+        yustam_api_error(404, 'Vendor profile not found.');
+    }
+    $payload = yustam_api_read_json_body();
+    if (!is_array($payload)) {
+        yustam_api_error(400, 'Invalid payload.');
+    }
+    $allowedKeys = array_keys(yustam_vendor_settings_defaults());
+    $updates = [];
+    foreach ($allowedKeys as $key) {
+        if (array_key_exists($key, $payload)) {
+            $updates[$key] = $payload[$key];
+        }
+    }
+    if (!$updates) {
+        $settings = yustam_vendor_settings_load($vendorId);
+        return [
+            'success' => true,
+            'settings' => $settings,
+        ];
+    }
+    $current = yustam_vendor_settings_load($vendorId);
+    $merged = array_merge($current, $updates);
+    $settings = yustam_vendor_settings_save($vendorId, $merged);
+    return [
+        'success' => true,
+        'settings' => $settings,
+        'message' => 'Settings updated successfully.',
+    ];
+}
+
+function yustam_api_vendor_change_password(): array
+{
+    $vendor = yustam_api_require_auth('vendor');
+    $vendorId = (int) ($vendor['vendorId'] ?? 0);
+    if ($vendorId <= 0) {
+        yustam_api_error(404, 'Vendor account not found.');
+    }
+    $body = yustam_api_read_json_body();
+    $currentPassword = trim((string) ($body['current_password'] ?? $body['currentPassword'] ?? ''));
+    $newPassword = trim((string) ($body['new_password'] ?? $body['newPassword'] ?? ''));
+    $confirmPassword = trim((string) ($body['confirm_password'] ?? $body['confirmPassword'] ?? ''));
+
+    if ($newPassword === '' || $confirmPassword === '') {
+        yustam_api_error(400, 'Enter and confirm your new password.');
+    }
+    if ($newPassword !== $confirmPassword) {
+        yustam_api_error(400, 'New passwords do not match.');
+    }
+    if (strlen($newPassword) < 6) {
+        yustam_api_error(400, 'Password must be at least 6 characters.');
+    }
+    if ($currentPassword !== '' && $currentPassword === $newPassword) {
+        yustam_api_error(400, 'Choose a password different from the current one.');
+    }
+
+    $db = get_db_connection();
+    $vendorRow = yustam_vendor_find_by_id($vendorId, $db);
+    if (!$vendorRow) {
+        yustam_api_error(404, 'Vendor account not found.');
+    }
+    $email = strtolower(trim((string) ($vendorRow['email'] ?? '')));
+    if ($email === '') {
+        yustam_api_error(400, 'This account does not have an email address on file.');
+    }
+    $provider = strtolower(trim((string) ($vendorRow['provider'] ?? '')));
+    $requiresCurrent = true;
+
+    $hasPasswordColumn = yustam_vendor_table_has_column('password');
+    $storedPassword = $hasPasswordColumn ? (string) ($vendorRow['password'] ?? '') : '';
+
+    if (!$hasPasswordColumn) {
+        yustam_api_error(500, 'Password storage is not configured for this account.');
+    }
+    if ($storedPassword === '') {
+        $requiresCurrent = false;
+    }
+    if (!in_array($provider, ['email', 'password'], true)) {
+        $requiresCurrent = false;
+    }
+    if ($requiresCurrent && $currentPassword === '') {
+        yustam_api_error(400, 'Enter your current password to continue.');
+    }
+
+    $verifiedFirebaseUid = '';
+    if ($requiresCurrent) {
+        try {
+            $authResponse = yustam_firebase_sign_in_with_password($email, $currentPassword);
+            $verifiedFirebaseUid = (string) ($authResponse['localId'] ?? '');
+        } catch (YustamFirebaseAuthException $authError) {
+            yustam_api_error(400, 'Current password is incorrect.');
+        } catch (Throwable $authError) {
+            error_log('Vendor password update: unable to verify current password for vendor ' . $vendorId . ': ' . $authError->getMessage());
+            yustam_api_error(500, 'Unable to verify your current password right now. Please try again.');
+        }
+    }
+
+    $firebaseUid = trim((string) ($vendorRow['firebase_uid'] ?? ''));
+    if ($firebaseUid === '' && $verifiedFirebaseUid !== '') {
+        $firebaseUid = $verifiedFirebaseUid;
+        try {
+            yustam_vendor_set_firebase_uid($vendorId, $firebaseUid, $db);
+        } catch (Throwable $syncError) {
+            error_log('Vendor password update: unable to store Firebase UID for vendor ' . $vendorId . ': ' . $syncError->getMessage());
+        }
+    }
+    if ($firebaseUid === '') {
+        try {
+            $firebaseRecord = yustam_firebase_get_user_by_email($email);
+            if (is_array($firebaseRecord) && !empty($firebaseRecord['localId'])) {
+                $firebaseUid = (string) $firebaseRecord['localId'];
+                try {
+                    yustam_vendor_set_firebase_uid($vendorId, $firebaseUid, $db);
+                } catch (Throwable $syncError) {
+                    error_log('Vendor password update: unable to store Firebase UID lookup for vendor ' . $vendorId . ': ' . $syncError->getMessage());
+                }
+            }
+        } catch (Throwable $lookupError) {
+            error_log('Vendor password update: unable to lookup Firebase account for vendor ' . $vendorId . ': ' . $lookupError->getMessage());
+        }
+    }
+    if ($firebaseUid === '') {
+        yustam_api_error(500, 'Unable to locate your authentication record. Please contact support.');
+    }
+
+    try {
+        yustam_firebase_update_user_password($firebaseUid, $newPassword);
+    } catch (YustamFirebaseAuthException $firebaseError) {
+        yustam_api_error(400, $firebaseError->getMessage());
+    } catch (Throwable $firebaseError) {
+        error_log('Vendor password update: unable to update Firebase password for vendor ' . $vendorId . ': ' . $firebaseError->getMessage());
+        yustam_api_error(500, 'Unable to update your password right now. Please try again.');
+    }
+
+    $setParts = [];
+    $types = '';
+    $values = [];
+    $passwordHash = password_hash($newPassword, PASSWORD_DEFAULT);
+    if ($hasPasswordColumn) {
+        $setParts[] = '`password` = ?';
+        $types .= 's';
+        $values[] = $passwordHash;
+    }
+    if (yustam_vendor_table_has_column('provider')) {
+        $setParts[] = '`provider` = ?';
+        $types .= 's';
+        $values[] = 'email';
+    }
+    if (yustam_vendor_table_has_column('updated_at')) {
+        $setParts[] = '`updated_at` = NOW()';
+    }
+    if (!$setParts) {
+        yustam_api_error(500, 'Unable to update your account record.');
+    }
+    $types .= 'i';
+    $values[] = $vendorId;
+    $sql = sprintf(
+        'UPDATE `%s` SET %s WHERE id = ? LIMIT 1',
+        YUSTAM_VENDORS_TABLE,
+        implode(', ', $setParts)
+    );
+    $stmt = $db->prepare($sql);
+    if (!$stmt) {
+        yustam_api_error(500, 'Unable to update your account record.');
+    }
+    $params = [$types];
+    foreach ($values as $index => $value) {
+        $params[] = &$values[$index];
+    }
+    call_user_func_array([$stmt, 'bind_param'], $params);
+    $stmt->execute();
+    $stmt->close();
+
+    return [
+        'success' => true,
+        'message' => 'Password updated successfully.',
+    ];
+}
+
+function yustam_api_vendor_table_exists(mysqli $db, string $table): bool
+{
+    if (!preg_match('/^[A-Za-z0-9_]+$/', $table)) {
+        return false;
+    }
+    $escaped = $db->real_escape_string($table);
+    $sql = sprintf("SHOW TABLES LIKE '%s'", $escaped);
+    $result = $db->query($sql);
+    if ($result instanceof mysqli_result) {
+        $exists = $result->num_rows > 0;
+        $result->free();
+        return $exists;
+    }
+    return false;
+}
+
+function yustam_api_vendor_delete_account(): array
+{
+    $vendor = yustam_api_require_auth('vendor');
+    $vendorId = (int) ($vendor['vendorId'] ?? 0);
+    if ($vendorId <= 0) {
+        yustam_api_error(404, 'Unable to determine your account.');
+    }
+    $body = yustam_api_read_json_body();
+    $password = trim((string) ($body['password'] ?? $body['current_password'] ?? ''));
+    if ($password === '') {
+        yustam_api_error(400, 'Please enter your password to confirm.');
+    }
+
+    $db = get_db_connection();
+    $vendorRow = yustam_vendor_find_by_id($vendorId, $db);
+    if (!$vendorRow) {
+        yustam_api_error(404, 'This account no longer exists.');
+    }
+
+    $vendorEmail = trim((string) ($vendorRow['email'] ?? ''));
+    if ($vendorEmail !== '') {
+        try {
+            yustam_firebase_sign_in_with_password($vendorEmail, $password);
+        } catch (YustamFirebaseAuthException $authError) {
+            yustam_api_error(400, 'Password is incorrect.');
+        } catch (Throwable $authError) {
+            error_log('Vendor deletion: unable to verify password for vendor ' . $vendorId . ': ' . $authError->getMessage());
+            yustam_api_error(500, 'Unable to verify your password right now. Please try again.');
+        }
+    }
+
+    $firebaseUid = trim((string) ($vendorRow['firebase_uid'] ?? ''));
+    $vendorUid = trim((string) ($vendorRow['vendor_uid'] ?? ''));
+    $settingsFile = yustam_vendor_settings_file($vendorId);
+
+    $db->begin_transaction();
+    try {
+        if (yustam_api_vendor_table_exists($db, 'listings')) {
+            $deleteListings = $db->prepare('DELETE FROM `listings` WHERE vendor_id = ?');
+            if ($deleteListings) {
+                $deleteListings->bind_param('i', $vendorId);
+                $deleteListings->execute();
+                $deleteListings->close();
+            }
+        }
+        if (yustam_api_vendor_table_exists($db, 'password_resets')) {
+            $deleteResets = $db->prepare('DELETE FROM `password_resets` WHERE user_id = ?');
+            if ($deleteResets) {
+                $deleteResets->bind_param('i', $vendorId);
+                $deleteResets->execute();
+                $deleteResets->close();
+            }
+        }
+        $notificationsTable = yustam_vendor_notifications_table();
+        if ($notificationsTable !== '' && yustam_api_vendor_table_exists($db, $notificationsTable)) {
+            $deleteNotifications = $db->prepare(sprintf('DELETE FROM `%s` WHERE vendor_id = ?', $notificationsTable));
+            if ($deleteNotifications instanceof mysqli_stmt) {
+                $deleteNotifications->bind_param('i', $vendorId);
+                $deleteNotifications->execute();
+                $deleteNotifications->close();
+            }
+        }
+        $deleteVendor = $db->prepare(sprintf('DELETE FROM `%s` WHERE id = ?', YUSTAM_VENDORS_TABLE));
+        if ($deleteVendor === false) {
+            throw new RuntimeException('Unable to prepare vendor deletion statement.');
+        }
+        $deleteVendor->bind_param('i', $vendorId);
+        $deleteVendor->execute();
+        $deleteVendor->close();
+        $db->commit();
+    } catch (Throwable $deletionError) {
+        $db->rollback();
+        error_log('Vendor deletion failed for vendor ' . $vendorId . ': ' . $deletionError->getMessage());
+        yustam_api_error(500, 'We could not delete your account. Please try again.');
+    }
+
+    if (is_file($settingsFile)) {
+        @unlink($settingsFile);
+    }
+
+    $potentialIds = array_filter([
+        $firebaseUid,
+        $vendorUid,
+        $vendorEmail,
+        (string) $vendorId,
+    ], static fn($id) => $id !== '');
+
+    foreach ($potentialIds as $firestoreId) {
+        try {
+            yustam_firestore_delete_document('vendors/' . $firestoreId);
+        } catch (Throwable $firestoreError) {
+            error_log('Vendor deletion: unable to delete Firestore vendor document ' . $firestoreId . ': ' . $firestoreError->getMessage());
+        }
+    }
+
+    if ($vendorUid !== '' || $firebaseUid !== '') {
+        try {
+            $vendorQueryId = $firebaseUid !== '' ? $firebaseUid : $vendorUid;
+            $listingsQuery = [
+                'structuredQuery' => [
+                    'from' => [['collectionId' => 'listings']],
+                    'where' => [
+                        'fieldFilter' => [
+                            'field' => ['fieldPath' => 'vendorId'],
+                            'op' => 'EQUAL',
+                            'value' => yustam_firestore_string($vendorQueryId),
+                        ],
+                    ],
+                    'select' => [
+                        'fields' => [
+                            ['fieldPath' => '__name__'],
+                        ],
+                    ],
+                ],
+            ];
+            $listingResults = yustam_firestore_run_query($listingsQuery);
+            foreach ($listingResults as $result) {
+                if (isset($result['document']['name'])) {
+                    $listingPath = yustam_firestore_relative_path($result['document']['name']);
+                    try {
+                        yustam_firestore_delete_document($listingPath);
+                    } catch (Throwable $listingDeleteError) {
+                        error_log('Vendor deletion: unable to delete Firestore listing ' . $listingPath . ': ' . $listingDeleteError->getMessage());
+                    }
+                }
+            }
+        } catch (Throwable $listingsError) {
+            error_log('Vendor deletion: unable to query/delete Firestore listings for vendor ' . $vendorId . ': ' . $listingsError->getMessage());
+        }
+    }
+
+    if ($firebaseUid !== '') {
+        try {
+            yustam_firebase_delete_user($firebaseUid);
+        } catch (Throwable $firebaseError) {
+            error_log('Vendor deletion: unable to delete Firebase account for vendor ' . $vendorId . ': ' . $firebaseError->getMessage());
+        }
+    }
+
+    return [
+        'success' => true,
+        'message' => 'Your vendor account has been deleted.',
     ];
 }
 

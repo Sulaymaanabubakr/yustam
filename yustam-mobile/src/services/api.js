@@ -665,17 +665,155 @@ export const vendorAPI = {
     };
   },
   getBillingHistory: async () => {
+    let catalog = {};
+    try {
+      catalog = await fetchPlanCatalog();
+    } catch (error) {
+      console.warn('Unable to fetch plan catalog for billing history', error);
+    }
+
     const response = await api.get('/plans/subscriptions/me');
     const subscriptions = Array.isArray(response.data?.subscriptions) ? response.data.subscriptions : [];
-    const transactions = subscriptions.map((subscription) => ({
-      id: subscription.id,
-      plan: subscription.plan?.name ?? 'Plan',
-      amount: Number(subscription.plan?.price) || 0,
-      date: subscription.startsAt ?? subscription.createdAt,
-      status: (subscription.status ?? 'completed').toLowerCase(),
-      paymentMethod: 'Card',
-      reference: subscription.id.slice(0, 10),
-    }));
+
+    const parseAmountValue = (value) => {
+      if (typeof value === 'number' && Number.isFinite(value)) {
+        return value;
+      }
+      if (typeof value === 'string') {
+        const numeric = Number(value.replace(/[^0-9.]/g, ''));
+        return Number.isNaN(numeric) ? 0 : numeric;
+      }
+      return 0;
+    };
+
+    const resolveCatalogEntry = (slug) => {
+      if (!slug) {
+        return null;
+      }
+      if (catalog[slug]) {
+        return catalog[slug];
+      }
+      if (catalog[`${slug}-plan`]) {
+        return catalog[`${slug}-plan`];
+      }
+      return null;
+    };
+
+    const transactions = subscriptions.map((subscription, index) => {
+      const metadata = subscription?.metadata || {};
+      const planNameSource =
+        metadata.displayName ||
+        metadata.planName ||
+        subscription.plan?.displayName ||
+        subscription.plan?.name ||
+        subscription.plan ||
+        metadata.plan ||
+        'Plan';
+      const planName = cleanPlanDisplayName(planNameSource) || 'Plan';
+      const slugCandidate =
+        metadata.slug ||
+        metadata.planSlug ||
+        subscription.slug ||
+        normalisePlanSlug(planName, `plan-${index + 1}`);
+      const catalogEntry = resolveCatalogEntry(slugCandidate);
+      const durationMonths = Number(
+        metadata.durationMonths ??
+          metadata.planDuration ??
+          metadata.planDurationMonths ??
+          subscription.durationMonths ??
+          subscription.intervalMonths ??
+          0
+      );
+      const durationOptions = catalogEntry?.durations || {};
+      const durationOption =
+        (Number.isFinite(durationMonths) && durationMonths > 0 && durationOptions[durationMonths]) ||
+        (Number.isFinite(durationMonths) && durationMonths > 0 && durationOptions[String(durationMonths)]) ||
+        Object.values(durationOptions)[0] ||
+        null;
+      const intervalLabel =
+        subscription.intervalLabel ||
+        subscription.plan?.intervalLabel ||
+        metadata.intervalLabel ||
+        metadata.planInterval ||
+        metadata.billingCycle ||
+        durationOption?.intervalLabel ||
+        (Number.isFinite(durationMonths) && durationMonths > 0 ? formatDurationLabel(durationMonths) : 'Monthly');
+      const planType =
+        metadata.planType ||
+        metadata.planTier ||
+        metadata.planCategory ||
+        subscription.plan?.category ||
+        (catalogEntry?.displayName ?? catalogEntry?.name) ||
+        null;
+      const amount = parseAmountValue(
+        subscription.amount ??
+          subscription.plan?.amount ??
+          subscription.plan?.price ??
+          metadata.paymentAmount ??
+          metadata.planAmount ??
+          metadata.plan_amount ??
+          durationOption?.amount ??
+          catalogEntry?.price ??
+          0
+      );
+      const reference =
+        subscription.reference ||
+        metadata.lastPaymentReference ||
+        metadata.reference ||
+        subscription.id ||
+        `REF-${index + 1}`;
+      const paymentMethod =
+        metadata.paymentMethod ||
+        subscription.paymentMethod ||
+        subscription.cardBrand ||
+        subscription.channel ||
+        'Card';
+      const resolvedDate =
+        subscription.paidAt ||
+        subscription.updatedAt ||
+        subscription.endsAt ||
+        subscription.startsAt ||
+        metadata.lastPaymentDate ||
+        metadata.date ||
+        subscription.createdAt ||
+        new Date().toISOString();
+      const statusRaw = (subscription.status || metadata.status || 'completed').toString();
+      const status = statusRaw.toLowerCase();
+      const statusLabel =
+        metadata.statusLabel ||
+        subscription.statusLabel ||
+        statusRaw.replace(/_/g, ' ') ||
+        'Completed';
+
+      return {
+        id: reference,
+        plan: planName,
+        planType: planType || null,
+        interval: intervalLabel,
+        amount,
+        status,
+        statusLabel,
+        date: resolvedDate,
+        reference,
+        paymentMethod,
+      };
+    });
+
+    transactions.sort((a, b) => {
+      const aTime = new Date(a.date).getTime();
+      const bTime = new Date(b.date).getTime();
+      if (Number.isNaN(aTime) && Number.isNaN(bTime)) {
+        return 0;
+      }
+      if (Number.isNaN(aTime)) {
+        return 1;
+      }
+      if (Number.isNaN(bTime)) {
+        return -1;
+      }
+      return bTime - aTime;
+    });
+
     return {
       data: {
         success: true,
@@ -693,6 +831,16 @@ export const vendorAPI = {
     api.post('/subscription/toggle-autorenew', { enabled }),
   cancelSubscription: (reason) =>
     api.post('/subscription/cancel', { reason }),
+};
+
+export const profileAPI = {
+  getSettings: () => api.get('/vendor/settings'),
+  updateSettings: (payload = {}) => api.patch('/vendor/settings', payload),
+  updatePassword: (payload = {}) => api.post('/vendor/password', payload),
+  deleteAccount: (payload = {}) =>
+    api.delete('/vendor/me', {
+      data: payload,
+    }),
 };
 
 export const planAPI = {

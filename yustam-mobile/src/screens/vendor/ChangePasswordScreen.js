@@ -64,12 +64,13 @@ const VendorChangePasswordScreen = ({ navigation }) => {
     }
     setLoading(true);
     try {
-      await profileAPI.updatePassword({
+      const response = await profileAPI.updatePassword({
         current_password: form.currentPassword.trim(),
         new_password: form.newPassword.trim(),
         confirm_password: form.confirmPassword.trim(),
       });
-      showToast('Password updated successfully');
+      const payload = response?.data ?? {};
+      showToast(payload?.message || 'Password updated successfully');
       navigation.goBack();
     } catch (error) {
       showToast(error.message || 'Unable to update password.', 'error');

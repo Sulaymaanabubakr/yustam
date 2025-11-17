@@ -10,59 +10,47 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '../../context/AuthContext';
 import theme from '../../theme';
 import Toast from '../../components/Toast';
 import { profileAPI } from '../../services/api';
 import { goBackOrNavigate } from '../../utils/navigation';
 
-const SETTINGS_KEY_MAP = {
-  listingApprovals: 'notifApproved',
-  planExpiry: 'notifPlanExpiry',
-  newMessages: 'notifBuyerMsg',
-  marketingEmails: 'notifUpdates',
-  twoFactorAuth: 'twoFactor',
-  loginAlerts: 'loginAlert',
+const DEFAULT_SETTINGS = {
+  pushNotifications: true,
+  emailNotifications: true,
+  smsNotifications: false,
+  listingApprovals: true,
+  newMessages: false,
+  planExpiry: true,
+  marketingEmails: true,
+  twoFactorAuth: false,
+  loginAlerts: true,
+  publicProfile: true,
+  showEmail: false,
+  showPhone: false,
 };
 
-const mapServerSettingsToUI = (serverSettings = {}) => {
-  return Object.entries(SETTINGS_KEY_MAP).reduce((acc, [uiKey, serverKey]) => {
-    if (Object.prototype.hasOwnProperty.call(serverSettings, serverKey)) {
-      acc[uiKey] = Boolean(serverSettings[serverKey]);
+const SETTINGS_KEYS = Object.keys(DEFAULT_SETTINGS);
+
+const mapServerSettingsToUI = (serverSettings = {}) =>
+  SETTINGS_KEYS.reduce((acc, key) => {
+    if (Object.prototype.hasOwnProperty.call(serverSettings, key)) {
+      acc[key] = Boolean(serverSettings[key]);
     }
     return acc;
   }, {});
-};
 
-const buildServerPayload = (state) => {
-  return Object.entries(SETTINGS_KEY_MAP).reduce((acc, [uiKey, serverKey]) => {
-    acc[serverKey] = Boolean(state[uiKey]);
+const buildServerPayload = (state = {}) =>
+  SETTINGS_KEYS.reduce((acc, key) => {
+    if (Object.prototype.hasOwnProperty.call(state, key)) {
+      acc[key] = Boolean(state[key]);
+    }
     return acc;
   }, {});
-};
-
-const mergeStateWithServer = (currentState, serverSettings) => ({
-  ...currentState,
-  ...mapServerSettingsToUI(serverSettings),
-});
 
 const SettingsScreen = ({ navigation }) => {
-  const { logout } = useAuth();
   const [toast, setToast] = useState({ visible: false, message: '', type: 'info' });
-  const [settings, setSettings] = useState({
-    pushNotifications: true,
-    emailNotifications: true,
-    smsNotifications: false,
-    listingApprovals: true,
-    newMessages: true,
-    planExpiry: true,
-    marketingEmails: false,
-    twoFactorAuth: false,
-    loginAlerts: true,
-    publicProfile: true,
-    showEmail: false,
-    showPhone: false,
-  });
+  const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
   const [savingKeys, setSavingKeys] = useState({});
 
@@ -89,7 +77,10 @@ const SettingsScreen = ({ navigation }) => {
         }
 
         if (payload?.settings) {
-          setSettings((prev) => mergeStateWithServer(prev, payload.settings));
+          setSettings((prev) => ({
+            ...prev,
+            ...mapServerSettingsToUI(payload.settings),
+          }));
         }
       } catch (error) {
         if (isMounted) {
@@ -110,6 +101,10 @@ const SettingsScreen = ({ navigation }) => {
   }, []);
 
   const handleToggle = async (key) => {
+    if (key === 'smsNotifications') {
+      showToast('SMS notifications are coming soon.', 'info');
+      return;
+    }
     let previousValue;
     let updatedSettings;
 
@@ -123,19 +118,16 @@ const SettingsScreen = ({ navigation }) => {
       return;
     }
 
-    const backendKey = SETTINGS_KEY_MAP[key];
-    if (!backendKey) {
-      showToast('Preference updated locally', 'info');
-      return;
-    }
-
     setSavingKeys((prev) => ({ ...prev, [key]: true }));
 
     try {
       const response = await profileAPI.updateSettings(buildServerPayload(updatedSettings));
       const payload = response?.data ?? {};
       if (payload?.settings) {
-        setSettings((current) => mergeStateWithServer(current, payload.settings));
+        setSettings((current) => ({
+          ...current,
+          ...mapServerSettingsToUI(payload.settings),
+        }));
       }
       showToast('Settings updated');
     } catch (error) {
@@ -150,26 +142,6 @@ const SettingsScreen = ({ navigation }) => {
     navigation.navigate('VendorChangePassword');
   };
 
-  const handleClearCache = () => {
-    Alert.alert(
-      'Clear Cache',
-      'This will clear all cached data and temporary files. Continue?',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Clear',
-          onPress: () => {
-            // TODO: Clear cache logic
-            showToast('Cache cleared successfully');
-          },
-        },
-      ]
-    );
-  };
-
   const SettingSection = ({ title, children }) => (
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>{title}</Text>
@@ -177,15 +149,29 @@ const SettingsScreen = ({ navigation }) => {
     </View>
   );
 
-  const SettingItem = ({ icon, label, value, onToggle, type = 'toggle', disabled = false }) => (
+  const SettingItem = ({
+    icon,
+    label,
+    value,
+    onToggle,
+    type = 'toggle',
+    disabled = false,
+    note,
+    comingSoon = false,
+  }) => (
     <View style={styles.settingItem}>
       <View style={styles.settingLeft}>
         <Ionicons name={icon} size={20} color={theme.colors.textSecondary} />
-        <Text style={styles.settingLabel}>{label}</Text>
+        <View style={styles.settingTextBlock}>
+          <Text style={styles.settingLabel}>{label}</Text>
+          {note ? <Text style={styles.settingNote}>{note}</Text> : null}
+        </View>
       </View>
-      {type === 'toggle' ? (
+      {comingSoon ? (
+        <Text style={styles.comingSoonText}>Coming soon</Text>
+      ) : type === 'toggle' ? (
         <Switch
-          value={value}
+          value={Boolean(value)}
           onValueChange={onToggle}
           trackColor={{ false: theme.colors.border, true: theme.colors.orange }}
           thumbColor={theme.colors.white}
@@ -260,7 +246,9 @@ const SettingsScreen = ({ navigation }) => {
             label="SMS Notifications"
             value={settings.smsNotifications}
             onToggle={() => handleToggle('smsNotifications')}
-            disabled={isToggleDisabled('smsNotifications')}
+            disabled
+            comingSoon
+            note="Stay tuned for SMS alerts"
           />
         </SettingSection>
 
@@ -304,6 +292,7 @@ const SettingsScreen = ({ navigation }) => {
             value={settings.twoFactorAuth}
             onToggle={() => handleToggle('twoFactorAuth')}
             disabled={isToggleDisabled('twoFactorAuth')}
+            note={settings.twoFactorAuth ? 'Extra verification enabled' : 'Add a second step at sign-in'}
           />
           <SettingItem
             icon="alert-circle-outline"
@@ -311,6 +300,7 @@ const SettingsScreen = ({ navigation }) => {
             value={settings.loginAlerts}
             onToggle={() => handleToggle('loginAlerts')}
             disabled={isToggleDisabled('loginAlerts')}
+            note="Get notified when new logins happen"
           />
           <SettingItem
             icon="globe-outline"
@@ -341,11 +331,6 @@ const SettingsScreen = ({ navigation }) => {
             icon="key-outline"
             label="Change Password"
             onPress={handleChangePassword}
-          />
-          <ActionButton
-            icon="trash-outline"
-            label="Clear Cache"
-            onPress={handleClearCache}
           />
         </SettingSection>
 
@@ -429,14 +414,29 @@ const styles = StyleSheet.create({
   },
   settingLeft: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: theme.spacing.base,
     flex: 1,
+  },
+  settingTextBlock: {
+    flex: 1,
+    gap: theme.spacing.xs / 2,
   },
   settingLabel: {
     fontFamily: theme.typography.fontFamily.inter,
     fontSize: theme.typography.fontSize.base,
     color: theme.colors.textPrimary,
+  },
+  settingNote: {
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.textSecondary,
+  },
+  comingSoonText: {
+    fontFamily: theme.typography.fontFamily.interSemiBold,
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.textSecondary,
+    textTransform: 'uppercase',
   },
   actionButton: {
     flexDirection: 'row',
