@@ -610,11 +610,12 @@ export const vendorAPI = {
         remainingListings: currentPlan.listings ?? null,
         contactEmail: 'support@yustam.com.ng',
         vendorName: currentPlan.vendorName || 'Yustam Vendor',
-          slug: currentPlan.slug,
-          durationOptions: durations,
-        },
+        slug: currentPlan.slug,
+         planCode: currentPlan.planCode || catalogEntry?.planCode || null,
+        durationOptions: durations,
       },
-    };
+    },
+  };
   },
   getSubscriptionDetails: async () => {
     const [catalog, subscription] = await Promise.all([fetchPlanCatalog(), fetchCurrentSubscription()]);

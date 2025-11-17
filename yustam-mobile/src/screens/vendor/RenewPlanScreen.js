@@ -19,7 +19,7 @@ import Button from '../../components/Button';
 import { goBackOrNavigate } from '../../utils/navigation';
 import { formatNaira } from '../../utils/formatters';
 import { cleanPlanDisplayName } from '../../utils/subscription';
-import { getPlanPreset } from '../../data/vendorPlans';
+import { getPlanPreset, getPlanPresetByCode } from '../../data/vendorPlans';
 
 const resolveVendorId = (profile) => {
   if (!profile) {
@@ -72,7 +72,28 @@ const normaliseDurationOptions = (options = []) => {
         planCode,
       };
     })
-    .filter(Boolean);
+    .filter((entry) => entry && entry.planCode && entry.amount > 0);
+};
+
+const mergeDurationOptions = (baseOptions = [], overrides = []) => {
+  const map = new Map();
+  baseOptions.forEach((option) => {
+    if (!option) return;
+    map.set(option.months, { ...option });
+  });
+  overrides.forEach((option) => {
+    if (!option) return;
+    const existing = map.get(option.months) || {};
+    map.set(option.months, {
+      months: option.months,
+      amount: option.amount > 0 ? option.amount : existing.amount,
+      intervalLabel: option.intervalLabel || existing.intervalLabel,
+      planCode: option.planCode || existing.planCode,
+    });
+  });
+  return Array.from(map.values())
+    .filter((option) => option.planCode && option.amount > 0)
+    .sort((a, b) => a.months - b.months);
 };
 
 const VendorRenewPlanScreen = ({ navigation }) => {
@@ -110,16 +131,29 @@ const VendorRenewPlanScreen = ({ navigation }) => {
       }
       const response = await vendorAPI.getRenewPlan();
       const payload = response.data?.data || {};
-      let durations = normaliseDurationOptions(payload.durationOptions || []);
+      const preferredPlanCode =
+        payload.planCode || payload.plan_code || payload.plan?.code || payload.plan?.plan_code;
+      const fallbackPreset =
+        getPlanPresetByCode(preferredPlanCode) ||
+        getPlanPreset(payload.slug || payload.planSlug || payload.planName || payload.plan);
+      const fallbackDurations = normaliseDurationOptions(fallbackPreset?.durationOptions || []);
+      const overrideDurations = normaliseDurationOptions(payload.durationOptions || []);
+      let durations = mergeDurationOptions(fallbackDurations, overrideDurations);
       if (!durations.length) {
-        const fallbackPreset = getPlanPreset(payload.slug || payload.planSlug || payload.planName || payload.plan);
-        const fallbackDurations = normaliseDurationOptions(fallbackPreset?.durationOptions || []);
         durations = fallbackDurations;
+      }
+      if (!durations.length) {
+        durations = overrideDurations;
       }
       setPlan({
         name: cleanPlanDisplayName(payload.planName || 'Current Plan'),
         badge: payload.planBadge || '',
-        price: payload.monthlyPrice || 0,
+        price:
+          payload.monthlyPrice ||
+          fallbackPreset?.monthlyPrice ||
+          fallbackPreset?.price ||
+          durations[0]?.amount ||
+          0,
         currency: payload.currency || 'NGN',
         expiresOn: payload.expiresOn || '',
         remainingListings: payload.remainingListings ?? null,
