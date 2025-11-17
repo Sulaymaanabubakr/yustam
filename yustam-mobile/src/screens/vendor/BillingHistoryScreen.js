@@ -7,7 +7,6 @@ import {
   RefreshControl,
   ActivityIndicator,
   TouchableOpacity,
-  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,6 +17,7 @@ import Button from '../../components/Button';
 import { vendorAPI } from '../../services/api';
 import { goBackOrNavigate } from '../../utils/navigation';
 import { formatNaira, formatDate } from '../../utils/formatters';
+import { cleanPlanDisplayName } from '../../utils/subscription';
 
 const BillingHistoryScreen = ({ navigation }) => {
   const { user } = useAuth();
@@ -25,27 +25,72 @@ const BillingHistoryScreen = ({ navigation }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [toast, setToast] = useState({ visible: false, message: '', type: 'info' });
   const [transactions, setTransactions] = useState([]);
+  const [summary, setSummary] = useState({
+    totalTransactions: 0,
+    totalSpent: 0,
+    lastPayment: null,
+  });
 
   useEffect(() => {
     fetchBillingHistory();
   }, []);
 
+  const parseAmount = (value) => {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value;
+    }
+    if (typeof value === 'string') {
+      const numeric = Number(value.replace(/[^0-9.]/g, ''));
+      return Number.isNaN(numeric) ? 0 : numeric;
+    }
+    return 0;
+  };
+
   const fetchBillingHistory = async () => {
     try {
       setLoading(true);
       const response = await vendorAPI.getBillingHistory();
-      if (typeof response.data !== 'object' || !response.data) {
-        throw new Error('Billing history is only available on the web dashboard at the moment.');
+      const apiPayload = response?.data?.data?.transactions;
+      if (!response?.data?.success || !Array.isArray(apiPayload)) {
+        throw new Error(response?.data?.message || 'No billing records found.');
       }
 
-      if (!response.data?.success || !Array.isArray(response.data?.data?.transactions)) {
-        throw new Error(response.data?.message || 'No billing records found.');
-      }
+      const normalized = apiPayload.map((entry, index) => {
+        const amount = parseAmount(entry?.amount ?? entry?.plan?.price ?? entry?.plan?.amount ?? 0);
+        const status = String(entry?.status || 'completed').toLowerCase();
+        const interval =
+          entry?.plan?.intervalLabel ||
+          entry?.intervalLabel ||
+          (entry?.plan?.durationMonths ? `${entry.plan.durationMonths} months` : 'Monthly');
+        return {
+          id: entry?.id || entry?.reference || `txn-${index}`,
+          plan: cleanPlanDisplayName(entry?.plan?.name || entry?.plan || 'Plan'),
+          interval,
+          amount,
+          status,
+          statusLabel: entry?.statusLabel || status.replace(/_/g, ' '),
+          date: entry?.date || entry?.createdAt || entry?.startsAt || entry?.endsAt || new Date().toISOString(),
+          reference: entry?.reference || entry?.id || `REF-${index}`,
+          paymentMethod: entry?.paymentMethod || entry?.cardBrand || 'Card',
+        };
+      });
 
-      setTransactions(response.data.data.transactions);
+      const totalTransactions = normalized.length;
+      const successStatuses = ['completed', 'success', 'active', 'paid'];
+      const totalSpent = normalized.reduce(
+        (sum, txn) => sum + (successStatuses.includes(txn.status) ? txn.amount : 0),
+        0
+      );
+      setTransactions(normalized);
+      setSummary({
+        totalTransactions,
+        totalSpent,
+        lastPayment: normalized[0]?.date || null,
+      });
     } catch (error) {
       console.error('Error fetching billing history:', error);
       setTransactions([]);
+      setSummary({ totalTransactions: 0, totalSpent: 0, lastPayment: null });
       showToast(
         error.message || 'Billing history is not available right now. Please try again later.',
         'error'
@@ -70,7 +115,7 @@ const BillingHistoryScreen = ({ navigation }) => {
   };
 
   const handleRenewPlan = () => {
-    navigation.navigate('Plans');
+    navigation.navigate('VendorRenewPlan');
   };
 
   const handleUpgradePlan = () => {
@@ -84,11 +129,15 @@ const BillingHistoryScreen = ({ navigation }) => {
   const getStatusColor = (status) => {
     switch (status.toLowerCase()) {
       case 'completed':
-        return '#0F9D58';
+      case 'success':
+      case 'active':
+        return theme.colors.emerald;
       case 'pending':
-        return '#FFA500';
+      case 'processing':
+        return theme.colors.orange;
       case 'failed':
-        return '#D93025';
+      case 'cancelled':
+        return theme.colors.red || '#D93025';
       default:
         return theme.colors.textSecondary;
     }
@@ -98,20 +147,23 @@ const BillingHistoryScreen = ({ navigation }) => {
     <View style={styles.transactionCard}>
       <View style={styles.transactionHeader}>
         <View style={styles.transactionLeft}>
+          <Text style={styles.planName}>{transaction.plan}</Text>
+          <Text style={styles.planInterval}>{transaction.interval}</Text>
+        </View>
+        <View style={styles.transactionAmountBlock}>
+          <Text style={styles.amount}>{formatAmount(transaction.amount)}</Text>
           <View style={[styles.statusBadge, { backgroundColor: `${getStatusColor(transaction.status)}20` }]}>
             <Text style={[styles.statusText, { color: getStatusColor(transaction.status) }]}>
-              {transaction.status}
+              {transaction.statusLabel}
             </Text>
           </View>
-          <Text style={styles.planName}>{transaction.plan}</Text>
         </View>
-        <Text style={styles.amount}>{formatAmount(transaction.amount)}</Text>
       </View>
-      
+
       <View style={styles.transactionDetails}>
         <View style={styles.detailRow}>
           <Ionicons name="calendar-outline" size={16} color={theme.colors.textSecondary} />
-              <Text style={styles.detailText}>{formatDateLabel(transaction.date)}</Text>
+          <Text style={styles.detailText}>{formatDateLabel(transaction.date)}</Text>
         </View>
         <View style={styles.detailRow}>
           <Ionicons name="card-outline" size={16} color={theme.colors.textSecondary} />
@@ -189,31 +241,37 @@ const BillingHistoryScreen = ({ navigation }) => {
 
         {/* Summary */}
         <View style={styles.summaryCard}>
-          <Text style={styles.summaryTitle}>Transaction Summary</Text>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Total Transactions</Text>
-            <Text style={styles.summaryValue}>{transactions.length}</Text>
-          </View>
-          <View style={styles.summaryDivider} />
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Total Spent</Text>
-            <Text style={styles.summaryValue}>
-              {formatAmount(transactions.reduce((sum, t) => sum + t.amount, 0))}
-            </Text>
+          <Text style={styles.summaryTitle}>Billing Summary</Text>
+          <View style={styles.summaryGrid}>
+            <View style={styles.summaryItem}>
+              <Text style={styles.summaryLabel}>Total transactions</Text>
+              <Text style={styles.summaryValue}>{summary.totalTransactions}</Text>
+            </View>
+            <View style={styles.summaryItem}>
+              <Text style={styles.summaryLabel}>Total spent</Text>
+              <Text style={styles.summaryValue}>{formatAmount(summary.totalSpent)}</Text>
+            </View>
+            <View style={styles.summaryItem}>
+              <Text style={styles.summaryLabel}>Last payment</Text>
+              <Text style={styles.summaryValue}>
+                {summary.lastPayment ? formatDateLabel(summary.lastPayment) : 'Not yet'}
+              </Text>
+            </View>
           </View>
         </View>
 
         {/* Transactions List */}
-        <View style={styles.section}>
+        <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Payment History</Text>
+          <Text style={styles.sectionSubtitle}>The most recent renewals and plan upgrades</Text>
         </View>
 
         {transactions.length === 0 ? (
           <View style={styles.emptyState}>
             <Ionicons name="receipt-outline" size={64} color={theme.colors.textTertiary} />
-            <Text style={styles.emptyText}>No transactions yet</Text>
+            <Text style={styles.emptyText}>No payments yet</Text>
             <Text style={styles.emptySubtext}>
-              Your payment history will appear here
+              Renew or upgrade your subscription to see payment details here.
             </Text>
           </View>
         ) : (
@@ -277,74 +335,90 @@ const styles = StyleSheet.create({
   actionButton: {
     flex: 1,
   },
-  summaryCard: {
-    backgroundColor: theme.colors.white,
-    borderRadius: theme.borderRadius.lg,
-    padding: theme.spacing.lg,
-    marginHorizontal: theme.spacing.lg,
-    marginTop: theme.spacing.xl,
-    ...theme.shadows.medium,
-  },
-  summaryTitle: {
-    fontFamily: theme.typography.fontFamily.anton,
-    fontSize: theme.typography.fontSize.lg,
-    color: theme.colors.emerald,
-    letterSpacing: theme.typography.letterSpacing.wide,
-    marginBottom: theme.spacing.base,
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: theme.spacing.sm,
-  },
-  summaryDivider: {
-    height: 1,
-    backgroundColor: theme.colors.border,
-    marginVertical: theme.spacing.xs,
-  },
-  summaryLabel: {
-    fontFamily: theme.typography.fontFamily.interMedium,
-    fontSize: theme.typography.fontSize.base,
-    color: theme.colors.textSecondary,
-  },
-  summaryValue: {
-    fontFamily: theme.typography.fontFamily.anton,
-    fontSize: theme.typography.fontSize.xl,
-    color: theme.colors.emerald,
-    letterSpacing: theme.typography.letterSpacing.wide,
-  },
+    summaryCard: {
+      backgroundColor: theme.colors.white,
+      borderRadius: theme.borderRadius.lg,
+      padding: theme.spacing.lg,
+      marginHorizontal: theme.spacing.lg,
+      marginTop: theme.spacing.xl,
+      gap: theme.spacing.base,
+      ...theme.shadows.medium,
+    },
+    summaryTitle: {
+      fontFamily: theme.typography.fontFamily.anton,
+      fontSize: theme.typography.fontSize.lg,
+      color: theme.colors.emerald,
+      letterSpacing: theme.typography.letterSpacing.wide,
+    },
+    summaryGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: theme.spacing.base,
+    },
+    summaryItem: {
+      flexBasis: '48%',
+      backgroundColor: theme.colors.background,
+      borderRadius: theme.borderRadius.md,
+      padding: theme.spacing.sm,
+    },
+    summaryLabel: {
+      fontFamily: theme.typography.fontFamily.inter,
+      fontSize: theme.typography.fontSize.xs,
+      color: theme.colors.textSecondary,
+      textTransform: 'uppercase',
+    },
+    summaryValue: {
+      fontFamily: theme.typography.fontFamily.anton,
+      fontSize: theme.typography.fontSize.lg,
+      color: theme.colors.textPrimary,
+      marginTop: theme.spacing.xs / 2,
+    },
   section: {
     paddingHorizontal: theme.spacing.lg,
     paddingTop: theme.spacing.xl,
     paddingBottom: theme.spacing.base,
   },
+    sectionHeader: {
+      paddingHorizontal: theme.spacing.lg,
+      paddingTop: theme.spacing['2xl'],
+      paddingBottom: theme.spacing.md,
+      gap: theme.spacing.xs,
+    },
   sectionTitle: {
     fontFamily: theme.typography.fontFamily.anton,
     fontSize: theme.typography.fontSize.xl,
     color: theme.colors.emerald,
     letterSpacing: theme.typography.letterSpacing.wide,
   },
+  sectionSubtitle: {
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.textSecondary,
+  },
   transactionsContainer: {
     paddingHorizontal: theme.spacing.lg,
     gap: theme.spacing.base,
   },
-  transactionCard: {
-    backgroundColor: theme.colors.white,
-    borderRadius: theme.borderRadius.lg,
-    padding: theme.spacing.lg,
-    ...theme.shadows.medium,
-  },
-  transactionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: theme.spacing.base,
-  },
-  transactionLeft: {
-    flex: 1,
-    gap: theme.spacing.sm,
-  },
+    transactionCard: {
+      backgroundColor: theme.colors.white,
+      borderRadius: theme.borderRadius.lg,
+      padding: theme.spacing.lg,
+      ...theme.shadows.medium,
+    },
+    transactionHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      marginBottom: theme.spacing.base,
+    },
+    transactionLeft: {
+      flex: 1,
+      gap: theme.spacing.xs,
+    },
+    transactionAmountBlock: {
+      alignItems: 'flex-end',
+      gap: theme.spacing.xs / 2,
+    },
   statusBadge: {
     alignSelf: 'flex-start',
     paddingHorizontal: theme.spacing.sm,
@@ -357,12 +431,17 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: theme.typography.letterSpacing.wide,
   },
-  planName: {
-    fontFamily: theme.typography.fontFamily.anton,
-    fontSize: theme.typography.fontSize.lg,
-    color: theme.colors.emerald,
-    letterSpacing: theme.typography.letterSpacing.wide,
-  },
+    planName: {
+      fontFamily: theme.typography.fontFamily.anton,
+      fontSize: theme.typography.fontSize.base,
+      color: theme.colors.textPrimary,
+      letterSpacing: theme.typography.letterSpacing.normal,
+    },
+    planInterval: {
+      fontFamily: theme.typography.fontFamily.inter,
+      fontSize: theme.typography.fontSize.xs,
+      color: theme.colors.textSecondary,
+    },
   amount: {
     fontFamily: theme.typography.fontFamily.anton,
     fontSize: theme.typography.fontSize['2xl'],
