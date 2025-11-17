@@ -344,7 +344,17 @@ const BuyerSearchScreen = ({ navigation, route }) => {
   const renderProduct = ({ item }) => (
     <TouchableOpacity style={styles.productCard} onPress={() => handleSelect(item)} activeOpacity={0.92}>
       <View style={styles.productImageWrapper}>
-        <Image source={{ uri: item.image || FALLBACK_IMAGE }} style={styles.productImage} resizeMode="contain" />
+        {item.image ? (
+          <>
+            <Image source={{ uri: item.image }} style={styles.productImage} resizeMode="cover" />
+            <View style={styles.productImageOverlay} />
+          </>
+        ) : (
+          <View style={styles.productImageFallback}>
+            <Ionicons name="image-outline" size={24} color={theme.colors.textSecondary} />
+            <Text style={styles.productImageFallbackText}>No image</Text>
+          </View>
+        )}
         <View style={styles.badgeRow}>
           {item.badges?.map((badge) => (
             <View key={`${item.id}-${badge}`} style={styles.productBadge}>
@@ -576,6 +586,8 @@ const BuyerSearchScreen = ({ navigation, route }) => {
         data={filteredResults}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContainer}
+        numColumns={2}
+        columnWrapperStyle={styles.listColumns}
         renderItem={renderProduct}
         ListHeaderComponent={renderHeader}
         ListFooterComponent={renderFooter}
@@ -692,6 +704,10 @@ const styles = StyleSheet.create({
   listContainer: {
     paddingHorizontal: theme.spacing.lg,
     paddingBottom: theme.spacing['4xl'],
+  },
+  listColumns: {
+    justifyContent: 'space-between',
+    columnGap: theme.spacing.md,
   },
   listHeader: {
     gap: theme.spacing.xl,
@@ -848,25 +864,46 @@ const styles = StyleSheet.create({
     padding: theme.spacing.md,
     marginBottom: theme.spacing.lg,
     gap: theme.spacing.md,
+    flexBasis: '48%',
+    maxWidth: '48%',
+    flexGrow: 1,
     ...theme.shadows.card,
   },
   productImageWrapper: {
     position: 'relative',
-    borderRadius: theme.radius.xl,
+    borderRadius: theme.radius['2xl'],
     backgroundColor: theme.colors.backgroundLight,
-    padding: theme.spacing.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
+    overflow: 'hidden',
+    aspectRatio: 1,
+    marginBottom: theme.spacing.xs,
   },
   productImage: {
-    width: '100%',
-    height: 160,
+    ...StyleSheet.absoluteFillObject,
+    width: undefined,
+    height: undefined,
+    transform: [{ scale: 1.05 }],
+  },
+  productImageOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+  },
+  productImageFallback: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: theme.spacing.xs,
+  },
+  productImageFallbackText: {
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.textSecondary,
   },
   badgeRow: {
     position: 'absolute',
-    top: theme.spacing.md,
-    left: theme.spacing.md,
-    flexDirection: 'column',
+    top: theme.spacing.sm,
+    left: theme.spacing.sm,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: theme.spacing.xs,
   },
   productBadge: {

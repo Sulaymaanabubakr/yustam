@@ -14,24 +14,22 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Picker } from '@react-native-picker/picker';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../../context/AuthContext';
 import theme from '../../theme';
 import Toast from '../../components/Toast';
 import Button from '../../components/Button';
 import { CLOUDINARY_UPLOAD_PRESET, CLOUDINARY_CLOUD_NAME } from '../../config/cloudinary';
+import { STATES } from '../../config/constants';
 import { goBackOrNavigate } from '../../utils/navigation';
 import { resolveUserUid } from '../../utils/user';
-import { listingsAPI } from '../../services/api';
-
-const NIGERIAN_STATES = [
-  'Abia', 'Adamawa', 'Akwa Ibom', 'Anambra', 'Bauchi', 'Bayelsa', 'Benue', 'Borno',
-  'Cross River', 'Delta', 'Ebonyi', 'Edo', 'Ekiti', 'Enugu', 'FCT Abuja', 'Gombe',
-  'Imo', 'Jigawa', 'Kaduna', 'Kano', 'Katsina', 'Kebbi', 'Kogi', 'Kwara', 'Lagos',
-  'Nasarawa', 'Niger', 'Ogun', 'Ondo', 'Osun', 'Oyo', 'Plateau', 'Rivers', 'Sokoto',
-  'Taraba', 'Yobe', 'Zamfara'
-];
+import { homeAPI, listingsAPI } from '../../services/api';
+import SelectField from '../../components/SelectField';
+import {
+  CATEGORY_OPTION_LIST,
+  buildOptionsFromLabels,
+  getSubcategoriesForCategory,
+} from '../../data/categories';
 
 const CONDITIONS = ['New', 'Used - Like New', 'Used - Good', 'Used - Fair', 'Refurbished'];
 
@@ -42,6 +40,17 @@ const STATUS_OPTIONS = [
   { value: 'unlisted', label: 'Temporarily Unlisted' },
   { value: 'sold', label: 'Sold / Out of Stock' },
 ];
+
+const CONDITION_OPTIONS = CONDITIONS.map((label) => ({ label, value: label }));
+const STATUS_SELECT_OPTIONS = STATUS_OPTIONS;
+const STATE_OPTIONS = STATES.map((label) => ({ label, value: label }));
+const DEFAULT_COUNTRY = 'Nigeria';
+const FALLBACK_CATEGORY_OPTIONS = CATEGORY_OPTION_LIST;
+
+const CATEGORY_SELECT_OPTIONS = CATEGORY_OPTIONS.map((label) => ({ label, value: label }));
+const CONDITION_OPTIONS = CONDITIONS.map((label) => ({ label, value: label }));
+const STATUS_SELECT_OPTIONS = STATUS_OPTIONS;
+const STATE_OPTIONS = NIGERIAN_STATES.map((label) => ({ label, value: label }));
 
 const CATEGORY_PRESETS = {
   'Phones & Tablets': ['Smartphones', 'Feature Phones', 'Tablets', 'Smartwatches & Wearables', 'Accessories'],
@@ -59,8 +68,6 @@ const CATEGORY_PRESETS = {
   Other: [],
 };
 
-const CATEGORY_OPTIONS = Object.keys(CATEGORY_PRESETS);
-const DEFAULT_COUNTRY = 'Nigeria';
 
 const createDefaultFormState = () => ({
   title: '',
@@ -94,18 +101,17 @@ const ListingEditorScreen = ({ route, navigation }) => {
   const isEditMode = !!listing;
 
   const [formData, setFormData] = useState(createDefaultFormState);
-
+  const [categoryOptions, setCategoryOptions] = useState(FALLBACK_CATEGORY_OPTIONS);
+  const [categoryLoading, setCategoryLoading] = useState(false);
   const [images, setImages] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState({ visible: false, message: '', type: 'info' });
-  const subcategoryOptions = useMemo(() => {
-    if (!formData.category) {
-      return [];
-    }
-    const options = CATEGORY_PRESETS[formData.category];
-    return Array.isArray(options) ? options : [];
-  }, [formData.category]);
+  const subcategoryOptions = useMemo(
+    () => (formData.category ? getSubcategoriesForCategory(formData.category) : []),
+    [formData.category]
+  );
+  const hasPresetSubcategories = subcategoryOptions.length > 0;
 
   useEffect(() => {
     if (listing) {
@@ -135,6 +141,38 @@ const ListingEditorScreen = ({ route, navigation }) => {
       setImages([]);
     }
   }, [listing]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const loadCategories = async () => {
+      setCategoryLoading(true);
+      try {
+        const categories = await homeAPI.listCategories();
+        if (!isMounted) {
+          return;
+        }
+        if (Array.isArray(categories) && categories.length) {
+          setCategoryOptions(buildOptionsFromLabels(categories));
+        } else {
+          setCategoryOptions(FALLBACK_CATEGORY_OPTIONS);
+        }
+      } catch (error) {
+        console.warn('Failed to load categories', error);
+        if (isMounted) {
+          setCategoryOptions(FALLBACK_CATEGORY_OPTIONS);
+        }
+      } finally {
+        if (isMounted) {
+          setCategoryLoading(false);
+        }
+      }
+    };
+
+    loadCategories();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const showToast = (message, type = 'success') => {
     setToast({ visible: true, message, type });
@@ -434,81 +472,72 @@ const ListingEditorScreen = ({ route, navigation }) => {
 
         {/* Category */}
         <View style={styles.section}>
-          <Text style={styles.label}>Category *</Text>
-          <View style={styles.pickerContainer}>
-            <Picker
-              selectedValue={formData.category}
-              onValueChange={(value) => updateFormData('category', value)}
-              style={styles.picker}
-            >
-              <Picker.Item label="Select category..." value="" />
-              {CATEGORY_OPTIONS.map((cat) => (
-                <Picker.Item key={cat} label={cat} value={cat} />
-              ))}
-            </Picker>
-          </View>
+          <SelectField
+            label="Category *"
+            placeholder="Select category..."
+            value={formData.category}
+            options={categoryOptions}
+            onSelect={(value) => updateFormData('category', value)}
+            loading={categoryLoading}
+            helperText={
+              !categoryLoading && !categoryOptions.length
+                ? 'Unable to load categories. Please try again later.'
+                : undefined
+            }
+          />
         </View>
 
         {/* Subcategory */}
         <View style={styles.section}>
           <Text style={styles.label}>
-            Subcategory {subcategoryOptions.length ? '*' : '(optional)'}
+            Subcategory {hasPresetSubcategories ? '*' : '(optional)'}
           </Text>
-          {subcategoryOptions.length ? (
-            <View style={styles.pickerContainer}>
-              <Picker
-                selectedValue={formData.subcategory}
-                onValueChange={(value) => updateFormData('subcategory', value)}
-                style={styles.picker}
-              >
-                <Picker.Item label="Select subcategory..." value="" />
-                {subcategoryOptions.map((option) => (
-                  <Picker.Item key={option} label={option} value={option} />
-                ))}
-              </Picker>
-            </View>
-          ) : (
-            <TextInput
-              style={styles.input}
+          {hasPresetSubcategories ? (
+            <SelectField
+              placeholder="Select subcategory..."
               value={formData.subcategory}
-              onChangeText={(text) => updateFormData('subcategory', text)}
-              placeholder="Enter subcategory (optional)"
-              placeholderTextColor={theme.colors.textSecondary}
+              options={subcategoryOptions}
+              onSelect={(value) => updateFormData('subcategory', value)}
+              searchable={subcategoryOptions.length > 8}
             />
+          ) : (
+            <>
+              <TextInput
+                style={styles.input}
+                value={formData.subcategory}
+                onChangeText={(text) => updateFormData('subcategory', text)}
+                placeholder="Enter subcategory (optional)"
+                placeholderTextColor={theme.colors.textSecondary}
+              />
+              {formData.category ? (
+                <Text style={styles.helperText}>
+                  No preset collections for this category yet. Use your own label if needed.
+                </Text>
+              ) : null}
+            </>
           )}
         </View>
 
         {/* Condition */}
         <View style={styles.section}>
-          <Text style={styles.label}>Condition</Text>
-          <View style={styles.pickerContainer}>
-            <Picker
-              selectedValue={formData.condition}
-              onValueChange={(value) => updateFormData('condition', value)}
-              style={styles.picker}
-            >
-              {CONDITIONS.map(cond => (
-                <Picker.Item key={cond} label={cond} value={cond} />
-              ))}
-            </Picker>
-          </View>
+          <SelectField
+            label="Condition"
+            value={formData.condition}
+            options={CONDITION_OPTIONS}
+            onSelect={(value) => updateFormData('condition', value)}
+            searchable={false}
+          />
         </View>
 
         {/* State */}
         <View style={styles.section}>
-          <Text style={styles.label}>State *</Text>
-          <View style={styles.pickerContainer}>
-            <Picker
-              selectedValue={formData.state}
-              onValueChange={(value) => updateFormData('state', value)}
-              style={styles.picker}
-            >
-              <Picker.Item label="Select state..." value="" />
-              {NIGERIAN_STATES.map(state => (
-                <Picker.Item key={state} label={state} value={state} />
-              ))}
-            </Picker>
-          </View>
+          <SelectField
+            label="State *"
+            placeholder="Select state..."
+            value={formData.state}
+            options={STATE_OPTIONS}
+            onSelect={(value) => updateFormData('state', value)}
+          />
         </View>
 
         {/* Location/City */}
@@ -537,24 +566,19 @@ const ListingEditorScreen = ({ route, navigation }) => {
 
         {/* Status */}
         <View style={styles.section}>
-          <Text style={styles.label}>Status {isEditMode ? '' : '(auto)'}</Text>
-          <View style={[styles.pickerContainer, !isEditMode && styles.pickerDisabled]}>
-            <Picker
-              enabled={isEditMode}
-              selectedValue={formData.status}
-              onValueChange={(value) => updateFormData('status', value)}
-              style={styles.picker}
-            >
-              {STATUS_OPTIONS.map((opt) => (
-                <Picker.Item key={opt.value} label={opt.label} value={opt.value} />
-              ))}
-            </Picker>
-          </View>
-          {!isEditMode && (
-            <Text style={styles.helperText}>
-              New listings are submitted for review before going live.
-            </Text>
-          )}
+          <SelectField
+            label={`Status ${isEditMode ? '' : '(auto)'}`}
+            value={formData.status}
+            options={STATUS_SELECT_OPTIONS}
+            onSelect={(value) => updateFormData('status', value)}
+            disabled={!isEditMode}
+            searchable={false}
+            helperText={
+              !isEditMode
+                ? 'New listings are submitted for review before going live.'
+                : undefined
+            }
+          />
         </View>
 
         {/* Save Button */}
@@ -650,19 +674,6 @@ const styles = StyleSheet.create({
   textArea: {
     height: 100,
     paddingTop: theme.spacing.base,
-  },
-  pickerContainer: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    borderRadius: theme.borderRadius.md,
-    overflow: 'hidden',
-  },
-  picker: {
-    height: 50,
-  },
-  pickerDisabled: {
-    opacity: 0.6,
   },
   imagesContainer: {
     flexDirection: 'row',

@@ -1,4 +1,5 @@
 import Constants from 'expo-constants';
+import { CATEGORY_VALUE_LIST } from '../data/categories';
 
 const expoExtra = Constants?.expoConfig?.extra ?? Constants?.manifest?.extra ?? {};
 
@@ -40,20 +41,7 @@ export const APP_DOWNLOAD_LINKS = {
 };
 
 // Categories from web app
-export const CATEGORIES = [
-  'Phones & Tablets',
-  'Electronics',
-  'Fashion',
-  'Property',
-  'Food & Groceries',
-  'Beauty',
-  'Vehicles',
-  'Home & Kitchen',
-  'Power Solutions',
-  'Computing',
-  'Services',
-  'Others',
-];
+export const CATEGORIES = CATEGORY_VALUE_LIST;
 
 // Nigerian States
 export const STATES = [

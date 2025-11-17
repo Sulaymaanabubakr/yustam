@@ -14,12 +14,12 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Picker } from '@react-native-picker/picker';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../../context/AuthContext';
 import theme from '../../theme';
 import Toast from '../../components/Toast';
 import Button from '../../components/Button';
+import SelectField from '../../components/SelectField';
 import { STATES } from '../../config/constants';
 import { uploadImage } from '../../config/cloudinary';
 import { vendorAPI, authAPI } from '../../services/api';
@@ -399,19 +399,13 @@ const EditProfileScreen = ({ navigation }) => {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.label}>State *</Text>
-          <View style={styles.pickerContainer}>
-            <Picker
-              selectedValue={formData.state}
-              onValueChange={(value) => updateFormData('state', value)}
-              style={styles.picker}
-            >
-              <Picker.Item label="Select state..." value="" />
-              {STATES.map(state => (
-                <Picker.Item key={state} label={state} value={state} />
-              ))}
-            </Picker>
-          </View>
+          <SelectField
+            label="State *"
+            placeholder="Select state..."
+            value={formData.state}
+            options={STATES}
+            onSelect={(value) => updateFormData('state', value)}
+          />
         </View>
 
         {/* Save Button */}
@@ -642,16 +636,6 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.sizes.xs,
     color: theme.colors.textSecondary,
     marginTop: theme.spacing.xs,
-  },
-  pickerContainer: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    borderRadius: theme.borderRadius.md,
-    overflow: 'hidden',
-  },
-  picker: {
-    height: 50,
   },
   saveButton: {
     marginTop: theme.spacing.md,

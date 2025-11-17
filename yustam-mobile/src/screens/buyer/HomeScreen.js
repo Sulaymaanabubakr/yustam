@@ -413,7 +413,17 @@ const ListingCard = ({ item, onPress, variant = 'rail' }) => {
       activeOpacity={0.92}
     >
       <View style={styles.listingImageWrapper}>
-        <Image source={{ uri: item.image }} style={styles.listingImage} resizeMode="contain" />
+        {item.image ? (
+          <>
+            <Image source={{ uri: item.image }} style={styles.listingImage} resizeMode="cover" />
+            <View style={styles.listingImageOverlay} />
+          </>
+        ) : (
+          <View style={styles.listingImagePlaceholder}>
+            <Ionicons name="image-outline" size={28} color={theme.colors.textSecondary} />
+            <Text style={styles.listingImagePlaceholderText}>No image</Text>
+          </View>
+        )}
         {item.badges?.length ? (
           <View style={styles.listingBadge}>
             <Text style={styles.listingBadgeText}>{item.badges[0]}</Text>
@@ -693,14 +703,33 @@ const styles = StyleSheet.create({
     width: '48%',
   },
   listingImageWrapper: {
-    borderRadius: theme.radius.xl,
+    borderRadius: theme.radius['2xl'],
+    overflow: 'hidden',
     backgroundColor: theme.colors.background,
-    padding: theme.spacing.md,
     position: 'relative',
+    aspectRatio: 1.15,
+    marginBottom: theme.spacing.xs,
   },
   listingImage: {
-    width: '100%',
-    height: 120,
+    ...StyleSheet.absoluteFillObject,
+    width: undefined,
+    height: undefined,
+    transform: [{ scale: 1.05 }],
+  },
+  listingImageOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+  },
+  listingImagePlaceholder: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: theme.spacing.xs,
+  },
+  listingImagePlaceholderText: {
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.textSecondary,
   },
   listingBadge: {
     position: 'absolute',

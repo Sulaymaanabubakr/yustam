@@ -610,13 +610,19 @@ const VendorStorefrontScreen = ({ navigation, route }) => {
                     }
                     activeOpacity={0.8}
                   >
-                    {listing.image ? (
-                      <Image source={{ uri: listing.image }} style={styles.listingImage} />
-                    ) : (
-                      <View style={styles.listingPlaceholder}>
-                        <Ionicons name="image-outline" size={28} color={theme.colors.textSecondary} />
-                      </View>
-                    )}
+                    <View style={styles.listingImageContainer}>
+                      {listing.image ? (
+                        <>
+                          <Image source={{ uri: listing.image }} style={styles.listingImage} resizeMode="cover" />
+                          <View style={styles.listingImageSheen} />
+                        </>
+                      ) : (
+                        <View style={styles.listingPlaceholder}>
+                          <Ionicons name="image-outline" size={28} color={theme.colors.textSecondary} />
+                          <Text style={styles.listingPlaceholderText}>No image</Text>
+                        </View>
+                      )}
+                    </View>
                     <View style={styles.listingInfo}>
                       <Text style={styles.listingTitle} numberOfLines={2}>
                         {listing.title}
@@ -935,20 +941,36 @@ const styles = StyleSheet.create({
   listingCard: {
     width: '47%',
     borderRadius: theme.borderRadius.lg,
-    overflow: 'hidden',
     backgroundColor: theme.colors.white,
     ...theme.shadows.small,
+    overflow: 'hidden',
+  },
+  listingImageContainer: {
+    width: '100%',
+    aspectRatio: 1,
+    backgroundColor: theme.colors.backgroundLight,
+    position: 'relative',
   },
   listingImage: {
-    width: '100%',
-    height: 140,
+    ...StyleSheet.absoluteFillObject,
+    width: undefined,
+    height: undefined,
+    transform: [{ scale: 1.05 }],
+  },
+  listingImageSheen: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.05)',
   },
   listingPlaceholder: {
-    width: '100%',
-    height: 140,
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: theme.colors.backgroundLight,
+    gap: theme.spacing.xs,
+  },
+  listingPlaceholderText: {
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.textSecondary,
   },
   listingInfo: {
     padding: theme.spacing.sm,

@@ -8,14 +8,14 @@ import {
   ActivityIndicator,
   Platform,
 } from 'react-native';
-import { Picker } from '@react-native-picker/picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../../context/AuthContext';
-import { CATEGORIES } from '../../config/constants';
+import { CATEGORY_OPTION_LIST } from '../../data/categories';
 import theme from '../../theme';
 import Input from '../../components/Input';
 import Button from '../../components/Button';
 import Toast from '../../components/Toast';
+import SelectField from '../../components/SelectField';
 import * as Google from 'expo-auth-session/providers/google';
 import { makeRedirectUri } from 'expo-auth-session';
 import {
@@ -336,23 +336,20 @@ const RegisterForm = ({ navigation }) => {
           />
 
           <View style={styles.pickerContainer}>
-            <Text style={styles.label}>Main Category</Text>
-            <View style={[styles.pickerWrapper, errors.category && styles.pickerError]}>
-              <Picker
-                selectedValue={category}
-                onValueChange={(value) => {
-                  setCategory(value);
-                  if (errors.category) setErrors({ ...errors, category: null });
-                }}
-                style={styles.picker}
-              >
-                <Picker.Item label="Select your focus category" value="" />
-                {CATEGORIES.map((cat) => (
-                  <Picker.Item key={cat} label={cat} value={cat} />
-                ))}
-              </Picker>
-            </View>
-            {errors.category && <Text style={styles.errorText}>{errors.category}</Text>}
+            <SelectField
+              label="Main Category"
+              placeholder="Select your focus category"
+              value={category}
+              options={CATEGORY_OPTION_LIST}
+              onSelect={(value) => {
+                setCategory(value);
+                if (errors.category) {
+                  setErrors({ ...errors, category: null });
+                }
+              }}
+              helperText={errors.category}
+              error={Boolean(errors.category)}
+            />
           </View>
         </>
       )}
@@ -430,20 +427,6 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.sm,
     color: theme.colors.textPrimary,
     marginBottom: theme.spacing.sm,
-  },
-  pickerWrapper: {
-    borderRadius: theme.radius.lg,
-    borderWidth: 1,
-    borderColor: theme.colors.borderLight,
-    backgroundColor: theme.colors.white,
-    overflow: 'hidden',
-  },
-  pickerError: {
-    borderColor: theme.colors.error,
-    borderWidth: 2,
-  },
-  picker: {
-    height: 50,
   },
   errorText: {
     fontFamily: theme.typography.fontFamily.inter,

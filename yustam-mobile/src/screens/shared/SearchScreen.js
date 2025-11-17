@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -9,10 +9,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Picker } from '@react-native-picker/picker';
-import { CATEGORIES, STATES } from '../../config/constants';
+import { STATES } from '../../config/constants';
 import theme from '../../theme';
 import Button from '../../components/Button';
+import SelectField from '../../components/SelectField';
+import { CATEGORY_OPTION_LIST } from '../../data/categories';
 
 const SearchScreen = ({ route }) => {
   const [searchQuery, setSearchQuery] = useState(route?.params?.query || '');
@@ -20,6 +21,14 @@ const SearchScreen = ({ route }) => {
   const [location, setLocation] = useState('');
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
+  const categoryOptions = useMemo(
+    () => [{ label: 'All Categories', value: '' }, ...CATEGORY_OPTION_LIST],
+    []
+  );
+  const stateOptions = useMemo(
+    () => [{ label: 'All Nigeria', value: '' }, ...STATES.map((state) => ({ label: state, value: state }))],
+    []
+  );
 
   const handleSearch = () => {
     // TODO: Implement search with filters
@@ -53,35 +62,23 @@ const SearchScreen = ({ route }) => {
           <Text style={styles.sectionTitle}>Filters</Text>
 
           <View style={styles.filterGroup}>
-            <Text style={styles.label}>Category</Text>
-            <View style={styles.pickerContainer}>
-              <Picker
-                selectedValue={category}
-                onValueChange={setCategory}
-                style={styles.picker}
-              >
-                <Picker.Item label="All Categories" value="" />
-                {CATEGORIES.map((cat) => (
-                  <Picker.Item key={cat} label={cat} value={cat} />
-                ))}
-              </Picker>
-            </View>
+            <SelectField
+              label="Category"
+              placeholder="All Categories"
+              value={category}
+              options={categoryOptions}
+              onSelect={setCategory}
+            />
           </View>
 
           <View style={styles.filterGroup}>
-            <Text style={styles.label}>Location</Text>
-            <View style={styles.pickerContainer}>
-              <Picker
-                selectedValue={location}
-                onValueChange={setLocation}
-                style={styles.picker}
-              >
-                <Picker.Item label="All Nigeria" value="" />
-                {STATES.map((state) => (
-                  <Picker.Item key={state} label={state} value={state} />
-                ))}
-              </Picker>
-            </View>
+            <SelectField
+              label="Location"
+              placeholder="All Nigeria"
+              value={location}
+              options={stateOptions}
+              onSelect={setLocation}
+            />
           </View>
 
           <View style={styles.filterGroup}>
@@ -184,16 +181,6 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.fontFamily.interSemiBold,
     fontSize: theme.typography.fontSize.sm,
     color: theme.colors.textPrimary,
-  },
-  pickerContainer: {
-    borderRadius: theme.radius.lg,
-    borderWidth: 1,
-    borderColor: theme.colors.borderLight,
-    backgroundColor: theme.colors.white,
-    overflow: 'hidden',
-  },
-  picker: {
-    height: 50,
   },
   priceRangeContainer: {
     flexDirection: 'row',
