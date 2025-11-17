@@ -191,62 +191,6 @@ const fetchCurrentSubscription = async () => {
     return null;
   }
 };
-    const externalSubscription = Boolean(
-      metadata.manageExternally ||
-        metadata.externalSubscription ||
-        metadata.source === 'external'
-    );
-    const subscriptionCode =
-      metadata.subscriptionCode ||
-      metadata.subscription_code ||
-      metadata.paystack_subscription_code ||
-      record?.subscriptionCode ||
-      record?.subscription_code ||
-      '';
-    const planInfo = record?.plan;
-    const cancelled = Boolean(metadata.cancelled);
-    const rawCanCancel = metadata.canCancel;
-    const canCancel = externalSubscription
-      ? false
-      : typeof rawCanCancel === 'boolean'
-        ? rawCanCancel
-        : Boolean(subscriptionCode);
-    const planName =
-      metadata.planName ||
-      (typeof planInfo === 'object' ? planInfo?.name ?? planInfo?.displayName : planInfo) ||
-      'Free Plan';
-    const slugSource =
-      metadata.slug ||
-      metadata.planSlug ||
-      (typeof planInfo === 'object' ? planInfo?.slug : planInfo) ||
-      planName ||
-      'plan';
-    const slug = normalisePlanSlug(slugSource, slugSource);
-    const status = metadata.status || record?.status || 'Active';
-    const statusLabel = metadata.statusLabel || record?.status || status;
-    const expiryDisplay = metadata.nextBillingDisplay || metadata.expiryDisplay || record?.endsAt || '--';
-
-    return {
-      slug,
-      planSlug: slug,
-      name: planName,
-      displayName: metadata.displayName || planName,
-      status,
-      statusLabel,
-      expiryDisplay,
-      nextBillingDisplay: metadata.nextBillingDisplay || expiryDisplay,
-      nextBillingIso: metadata.nextBillingIso || null,
-      notice: metadata.notice || '',
-      cancelled,
-      canCancel,
-      subscriptionCode,
-      autoRenew: !cancelled,
-    };
-  } catch (error) {
-    console.warn('Unable to fetch subscription state', error);
-    return null;
-  }
-};
 
 const mapPlanDurationOptions = (definition = {}) => {
   const durations = definition?.durations || {};

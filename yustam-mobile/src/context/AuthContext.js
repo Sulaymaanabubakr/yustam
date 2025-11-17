@@ -339,46 +339,72 @@ export const AuthProvider = ({ children }) => {
 };
 
 export default AuthContext;
-  const fetchBackendUser = async () => {
-    try {
-      const response = await authAPI.getCurrentUser();
-      return response.data?.user ?? response.data;
-    } catch (error) {
-      console.warn('Unable to fetch backend user profile', error);
-      return null;
-    }
-  };
 
-  const ensureVendorRoleForUser = async (firebaseUser, backendUser, metadata = {}) => {
-    if (!firebaseUser) {
+const extractVendorProfile = (payload = {}) => {
+  if (!payload || typeof payload !== 'object') {
+    return null;
+  }
+  if (payload.profile) {
+    return payload.profile;
+  }
+  if (payload.data?.profile) {
+    return payload.data.profile;
+  }
+  if (payload.vendor) {
+    return payload.vendor;
+  }
+  return payload.data ?? payload;
+};
+
+const ensureVendorRoleForUser = async (firebaseUser, backendUser, metadata = {}) => {
+  if (!firebaseUser) {
+    return backendUser;
+  }
+  if (backendUser?.role?.toLowerCase() === USER_ROLES.VENDOR) {
+    return backendUser;
+  }
+
+  const businessName =
+    metadata.businessName ||
+    metadata.fullName ||
+    backendUser?.displayName ||
+    firebaseUser.displayName ||
+    firebaseUser.email?.split('@')[0] ||
+    'Yustam Vendor';
+
+  try {
+    const activationResponse = await vendorAPI.activate({ businessName });
+    if (metadata.businessName || metadata.category || metadata.phone) {
+      await vendorAPI.updateProfile({
+        businessName: metadata.businessName || businessName,
+        category: metadata.category,
+        phone: metadata.phone,
+      });
+    }
+
+    const profilePayload = extractVendorProfile(activationResponse?.data ?? activationResponse);
+    if (!profilePayload) {
       return backendUser;
     }
-    if (backendUser?.role?.toLowerCase() === USER_ROLES.VENDOR) {
-      return backendUser;
+
+    const vendorReference = profilePayload.id || '';
+    let vendorId = profilePayload.vendorId ?? null;
+    if (!vendorId && typeof vendorReference === 'string' && vendorReference.includes(':')) {
+      const [, numericId] = vendorReference.split(':');
+      vendorId = Number(numericId) || null;
     }
 
-    const businessName =
-      metadata.businessName ||
-      metadata.fullName ||
-      backendUser?.displayName ||
-      firebaseUser.displayName ||
-      firebaseUser.email?.split('@')[0] ||
-      'Yustam Vendor';
-
-    try {
-      await vendorAPI.activate({ businessName });
-      if (metadata.businessName || metadata.category || metadata.phone) {
-        await vendorAPI.updateProfile({
-          businessName: metadata.businessName || businessName,
-          category: metadata.category,
-          phone: metadata.phone,
-        });
-      }
-    } catch (error) {
-      console.warn('Failed to ensure vendor access', error);
-      return backendUser;
-    }
-
-    const refreshedUser = await fetchBackendUser();
-    return refreshedUser ?? backendUser;
-  };
+    return {
+      ...backendUser,
+      role: USER_ROLES.VENDOR,
+      vendorId: vendorId ?? backendUser?.vendorId ?? null,
+      vendorUid: profilePayload.vendorUid || backendUser?.vendorUid || null,
+      displayName: profilePayload.businessName || backendUser?.displayName || businessName,
+      email: profilePayload.email || backendUser?.email || firebaseUser.email,
+      phone: profilePayload.phone || backendUser?.phone || firebaseUser.phoneNumber,
+    };
+  } catch (error) {
+    console.warn('Failed to ensure vendor access', error);
+    return backendUser;
+  }
+};
