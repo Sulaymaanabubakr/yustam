@@ -230,14 +230,41 @@ const fetchCurrentSubscription = async () => {
 
 const mapPlanDurationOptions = (definition = {}) => {
   const durations = definition?.durations || {};
-  return Object.values(durations)
-    .map((option) => ({
-      months: Number(option.months) || 0,
-      amount: Number(option.amount) || 0,
-      intervalLabel: option.intervalLabel || '',
-      planCode: option.planCode || null,
-    }))
-    .filter((entry) => entry.months > 0 && entry.planCode)
+  const rawOptions = Array.isArray(durations)
+    ? durations
+    : Object.entries(durations).map(([monthsKey, option]) => ({
+        months: Number(option?.months ?? monthsKey),
+        ...option,
+      }));
+  return rawOptions
+    .map((option) => {
+      const months =
+        Number(option?.months ?? option?.durationMonths ?? option?.interval ?? option?.period ?? 0) || 0;
+      if (!Number.isFinite(months) || months <= 0) {
+        return null;
+      }
+      const amount = Number(
+        option?.amount ?? option?.price ?? option?.total ?? option?.value ?? 0
+      );
+      const planCode = option?.planCode || option?.code || option?.plan || null;
+      const intervalLabel =
+        option?.intervalLabel ||
+        option?.label ||
+        (months === 1
+          ? 'Monthly'
+          : months === 3
+            ? 'Quarterly'
+            : months === 6
+              ? 'Biannual'
+              : `${months} Month${months === 1 ? '' : 's'}`);
+      return {
+        months,
+        amount,
+        intervalLabel,
+        planCode,
+      };
+    })
+    .filter((entry) => entry && entry.planCode && entry.amount > 0)
     .sort((a, b) => a.months - b.months);
 };
 
@@ -571,18 +598,18 @@ export const vendorAPI = {
     }
     const catalogEntry = catalog[currentPlan.slug] || catalog[`${currentPlan.slug}-plan`] || {};
     const durations = mapPlanDurationOptions(catalogEntry);
-    return {
+  return {
+    data: {
+      success: true,
       data: {
-        success: true,
-        data: {
-          planName: currentPlan.displayName,
-          planBadge: currentPlan.statusLabel || currentPlan.status,
-          monthlyPrice: currentPlan.price || 0,
-          currency: currentPlan.currency || 'NGN',
-          expiresOn: currentPlan.nextBillingDisplay || currentPlan.expiryDisplay || '--',
-          remainingListings: currentPlan.listings ?? null,
-          contactEmail: 'support@yustam.com.ng',
-          vendorName: currentPlan.vendorName || 'Yustam Vendor',
+        planName: currentPlan.displayName,
+        planBadge: currentPlan.statusLabel || currentPlan.status,
+        monthlyPrice: currentPlan.price || (durations[0]?.amount ?? 0),
+        currency: currentPlan.currency || 'NGN',
+        expiresOn: currentPlan.nextBillingDisplay || currentPlan.expiryDisplay || '--',
+        remainingListings: currentPlan.listings ?? null,
+        contactEmail: 'support@yustam.com.ng',
+        vendorName: currentPlan.vendorName || 'Yustam Vendor',
           slug: currentPlan.slug,
           durationOptions: durations,
         },

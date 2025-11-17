@@ -18,6 +18,8 @@ import Toast from '../../components/Toast';
 import Button from '../../components/Button';
 import { goBackOrNavigate } from '../../utils/navigation';
 import { formatNaira } from '../../utils/formatters';
+import { cleanPlanDisplayName } from '../../utils/subscription';
+import { getPlanPreset } from '../../data/vendorPlans';
 
 const resolveVendorId = (profile) => {
   if (!profile) {
@@ -46,6 +48,33 @@ const buildPlanReference = (vendorId) => {
   return `YUSTAM-V${vendorId}-${randomPart}-${Date.now()}`;
 };
 
+const normaliseDurationOptions = (options = []) => {
+  if (!Array.isArray(options)) {
+    return [];
+  }
+  return options
+    .map((option) => {
+      const months =
+        Number(option?.months ?? option?.durationMonths ?? option?.interval ?? option?.period ?? 0) || 0;
+      if (!Number.isFinite(months) || months <= 0) {
+        return null;
+      }
+      const amount = Number(option?.amount ?? option?.price ?? option?.total ?? 0) || 0;
+      const intervalLabel =
+        option?.intervalLabel ||
+        option?.label ||
+        (months === 1 ? 'Monthly' : months === 3 ? 'Quarterly' : months === 6 ? 'Biannual' : `${months} Months`);
+      const planCode = option?.planCode || option?.code || option?.plan || null;
+      return {
+        months,
+        amount,
+        intervalLabel,
+        planCode,
+      };
+    })
+    .filter(Boolean);
+};
+
 const VendorRenewPlanScreen = ({ navigation }) => {
   const { user } = useAuth();
   const { popup } = usePaystack();
@@ -59,15 +88,13 @@ const VendorRenewPlanScreen = ({ navigation }) => {
     () => (Array.isArray(plan?.durations) ? plan.durations : []),
     [plan]
   );
+  const hasDurationOptions = durationOptions.length > 0;
   const selectedOption = useMemo(() => {
     if (!durationOptions.length) {
       return null;
     }
-    return (
-      durationOptions.find((option) => option.months === selectedDuration) ||
-      durationOptions[0] ||
-      null
-    );
+    const directMatch = durationOptions.find((option) => option.months === selectedDuration);
+    return directMatch || durationOptions[0] || null;
   }, [durationOptions, selectedDuration]);
 
   const showToast = (message, type = 'success') => {
@@ -83,9 +110,14 @@ const VendorRenewPlanScreen = ({ navigation }) => {
       }
       const response = await vendorAPI.getRenewPlan();
       const payload = response.data?.data || {};
-      const durations = Array.isArray(payload.durationOptions) ? payload.durationOptions : [];
+      let durations = normaliseDurationOptions(payload.durationOptions || []);
+      if (!durations.length) {
+        const fallbackPreset = getPlanPreset(payload.slug || payload.planSlug || payload.planName || payload.plan);
+        const fallbackDurations = normaliseDurationOptions(fallbackPreset?.durationOptions || []);
+        durations = fallbackDurations;
+      }
       setPlan({
-        name: payload.planName || 'Current Plan',
+        name: cleanPlanDisplayName(payload.planName || 'Current Plan'),
         badge: payload.planBadge || '',
         price: payload.monthlyPrice || 0,
         currency: payload.currency || 'NGN',
@@ -96,7 +128,7 @@ const VendorRenewPlanScreen = ({ navigation }) => {
         slug: payload.slug || '',
         durations,
       });
-      setSelectedDuration(durations[0]?.months || durations[0]?.durationMonths || 1);
+      setSelectedDuration(durations[0]?.months || null);
     } catch (error) {
       console.error('Failed to load renewal plan', error);
       showToast(error.message || 'Unable to load renewal details', 'error');
@@ -154,8 +186,16 @@ const VendorRenewPlanScreen = ({ navigation }) => {
       showToast('Payment module is not ready yet. Please try again shortly.', 'error');
       return;
     }
-    if (!selectedOption?.planCode || !Number(selectedOption?.amount)) {
+    if (!selectedOption) {
+      if (!hasDurationOptions) {
+        showToast('Renewal options are not available for this plan. Please contact support.', 'error');
+        return;
+      }
       showToast('Select a billing duration before renewing.', 'error');
+      return;
+    }
+    if (!selectedOption?.planCode || !Number(selectedOption?.amount)) {
+      showToast('This billing option is not available. Please pick another duration.', 'error');
       return;
     }
     if (!user?.email) {
@@ -240,7 +280,10 @@ const VendorRenewPlanScreen = ({ navigation }) => {
         <View style={styles.planCard}>
           <Text style={styles.planLabel}>Current Plan</Text>
           <Text style={styles.planName}>{plan?.name}</Text>
-          <Text style={styles.planPrice}>{formatNaira(plan?.price || 0)}/month</Text>
+          <Text style={styles.planPrice}>
+            {formatNaira(plan?.price || selectedOption?.amount || 0)}
+            {selectedOption ? ` / ${selectedOption.intervalLabel || 'month'}` : ''}
+          </Text>
           <View style={styles.planMeta}>
             <Ionicons name="time-outline" size={18} color={theme.colors.textSecondary} />
             <Text style={styles.planMetaText}>
@@ -260,7 +303,7 @@ const VendorRenewPlanScreen = ({ navigation }) => {
           )}
         </View>
 
-        {durationOptions.length > 0 && (
+        {hasDurationOptions ? (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Renewal Options</Text>
             <View style={styles.durationSection}>
@@ -289,10 +332,23 @@ const VendorRenewPlanScreen = ({ navigation }) => {
             </View>
             {selectedOption && (
               <Text style={styles.summaryText}>
-                You’ll pay {formatNaira(selectedOption.amount)} for{' '}
+                You'll pay {formatNaira(selectedOption.amount)} for{' '}
                 {selectedOption.intervalLabel || `${selectedOption.months} months`}.
               </Text>
             )}
+          </View>
+        ) : (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Renewal Options</Text>
+            <View style={styles.emptyDurationState}>
+              <Ionicons name="alert-circle-outline" size={20} color={theme.colors.orange} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.emptyDurationTitle}>No billing options available</Text>
+                <Text style={styles.emptyDurationText}>
+                  We couldn't load renewal durations for this plan. Please contact support to renew manually.
+                </Text>
+              </View>
+            </View>
           </View>
         )}
 
@@ -317,7 +373,7 @@ const VendorRenewPlanScreen = ({ navigation }) => {
           icon="sparkles-outline"
           onPress={handleRenew}
           loading={processingPayment}
-          disabled={processingPayment}
+          disabled={processingPayment || !selectedOption}
         >
           Proceed to Renew
         </Button>
@@ -414,6 +470,25 @@ const styles = StyleSheet.create({
   durationSection: {
     gap: theme.spacing.sm,
     marginTop: theme.spacing.md,
+  },
+  emptyDurationState: {
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+    padding: theme.spacing.md,
+    backgroundColor: `${theme.colors.orange}15`,
+    borderRadius: theme.radius.lg,
+    alignItems: 'flex-start',
+  },
+  emptyDurationTitle: {
+    fontFamily: theme.typography.fontFamily.interSemiBold,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.textPrimary,
+  },
+  emptyDurationText: {
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.textSecondary,
+    marginTop: theme.spacing.xs / 2,
   },
   durationOption: {
     flexDirection: 'row',

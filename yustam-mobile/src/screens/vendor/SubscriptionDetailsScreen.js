@@ -18,7 +18,7 @@ import { goBackOrNavigate } from '../../utils/navigation';
 import { API_BASE_URL } from '../../config/constants';
 import { formatNaira, formatNumber } from '../../utils/formatters';
 import * as WebBrowser from 'expo-web-browser';
-import { deriveSubscriptionStatusMeta, normalizeAutoRenewFlag } from '../../utils/subscription';
+import { deriveSubscriptionStatusMeta, normalizeAutoRenewFlag, cleanPlanDisplayName } from '../../utils/subscription';
 
 const SubscriptionDetailsScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
@@ -96,8 +96,8 @@ const SubscriptionDetailsScreen = ({ navigation }) => {
 
       setPlan({
         slug: activeSlug,
-        name: planDefinition.name || subscription.name || 'Free',
-        displayName: planDefinition.displayName || planDefinition.name || 'Free',
+        name: cleanPlanDisplayName(planDefinition.name || subscription.name || 'Free'),
+        displayName: cleanPlanDisplayName(planDefinition.displayName || planDefinition.name || 'Free'),
         status: statusMeta.primaryStatus,
         statusNote: statusMeta.secondaryStatus,
         renewalLabel: statusMeta.renewalLabel,

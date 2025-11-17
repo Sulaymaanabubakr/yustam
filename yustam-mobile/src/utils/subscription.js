@@ -46,6 +46,13 @@ export const cleanPlanDisplayName = (value = '') => {
   if (!base) {
     return '';
   }
-  const cleaned = base.replace(/\s*-\s*(\d+\s*)?(month|months|quarter|quarterly|week|weeks|year|years|annual|annually)\b.*$/i, '');
-  return cleaned.trim();
+  const withoutDuration = base.replace(
+    /\s*-\s*(\d+\s*)?(month|months|quarter|quarterly|week|weeks|year|years|annual|annually)\b.*$/i,
+    ''
+  ).trim();
+  if (withoutDuration.toLowerCase() === 'free plan') {
+    return 'Free Plan';
+  }
+  const stripped = withoutDuration.replace(/\bplan\b/gi, '').replace(/\s+/g, ' ').trim();
+  return stripped || withoutDuration;
 };

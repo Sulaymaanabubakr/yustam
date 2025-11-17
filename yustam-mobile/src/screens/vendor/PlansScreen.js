@@ -43,6 +43,7 @@ import { goBackOrNavigate } from '../../utils/navigation';
 import { formatNumber, formatNaira } from '../../utils/formatters';
 import { DEFAULT_VENDOR_PLANS, getPlanPreset } from '../../data/vendorPlans';
 import { usePaystack } from 'react-native-paystack-webview';
+import { cleanPlanDisplayName } from '../../utils/subscription';
 
 const BILLING_LABELS = {
   1: 'Monthly',
@@ -229,8 +230,11 @@ const PlansScreen = ({ navigation }) => {
       setCurrentPlan(slugRaw);
       setDiscounts(Object.keys(payload.discounts || {}).length ? payload.discounts : DEFAULT_DISCOUNT_MAP);
       const summary = payload.currentPlan || {};
+      const currentPlanName = cleanPlanDisplayName(
+        summary.displayName || summary.name || getPlanLabel(slugRaw)
+      );
       setCurrentPlanInfo({
-        name: summary.displayName || summary.name || getPlanLabel(slugRaw),
+        name: currentPlanName,
         status: summary.status || subscription.status || 'Active',
         statusNote: summary.statusNote || subscription.statusNote || null,
         renewalLabel: summary.renewalLabel || subscription.renewalLabel || (summary.statusNote ? 'Expires on' : 'Renews'),
@@ -734,6 +738,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  summaryStatusGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
   },
   summaryStatusGroup: {
     flexDirection: 'row',
