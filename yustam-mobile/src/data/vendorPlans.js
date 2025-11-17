@@ -51,10 +51,10 @@ const PLAN_LIBRARY = {
       'Eligible for promotional campaigns',
     ],
     durationOptions: [
-      { months: 1, amount: 3000, intervalLabel: 'Monthly' },
-      { months: 3, amount: 8370, intervalLabel: 'Quarterly' },
-      { months: 6, amount: 15840, intervalLabel: 'Biannual' },
-      { months: 12, amount: 29880, intervalLabel: 'Annual' },
+      { months: 1, amount: 3000, intervalLabel: 'Monthly', planCode: 'PLN_j1nrwlimkmfcg5q' },
+      { months: 3, amount: 8370, intervalLabel: 'Quarterly', planCode: 'PLN_p5sdo8umjca4jbv' },
+      { months: 6, amount: 15840, intervalLabel: 'Biannual', planCode: 'PLN_iuwpbvhy7vqgil0' },
+      { months: 12, amount: 29880, intervalLabel: 'Annual', planCode: 'PLN_r7uurqe26e0dg2p' },
     ],
   },
   pro: {
@@ -78,10 +78,10 @@ const PLAN_LIBRARY = {
       'Eligible for social media highlight features',
     ],
     durationOptions: [
-      { months: 1, amount: 5000, intervalLabel: 'Monthly' },
-      { months: 3, amount: 13950, intervalLabel: 'Quarterly' },
-      { months: 6, amount: 26400, intervalLabel: 'Biannual' },
-      { months: 12, amount: 49800, intervalLabel: 'Annual' },
+      { months: 1, amount: 5000, intervalLabel: 'Monthly', planCode: 'PLN_9paomaa1bl6ikft' },
+      { months: 3, amount: 13950, intervalLabel: 'Quarterly', planCode: 'PLN_mvrb8re3t8wogm0' },
+      { months: 6, amount: 26400, intervalLabel: 'Biannual', planCode: 'PLN_xijcfx9aaf5nvt1' },
+      { months: 12, amount: 49800, intervalLabel: 'Annual', planCode: 'PLN_0bghda7lp46ew5u' },
     ],
   },
   elite: {
@@ -105,10 +105,10 @@ const PLAN_LIBRARY = {
       'Invitation to the Elite Vendor Network',
     ],
     durationOptions: [
-      { months: 1, amount: 8000, intervalLabel: 'Monthly' },
-      { months: 3, amount: 22320, intervalLabel: 'Quarterly' },
-      { months: 6, amount: 42240, intervalLabel: 'Biannual' },
-      { months: 12, amount: 79680, intervalLabel: 'Annual' },
+      { months: 1, amount: 8000, intervalLabel: 'Monthly', planCode: 'PLN_7fu939t6pelwv3s' },
+      { months: 3, amount: 22320, intervalLabel: 'Quarterly', planCode: 'PLN_8q8av3vs9d52e6x' },
+      { months: 6, amount: 42240, intervalLabel: 'Biannual', planCode: 'PLN_15uflpdg5thmfoj' },
+      { months: 12, amount: 79680, intervalLabel: 'Annual', planCode: 'PLN_hvkc4s9j4o9nays' },
     ],
   },
   power: {
@@ -134,18 +134,21 @@ const PLAN_LIBRARY = {
       'Invite-only partnerships & affiliate campaigns',
     ],
     durationOptions: [
-      { months: 1, amount: 15000, intervalLabel: 'Monthly' },
-      { months: 3, amount: 41850, intervalLabel: 'Quarterly' },
-      { months: 6, amount: 79200, intervalLabel: 'Biannual' },
-      { months: 12, amount: 149400, intervalLabel: 'Annual' },
+      { months: 1, amount: 15000, intervalLabel: 'Monthly', planCode: 'PLN_m0mn0nw12o584dl' },
+      { months: 3, amount: 41850, intervalLabel: 'Quarterly', planCode: 'PLN_176562aqdxtnglg' },
+      { months: 6, amount: 79200, intervalLabel: 'Biannual', planCode: 'PLN_hxbk93v00ruczkb' },
+      { months: 12, amount: 149400, intervalLabel: 'Annual', planCode: 'PLN_r7uurqe26e0dg2p' },
     ],
   },
 };
 
 export const DEFAULT_VENDOR_PLANS = Object.values(PLAN_LIBRARY);
 
-export const getPlanPreset = (slug = 'free') => {
-  const normalized = normalisePlanKey(slug);
+export const matchPlanPreset = (identifier) => {
+  if (!identifier) {
+    return null;
+  }
+  const normalized = normalisePlanKey(identifier);
   if (PLAN_LIBRARY[normalized]) {
     return PLAN_LIBRARY[normalized];
   }
@@ -154,7 +157,25 @@ export const getPlanPreset = (slug = 'free') => {
     const planNameKey = normalisePlanKey(plan.name);
     return planSlugKey === normalized || planNameKey === normalized;
   });
-  return match || PLAN_LIBRARY.free;
+  return match || null;
+};
+
+export const getPlanPreset = (identifier = 'free') => {
+  return matchPlanPreset(identifier) || PLAN_LIBRARY.free;
+};
+
+export const getPlanPresetByCode = (planCode) => {
+  const code = String(planCode || '').toLowerCase();
+  if (!code) {
+    return null;
+  }
+  const preset = Object.values(PLAN_LIBRARY).find((plan) => {
+    const durations = Array.isArray(plan.durationOptions)
+      ? plan.durationOptions
+      : Object.values(plan.durationOptions || {});
+    return durations.some((entry) => String(entry?.planCode || '').toLowerCase() === code);
+  });
+  return preset || null;
 };
 
 export default PLAN_LIBRARY;

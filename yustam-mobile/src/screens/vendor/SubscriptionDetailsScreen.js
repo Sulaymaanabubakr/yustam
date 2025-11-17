@@ -18,6 +18,7 @@ import { goBackOrNavigate } from '../../utils/navigation';
 import { API_BASE_URL } from '../../config/constants';
 import { formatNaira, formatNumber } from '../../utils/formatters';
 import * as WebBrowser from 'expo-web-browser';
+import { deriveSubscriptionStatusMeta, normalizeAutoRenewFlag } from '../../utils/subscription';
 
 const SubscriptionDetailsScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
@@ -28,9 +29,11 @@ const SubscriptionDetailsScreen = ({ navigation }) => {
     name: 'Free',
     displayName: 'Free Plan',
     status: 'Active',
+    statusNote: null,
+    renewalLabel: 'Next billing',
     price: 0,
     duration: 'Monthly',
-    autoRenew: false,
+    autoRenew: true,
     nextBillingDisplay: '--',
     nextBillingIso: '',
   });
@@ -81,16 +84,29 @@ const SubscriptionDetailsScreen = ({ navigation }) => {
           features: subscription.features || [],
         };
 
+      const autoRenew = normalizeAutoRenewFlag(
+        subscription.autoRenew ?? subscription.auto_renew ?? subscription.renewalStatus,
+        true
+      );
+      const statusMeta = deriveSubscriptionStatusMeta(
+        subscription.status || subscription.statusLabel || 'Active',
+        autoRenew,
+        Boolean(subscription.cancelled)
+      );
+
       setPlan({
         slug: activeSlug,
         name: planDefinition.name || subscription.name || 'Free',
         displayName: planDefinition.displayName || planDefinition.name || 'Free',
-        status: subscription.statusLabel || subscription.status || 'Active',
+        status: statusMeta.primaryStatus,
+        statusNote: statusMeta.secondaryStatus,
+        renewalLabel: statusMeta.renewalLabel,
         price: planDefinition.price || subscription.amount || subscription.price || 0,
         duration: planDefinition.duration || subscription.durationLabel || 'Monthly',
-        autoRenew: Boolean(subscription.autoRenew || subscription.renewalStatus === 'auto'),
+        autoRenew,
         nextBillingDisplay: subscription.nextBillingDisplay || subscription.expiryDisplay || '--',
         nextBillingIso: subscription.nextBillingIso || subscription.expiryIso || '',
+        statusMeta,
       });
 
       setSubscriptionMeta(subscription);
@@ -202,18 +218,25 @@ const SubscriptionDetailsScreen = ({ navigation }) => {
                 <Text style={styles.planLabel}>Current Plan</Text>
                 <Text style={styles.planName}>{plan.displayName}</Text>
               </View>
-              <View
-                style={[
-                  styles.statusBadge,
-                  plan.status.toLowerCase().includes('active') ? styles.statusActive : styles.statusPaused,
-                ]}
-              >
-                <Ionicons
-                  name={plan.status.toLowerCase().includes('active') ? 'checkmark-circle' : 'time-outline'}
-                  size={16}
-                  color={theme.colors.white}
-                />
-                <Text style={styles.statusText}>{plan.status}</Text>
+              <View style={styles.summaryStatusGroup}>
+                <View
+                  style={[
+                    styles.statusBadge,
+                    plan.status.toLowerCase().includes('active') ? styles.statusActive : styles.statusPaused,
+                  ]}
+                >
+                  <Ionicons
+                    name={plan.status.toLowerCase().includes('active') ? 'checkmark-circle' : 'time-outline'}
+                    size={16}
+                    color={theme.colors.white}
+                  />
+                  <Text style={styles.statusText}>{plan.status}</Text>
+                </View>
+                {plan.statusNote ? (
+                  <View style={[styles.statusBadge, styles.statusPaused]}>
+                    <Text style={styles.statusText}>{plan.statusNote}</Text>
+                  </View>
+                ) : null}
               </View>
             </View>
 
@@ -222,7 +245,7 @@ const SubscriptionDetailsScreen = ({ navigation }) => {
               <Text style={styles.priceDuration}>/ {plan.duration}</Text>
             </View>
             <Text style={styles.nextBilling}>
-              Next billing date: {plan.nextBillingDisplay || 'Not scheduled'}
+              {plan.renewalLabel || 'Next billing'}: {plan.nextBillingDisplay || 'Not scheduled'}
             </Text>
           </View>
         </View>
@@ -340,6 +363,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  summaryStatusGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
   },
   planLabel: {
     fontFamily: theme.typography.fontFamily.inter,

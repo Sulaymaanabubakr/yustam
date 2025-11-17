@@ -231,7 +231,9 @@ const PlansScreen = ({ navigation }) => {
       const summary = payload.currentPlan || {};
       setCurrentPlanInfo({
         name: summary.displayName || summary.name || getPlanLabel(slugRaw),
-        status: summary.status || subscription.statusLabel || 'Active',
+        status: summary.status || subscription.status || 'Active',
+        statusNote: summary.statusNote || subscription.statusNote || null,
+        renewalLabel: summary.renewalLabel || subscription.renewalLabel || (summary.statusNote ? 'Expires on' : 'Renews'),
         expiry: summary.expiryDisplay || summary.nextBillingDisplay || '--',
         notice: summary.notice || subscription.notice || '',
       });
@@ -574,28 +576,37 @@ const PlansScreen = ({ navigation }) => {
           {currentPlanInfo && (
             <View style={styles.summaryCard}>
               <View style={styles.summaryHeader}>
-              <Text style={styles.summaryLabel}>Current Plan</Text>
-              <View
-                style={[
-                  styles.summaryStatusBadge,
-                  (currentPlanInfo.status || '').toLowerCase().includes('active')
-                    ? styles.summaryStatusActive
-                    : styles.summaryStatusWarning,
-                ]}
-              >
-                <Text style={styles.summaryStatusText}>{currentPlanInfo.status || 'Active'}</Text>
+                <Text style={styles.summaryLabel}>Current Plan</Text>
+                <View style={styles.summaryStatusGroup}>
+                  <View
+                    style={[
+                      styles.summaryStatusBadge,
+                      (currentPlanInfo.status || '').toLowerCase().includes('active')
+                        ? styles.summaryStatusActive
+                        : styles.summaryStatusWarning,
+                    ]}
+                  >
+                    <Text style={styles.summaryStatusText}>{currentPlanInfo.status || 'Active'}</Text>
+                  </View>
+                  {currentPlanInfo.statusNote ? (
+                    <View style={[styles.summaryStatusBadge, styles.summaryStatusWarning]}>
+                      <Text style={styles.summaryStatusText}>{currentPlanInfo.statusNote}</Text>
+                    </View>
+                  ) : null}
+                </View>
               </View>
+              <Text style={styles.summaryPlanName}>{currentPlanInfo.name}</Text>
+              <Text style={styles.summaryMeta}>
+                {(currentPlanInfo.renewalLabel || 'Renews')}: {currentPlanInfo.expiry || '--'}
+              </Text>
+              {currentPlanInfo.notice ? (
+                <View style={styles.summaryNotice}>
+                  <Ionicons name="information-circle-outline" size={18} color={theme.colors.accent} />
+                  <Text style={styles.summaryNoticeText}>{currentPlanInfo.notice}</Text>
+                </View>
+              ) : null}
             </View>
-            <Text style={styles.summaryPlanName}>{currentPlanInfo.name}</Text>
-            <Text style={styles.summaryMeta}>Renews: {currentPlanInfo.expiry || '--'}</Text>
-            {currentPlanInfo.notice ? (
-              <View style={styles.summaryNotice}>
-                <Ionicons name="information-circle-outline" size={18} color={theme.colors.accent} />
-                <Text style={styles.summaryNoticeText}>{currentPlanInfo.notice}</Text>
-              </View>
-            ) : null}
-          </View>
-        )}
+          )}
 
         <View style={styles.subscriptionSummary}>
           <Button
@@ -723,6 +734,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  summaryStatusGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
   },
   summaryLabel: {
     fontFamily: theme.typography.fontFamily.interSemiBold,

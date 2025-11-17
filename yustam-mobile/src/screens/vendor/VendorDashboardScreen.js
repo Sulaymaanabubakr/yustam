@@ -18,6 +18,7 @@ import Button from '../../components/Button';
 import { vendorAPI } from '../../services/api';
 import { formatNumber } from '../../utils/formatters';
 import { resolveUserUid } from '../../utils/user';
+import { deriveSubscriptionStatusMeta, normalizeAutoRenewFlag, cleanPlanDisplayName } from '../../utils/subscription';
 
 const formatVerificationStatusLabel = (value) => {
   const normalised = String(value || '').trim().toLowerCase();
@@ -48,7 +49,9 @@ const VendorDashboardScreen = ({ navigation }) => {
     unreadNotifications: 0,
     planName: 'Free',
     planStatus: 'Active',
+    planStatusNote: null,
     planRenewal: '--',
+    planRenewalLabel: 'Next billing',
     verificationStatus: 'Pending',
   });
 
@@ -101,6 +104,35 @@ const VendorDashboardScreen = ({ navigation }) => {
         verificationData?.statusDisplay || verificationData?.status
       );
 
+      const autoRenewSource =
+        planSummary?.autoRenew ??
+        planSummary?.auto_renew ??
+        subscription.autoRenew ??
+        subscription.renewalStatus;
+      const normalizedAutoRenew = normalizeAutoRenewFlag(autoRenewSource, true);
+      const statusMeta = deriveSubscriptionStatusMeta(
+        planSummary?.status ||
+          planSummary?.statusLabel ||
+          subscription.status ||
+          subscription.statusLabel ||
+          profile.planStatus ||
+          'Active',
+        normalizedAutoRenew,
+        planSummary?.cancelled ?? subscription.cancelled ?? false
+      );
+      const dashboardPlanStatus = statusMeta.primaryStatus;
+      const planStatusNote = statusMeta.secondaryStatus;
+      const dashboardPlanRenewal =
+        planSummary?.nextBillingDisplay ||
+        planSummary?.expiryDisplay ||
+        subscription.nextBillingDisplay ||
+        profile.planRenewal ||
+        '--';
+      const dashboardPlanRenewalLabel =
+        subscription?.renewalLabel ||
+        planSummary?.renewalLabel ||
+        statusMeta.renewalLabel ||
+        (planStatusNote ? 'Expires on' : 'Next billing');
       setDashboard({
         totalListings,
         activeListings,
@@ -108,20 +140,13 @@ const VendorDashboardScreen = ({ navigation }) => {
         totalViews: stats.total_views || 0,
         unreadMessages,
         unreadNotifications,
-        planName: planSummary?.displayName || subscription.displayName || profile.plan || 'Free',
-        planStatus:
-          planSummary?.statusLabel ||
-          planSummary?.status ||
-          subscription.statusLabel ||
-          subscription.status ||
-          profile.planStatus ||
-          'Active',
-        planRenewal:
-          planSummary?.nextBillingDisplay ||
-          planSummary?.expiryDisplay ||
-          subscription.nextBillingDisplay ||
-          profile.planRenewal ||
-          '--',
+        planName: cleanPlanDisplayName(
+          planSummary?.displayName || subscription.displayName || profile.plan || 'Free'
+        ),
+        planStatus: dashboardPlanStatus,
+        planStatusNote,
+        planRenewal: dashboardPlanRenewal,
+        planRenewalLabel: dashboardPlanRenewalLabel,
         verificationStatus,
       });
     } catch (error) {
@@ -273,12 +298,20 @@ const VendorDashboardScreen = ({ navigation }) => {
                 <Text style={styles.planLabel}>Current Plan</Text>
                 <Text style={styles.planName}>{dashboard.planName}</Text>
               </View>
-              <View style={[styles.statusBadge, dashboard.planStatus === 'Active' ? styles.activeBadge : styles.inactiveBadge]}>
-                <Text style={styles.statusText}>{dashboard.planStatus}</Text>
+              <View style={styles.statusPills}>
+                <View style={[styles.statusBadge, styles.activeBadge]}>
+                  <Text style={styles.statusText}>{dashboard.planStatus}</Text>
+                </View>
+                {dashboard.planStatusNote ? (
+                  <View style={[styles.statusBadge, styles.inactiveBadge]}>
+                    <Text style={styles.statusText}>{dashboard.planStatusNote}</Text>
+                  </View>
+                ) : null}
               </View>
             </View>
             <Text style={styles.planRenewal}>
-              Next billing: {dashboard.planRenewal && dashboard.planRenewal !== '--' ? dashboard.planRenewal : 'Not scheduled'}
+              {dashboard.planRenewalLabel}:{' '}
+              {dashboard.planRenewal && dashboard.planRenewal !== '--' ? dashboard.planRenewal : 'Not scheduled'}
             </Text>
             <Button
               title="Manage Plan"
@@ -489,6 +522,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: theme.spacing.base,
+  },
+  statusPills: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
   },
   planInfo: {
     flex: 1,

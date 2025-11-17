@@ -1,6 +1,7 @@
 
 import axios from 'axios';
 import { API_BASE_URL } from '../config/constants';
+import { deriveSubscriptionStatusMeta, normalizeAutoRenewFlag, cleanPlanDisplayName } from '../utils/subscription';
 
 // Verify plan payment by calling backend callback endpoint
 // (moved below into vendorAPI)
@@ -59,12 +60,36 @@ const buildFormData = (payload = {}) => {
   return formData;
 };
 
-const normalisePlanSlug = (name, fallback) =>
-  (name || fallback || '')
-    .toLowerCase()
-    .replace(/\b(plan|seller|vendor)\b/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '') || fallback || 'plan';
+const normalisePlanSlug = (name, fallback) => {
+  const source =
+    typeof name === 'string' && name.trim() !== ''
+      ? name
+      : typeof fallback === 'string'
+        ? fallback
+        : 'plan';
+  return (
+    source
+      .toLowerCase()
+      .replace(/\b(plan|seller|vendor)\b/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'plan'
+  );
+};
+
+const findPlanInCatalogByCode = (planCode, catalog = {}) => {
+  const code = String(planCode || '').toLowerCase();
+  if (!code) {
+    return null;
+  }
+  return (
+    Object.values(catalog).find((plan) => {
+      const durations = Array.isArray(plan?.durations)
+        ? plan.durations
+        : Object.values(plan?.durations || {});
+      return durations.some((option) => String(option?.planCode || '').toLowerCase() === code);
+    }) || null
+  );
+};
 
 const formatDurationLabel = (months) => {
   const numeric = Number(months);
@@ -161,7 +186,14 @@ const fetchCurrentSubscription = async () => {
       payload.next_payment_date ||
       payload.nextBillingDate ||
       null;
-    const status = (payload.status || 'inactive').toUpperCase();
+    const rawAutoRenew =
+      payload.auto_renew ?? payload.autoRenew ?? payload.renewalStatus ?? payload.autoRenewal;
+    const autoRenew = normalizeAutoRenewFlag(rawAutoRenew, true);
+    const statusMeta = deriveSubscriptionStatusMeta(
+      payload.status || payload.plan_status || payload.subscription_status,
+      autoRenew,
+      Boolean(payload.cancelled)
+    );
     const planName = payload.plan_name || payload.planName || 'Free Plan';
     const subscriptionCode = payload.subscription_code || payload.subscriptionCode || '';
     return {
@@ -172,19 +204,23 @@ const fetchCurrentSubscription = async () => {
       name: planName,
       subscriptionCode,
       planCode: payload.plan_code || payload.planCode || null,
-      status,
-      statusLabel: status.replace(/_/g, ' '),
+      status: statusMeta.primaryStatus,
+      statusLabel: statusMeta.primaryStatus,
+      statusNote: statusMeta.secondaryStatus,
       nextBillingDisplay: expires,
       expiryDisplay: expires,
-      autoRenew: Boolean(payload.auto_renew ?? payload.autoRenew),
-      renewalStatus: (payload.auto_renew ?? payload.autoRenew) ? 'auto' : 'manual',
+      renewalLabel: statusMeta.renewalLabel,
+      autoRenew,
+      renewalStatus: autoRenew ? 'auto' : 'manual',
       externalSubscription: Boolean(payload.externalSubscription || payload.manageExternally),
       canCancel: Boolean(subscriptionCode),
-      cancelled: !(payload.auto_renew ?? payload.autoRenew),
+      cancelled: Boolean(payload.cancelled),
+      cancellationScheduled: statusMeta.cancellationScheduled,
       notice: payload.notice || '',
       planAmount: payload.plan_amount || payload.planAmount || 0,
       planInterval: payload.plan_interval || payload.planInterval || 'monthly',
       metadata: payload,
+      statusMeta,
     };
   } catch (error) {
     console.warn('Unable to fetch subscription state', error);
@@ -209,26 +245,44 @@ const enrichSubscriptionWithPlan = (subscription, catalog = {}) => {
   if (!subscription) {
     return null;
   }
-  const slugSource =
+  const slugSourceValue =
     subscription.slug ||
     subscription.planSlug ||
     subscription.planName ||
     subscription.name ||
     subscription.displayName ||
+    subscription.plan?.slug ||
+    subscription.plan?.name ||
+    subscription.plan ||
     'free';
+  const slugSource =
+    typeof slugSourceValue === 'string'
+      ? slugSourceValue
+      : slugSourceValue?.slug || slugSourceValue?.name || '';
   const slug = normalisePlanSlug(slugSource, 'free');
+  const planCodeHint =
+    subscription.planCode ||
+    subscription.plan_code ||
+    subscription.plan?.plan_code ||
+    subscription.plan?.code ||
+    subscription.metadata?.planCode ||
+    subscription.metadata?.plan_code ||
+    null;
+  const planByCode = findPlanInCatalogByCode(planCodeHint, catalog);
   const planDefinition =
     catalog[slug] ||
     catalog[`${slug}-plan`] ||
     catalog[slugSource] ||
+    planByCode ||
     null;
-  const displayName =
+  const rawDisplayName =
     subscription.displayName ||
     planDefinition?.displayName ||
     planDefinition?.name ||
     subscription.name ||
     subscription.planName ||
     'Free Plan';
+  const displayName = cleanPlanDisplayName(rawDisplayName);
 
   return {
     ...subscription,
@@ -558,8 +612,11 @@ export const vendorAPI = {
           ...currentPlan,
           planName: currentPlan.displayName,
           status: currentPlan.status || currentPlan.statusLabel || 'Active',
+          statusNote: currentPlan.statusNote || null,
+          statusMeta: currentPlan.statusMeta || null,
           expiryDisplay: currentPlan.nextBillingDisplay || currentPlan.expiryDisplay || '--',
-          autoRenew: Boolean(subscription?.autoRenew ?? subscription?.renewalStatus === 'auto'),
+          autoRenew: currentPlan.autoRenew,
+          renewalLabel: currentPlan.renewalLabel || 'Next billing',
           canCancel: Boolean(
             subscription?.canCancel ?? subscription?.subscriptionCode
           ),

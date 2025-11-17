@@ -20,7 +20,8 @@ import Toast from '../../components/Toast';
 import Button from '../../components/Button';
 import { vendorAPI } from '../../services/api';
 import { goBackOrNavigate } from '../../utils/navigation';
-import { getPlanPreset } from '../../data/vendorPlans';
+import { getPlanPreset, getPlanPresetByCode, matchPlanPreset } from '../../data/vendorPlans';
+import { deriveSubscriptionStatusMeta, normalizeAutoRenewFlag, cleanPlanDisplayName } from '../../utils/subscription';
 
 const CANCELLATION_REASONS = [
   { id: 'cost', label: 'It’s more expensive than I expected' },
@@ -49,7 +50,11 @@ const VendorManageSubscriptionScreen = ({ navigation }) => {
   const [selectedReasonId, setSelectedReasonId] = useState(null);
   const [customReason, setCustomReason] = useState('');
   const [isCancelling, setIsCancelling] = useState(false);
-  const isCancelPending = Boolean(details?.status && details.status.toLowerCase().includes('cancel'));
+  const statusMeta = details?.statusMeta;
+  const cancellationScheduled = Boolean(statusMeta?.cancellationScheduled);
+  const primaryStatus = statusMeta?.primaryStatus ?? details?.status ?? 'Active';
+  const secondaryStatus = statusMeta?.secondaryStatus ?? null;
+  const renewalLabel = statusMeta?.renewalLabel ?? (cancellationScheduled ? 'Expires on' : 'Next billing');
 
   const showToast = (message, type = 'success') => {
     setToast({ visible: true, message, type });
@@ -64,9 +69,34 @@ const VendorManageSubscriptionScreen = ({ navigation }) => {
       }
       const response = await vendorAPI.getSubscriptionDetails();
       const payload = response.data?.data || response.data || {};
-      const planPreset = getPlanPreset(payload.slug || payload.planSlug || payload.planName);
+      const planPreset =
+        getPlanPresetByCode(
+          payload.planCode ||
+            payload.plan_code ||
+            payload.plan?.code ||
+            payload.plan?.plan_code
+        ) ||
+        matchPlanPreset(
+          payload.slug ||
+            payload.planSlug ||
+            payload.planName ||
+            payload.displayName ||
+            payload.plan
+        );
       const slug = planPreset?.slug || normalisePlanSlug(payload.slug || payload.planSlug || payload.planName);
-      const fallbackPlan = planPreset;
+      const fallbackPlan = planPreset || getPlanPreset('free');
+      const rawAutoRenew =
+        payload.autoRenew ??
+        payload.auto_renew ??
+        payload.renewalStatus ??
+        payload.subscription?.autoRenew ??
+        payload.subscription?.renewalStatus;
+      const autoRenew = normalizeAutoRenewFlag(rawAutoRenew, true);
+      const statusMeta = deriveSubscriptionStatusMeta(
+        payload.status || payload.subscription?.status,
+        autoRenew,
+        Boolean(payload.cancelled)
+      );
       const usagePayload = payload.usage || {
         allowed: payload.listingsAllowed ?? fallbackPlan.listings ?? 0,
         used: payload.listingsUsed ?? 0,
@@ -96,12 +126,14 @@ const VendorManageSubscriptionScreen = ({ navigation }) => {
         payload.planPrice ||
         (fallbackPlan.price ? `₦${fallbackPlan.price.toLocaleString()}` : null);
 
+      const canCancel = Boolean(payload.canCancel) && !statusMeta.cancellationScheduled;
+
       setDetails({
-        planName: payload.planName || payload.displayName || fallbackPlan.name || 'Free Plan',
+        planName: cleanPlanDisplayName(payload.planName || payload.displayName || fallbackPlan.name || 'Free Plan'),
         status: payload.status || payload.subscription?.status || 'Active',
         expiryDisplay: payload.expiryDisplay || payload.nextBillingDisplay || '--',
-        autoRenew: Boolean(payload.autoRenew ?? payload.renewalStatus === 'auto'),
-        canCancel: Boolean(payload.canCancel),
+        autoRenew,
+        canCancel,
         cancelled: Boolean(payload.cancelled),
         subscriptionCode: payload.subscriptionCode || '',
         usage,
@@ -114,6 +146,7 @@ const VendorManageSubscriptionScreen = ({ navigation }) => {
         externalManaged,
         lastPaymentDisplay: payload.lastPaymentDisplay || payload.lastChargedAt || null,
         paymentMethod: payload.paymentMethod || payload.cardBrand || null,
+        statusMeta,
       });
     } catch (error) {
       console.error('Failed to load subscription details', error);
@@ -336,7 +369,7 @@ const VendorManageSubscriptionScreen = ({ navigation }) => {
           <View style={styles.metaRow}>
             <Ionicons name="calendar-outline" size={18} color={theme.colors.accent} />
             <View style={{ flex: 1 }}>
-              <Text style={styles.metaLabel}>{isCancelPending ? 'Access ends' : 'Next billing'}</Text>
+              <Text style={styles.metaLabel}>{renewalLabel}</Text>
               <Text style={styles.metaValue}>{details?.expiryDisplay || '--'}</Text>
             </View>
           </View>
@@ -344,7 +377,10 @@ const VendorManageSubscriptionScreen = ({ navigation }) => {
             <Ionicons name="speedometer-outline" size={18} color={theme.colors.accent} />
             <View style={{ flex: 1 }}>
               <Text style={styles.metaLabel}>Status</Text>
-              <Text style={styles.metaValue}>{isCancelPending ? 'Cancellation scheduled' : details?.status || 'Active'}</Text>
+              <Text style={styles.metaValue}>
+                {primaryStatus}
+                {secondaryStatus ? ` · ${secondaryStatus}` : ''}
+              </Text>
             </View>
           </View>
         </View>
@@ -368,14 +404,24 @@ const VendorManageSubscriptionScreen = ({ navigation }) => {
         <View style={styles.planCard}>
           <View style={styles.planHeader}>
             <Text style={styles.planName}>{details?.planName}</Text>
-            <Text style={[styles.statusBadge, details?.status === 'Active' ? styles.statusActive : styles.statusPending]}>
-              {details?.status}
-            </Text>
+            <View style={styles.statusPills}>
+              <Text
+                style={[
+                  styles.statusBadge,
+                  primaryStatus === 'Active' ? styles.statusActive : styles.statusPending,
+                ]}
+              >
+                {primaryStatus}
+              </Text>
+              {secondaryStatus ? (
+                <Text style={[styles.statusBadge, styles.statusPending]}>{secondaryStatus}</Text>
+              ) : null}
+            </View>
           </View>
           <Text style={styles.planExpiry}>
-            {isCancelPending
-              ? `Auto-renew off. Access ends ${details?.expiryDisplay || '--'}`
-              : `Next billing: ${details?.expiryDisplay || '--'}`}
+            {cancellationScheduled
+              ? `Auto-renew off. ${renewalLabel}: ${details?.expiryDisplay || '--'}`
+              : `${renewalLabel}: ${details?.expiryDisplay || '--'}`}
           </Text>
           <View style={styles.usageRow}>
             <View style={styles.usageStat}>
@@ -473,7 +519,7 @@ const VendorManageSubscriptionScreen = ({ navigation }) => {
           icon="close-circle-outline"
           fullWidth
           onPress={openCancelModal}
-          disabled={isCancelling || !details?.canCancel || details?.cancelled}
+          disabled={isCancelling || !details?.canCancel}
         >
           Cancel Subscription
         </Button>
@@ -574,6 +620,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  statusPills: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
   },
   planName: {
     fontFamily: theme.typography.fontFamily.anton,
