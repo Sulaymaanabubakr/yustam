@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -13,7 +13,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
 import theme from '../../theme';
 import Toast from '../../components/Toast';
@@ -21,6 +20,8 @@ import { vendorAPI } from '../../services/api';
 import { goBackOrNavigate } from '../../utils/navigation';
 import resolveMediaUrl from '../../utils/url';
 import { formatNaira } from '../../utils/formatters';
+import { collection, onSnapshot, query, where, deleteDoc, doc } from 'firebase/firestore';
+import { db } from '../../config/firebase';
 
 const extractVendorId = (profile = {}) => {
   if (!profile || typeof profile !== 'object') {
@@ -48,6 +49,25 @@ const extractVendorId = (profile = {}) => {
   return null;
 };
 
+const formatTimestamp = (value) => {
+  if (!value) {
+    return '';
+  }
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (value?.toDate) {
+    return value.toDate().toISOString();
+  }
+  if (typeof value === 'object' && typeof value.seconds === 'number') {
+    return new Date(value.seconds * 1000).toISOString();
+  }
+  if (typeof value === 'number') {
+    return new Date(value).toISOString();
+  }
+  return '';
+};
+
 const VendorListingsScreen = ({ navigation }) => {
   const { user, updateUserProfile } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -69,7 +89,19 @@ const VendorListingsScreen = ({ navigation }) => {
     }
     return null;
   }, [user]);
-  const ownerRef = vendorId ? `vendor:${vendorId}` : null;
+  const vendorUid = useMemo(() => {
+    if (user?.vendor?.vendorUid) {
+      return user.vendor.vendorUid;
+    }
+    if (user?.vendorUid) {
+      return user.vendorUid;
+    }
+    if (user?.uid) {
+      return user.uid;
+    }
+    return null;
+  }, [user]);
+  const hydrationAttempted = useRef(false);
 
   const hydrateVendorAccount = useCallback(async () => {
     try {
@@ -105,94 +137,82 @@ const VendorListingsScreen = ({ navigation }) => {
     }
   }, [updateUserProfile, user?.vendor]);
 
-  const filters = [
-    { key: 'all', label: 'All', count: 0 },
-    { key: 'approved', label: 'Live', count: 0 },
-    { key: 'pending', label: 'Pending', count: 0 },
-    { key: 'draft', label: 'Draft', count: 0 },
-    { key: 'sold', label: 'Sold', count: 0 },
-  ];
-
   useEffect(() => {
     filterListings();
   }, [selectedFilter, searchQuery, listings]);
 
-  useFocusEffect(
-    useCallback(() => {
-      fetchListings();
-    }, [fetchListings])
-  );
-
-  const fetchListings = useCallback(async () => {
-    setLoading(true);
-    let targetOwnerRef = ownerRef;
-    if (!targetOwnerRef) {
-      targetOwnerRef = await hydrateVendorAccount();
-    }
-    if (!targetOwnerRef) {
-      setLoading(false);
-      showToast('Unable to load your vendor account. Please try again later.', 'error');
+  useEffect(() => {
+    if (vendorId || hydrationAttempted.current) {
       return;
     }
-    try {
-      const response = await vendorAPI.getListings({
-        status: 'all',
-        perPage: 50,
-        ownerId: targetOwnerRef,
-        includeDrafts: true,
-      });
-      const payload = response.data?.data;
-      if (!response.data?.success || !payload) {
-        throw new Error('Unable to load listings right now.');
-      }
+    hydrationAttempted.current = true;
+    hydrateVendorAccount();
+  }, [hydrateVendorAccount, vendorId]);
 
-      const normalizedListings = Array.isArray(payload.listings)
-        ? payload.listings.map((listing) => {
-            const statusRaw = (listing.status_raw || listing.status || 'pending').toLowerCase();
-            const locationParts = [listing.city, listing.state].filter(Boolean);
-            const primaryImage =
-              listing.image ||
-              listing.primaryImage ||
-              listing.listing_image ||
-              (Array.isArray(listing.images) && listing.images.length ? listing.images[0] : null);
-            return {
-              id: listing.id || listing.listing_id || listing.public_id || '',
-              firestoreId:
-                listing.firestoreId ||
-                listing.firestore_id ||
-                listing.fireStoreId ||
-                listing.public_id ||
-                '',
-              publicId: listing.public_id || listing.id || '',
-              title: listing.title || 'Untitled listing',
-              description: listing.description || '',
-              price: Number(listing.price) || 0,
-              status_raw: statusRaw,
-              status_label: formatStatusLabel(statusRaw),
-              views: Number(listing.views ?? 0),
-              added_on: listing.added_on || listing.createdAt || '',
-              image: resolveMediaUrl(primaryImage),
-              images: Array.isArray(listing.images)
-                ? listing.images.map((img) => resolveMediaUrl(img))
-                : [],
-              category: listing.category || '',
-              subcategory: listing.subcategory || '',
-              location: locationParts.join(', ') || listing.location || listing.state || '',
-              city: listing.city || '',
-              state: listing.state || '',
-              country: listing.country || '',
-            };
-          })
-        : [];
-
-      setListings(normalizedListings);
-    } catch (error) {
-      console.error('Error fetching listings:', error);
-      showToast('Failed to load listings', 'error');
-    } finally {
+  useEffect(() => {
+    if (!vendorUid) {
+      setListings([]);
       setLoading(false);
+      return undefined;
     }
-  }, [hydrateVendorAccount, ownerRef]);
+
+    setLoading(true);
+    const listingsQuery = query(collection(db, 'listings'), where('vendorUid', '==', vendorUid));
+    const unsubscribe = onSnapshot(
+      listingsQuery,
+      (snapshot) => {
+        const items = snapshot.docs.map((docSnap) => {
+          const data = docSnap.data() || {};
+          const statusRaw = String(data.status || 'pending').toLowerCase();
+          const imageUrls = Array.isArray(data.imageUrls) ? data.imageUrls : [];
+          const primaryImage = data.coverImage || imageUrls[0] || null;
+          const locationParts = [data.location, data.city, data.state].filter(Boolean);
+          return {
+            id: data.publicId || docSnap.id,
+            firestoreId: docSnap.id,
+            publicId: data.publicId || '',
+            title: data.title || data.listingTitle || 'Untitled listing',
+            description: data.description || '',
+            price: Number(data.price) || 0,
+            status: data.status || statusRaw,
+            status_raw: statusRaw,
+            status_label: formatStatusLabel(statusRaw),
+            views: Number(data.views ?? 0),
+            added_on: formatTimestamp(data.createdAt) || '',
+            image: resolveMediaUrl(primaryImage),
+            images: imageUrls,
+            category: data.category || '',
+            subcategory: data.subcategory || '',
+            location: locationParts.join(', ') || '',
+            city: data.city || '',
+            state: data.state || '',
+            country: data.country || 'Nigeria',
+          };
+        });
+
+        items.sort((a, b) => {
+          const aDate = new Date(a.added_on || 0).getTime();
+          const bDate = new Date(b.added_on || 0).getTime();
+          return bDate - aDate;
+        });
+
+        setListings(items);
+        setLoading(false);
+      },
+      (error) => {
+        console.error('Firestore listings stream failed:', error);
+        setToast({
+          visible: true,
+          message: 'Failed to load listings from server.',
+          type: 'error',
+        });
+        setLoading(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [vendorUid]);
+
 
   const filterListings = () => {
     let filtered = [...listings];
@@ -243,9 +263,11 @@ const VendorListingsScreen = ({ navigation }) => {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await fetchListings();
-    setRefreshing(false);
-  }, [fetchListings]);
+    if (!vendorId) {
+      await hydrateVendorAccount();
+    }
+    setTimeout(() => setRefreshing(false), 500);
+  }, [hydrateVendorAccount, vendorId]);
 
   const showToast = (message, type = 'success') => {
     setToast({ visible: true, message, type });
@@ -271,16 +293,27 @@ const VendorListingsScreen = ({ navigation }) => {
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: () => confirmDeleteListing(listing.id),
+          onPress: () => confirmDeleteListing(listing),
         },
       ]
     );
   };
 
-  const confirmDeleteListing = async (listingId) => {
+  const confirmDeleteListing = async (listing) => {
+    const listingId = listing?.id || listing?.firestoreId;
+    if (!listingId) {
+      showToast('Unable to determine listing identifier', 'error');
+      return;
+    }
     try {
       await vendorAPI.deleteListing(listingId);
-      setListings((current) => current.filter((listing) => listing.id !== listingId));
+      if (listing.firestoreId) {
+        try {
+          await deleteDoc(doc(db, 'listings', listing.firestoreId));
+        } catch (fireError) {
+          console.warn('Failed to remove listing document from Firestore', fireError);
+        }
+      }
       showToast('Listing deleted successfully');
     } catch (error) {
       console.error('Error deleting listing:', error);
@@ -484,7 +517,7 @@ const VendorListingsScreen = ({ navigation }) => {
       <FlatList
         data={filteredListings}
         renderItem={({ item }) => <ListingCard item={item} />}
-        keyExtractor={item => item.id}
+        keyExtractor={(item) => item.firestoreId || item.id}
         contentContainerStyle={styles.listContent}
         refreshControl={
           <RefreshControl

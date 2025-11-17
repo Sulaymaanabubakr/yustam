@@ -1,5 +1,6 @@
 import * as WebBrowser from 'expo-web-browser';
 import Constants from 'expo-constants';
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -30,3 +31,22 @@ export const GOOGLE_OAUTH_SCOPES = ['openid', 'profile', 'email'];
 
 export const hasGoogleOAuthConfig = () =>
   Object.values(GOOGLE_OAUTH_CONFIG).some((value) => typeof value === 'string' && value.length > 0);
+
+let googleSignInConfigured = false;
+export const configureGoogleSignIn = () => {
+  if (googleSignInConfigured) {
+    return;
+  }
+  try {
+    GoogleSignin.configure({
+      webClientId: GOOGLE_OAUTH_CONFIG.webClientId,
+      iosClientId: GOOGLE_OAUTH_CONFIG.iosClientId,
+      offlineAccess: true,
+      forceCodeForRefreshToken: false,
+      scopes: GOOGLE_OAUTH_SCOPES,
+    });
+    googleSignInConfigured = true;
+  } catch (error) {
+    console.warn('Unable to configure native Google Sign-In', error);
+  }
+};

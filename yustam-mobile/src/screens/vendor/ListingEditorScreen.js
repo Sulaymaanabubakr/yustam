@@ -35,19 +35,12 @@ import { db } from '../../config/firebase';
 
 const CONDITIONS = ['New', 'Used - Like New', 'Used - Good', 'Used - Fair', 'Refurbished'];
 
-const STATUS_OPTIONS = [
-  { value: 'draft', label: 'Draft' },
-  { value: 'pending', label: 'Pending Review' },
-  { value: 'approved', label: 'Live' },
-  { value: 'unlisted', label: 'Temporarily Unlisted' },
-  { value: 'sold', label: 'Sold / Out of Stock' },
-];
-
 const CONDITION_OPTIONS = CONDITIONS.map((label) => ({ label, value: label }));
-const STATUS_SELECT_OPTIONS = STATUS_OPTIONS;
 const STATE_OPTIONS = STATES.map((label) => ({ label, value: label }));
 const DEFAULT_COUNTRY = 'Nigeria';
 const FALLBACK_CATEGORY_OPTIONS = CATEGORY_OPTION_LIST;
+const MIN_IMAGE_COUNT = 2;
+const MAX_IMAGE_COUNT = 8;
 
 const createDefaultFormState = () => ({
   title: '',
@@ -68,6 +61,14 @@ const normalisePriceValue = (value) => {
   }
   const numeric = Number(String(value).replace(/[^0-9.]/g, ''));
   return Number.isFinite(numeric) ? numeric : null;
+};
+
+const formatPriceDisplay = (value) => {
+  const numeric = normalisePriceValue(value);
+  if (!numeric) {
+    return '';
+  }
+  return Number(numeric).toLocaleString();
 };
 
 const ListingEditorScreen = ({ route, navigation }) => {
@@ -121,6 +122,7 @@ const ListingEditorScreen = ({ route, navigation }) => {
       const mergedLocation = [locationValue, formData.state].filter(Boolean).join(', ');
       const trimmedTitle = formData.title.trim() || 'Marketplace Listing';
       const priceValue = normalisePriceValue(formData.price) ?? 0;
+      const countryValue = formData.country || DEFAULT_COUNTRY;
       return {
         title: trimmedTitle,
         productTitle: trimmedTitle,
@@ -148,7 +150,7 @@ const ListingEditorScreen = ({ route, navigation }) => {
         location: mergedLocation,
         city: locationValue,
         state: formData.state,
-        country: formData.country,
+        country: countryValue,
       };
     },
     [
@@ -210,7 +212,10 @@ const ListingEditorScreen = ({ route, navigation }) => {
         ...createDefaultFormState(),
         title: listing.title || '',
         description: listing.description || '',
-        price: listing.price !== undefined && listing.price !== null ? String(listing.price) : '',
+        price:
+          listing.price !== undefined && listing.price !== null
+            ? formatPriceDisplay(listing.price)
+            : '',
         category: listing.category || '',
         subcategory: listing.subcategory || '',
         condition: listing.condition || 'New',
@@ -221,7 +226,8 @@ const ListingEditorScreen = ({ route, navigation }) => {
       });
 
       if (Array.isArray(listing.images) && listing.images.length > 0) {
-        setImages(listing.images.map((url) => ({ uri: url, uploaded: true })));
+        const limitedImages = listing.images.slice(0, MAX_IMAGE_COUNT);
+        setImages(limitedImages.map((url) => ({ uri: url, uploaded: true })));
       } else if (listing.image || listing.primaryImage) {
         setImages([{ uri: listing.image || listing.primaryImage, uploaded: true }]);
       } else {
@@ -281,6 +287,17 @@ const ListingEditorScreen = ({ route, navigation }) => {
     }));
   };
 
+  const handlePriceInputChange = (text) => {
+    const sanitized = text.replace(/[^0-9]/g, '');
+    if (!sanitized) {
+      updateFormData('price', '');
+      return;
+    }
+    const numeric = Number(sanitized);
+    const formatted = Number.isFinite(numeric) ? numeric.toLocaleString() : '';
+    updateFormData('price', formatted);
+  };
+
   const requestPermissions = async () => {
     if (Platform.OS !== 'web') {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -293,25 +310,40 @@ const ListingEditorScreen = ({ route, navigation }) => {
   };
 
   const pickImage = async () => {
+    if (images.length >= MAX_IMAGE_COUNT) {
+      showToast(`You can only upload up to ${MAX_IMAGE_COUNT} images`, 'error');
+      return;
+    }
+
     const hasPermission = await requestPermissions();
     if (!hasPermission) return;
 
     try {
+      const remainingSlots = MAX_IMAGE_COUNT - images.length;
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: 'images',
-        allowsMultipleSelection: false,
-        quality: 0.8,
-        aspect: [4, 3],
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsMultipleSelection: true,
+        selectionLimit: remainingSlots,
+        quality: 0.85,
       });
 
-      if (!result.canceled && Array.isArray(result.assets)) {
-        const selections = result.assets
-          .filter((asset) => asset?.uri)
-          .map((asset) => ({ uri: asset.uri, uploaded: false }));
-        if (selections.length) {
-          setImages((prev) => [...prev, ...selections]);
-          showToast('Image added. Remember to save the listing.');
-        }
+      if (result.canceled) {
+        return;
+      }
+
+      const assets = result.assets || result.selected || [];
+      const selections = assets
+        .filter((asset) => asset?.uri)
+        .slice(0, remainingSlots)
+        .map((asset) => ({ uri: asset.uri, uploaded: false }));
+
+      if (selections.length) {
+        setImages((prev) => [...prev, ...selections]);
+        showToast(
+          selections.length > 1
+            ? `${selections.length} images added. Remember to save the listing.`
+            : 'Image added. Remember to save the listing.'
+        );
       }
     } catch (error) {
       console.error('Error picking image:', error);
@@ -396,8 +428,8 @@ const ListingEditorScreen = ({ route, navigation }) => {
       showToast('Please enter a description', 'error');
       return false;
     }
-    const numericPrice = parseFloat(formData.price);
-    if (!formData.price || Number.isNaN(numericPrice) || numericPrice <= 0) {
+    const numericPrice = normalisePriceValue(formData.price);
+    if (!numericPrice || numericPrice <= 0) {
       showToast('Please enter a valid price', 'error');
       return false;
     }
@@ -417,8 +449,12 @@ const ListingEditorScreen = ({ route, navigation }) => {
       showToast('Please enter your city or location', 'error');
       return false;
     }
-    if (images.length === 0) {
-      showToast('Please add at least one image', 'error');
+    if (images.length < MIN_IMAGE_COUNT) {
+      showToast(`Please add at least ${MIN_IMAGE_COUNT} images`, 'error');
+      return false;
+    }
+    if (images.length > MAX_IMAGE_COUNT) {
+      showToast(`You can only upload up to ${MAX_IMAGE_COUNT} images`, 'error');
       return false;
     }
     return true;
@@ -437,17 +473,18 @@ const ListingEditorScreen = ({ route, navigation }) => {
       rollbackFirestore = firestoreSyncResult?.rollback;
       const resolvedFirestoreId =
         firestoreSyncResult?.firestoreId || listing?.firestoreId || listingIdentifier || null;
+      const priceValue = normalisePriceValue(formData.price) || 0;
       const payload = {
         title: formData.title.trim(),
         description: formData.description.trim(),
-        price: parseFloat(formData.price),
+        price: priceValue,
         category: formData.category,
         subcategory: formData.subcategory,
         condition: formData.condition,
         location: formData.location.trim(),
         city: formData.location.trim(),
         state: formData.state,
-        country: formData.country || DEFAULT_COUNTRY,
+        country: DEFAULT_COUNTRY,
         status: isEditMode ? formData.status : 'pending',
         images: imageUrls,
         primaryImage: imageUrls[0] || '',
@@ -509,7 +546,12 @@ const ListingEditorScreen = ({ route, navigation }) => {
       <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
         {/* Images Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Product Images *</Text>
+          <Text style={styles.sectionTitle}>
+            Product Images ({images.length}/{MAX_IMAGE_COUNT}) *
+          </Text>
+          <Text style={styles.helperText}>
+            Add at least {MIN_IMAGE_COUNT} and at most {MAX_IMAGE_COUNT} clear photos.
+          </Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imagesContainer}>
             {images.map((image, index) => (
               <View key={index} style={styles.imageWrapper}>
@@ -524,7 +566,9 @@ const ListingEditorScreen = ({ route, navigation }) => {
             ))}
             <TouchableOpacity style={styles.addImageButton} onPress={pickImage}>
               <Ionicons name="add-circle-outline" size={40} color={theme.colors.accent} />
-              <Text style={styles.addImageText}>Add Photo</Text>
+              <Text style={styles.addImageText}>
+                {images.length >= MAX_IMAGE_COUNT ? 'Limit Reached' : 'Add Photos'}
+              </Text>
             </TouchableOpacity>
           </ScrollView>
         </View>
@@ -558,14 +602,14 @@ const ListingEditorScreen = ({ route, navigation }) => {
 
         {/* Price */}
         <View style={styles.section}>
-          <Text style={styles.label}>Price (₦) *</Text>
+          <Text style={styles.label}>Price (NGN) *</Text>
           <TextInput
             style={styles.input}
             value={formData.price}
-            onChangeText={(text) => updateFormData('price', text)}
-            placeholder="0.00"
+            onChangeText={handlePriceInputChange}
+            placeholder="e.g., 150,000"
             placeholderTextColor={theme.colors.textSecondary}
-            keyboardType="numeric"
+            keyboardType="number-pad"
           />
         </View>
 
@@ -648,35 +692,6 @@ const ListingEditorScreen = ({ route, navigation }) => {
             onChangeText={(text) => updateFormData('location', text)}
             placeholder="e.g., Ikeja"
             placeholderTextColor={theme.colors.textSecondary}
-          />
-        </View>
-
-        {/* Country */}
-        <View style={styles.section}>
-          <Text style={styles.label}>Country</Text>
-          <TextInput
-            style={styles.input}
-            value={formData.country}
-            onChangeText={(text) => updateFormData('country', text)}
-            placeholder="Nigeria"
-            placeholderTextColor={theme.colors.textSecondary}
-          />
-        </View>
-
-        {/* Status */}
-        <View style={styles.section}>
-          <SelectField
-            label={`Status ${isEditMode ? '' : '(auto)'}`}
-            value={formData.status}
-            options={STATUS_SELECT_OPTIONS}
-            onSelect={(value) => updateFormData('status', value)}
-            disabled={!isEditMode}
-            searchable={false}
-            helperText={
-              !isEditMode
-                ? 'New listings are submitted for review before going live.'
-                : undefined
-            }
           />
         </View>
 
@@ -811,6 +826,7 @@ const styles = StyleSheet.create({
     color: theme.colors.accent,
     marginTop: theme.spacing.xs,
     fontWeight: '600',
+    textAlign: 'center',
   },
   saveButton: {
     marginTop: theme.spacing.md,

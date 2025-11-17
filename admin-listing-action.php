@@ -38,6 +38,7 @@ if ($action === 'reject' && $reason === '') {
 }
 
 require_once __DIR__ . '/firebase-support.php';
+require_once __DIR__ . '/notifications-storage.php';
 require_once __DIR__ . '/db.php';
 
 if (!yustam_firebase_service_account_available()) {
@@ -296,11 +297,16 @@ try {
         $updateListingStatus($listingId, 'rejected');
     }
 
-    if ($action === 'reject') {
-        $vendorIdField = $documentFields['vendorID']['stringValue'] ?? $documentFields['vendorId']['stringValue'] ?? '';
-        $vendorUidField = $documentFields['vendorUid']['stringValue'] ?? $documentFields['vendorFirebaseUid']['stringValue'] ?? '';
-        $targetVendor = $vendorIdField !== '' ? $vendorIdField : $vendorUidField;
+    $vendorIdField = $documentFields['vendorID']['stringValue'] ?? $documentFields['vendorId']['stringValue'] ?? '';
+    $vendorUidField = $documentFields['vendorUid']['stringValue'] ?? $documentFields['vendorFirebaseUid']['stringValue'] ?? '';
+    $targetVendor = $vendorIdField !== '' ? $vendorIdField : $vendorUidField;
+    $numericVendorId = 0;
+    if ($vendorIdField !== '') {
+        $numericVendorId = (int) preg_replace('/[^0-9]/', '', $vendorIdField);
+    }
+    $listingTitle = $documentFields['title']['stringValue'] ?? 'Your listing';
 
+    if ($action === 'reject') {
         if ($targetVendor !== '') {
             $notificationPayload = [
                 'fields' => [
@@ -319,6 +325,50 @@ try {
             );
 
             yustam_firebase_http_json('POST', $notificationUrl, $notificationPayload, $authHeader);
+        }
+
+        if ($numericVendorId > 0) {
+            yustam_vendor_notifications_insert(
+                $db,
+                $numericVendorId,
+                'Listing needs updates',
+                sprintf('"%s" was rejected. Check feedback for details.', $listingTitle),
+                mb_substr($reason, 0, 500),
+                'listing_rejected'
+            );
+        }
+    }
+
+    if ($action === 'approve') {
+        if ($targetVendor !== '') {
+            $notificationPayload = [
+                'fields' => [
+                    'type' => ['stringValue' => 'listing_approved'],
+                    'listingId' => ['stringValue' => $listingId],
+                    'vendorId' => ['stringValue' => $targetVendor],
+                    'message' => ['stringValue' => sprintf('"%s" is now live on Yustam.', $listingTitle)],
+                    'createdAt' => ['timestampValue' => $now],
+                    'read' => ['booleanValue' => false],
+                ],
+            ];
+
+            $notificationUrl = sprintf(
+                'https://firestore.googleapis.com/v1/projects/%s/databases/(default)/documents/notifications',
+                rawurlencode($projectId)
+            );
+
+            yustam_firebase_http_json('POST', $notificationUrl, $notificationPayload, $authHeader);
+        }
+
+        if ($numericVendorId > 0) {
+            yustam_vendor_notifications_insert(
+                $db,
+                $numericVendorId,
+                'Listing approved',
+                sprintf('"%s" has been approved and is now live.', $listingTitle),
+                '',
+                'listing_approved'
+            );
         }
     }
 
