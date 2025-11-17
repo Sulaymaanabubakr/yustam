@@ -34,7 +34,7 @@ const normalisePlanSlug = (value = '') => {
   if (!base) {
     return 'free';
   }
-  const trimmed = base.replace(/plan$/i, '');
+  const trimmed = base.replace(/\b(plan|seller|vendor)\b/g, '');
   const slug = trimmed.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
   return slug || 'free';
 };
@@ -64,8 +64,9 @@ const VendorManageSubscriptionScreen = ({ navigation }) => {
       }
       const response = await vendorAPI.getSubscriptionDetails();
       const payload = response.data?.data || response.data || {};
-      const slug = normalisePlanSlug(payload.slug || payload.planSlug || payload.planName);
-      const fallbackPlan = getPlanPreset(slug);
+      const planPreset = getPlanPreset(payload.slug || payload.planSlug || payload.planName);
+      const slug = planPreset?.slug || normalisePlanSlug(payload.slug || payload.planSlug || payload.planName);
+      const fallbackPlan = planPreset;
       const usagePayload = payload.usage || {
         allowed: payload.listingsAllowed ?? fallbackPlan.listings ?? 0,
         used: payload.listingsUsed ?? 0,
@@ -176,6 +177,10 @@ const VendorManageSubscriptionScreen = ({ navigation }) => {
   const openCancelModal = () => {
     if (!details || details.slug === 'free') {
       showToast('This subscription cannot be cancelled. Please contact support if you need assistance.', 'error');
+      return;
+    }
+    if (!details.canCancel || details.cancelled) {
+      showToast('This subscription has already been cancelled. Renew to manage it again.', 'info');
       return;
     }
     setSelectedReasonId(null);
@@ -400,6 +405,14 @@ const VendorManageSubscriptionScreen = ({ navigation }) => {
             </Text>
           </View>
         ) : null}
+        {details?.cancelled ? (
+          <View style={styles.warningCard}>
+            <Ionicons name="alert-circle-outline" size={18} color={theme.colors.warning} />
+            <Text style={styles.warningText}>
+              Auto-renew has been cancelled. Purchase another cycle to re-enable management actions.
+            </Text>
+          </View>
+        ) : null}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Auto-Renewal</Text>
           <View style={styles.autoRenewRow}>
@@ -455,15 +468,15 @@ const VendorManageSubscriptionScreen = ({ navigation }) => {
           >
             Renew Now
           </Button>
-          <Button
-            variant="outline"
-            icon="close-circle-outline"
-            fullWidth
-            onPress={openCancelModal}
-            disabled={isCancelling}
-          >
-            Cancel Subscription
-          </Button>
+        <Button
+          variant="outline"
+          icon="close-circle-outline"
+          fullWidth
+          onPress={openCancelModal}
+          disabled={isCancelling || !details?.canCancel || details?.cancelled}
+        >
+          Cancel Subscription
+        </Button>
           <Button variant="text" icon="help-circle-outline" onPress={handleContactSupport}>
             Contact Support
           </Button>

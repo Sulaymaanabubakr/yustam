@@ -62,7 +62,7 @@ const buildFormData = (payload = {}) => {
 const normalisePlanSlug = (name, fallback) =>
   (name || fallback || '')
     .toLowerCase()
-    .replace(/plan$/i, '')
+    .replace(/\b(plan|seller|vendor)\b/g, '')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '') || fallback || 'plan';
 

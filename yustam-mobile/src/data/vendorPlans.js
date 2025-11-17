@@ -1,3 +1,10 @@
+const normalisePlanKey = (value = '') =>
+  String(value || '')
+    .toLowerCase()
+    .replace(/\b(plan|seller|vendor)\b/gi, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'free';
+
 const PLAN_LIBRARY = {
   free: {
     slug: 'free',
@@ -137,6 +144,17 @@ const PLAN_LIBRARY = {
 
 export const DEFAULT_VENDOR_PLANS = Object.values(PLAN_LIBRARY);
 
-export const getPlanPreset = (slug = 'free') => PLAN_LIBRARY[slug] || PLAN_LIBRARY.free;
+export const getPlanPreset = (slug = 'free') => {
+  const normalized = normalisePlanKey(slug);
+  if (PLAN_LIBRARY[normalized]) {
+    return PLAN_LIBRARY[normalized];
+  }
+  const match = Object.values(PLAN_LIBRARY).find((plan) => {
+    const planSlugKey = normalisePlanKey(plan.slug);
+    const planNameKey = normalisePlanKey(plan.name);
+    return planSlugKey === normalized || planNameKey === normalized;
+  });
+  return match || PLAN_LIBRARY.free;
+};
 
 export default PLAN_LIBRARY;
