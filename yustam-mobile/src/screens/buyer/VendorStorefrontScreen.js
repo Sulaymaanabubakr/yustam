@@ -25,11 +25,11 @@ import { db } from '../../config/firebase';
 const sanitizePhoneNumber = (value = '') => value.replace(/[^0-9]/g, '');
 
 const PLAN_BADGES = {
-  free: { background: '#E0E0E0' },
-  starter: { background: '#1877F2' },
-  pro: { background: '#CD7F32' },
-  elite: { background: '#C0C0C0' },
-  power: { background: '#D4AF37' },
+  free: { background: '#E0E0E0', tick: '#757575', border: '#C5C5C5' },
+  starter: { background: '#1877F2', tick: '#FFFFFF', border: '#145DB2' },
+  pro: { background: '#CD7F32', tick: '#FFFFFF', border: '#A85B1F' },
+  elite: { background: '#C0C0C0', tick: '#FFFFFF', border: '#9E9E9E' },
+  power: { background: '#D4AF37', tick: '#FFFFFF', border: '#B78E1D' },
 };
 
 const normalisePlanSlug = (value = '') =>
@@ -131,6 +131,7 @@ const buildStorefrontFromProfile = (profile) => {
     joinedDate: profile.joinedDate || '',
     vendorUid: profile.vendorUid || profile.vendorFirebaseUid || '',
     vendorId: profile.vendorId || '',
+    vendorSlug: profile.storefrontSlug || profile.slug || profile.vendorSlug || '',
   };
 };
 
@@ -144,6 +145,9 @@ const mergeStorefrontData = (base, update) => {
   merged.verificationLabel =
     merged.verificationLabel || buildVerificationLabel(merged.verificationState);
   merged.planSlug = normalisePlanSlug(merged.planSlug || merged.plan || merged.planLabel);
+  if (!merged.vendorSlug) {
+    merged.vendorSlug = update?.vendorSlug || base?.vendorSlug || '';
+  }
   return merged;
 };
 
@@ -224,6 +228,7 @@ const VendorStorefrontScreen = ({ navigation, route }) => {
   const {
     vendorId = '',
     vendorUid = '',
+    vendorSlug = '',
     vendorName = 'Marketplace Vendor',
     initialVendorProfile = null,
   } = route.params || {};
@@ -234,11 +239,18 @@ const VendorStorefrontScreen = ({ navigation, route }) => {
   );
 
   const identifierCandidates = useMemo(() => {
-    return [vendorId, vendorUid, initialStorefront?.vendorId, initialStorefront?.vendorUid]
+    return [
+      vendorSlug,
+      vendorId,
+      vendorUid,
+      initialStorefront?.vendorSlug,
+      initialStorefront?.vendorId,
+      initialStorefront?.vendorUid,
+    ]
       .map((value) => (value ? String(value).trim() : ''))
       .filter(Boolean)
       .filter((value, index, array) => array.indexOf(value) === index);
-  }, [vendorId, vendorUid, initialStorefront?.vendorId, initialStorefront?.vendorUid]);
+  }, [vendorId, vendorUid, vendorSlug, initialStorefront?.vendorId, initialStorefront?.vendorUid, initialStorefront?.vendorSlug]);
 
   const [storefront, setStorefront] = useState(initialStorefront);
   const [listings, setListings] = useState([]);
@@ -421,7 +433,9 @@ const VendorStorefrontScreen = ({ navigation, route }) => {
         <TouchableOpacity onPress={() => goBackOrNavigate(navigation)} style={styles.headerButton}>
           <Ionicons name="arrow-back" size={24} color={theme.colors.primary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{storefront?.businessName || vendorName}</Text>
+        <Text style={styles.headerTitle}>
+          {storefront?.businessName || storefront?.name || vendorName}
+        </Text>
         <View style={styles.headerSpacer} />
       </View>
 
@@ -472,7 +486,9 @@ const VendorStorefrontScreen = ({ navigation, route }) => {
           </View>
 
           <View style={styles.infoCard}>
-            <Text style={styles.businessName}>{storefront.businessName}</Text>
+            <Text style={styles.businessName}>
+              {storefront.businessName || storefront.name || vendorName}
+            </Text>
             <Text style={styles.planBadge}>{storefront.planLabel}</Text>
             <VerificationBadge
               verificationState={verificationState}
@@ -654,10 +670,11 @@ const VerificationBadge = ({ verificationState, planSlug, label }) => {
   const state = normaliseVerificationState(verificationState);
   const planPalette = PLAN_BADGES[normalisePlanSlug(planSlug || 'free')] || PLAN_BADGES.free;
   if (state === 'verified') {
+    const highlight = planPalette.tick || planPalette.background;
     return (
       <View style={styles.badgeRow}>
-        <MaterialCommunityIcons name="check-decagram" size={18} color={planPalette.background} />
-        <Text style={[styles.metaText, styles.badgeVerifiedText, { color: planPalette.background }]}>
+        <MaterialCommunityIcons name="check-decagram" size={18} color={highlight} />
+        <Text style={[styles.metaText, styles.badgeVerifiedText, { color: highlight }]}>
           {label || 'Verified vendor'}
         </Text>
       </View>

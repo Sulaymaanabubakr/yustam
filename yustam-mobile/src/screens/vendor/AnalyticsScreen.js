@@ -16,16 +16,40 @@ import Toast from '../../components/Toast';
 import { vendorAPI } from '../../services/api';
 import { goBackOrNavigate } from '../../utils/navigation';
 import { formatNumber } from '../../utils/formatters';
+import { matchPlanPreset, getPlanPresetByCode, getPlanPreset } from '../../data/vendorPlans';
+import { collectVendorIdentifiers, fetchVendorListingStats } from '../../utils/vendorUsage';
 
-const PLAN_LIMITS = {
-  free: 5,
-  starter: 20,
-  basic: 20,
-  pro: 50,
-  premium: 50,
-  elite: 80,
-  professional: 150,
-  power: 150,
+const resolvePlanPreset = (subscription) => {
+  if (!subscription) {
+    return getPlanPreset('free');
+  }
+  const codeCandidates = [
+    subscription.planCode,
+    subscription.plan_code,
+    subscription.plan?.code,
+    subscription.plan?.plan_code,
+  ];
+  for (const code of codeCandidates) {
+    const preset = getPlanPresetByCode(code);
+    if (preset) {
+      return preset;
+    }
+  }
+  const slugCandidates = [
+    subscription.slug,
+    subscription.planSlug,
+    subscription.planName,
+    subscription.displayName,
+    subscription.name,
+    subscription.plan,
+  ];
+  for (const slug of slugCandidates) {
+    const preset = matchPlanPreset(slug);
+    if (preset) {
+      return preset;
+    }
+  }
+  return getPlanPreset('free');
 };
 
 const AnalyticsScreen = ({ navigation }) => {
@@ -88,9 +112,24 @@ const AnalyticsScreen = ({ navigation }) => {
         ['rejected', 'archived'].includes(getStatus(listing))
       ).length;
 
-      const slug = (subscription.slug || subscription.planSlug || subscription.planName || '').toLowerCase();
-      const listingsAllowed =
-        PLAN_LIMITS[slug] || PLAN_LIMITS[slug.replace('-plan', '')] || PLAN_LIMITS.free;
+      const planPreset = resolvePlanPreset(subscription);
+      const listingsAllowed = planPreset?.listings ?? subscription.listings ?? 0;
+
+      let realtimeUsage = null;
+      try {
+        const identifiers = collectVendorIdentifiers(user, payload.profile);
+        if (
+          identifiers.vendorUidCandidates.length > 0 ||
+          typeof identifiers.vendorId === 'number'
+        ) {
+          realtimeUsage = await fetchVendorListingStats(identifiers);
+        }
+      } catch (usageError) {
+        console.warn('Unable to compute analytics usage stats', usageError);
+      }
+
+      const realtimeActive = realtimeUsage ? realtimeUsage.active : activeListings;
+      const realtimePending = realtimeUsage ? realtimeUsage.pending : pendingListings;
 
       const verificationData = verificationResponse?.data?.data;
       const verificationStatus =
@@ -107,14 +146,14 @@ const AnalyticsScreen = ({ navigation }) => {
 
       setAnalytics({
         totalListings,
-        activeListings,
-        pendingListings,
+        activeListings: realtimeActive,
+        pendingListings: realtimePending,
         rejectedListings,
         soldListings,
         totalViews: stats.total_views || 0,
         planName: subscription.displayName || 'Free',
         planStatus: subscription.statusLabel || subscription.status || 'Active',
-        listingsUsed: activeListings,
+        listingsUsed: realtimeActive,
         listingsAllowed,
         verificationStatus,
         verificationProgress,

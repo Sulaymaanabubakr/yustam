@@ -89,13 +89,23 @@ const EditProfileScreen = ({ navigation }) => {
         resolveMediaUrl(profile.photoUrl || profile.profilePhoto) ||
         user?.photoURL ||
         '';
+      const contactName =
+        profile.name || profile.displayName || user?.displayName || user?.fullName || '';
+      const resolvedBusinessName =
+        profile.businessName || user?.vendor?.businessName || user?.businessName || '';
+      const resolvedAddress =
+        profile.businessAddress ||
+        profile.address ||
+        user?.vendor?.businessAddress ||
+        user?.businessAddress ||
+        '';
 
       setFormData({
-        name: user?.displayName || profile.businessName || '',
+        name: contactName,
         email: profile.email || user?.email || '',
         phone: profile.phone || user?.phone || '',
-        businessName: profile.businessName || user?.businessName || '',
-        businessAddress: profile.address || profile.businessAddress || '',
+        businessName: resolvedBusinessName,
+        businessAddress: resolvedAddress,
         state: profile.state || user?.state || '',
         profilePhoto: resolvedPhoto,
       });
@@ -169,12 +179,16 @@ const EditProfileScreen = ({ navigation }) => {
       const result = await uploadImage(newPhotoUri, {
         folder: `vendors/${vendorUid || 'vendor'}/profile`,
       });
-      setUploading(false);
-      return result.url;
+      const uploadedUrl = result?.secure_url || result?.url || result?.path || '';
+      if (!uploadedUrl) {
+        throw new Error('Image upload failed.');
+      }
+      return uploadedUrl;
     } catch (error) {
       console.error('Error uploading photo:', error);
-      setUploading(false);
       throw error;
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -215,11 +229,15 @@ const EditProfileScreen = ({ navigation }) => {
       }
 
       const payload = {
+        name: formData.name.trim(),
         businessName: formData.businessName.trim(),
         phone: formData.phone.trim(),
         email: formData.email.trim(),
         state: formData.state,
         address: formData.businessAddress.trim(),
+        businessAddress: formData.businessAddress.trim(),
+        profilePhoto: profilePhotoUrl,
+        photoUrl: profilePhotoUrl,
       };
 
       const response = await vendorAPI.updateProfile(payload);
@@ -242,12 +260,19 @@ const EditProfileScreen = ({ navigation }) => {
 
       if (updateUserProfile) {
         await updateUserProfile({
-          displayName: formData.name,
+          displayName: formData.name.trim(),
           photoURL: profilePhotoUrl,
-          phone: formData.phone,
-          businessName: formData.businessName,
-          businessAddress: formData.businessAddress,
+          phone: formData.phone.trim(),
+          businessName: formData.businessName.trim(),
+          businessAddress: formData.businessAddress.trim(),
           state: formData.state,
+          vendor: {
+            ...(user?.vendor || {}),
+            vendorUid,
+            businessName: formData.businessName.trim(),
+            location: formData.businessAddress.trim(),
+            phone: formData.phone.trim(),
+          },
         });
       }
 

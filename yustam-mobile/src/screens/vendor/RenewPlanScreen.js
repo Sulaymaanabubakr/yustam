@@ -20,6 +20,7 @@ import { goBackOrNavigate } from '../../utils/navigation';
 import { formatNaira } from '../../utils/formatters';
 import { cleanPlanDisplayName } from '../../utils/subscription';
 import { getPlanPreset, getPlanPresetByCode } from '../../data/vendorPlans';
+import { collectVendorIdentifiers, fetchVendorListingStats } from '../../utils/vendorUsage';
 
 const resolveVendorId = (profile) => {
   if (!profile) {
@@ -145,6 +146,23 @@ const VendorRenewPlanScreen = ({ navigation }) => {
       if (!durations.length) {
         durations = overrideDurations;
       }
+      const planLimit = fallbackPreset?.listings ?? payload.remainingListings ?? null;
+      let remainingListings = payload.remainingListings ?? null;
+      if (typeof planLimit === 'number') {
+        try {
+          const identifiers = collectVendorIdentifiers(user);
+          if (
+            identifiers.vendorUidCandidates.length > 0 ||
+            typeof identifiers.vendorId === 'number'
+          ) {
+            const stats = await fetchVendorListingStats(identifiers);
+            remainingListings = Math.max(0, planLimit - stats.active);
+          }
+        } catch (statsError) {
+          console.warn('Unable to determine remaining listings', statsError);
+        }
+      }
+
       setPlan({
         name: cleanPlanDisplayName(payload.planName || 'Current Plan'),
         badge: payload.planBadge || '',
@@ -156,7 +174,7 @@ const VendorRenewPlanScreen = ({ navigation }) => {
           0,
         currency: payload.currency || 'NGN',
         expiresOn: payload.expiresOn || '',
-        remainingListings: payload.remainingListings ?? null,
+        remainingListings,
         contactEmail: payload.contactEmail || 'support@yustam.com.ng',
         vendorName: payload.vendorName || 'Yustam Vendor',
         slug: payload.slug || '',
@@ -170,7 +188,7 @@ const VendorRenewPlanScreen = ({ navigation }) => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [refreshing]);
+  }, [refreshing, user]);
 
   useEffect(() => {
     loadPlan();

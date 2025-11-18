@@ -22,12 +22,14 @@ import { vendorAPI } from '../../services/api';
 import { goBackOrNavigate } from '../../utils/navigation';
 import { getPlanPreset, getPlanPresetByCode, matchPlanPreset } from '../../data/vendorPlans';
 import { deriveSubscriptionStatusMeta, normalizeAutoRenewFlag, cleanPlanDisplayName } from '../../utils/subscription';
+import { useAuth } from '../../context/AuthContext';
+import { collectVendorIdentifiers, fetchVendorListingStats } from '../../utils/vendorUsage';
 
 const CANCELLATION_REASONS = [
-  { id: 'cost', label: 'It’s more expensive than I expected' },
-  { id: 'results', label: 'I’m not getting enough leads or sales' },
-  { id: 'temporary', label: 'I’m taking a break from selling' },
-  { id: 'experience', label: 'I had an issue with the app or support' },
+  { id: 'cost', label: "It's more expensive than I expected" },
+  { id: 'results', label: "I'm not getting enough leads or sales" },
+  { id: 'temporary', label: "I'm taking a break from selling" },
+  { id: 'experience', label: "I had an issue with the app or support" },
 ];
 
 const normalisePlanSlug = (value = '') => {
@@ -41,6 +43,7 @@ const normalisePlanSlug = (value = '') => {
 };
 
 const VendorManageSubscriptionScreen = ({ navigation }) => {
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [toast, setToast] = useState({ visible: false, message: '', type: 'info' });
@@ -102,10 +105,24 @@ const VendorManageSubscriptionScreen = ({ navigation }) => {
         used: payload.listingsUsed ?? 0,
         pending: payload.pendingListings ?? 0,
       };
+
+      let realtimeUsage = null;
+      try {
+        const identifiers = collectVendorIdentifiers(user, payload.profile || {});
+        if (
+          identifiers.vendorUidCandidates.length > 0 ||
+          typeof identifiers.vendorId === 'number'
+        ) {
+          realtimeUsage = await fetchVendorListingStats(identifiers);
+        }
+      } catch (statsError) {
+        console.warn('Unable to compute real-time usage stats', statsError);
+      }
+
       const usage = {
         allowed: usagePayload.allowed ?? fallbackPlan.listings ?? 0,
-        used: usagePayload.used ?? 0,
-        pending: usagePayload.pending ?? 0,
+        used: realtimeUsage ? realtimeUsage.active : usagePayload.used ?? 0,
+        pending: realtimeUsage ? realtimeUsage.pending : usagePayload.pending ?? 0,
       };
       const benefits =
         Array.isArray(payload.features) && payload.features.length
@@ -155,7 +172,7 @@ const VendorManageSubscriptionScreen = ({ navigation }) => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [refreshing]);
+  }, [refreshing, user]);
 
   useEffect(() => {
     loadDetails();
