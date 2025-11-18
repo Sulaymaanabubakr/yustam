@@ -171,6 +171,35 @@ const ProductDetailScreen = ({ navigation, route }) => {
       .filter(Boolean);
   }, [listing]);
 
+  const listingIdentifierCandidates = useMemo(() => {
+    const collect = new Set();
+    const push = (value) => {
+      if (value === null || value === undefined) {
+        return;
+      }
+      const normalised = String(value).trim();
+      if (normalised) {
+        collect.add(normalised);
+      }
+    };
+    const sourceListing = listing || {};
+    push(sourceListing.publicId);
+    push(sourceListing.public_id);
+    push(sourceListing.listingId);
+    push(sourceListing.listing_id);
+    push(sourceListing.firestoreId);
+    push(sourceListing.id);
+    push(listingId);
+    push(productId);
+    if (initialProduct) {
+      push(initialProduct.id);
+      push(initialProduct.listingId);
+      push(initialProduct.listing_id);
+      push(initialProduct.publicId);
+    }
+    return Array.from(collect);
+  }, [initialProduct, listing, listingId, productId]);
+
   const fetchVendorProfile = useCallback(async (identifiers) => {
     if (!identifiers.length) {
       return;
@@ -375,6 +404,7 @@ const ProductDetailScreen = ({ navigation, route }) => {
     setChatLoading(true);
     try {
       const coverImage = gallery[activeImageIndex] || gallery[0] || PLACEHOLDER_IMAGE;
+      const listingReference = listingIdentifierCandidates[0] || listing.id || productId || listingId;
       const payload = {
         buyer_uid: user.uid,
         buyer_name: user.fullName || user.displayName || user.email || 'Buyer',
@@ -382,7 +412,9 @@ const ProductDetailScreen = ({ navigation, route }) => {
         vendor_name: vendorProfile.name,
         vendor_business_name: vendorProfile.businessName || vendorProfile.name,
         vendor_plan: vendorProfile.planLabel,
-        listing_id: listing.id,
+        listing_id: listingReference,
+        listing_public_id: listing.publicId || listing.public_id || listingReference,
+        listing_firestore_id: listing.firestoreId || listingId || listingReference,
         listing_title: listing.title,
         listing_image: coverImage,
       };
@@ -400,14 +432,44 @@ const ProductDetailScreen = ({ navigation, route }) => {
         vendorPlanLabel: vendorProfile.planLabel,
         vendorUid: vendorProfile.vendorUid,
         listingTitle: listing.title,
-        listingId: listing.id,
+        listingId: listingReference,
         listingImage: coverImage,
         buyerId: user.uid,
         buyerName: user.fullName || user.displayName || user.email || 'Buyer',
       });
     } catch (chatError) {
       console.error('Chat initialisation failed:', chatError);
-      showToast(chatError?.message || 'Unable to start chat.', 'error');
+      const messageText = typeof chatError?.message === 'string' ? chatError.message : '';
+      if (messageText.toLowerCase().includes('unable to open chat thread')) {
+        const fallbackThread = await resolveExistingThread();
+        if (fallbackThread) {
+          navigation.navigate('ChatThread', {
+            chatId: fallbackThread.id || fallbackThread.chat_id,
+            firebaseThreadId: fallbackThread.firebaseThreadId || null,
+            vendorName: vendorProfile.name,
+            vendorPhoto: vendorProfile.avatar,
+            vendorPlanLabel: vendorProfile.planLabel,
+            vendorUid: vendorProfile.vendorUid,
+            listingTitle: fallbackThread.listingTitle || listing?.title,
+            listingId:
+              fallbackThread.listingId ||
+              fallbackThread.listing_id ||
+              fallbackThread.listingPublicId ||
+              listingIdentifierCandidates[0] ||
+              listing?.id,
+            listingImage:
+              fallbackThread.listingImage ||
+              gallery[activeImageIndex] ||
+              gallery[0] ||
+              PLACEHOLDER_IMAGE,
+            buyerId: fallbackThread.buyerUid || fallbackThread.buyer_uid || user?.uid,
+            buyerName:
+              fallbackThread.buyerName || user?.fullName || user?.displayName || user?.email || 'Buyer',
+          });
+          return;
+        }
+      }
+      showToast(messageText || 'Unable to start chat.', 'error');
     } finally {
       setChatLoading(false);
     }
@@ -415,7 +477,11 @@ const ProductDetailScreen = ({ navigation, route }) => {
     activeImageIndex,
     gallery,
     listing,
+    listingId,
+    listingIdentifierCandidates,
     navigation,
+    productId,
+    resolveExistingThread,
     role,
     showToast,
     user?.displayName,

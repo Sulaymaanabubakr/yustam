@@ -68,6 +68,42 @@ const formatTimestamp = (value) => {
   return '';
 };
 
+const formatStatusLabel = (status) => {
+  switch (status) {
+    case 'approved':
+      return 'Live';
+    case 'pending':
+      return 'Pending';
+    case 'draft':
+      return 'Draft';
+    case 'sold':
+      return 'Sold';
+    case 'unlisted':
+      return 'Unlisted';
+    default:
+      return status ? status.charAt(0).toUpperCase() + status.slice(1) : 'Pending';
+  }
+};
+
+const getStatusColor = (status) => {
+  switch (status) {
+    case 'approved':
+      return theme.colors.success;
+    case 'pending':
+      return theme.colors.warning;
+    case 'draft':
+      return theme.colors.textSecondary;
+    case 'sold':
+      return theme.colors.error;
+    case 'unlisted':
+      return theme.colors.textSecondary;
+    default:
+      return theme.colors.textSecondary;
+  }
+};
+
+const formatPrice = (price) => formatNaira(price || 0);
+
 const VendorListingsScreen = ({ navigation }) => {
   const { user, updateUserProfile } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -89,19 +125,78 @@ const VendorListingsScreen = ({ navigation }) => {
     }
     return null;
   }, [user]);
-  const vendorUid = useMemo(() => {
-    if (user?.vendor?.vendorUid) {
-      return user.vendor.vendorUid;
+  const vendorUidCandidates = useMemo(() => {
+    const collect = new Set();
+    const pushCandidate = (value) => {
+      if (typeof value === 'string' && value.trim()) {
+        collect.add(value.trim());
+      } else if (typeof value === 'number' && Number.isFinite(value)) {
+        collect.add(String(value));
+      }
+    };
+    if (user) {
+      pushCandidate(user.vendor?.vendorUid);
+      pushCandidate(user.vendor?.vendor_uid);
+      pushCandidate(user.vendor?.vendorFirebaseUid);
+      pushCandidate(user.vendor?.vendorFirebaseUID);
+      pushCandidate(user.vendor?.firebaseUid);
+      pushCandidate(user.vendor?.firebaseUID);
+      pushCandidate(user.vendorUid);
+      pushCandidate(user.vendor_uid);
+      pushCandidate(user.uid);
     }
-    if (user?.vendorUid) {
-      return user.vendorUid;
-    }
-    if (user?.uid) {
-      return user.uid;
-    }
-    return null;
+    return Array.from(collect).slice(0, 10);
   }, [user]);
   const hydrationAttempted = useRef(false);
+  const mergeSnapshots = useCallback(
+    (sourceKey, snapshot) => {
+      listingSourcesRef.current[sourceKey] = snapshot.docs || [];
+      const mergedMap = new Map();
+      Object.values(listingSourcesRef.current).forEach((docList = []) => {
+        docList.forEach((docSnap) => {
+          if (!docSnap?.id) {
+            return;
+          }
+          const data = docSnap.data() || {};
+          const statusRaw = String(data.status || 'pending').toLowerCase();
+          const imageUrls = Array.isArray(data.imageUrls) ? data.imageUrls : [];
+          const primaryImage = data.coverImage || imageUrls[0] || null;
+          const locationParts = [data.location, data.city, data.state].filter(Boolean);
+          mergedMap.set(docSnap.id, {
+            id: data.publicId || docSnap.id,
+            firestoreId: docSnap.id,
+            publicId: data.publicId || '',
+            title: data.title || data.listingTitle || 'Untitled listing',
+            description: data.description || '',
+            price: Number(data.price) || 0,
+            status: data.status || statusRaw,
+            status_raw: statusRaw,
+            status_label: formatStatusLabel(statusRaw),
+            views: Number(data.views ?? 0),
+            added_on: formatTimestamp(data.createdAt) || '',
+            image: resolveMediaUrl(primaryImage),
+            images: imageUrls,
+            category: data.category || '',
+            subcategory: data.subcategory || '',
+            location: locationParts.join(', ') || '',
+            city: data.city || '',
+            state: data.state || '',
+            country: data.country || 'Nigeria',
+          });
+        });
+      });
+      const nextListings = Array.from(mergedMap.values());
+      nextListings.sort((a, b) => {
+        const aDate = new Date(a.added_on || 0).getTime();
+        const bDate = new Date(b.added_on || 0).getTime();
+        return bDate - aDate;
+      });
+      setListings(nextListings);
+      setLoading(false);
+    },
+    []
+  );
+  const listingSourcesRef = useRef({});
 
   const hydrateVendorAccount = useCallback(async () => {
     try {
@@ -150,68 +245,58 @@ const VendorListingsScreen = ({ navigation }) => {
   }, [hydrateVendorAccount, vendorId]);
 
   useEffect(() => {
-    if (!vendorUid) {
+    listingSourcesRef.current = {};
+    const hasUidCandidates = vendorUidCandidates.length > 0;
+    const numericVendorId = Number(vendorId);
+    if (!hasUidCandidates && !Number.isFinite(numericVendorId)) {
       setListings([]);
       setLoading(false);
       return undefined;
     }
 
+    const unsubscribers = [];
+    const collectionRef = collection(db, 'listings');
+    const handleError = (error) => {
+      console.error('Firestore listings stream failed:', error);
+      setToast({
+        visible: true,
+        message: 'Failed to load listings from server.',
+        type: 'error',
+      });
+      setLoading(false);
+    };
+
     setLoading(true);
-    const listingsQuery = query(collection(db, 'listings'), where('vendorUid', '==', vendorUid));
-    const unsubscribe = onSnapshot(
-      listingsQuery,
-      (snapshot) => {
-        const items = snapshot.docs.map((docSnap) => {
-          const data = docSnap.data() || {};
-          const statusRaw = String(data.status || 'pending').toLowerCase();
-          const imageUrls = Array.isArray(data.imageUrls) ? data.imageUrls : [];
-          const primaryImage = data.coverImage || imageUrls[0] || null;
-          const locationParts = [data.location, data.city, data.state].filter(Boolean);
-          return {
-            id: data.publicId || docSnap.id,
-            firestoreId: docSnap.id,
-            publicId: data.publicId || '',
-            title: data.title || data.listingTitle || 'Untitled listing',
-            description: data.description || '',
-            price: Number(data.price) || 0,
-            status: data.status || statusRaw,
-            status_raw: statusRaw,
-            status_label: formatStatusLabel(statusRaw),
-            views: Number(data.views ?? 0),
-            added_on: formatTimestamp(data.createdAt) || '',
-            image: resolveMediaUrl(primaryImage),
-            images: imageUrls,
-            category: data.category || '',
-            subcategory: data.subcategory || '',
-            location: locationParts.join(', ') || '',
-            city: data.city || '',
-            state: data.state || '',
-            country: data.country || 'Nigeria',
-          };
-        });
 
-        items.sort((a, b) => {
-          const aDate = new Date(a.added_on || 0).getTime();
-          const bDate = new Date(b.added_on || 0).getTime();
-          return bDate - aDate;
-        });
-
-        setListings(items);
-        setLoading(false);
-      },
-      (error) => {
-        console.error('Firestore listings stream failed:', error);
-        setToast({
-          visible: true,
-          message: 'Failed to load listings from server.',
-          type: 'error',
-        });
-        setLoading(false);
+    if (hasUidCandidates) {
+      const identifiers = vendorUidCandidates.filter(Boolean);
+      if (identifiers.length === 1) {
+        const listingsQuery = query(collectionRef, where('vendorUid', '==', identifiers[0]));
+        unsubscribers.push(onSnapshot(listingsQuery, (snapshot) => mergeSnapshots('vendorUid', snapshot), handleError));
+      } else if (identifiers.length > 1) {
+        const limited = identifiers.slice(0, 10);
+        const listingsQuery = query(collectionRef, where('vendorUid', 'in', limited));
+        unsubscribers.push(
+          onSnapshot(listingsQuery, (snapshot) => mergeSnapshots('vendorUid', snapshot), handleError)
+        );
       }
-    );
+    }
 
-    return () => unsubscribe();
-  }, [vendorUid]);
+    if (Number.isFinite(numericVendorId)) {
+      const vendorIdQuery = query(collectionRef, where('vendorId', '==', numericVendorId));
+      unsubscribers.push(onSnapshot(vendorIdQuery, (snapshot) => mergeSnapshots('vendorId', snapshot), handleError));
+    }
+
+    return () => {
+      unsubscribers.forEach((unsubscribe) => {
+        try {
+          unsubscribe && unsubscribe();
+        } catch (error) {
+          console.warn('Failed to detach Firestore listener', error);
+        }
+      });
+    };
+  }, [mergeSnapshots, vendorId, vendorUidCandidates]);
 
 
   const filterListings = () => {
@@ -323,42 +408,6 @@ const VendorListingsScreen = ({ navigation }) => {
 
   const handleAddListing = () => {
     navigation.navigate('ListingEditor', { listing: null });
-  };
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'approved':
-        return theme.colors.success;
-      case 'pending':
-        return theme.colors.warning;
-      case 'draft':
-        return theme.colors.textSecondary;
-      case 'sold':
-        return theme.colors.error;
-      case 'unlisted':
-        return theme.colors.textSecondary;
-      default:
-        return theme.colors.textSecondary;
-    }
-  };
-
-  const formatPrice = (price) => formatNaira(price || 0);
-
-  const formatStatusLabel = (status) => {
-    switch (status) {
-      case 'approved':
-        return 'Live';
-      case 'pending':
-        return 'Pending';
-      case 'draft':
-        return 'Draft';
-      case 'sold':
-        return 'Sold';
-      case 'unlisted':
-        return 'Unlisted';
-      default:
-        return 'Pending';
-    }
   };
 
   const FilterChip = ({ filterKey, label, count, isSelected }) => (

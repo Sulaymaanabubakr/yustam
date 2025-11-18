@@ -37,16 +37,8 @@ export const GOOGLE_OAUTH_CONFIG = {
 
 export const GOOGLE_OAUTH_SCOPES = ['openid', 'profile', 'email'];
 
-export const hasGoogleOAuthConfig = () => {
-  const hasWebClient =
-    typeof GOOGLE_OAUTH_CONFIG.webClientId === 'string' && GOOGLE_OAUTH_CONFIG.webClientId.length > 0;
-  const hasNativeClient =
-    (typeof GOOGLE_OAUTH_CONFIG.androidClientId === 'string' &&
-      GOOGLE_OAUTH_CONFIG.androidClientId.length > 0) ||
-    (typeof GOOGLE_OAUTH_CONFIG.iosClientId === 'string' &&
-      GOOGLE_OAUTH_CONFIG.iosClientId.length > 0);
-  return hasWebClient && hasNativeClient;
-};
+export const hasGoogleOAuthConfig = () =>
+  typeof GOOGLE_OAUTH_CONFIG.webClientId === 'string' && GOOGLE_OAUTH_CONFIG.webClientId.length > 0;
 
 let googleSignInConfigured = false;
 export const configureGoogleSignIn = () => {
@@ -58,15 +50,21 @@ export const configureGoogleSignIn = () => {
     return;
   }
   try {
-    GoogleSignin.configure({
+    const config = {
       webClientId: GOOGLE_OAUTH_CONFIG.webClientId,
-      iosClientId: GOOGLE_OAUTH_CONFIG.iosClientId,
-      androidClientId: GOOGLE_OAUTH_CONFIG.androidClientId,
       offlineAccess: true,
       forceCodeForRefreshToken: false,
       scopes: GOOGLE_OAUTH_SCOPES,
       profileImageSize: 160,
-    });
+    };
+    if (GOOGLE_OAUTH_CONFIG.iosClientId) {
+      config.iosClientId = GOOGLE_OAUTH_CONFIG.iosClientId;
+    }
+    if (GOOGLE_OAUTH_CONFIG.androidClientId) {
+      config.androidClientId = GOOGLE_OAUTH_CONFIG.androidClientId;
+    }
+
+    GoogleSignin.configure(config);
     googleSignInConfigured = true;
   } catch (error) {
     console.warn('Unable to configure native Google Sign-In', error);
