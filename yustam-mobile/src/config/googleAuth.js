@@ -1,10 +1,12 @@
-import * as WebBrowser from 'expo-web-browser';
 import Constants from 'expo-constants';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 
-WebBrowser.maybeCompleteAuthSession();
-
-const FALLBACK_CLIENT_ID = '90080814337-23s48plm9jo0o545h9m5b5c6ut8e5ami.apps.googleusercontent.com';
+const DEFAULT_CLIENT_IDS = {
+  expoClientId: '',
+  iosClientId: '',
+  androidClientId: '',
+  webClientId: '',
+};
 
 const readExtraConfig = () => {
   try {
@@ -16,34 +18,54 @@ const readExtraConfig = () => {
   }
 };
 
-const extraConfig = readExtraConfig();
-
 const normalise = (value) => (typeof value === 'string' ? value.trim() : '');
 
+const extraConfig = {
+  ...DEFAULT_CLIENT_IDS,
+  ...Object.entries(readExtraConfig()).reduce((acc, [key, value]) => {
+    acc[key] = normalise(value);
+    return acc;
+  }, {}),
+};
+
 export const GOOGLE_OAUTH_CONFIG = {
-  expoClientId: normalise(extraConfig.expoClientId) || FALLBACK_CLIENT_ID,
-  iosClientId: normalise(extraConfig.iosClientId) || FALLBACK_CLIENT_ID,
-  androidClientId: normalise(extraConfig.androidClientId) || FALLBACK_CLIENT_ID,
-  webClientId: normalise(extraConfig.webClientId) || FALLBACK_CLIENT_ID,
+  expoClientId: extraConfig.expoClientId,
+  iosClientId: extraConfig.iosClientId,
+  androidClientId: extraConfig.androidClientId,
+  webClientId: extraConfig.webClientId,
 };
 
 export const GOOGLE_OAUTH_SCOPES = ['openid', 'profile', 'email'];
 
-export const hasGoogleOAuthConfig = () =>
-  Object.values(GOOGLE_OAUTH_CONFIG).some((value) => typeof value === 'string' && value.length > 0);
+export const hasGoogleOAuthConfig = () => {
+  const hasWebClient =
+    typeof GOOGLE_OAUTH_CONFIG.webClientId === 'string' && GOOGLE_OAUTH_CONFIG.webClientId.length > 0;
+  const hasNativeClient =
+    (typeof GOOGLE_OAUTH_CONFIG.androidClientId === 'string' &&
+      GOOGLE_OAUTH_CONFIG.androidClientId.length > 0) ||
+    (typeof GOOGLE_OAUTH_CONFIG.iosClientId === 'string' &&
+      GOOGLE_OAUTH_CONFIG.iosClientId.length > 0);
+  return hasWebClient && hasNativeClient;
+};
 
 let googleSignInConfigured = false;
 export const configureGoogleSignIn = () => {
   if (googleSignInConfigured) {
     return;
   }
+  if (!hasGoogleOAuthConfig()) {
+    console.warn('Google Sign-In cannot be configured without OAuth client IDs');
+    return;
+  }
   try {
     GoogleSignin.configure({
       webClientId: GOOGLE_OAUTH_CONFIG.webClientId,
       iosClientId: GOOGLE_OAUTH_CONFIG.iosClientId,
+      androidClientId: GOOGLE_OAUTH_CONFIG.androidClientId,
       offlineAccess: true,
       forceCodeForRefreshToken: false,
       scopes: GOOGLE_OAUTH_SCOPES,
+      profileImageSize: 160,
     });
     googleSignInConfigured = true;
   } catch (error) {

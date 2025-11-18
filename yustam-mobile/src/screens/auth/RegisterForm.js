@@ -9,6 +9,7 @@ import {
   Platform,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 import { useAuth } from '../../context/AuthContext';
 import { CATEGORY_OPTION_LIST } from '../../data/categories';
 import theme from '../../theme';
@@ -16,13 +17,7 @@ import Input from '../../components/Input';
 import Button from '../../components/Button';
 import Toast from '../../components/Toast';
 import SelectField from '../../components/SelectField';
-import * as Google from 'expo-auth-session/providers/google';
-import { makeRedirectUri } from 'expo-auth-session';
-import {
-  GOOGLE_OAUTH_CONFIG,
-  GOOGLE_OAUTH_SCOPES,
-  hasGoogleOAuthConfig,
-} from '../../config/googleAuth';
+import { configureGoogleSignIn, hasGoogleOAuthConfig } from '../../config/googleAuth';
 const RegisterForm = ({ navigation }) => {
   const { register: registerUser, signInWithGoogle, role: currentRole } = useAuth();
   const [role, setRole] = useState('buyer'); // Default role
@@ -42,28 +37,6 @@ const RegisterForm = ({ navigation }) => {
   // Vendor-specific fields
   const [businessName, setBusinessName] = useState('');
   const [category, setCategory] = useState('');
-
-  const nativeRedirectUri = Platform.select({
-    android: 'com.googleusercontent.apps.90080814337-3k0s5u9pne7i5vnfgalu5sddj8uc9jj3:/oauthredirect',
-    ios: 'com.googleusercontent.apps.90080814337-adt11pru8ka1b5adl5q381iolbjrsj93:/oauthredirect',
-    default: undefined,
-  });
-
-  const redirectUri = makeRedirectUri({
-    scheme: 'yustam',
-    native: nativeRedirectUri,
-    useProxy: false,
-  });
-  const [request, response, promptAsync] = Google.useAuthRequest({
-    expoClientId: GOOGLE_OAUTH_CONFIG.expoClientId,
-    iosClientId: GOOGLE_OAUTH_CONFIG.iosClientId,
-    androidClientId: GOOGLE_OAUTH_CONFIG.androidClientId,
-    webClientId: GOOGLE_OAUTH_CONFIG.webClientId,
-    responseType: 'id_token',
-    scopes: GOOGLE_OAUTH_SCOPES,
-    selectAccount: true,
-    redirectUri,
-  });
 
   useEffect(() => {
     // Load role from AsyncStorage
@@ -131,6 +104,10 @@ const RegisterForm = ({ navigation }) => {
     return Object.keys(newErrors).length === 0;
   };
 
+  useEffect(() => {
+    configureGoogleSignIn();
+  }, []);
+
   const handleRegister = async () => {
     if (!validate()) {
       showToast('Please fix the errors above');
@@ -172,76 +149,49 @@ const RegisterForm = ({ navigation }) => {
     }
   };
 
-  useEffect(() => {
-    if (!response) {
+  const handleGoogleSignUp = async () => {
+    if (googleLoading) {
       return;
     }
 
-    const handleGoogleResponse = async () => {
-      if (response.type === 'success') {
-        const idToken =
-          response.authentication?.idToken || response.params?.id_token || null;
-
-        if (!idToken) {
-          showToast('Unable to retrieve Google credentials. Please try again.');
-          setGoogleLoading(false);
-          return;
-        }
-
-        try {
-          const targetRole = role || currentRole || 'buyer';
-          await signInWithGoogle(idToken, targetRole);
-          showToast('Registration successful!', 'success');
-          setTimeout(() => {
-            navigation.replace('MainTabs');
-          }, 500);
-        } catch (error) {
-          console.error('Google registration error:', error);
-          const message = error instanceof Error ? error.message : 'Google sign-in failed. Please try again.';
-          showToast(message);
-        } finally {
-          setGoogleLoading(false);
-        }
-        return;
-      }
-
-      if (response.type === 'error') {
-        const message = response.error?.message || 'Google sign-in failed. Please try again.';
-        showToast(message);
-      }
-
-      setGoogleLoading(false);
-    };
-
-    handleGoogleResponse();
-  }, [response, role, currentRole, navigation, showToast, signInWithGoogle]);
-
-  const handleGoogleSignUp = async () => {
     if (!hasGoogleOAuthConfig()) {
       showToast('Google sign-in is not configured. Please contact support.');
       return;
     }
 
-    if (!request) {
-      showToast('Google sign-in is preparing. Please try again in a moment.');
-      return;
-    }
-
-    if (googleLoading) {
-      return;
-    }
-
-    setGoogleLoading(true);
-
     try {
-      await promptAsync({
-        useProxy: false,
-        showInRecents: true,
-        redirectUri,
-      });
+      setGoogleLoading(true);
+      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+      if (Platform.OS === 'android') {
+        await GoogleSignin.signOut().catch(() => undefined);
+      }
+      const account = await GoogleSignin.signIn();
+      const idToken = account?.idToken;
+
+      if (!idToken) {
+        throw new Error('Unable to retrieve Google credentials. Please try again.');
+      }
+
+      const targetRole = role || currentRole || 'buyer';
+      await signInWithGoogle(idToken, targetRole);
+      showToast('Registration successful!', 'success');
+      setTimeout(() => {
+        navigation.replace('MainTabs');
+      }, 500);
     } catch (error) {
-      console.error('Google prompt error:', error);
-      showToast('Unable to start Google sign-in. Please try again.');
+      console.error('Google registration error:', error);
+      let message = 'Google sign-in failed. Please try again.';
+      if (error?.code === statusCodes.SIGN_IN_CANCELLED) {
+        message = 'Google sign-in was cancelled.';
+      } else if (error?.code === statusCodes.IN_PROGRESS) {
+        message = 'Google sign-in is already in progress.';
+      } else if (error?.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+        message = 'Google Play Services is unavailable. Please update it and try again.';
+      } else if (error instanceof Error && error.message) {
+        message = error.message;
+      }
+      showToast(message);
+    } finally {
       setGoogleLoading(false);
     }
   };
@@ -391,10 +341,10 @@ const RegisterForm = ({ navigation }) => {
       </View>
 
       <TouchableOpacity
-        style={[styles.googleButton, (!request || googleLoading) && styles.googleButtonDisabled]}
+        style={[styles.googleButton, googleLoading && styles.googleButtonDisabled]}
         onPress={handleGoogleSignUp}
         activeOpacity={0.8}
-        disabled={!request || googleLoading}
+        disabled={googleLoading}
       >
         {googleLoading ? (
           <>

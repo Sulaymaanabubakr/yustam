@@ -1,6 +1,7 @@
 {
   "project_info": {
     "project_number": "472601563195",
+    "firebase_url": "https://yustam-50819-default-rtdb.europe-west1.firebasedatabase.app",
     "project_id": "yustam-50819",
     "storage_bucket": "yustam-50819.firebasestorage.app"
   },
@@ -29,6 +30,13 @@
             {
               "client_id": "472601563195-kmhmdbdllugsc25b7j4sbsgika5g6n5n.apps.googleusercontent.com",
               "client_type": 3
+            },
+            {
+              "client_id": "472601563195-230l0gfbmb8bc774ibqqrikr9sf9tucd.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.yustam.marketplace"
+              }
             }
           ]
         }
