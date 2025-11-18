@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Image,
   Modal,
@@ -14,7 +15,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import theme from '../../theme';
 import { CATEGORIES, STATES } from '../../config/constants';
 import {
@@ -28,6 +29,12 @@ import {
 import { db } from '../../config/firebase';
 import { formatNaira } from '../../utils/formatters';
 import { normalizeFirestoreListing } from '../../utils/listingTransforms';
+import {
+  buildVendorBadgeMeta,
+  clampRating,
+  describeVendorStatus,
+  formatListingLocation,
+} from '../../utils/listingBranding';
 
 const PAGE_SIZE = 40;
 
@@ -102,6 +109,16 @@ const FilterModal = ({ visible, title, options, onClose }) => (
     </TouchableWithoutFeedback>
   </Modal>
 );
+
+const renderRatingStars = (rating) => {
+  const safe = clampRating(rating);
+  const stars = [];
+  for (let i = 1; i <= 5; i += 1) {
+    const icon = safe >= i ? 'star' : 'star-outline';
+    stars.push(<Ionicons key={`star-${i}`} name={icon} size={14} color={theme.colors.orange} />);
+  }
+  return stars;
+};
 
 const BuyerSearchScreen = ({ navigation, route }) => {
   const [query, setQuery] = useState('');
@@ -341,8 +358,13 @@ const BuyerSearchScreen = ({ navigation, route }) => {
     return null;
   }, [activeFilterKey, selectedCategory, selectedLocation, selectedPriceRange, selectedSort]);
 
-  const renderProduct = ({ item }) => (
-    <TouchableOpacity style={styles.productCard} onPress={() => handleSelect(item)} activeOpacity={0.92}>
+  const renderProduct = ({ item }) => {
+    const displayBadges = (item.badges || []).filter((badge) => !/plan/i.test(badge));
+    const vendorMeta = buildVendorBadgeMeta(item);
+    const locationLabel = formatListingLocation(item);
+    const handleVendorInfo = () => Alert.alert('Vendor authenticity', describeVendorStatus(item));
+    return (
+      <TouchableOpacity style={styles.productCard} onPress={() => handleSelect(item)} activeOpacity={0.92}>
       <View style={styles.productImageWrapper}>
         {item.image ? (
           <>
@@ -355,13 +377,15 @@ const BuyerSearchScreen = ({ navigation, route }) => {
             <Text style={styles.productImageFallbackText}>No image</Text>
           </View>
         )}
-        <View style={styles.badgeRow}>
-          {item.badges?.map((badge) => (
-            <View key={`${item.id}-${badge}`} style={styles.productBadge}>
-              <Text style={styles.productBadgeText}>{badge}</Text>
-            </View>
-          ))}
-        </View>
+        {displayBadges.length ? (
+          <View style={styles.badgeRow}>
+            {displayBadges.map((badge) => (
+              <View key={`${item.id}-${badge}`} style={styles.productBadge}>
+                <Text style={styles.productBadgeText}>{badge}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
       </View>
       <View style={styles.productBody}>
         <Text style={styles.productCategory}>{item.category}</Text>
@@ -374,34 +398,43 @@ const BuyerSearchScreen = ({ navigation, route }) => {
         </View>
         <View style={styles.metaRow}>
           <View style={styles.ratingRow}>
-            <Ionicons name="star" size={14} color={theme.colors.orange} />
-            <Text style={styles.ratingText}>{formatRating(item.rating)}</Text>
+            <View style={styles.ratingStarsRow}>{renderRatingStars(item.rating)}</View>
             {item.reviews ? <Text style={styles.ratingCount}>({item.reviews})</Text> : null}
           </View>
-          <View style={styles.locationRow}>
-            <Ionicons name="location-outline" size={14} color={theme.colors.textSecondary} />
-            <Text style={styles.locationText} numberOfLines={1}>
-              {item.location}
-            </Text>
-          </View>
+          {locationLabel ? (
+            <View style={styles.locationRow}>
+              <Ionicons name="location-outline" size={14} color={theme.colors.textSecondary} />
+              <Text style={styles.locationText} numberOfLines={1}>
+                {locationLabel}
+              </Text>
+            </View>
+          ) : null}
         </View>
         <View style={styles.vendorRow}>
           <View style={styles.vendorInfo}>
-            <Text style={styles.vendorName} numberOfLines={1}>
-              {item.vendor}
-            </Text>
-            {item.verification === 'verified' ? (
-              <View style={styles.verificationChip}>
-                <Ionicons name="shield-checkmark" size={12} color={theme.colors.white} />
-                <Text style={styles.verificationText}>Verified</Text>
-              </View>
-            ) : null}
-          </View>
-          {item.vendorPlan ? (
-            <View style={styles.planBadge}>
-              <Text style={styles.planText}>{item.vendorPlan.toUpperCase()}</Text>
+            <View style={styles.vendorNameRow}>
+              <Text style={styles.vendorName} numberOfLines={1}>
+                {item.vendor}
+              </Text>
+              {vendorMeta.verificationState === 'verified' ? (
+                <MaterialCommunityIcons
+                  name="check-decagram"
+                  size={14}
+                  color={vendorMeta.palette.background}
+                />
+              ) : null}
             </View>
-          ) : null}
+          </View>
+          <TouchableOpacity
+            style={[
+              styles.vendorBadgeButton,
+              { borderColor: vendorMeta.palette.border || vendorMeta.palette.background },
+            ]}
+            onPress={handleVendorInfo}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="shield-checkmark-outline" size={16} color={vendorMeta.palette.background} />
+          </TouchableOpacity>
         </View>
         {item.tags?.length ? (
           <View style={styles.tagRow}>
@@ -413,8 +446,9 @@ const BuyerSearchScreen = ({ navigation, route }) => {
           </View>
         ) : null}
       </View>
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   const renderHeader = () => (
     <View style={styles.listHeader}>
@@ -861,9 +895,11 @@ const styles = StyleSheet.create({
   productCard: {
     backgroundColor: theme.colors.white,
     borderRadius: theme.radius['2xl'],
-    padding: theme.spacing.md,
+    paddingHorizontal: theme.spacing.md,
+    paddingTop: theme.spacing.md,
+    paddingBottom: theme.spacing.lg,
     marginBottom: theme.spacing.lg,
-    gap: theme.spacing.md,
+    gap: theme.spacing.xs,
     flexBasis: '48%',
     maxWidth: '48%',
     flexGrow: 1,
@@ -919,18 +955,20 @@ const styles = StyleSheet.create({
     color: theme.colors.orange,
   },
   productBody: {
-    gap: theme.spacing.sm,
+    gap: theme.spacing.xs,
   },
   productCategory: {
     fontFamily: theme.typography.fontFamily.inter,
     fontSize: theme.typography.fontSize.xs,
     color: theme.colors.textSecondary,
+    marginBottom: 2,
   },
   productTitle: {
     fontFamily: theme.typography.fontFamily.interSemiBold,
     fontSize: theme.typography.fontSize.lg,
     color: theme.colors.textPrimary,
     lineHeight: theme.typography.lineHeight.relaxed * theme.typography.fontSize.lg,
+    marginBottom: theme.spacing.xs / 2,
   },
   priceRow: {
     flexDirection: 'row',
@@ -956,12 +994,12 @@ const styles = StyleSheet.create({
   ratingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: theme.spacing.xs,
   },
-  ratingText: {
-    fontFamily: theme.typography.fontFamily.interSemiBold,
-    fontSize: theme.typography.fontSize.sm,
-    color: theme.colors.textPrimary,
+  ratingStarsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
   },
   ratingCount: {
     fontFamily: theme.typography.fontFamily.inter,
@@ -972,7 +1010,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    maxWidth: '55%',
+    maxWidth: '60%',
   },
   locationText: {
     fontFamily: theme.typography.fontFamily.inter,
@@ -986,40 +1024,26 @@ const styles = StyleSheet.create({
   },
   vendorInfo: {
     flex: 1,
+    marginRight: theme.spacing.sm,
+  },
+  vendorNameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.sm,
+    gap: theme.spacing.xs / 2,
   },
   vendorName: {
-    flex: 1,
     fontFamily: theme.typography.fontFamily.interSemiBold,
     fontSize: theme.typography.fontSize.sm,
     color: theme.colors.textPrimary,
   },
-  verificationChip: {
-    flexDirection: 'row',
+  vendorBadgeButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: theme.colors.primary,
-    borderRadius: theme.radius.full,
-    paddingVertical: 4,
-    paddingHorizontal: theme.spacing.sm,
-  },
-  verificationText: {
-    fontFamily: theme.typography.fontFamily.inter,
-    fontSize: theme.typography.fontSize.xs,
-    color: theme.colors.textLight,
-  },
-  planBadge: {
-    backgroundColor: theme.colors.backgroundLight,
-    borderRadius: theme.radius.full,
-    paddingVertical: 4,
-    paddingHorizontal: theme.spacing.sm,
-  },
-  planText: {
-    fontFamily: theme.typography.fontFamily.interSemiBold,
-    fontSize: theme.typography.fontSize.xs,
-    color: theme.colors.textSecondary,
+    justifyContent: 'center',
+    backgroundColor: theme.colors.white,
   },
   tagRow: {
     flexDirection: 'row',

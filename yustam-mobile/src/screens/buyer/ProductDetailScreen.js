@@ -2,8 +2,11 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Dimensions,
+  FlatList,
   Image,
   Linking,
+  Modal,
+  Pressable,
   ScrollView,
   Share,
   StyleSheet,
@@ -23,6 +26,7 @@ import resolveMediaUrl from '../../utils/url';
 import { API_BASE_URL, USER_ROLES } from '../../config/constants';
 import { chatAPI, vendorAPI } from '../../services/api';
 import { addRecentlyViewedListing } from '../../storage/recentlyViewed';
+import { formatListingLocation } from '../../utils/listingBranding';
 
 const { width } = Dimensions.get('window');
 const HERO_HEIGHT = width * 0.78;
@@ -42,6 +46,11 @@ const EXCLUDED_SPEC_KEYS = new Set([
   'productname',
   'name',
   'price',
+  'listingprice',
+  'listing_price',
+  'displayprice',
+  'formattedprice',
+  'price_display',
   'amount',
   'oldprice',
   'previousprice',
@@ -135,8 +144,11 @@ const ProductDetailScreen = ({ navigation, route }) => {
   const [vendorRecord, setVendorRecord] = useState(null);
   const [vendorLoading, setVendorLoading] = useState(false);
   const [reloadToken, setReloadToken] = useState(0);
+  const [viewerVisible, setViewerVisible] = useState(false);
+  const [viewerIndex, setViewerIndex] = useState(0);
   const vendorLookupKeyRef = useRef('');
   const scrollRef = useRef(null);
+  const viewerListRef = useRef(null);
 
   const listing = useMemo(() => buildListingModel(listingSource, listingId), [listingSource, listingId]);
   const listingData = listing?.raw || listingSource || {};
@@ -144,6 +156,7 @@ const ProductDetailScreen = ({ navigation, route }) => {
   const specifications = useMemo(() => extractSpecifications(listingData), [listingData]);
   const baseVendor = useMemo(() => buildVendorFromListing(listing), [listing]);
   const vendorProfile = useMemo(() => mergeVendorProfiles(baseVendor, vendorRecord), [baseVendor, vendorRecord]);
+  const vendorAvatar = vendorProfile.avatar || listing?.vendorAvatar || listing?.vendorPhoto || null;
   const verificationState = vendorProfile.verification || 'unverified';
   const verificationLabel = vendorProfile.verificationLabel || buildVerificationLabel(verificationState);
   const verificationColor =
@@ -160,6 +173,18 @@ const ProductDetailScreen = ({ navigation, route }) => {
       : 'shield-outline';
   const hasStorefront = Boolean(
     vendorProfile.storefrontSlug || vendorProfile.vendorUid || vendorProfile.vendorId || vendorProfile.storefrontUrl
+  );
+  const listingLocation = useMemo(
+    () => formatListingLocation({ ...(listingData || {}), ...(listing || {}) }),
+    [listing, listingData]
+  );
+  const listingBadges = useMemo(
+    () => (listing?.badges || []).filter((badge) => badge && !/plan/i.test(badge)),
+    [listing?.badges]
+  );
+  const watermarkCopy = useMemo(
+    () => `Posted on Yustam Marketplace by ${vendorProfile.name || listing?.vendorName || 'Yustam Vendor'}`,
+    [listing?.vendorName, vendorProfile.name]
   );
 
   const vendorIdentifiers = useMemo(() => {
@@ -245,11 +270,11 @@ const ProductDetailScreen = ({ navigation, route }) => {
       name: listing.title,
       price: listing.price,
       image: gallery?.[0],
-      location: listing.location,
+      location: listingLocation,
       category: listing.category,
     };
     addRecentlyViewedListing(entry);
-  }, [listing, gallery]);
+  }, [gallery, listing, listingLocation]);
 
   useEffect(() => {
     const targetId = productId || initialProduct?.id;
@@ -318,6 +343,59 @@ const ProductDetailScreen = ({ navigation, route }) => {
       console.warn('Share failed:', shareError);
     }
   }, [listing, productId]);
+
+  const viewerInitialIndex = useMemo(
+    () => Math.min(Math.max(viewerIndex, 0), Math.max(gallery.length - 1, 0)),
+    [gallery.length, viewerIndex]
+  );
+
+  const openGalleryViewer = useCallback(
+    (index = 0) => {
+      setViewerIndex(index);
+      setViewerVisible(true);
+    },
+    []
+  );
+
+  const closeGalleryViewer = useCallback(() => {
+    setViewerVisible(false);
+    setActiveImageIndex((prev) => (Number.isNaN(viewerInitialIndex) ? prev : viewerInitialIndex));
+  }, [viewerInitialIndex]);
+
+  useEffect(() => {
+    if (viewerVisible && viewerListRef.current && gallery.length) {
+      try {
+        viewerListRef.current.scrollToIndex({ index: viewerInitialIndex, animated: false });
+      } catch {
+        // Ignore out-of-range errors while list is mounting
+      }
+    }
+  }, [gallery.length, viewerInitialIndex, viewerVisible]);
+
+  const handleViewerMomentum = useCallback((event) => {
+    const offsetX = event.nativeEvent.contentOffset.x;
+    const index = Math.round(offsetX / width);
+    setViewerIndex(index);
+  }, []);
+
+  const renderViewerItem = useCallback(
+    ({ item }) => (
+      <View style={styles.viewerSlide}>
+        {item ? (
+          <Image source={{ uri: item }} style={styles.viewerImage} resizeMode="contain" />
+        ) : (
+          <View style={styles.viewerFallback}>
+            <Ionicons name="image-outline" size={32} color={theme.colors.white} />
+            <Text style={styles.viewerFallbackText}>No image</Text>
+          </View>
+        )}
+        <View pointerEvents="none" style={styles.viewerWatermark}>
+          <Text style={styles.viewerWatermarkText}>{watermarkCopy}</Text>
+        </View>
+      </View>
+    ),
+    [watermarkCopy]
+  );
 
   const handleCallVendor = useCallback(async () => {
     if (!vendorProfile.phone) {
@@ -571,11 +649,40 @@ const ProductDetailScreen = ({ navigation, route }) => {
               pagingEnabled
               showsHorizontalScrollIndicator={false}
               onMomentumScrollEnd={handleGalleryScroll}
+              contentContainerStyle={styles.heroRail}
             >
               {gallery.map((img, index) => (
-                <Image key={`${img}-${index}`} source={{ uri: img }} style={styles.heroImage} resizeMode="cover" />
+                <Pressable
+                  key={`${img}-${index}-${index}`}
+                  style={styles.heroSlide}
+                  onPress={() => openGalleryViewer(index)}
+                >
+                  {img ? (
+                    <>
+                      <Image source={{ uri: img }} style={styles.heroImage} resizeMode="cover" />
+                      <View style={styles.heroImageOverlay} />
+                    </>
+                  ) : (
+                    <View style={styles.heroImagePlaceholder}>
+                      <Ionicons name="image-outline" size={28} color={theme.colors.textSecondary} />
+                      <Text style={styles.heroImagePlaceholderText}>No image</Text>
+                    </View>
+                  )}
+                </Pressable>
               ))}
             </ScrollView>
+            {gallery.length ? (
+              <TouchableOpacity
+                style={styles.heroAction}
+                onPress={() => openGalleryViewer(activeImageIndex)}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="expand-outline" size={18} color={theme.colors.white} />
+              </TouchableOpacity>
+            ) : null}
+            <View pointerEvents="none" style={styles.heroWatermark}>
+              <Text style={styles.heroWatermarkText}>{watermarkCopy}</Text>
+            </View>
             {gallery.length > 1 ? (
               <View style={styles.paginationDots}>
                 {gallery.map((_, index) => (
@@ -603,10 +710,10 @@ const ProductDetailScreen = ({ navigation, route }) => {
                   <Text style={styles.metaText}>{listing.categoryLabel}</Text>
                 </View>
               ) : null}
-              {listing?.location ? (
+              {listingLocation ? (
                 <View style={styles.metaPill}>
                   <Ionicons name="location-outline" size={14} color={theme.colors.textSecondary} />
-                  <Text style={styles.metaText}>{listing.location}</Text>
+                  <Text style={styles.metaText}>{listingLocation}</Text>
                 </View>
               ) : null}
               {listing?.createdAt ? (
@@ -617,9 +724,9 @@ const ProductDetailScreen = ({ navigation, route }) => {
               ) : null}
             </View>
 
-            {listing?.badges?.length ? (
+            {listingBadges.length ? (
               <View style={styles.badgeRow}>
-                {listing.badges.map((badge) => (
+                {listingBadges.map((badge) => (
                   <View key={badge} style={styles.badge}>
                     <Text style={styles.badgeText}>{badge}</Text>
                   </View>
@@ -669,10 +776,10 @@ const ProductDetailScreen = ({ navigation, route }) => {
                 <Text style={styles.specValue}>{listing.categoryLabel}</Text>
               </View>
             ) : null}
-            {listing?.location ? (
+            {listingLocation ? (
               <View style={styles.specRow}>
                 <Text style={styles.specLabel}>Location</Text>
-                <Text style={styles.specValue}>{listing.location}</Text>
+                <Text style={styles.specValue}>{listingLocation}</Text>
               </View>
             ) : null}
             {listing?.createdAt ? (
@@ -686,8 +793,8 @@ const ProductDetailScreen = ({ navigation, route }) => {
           <View style={styles.sectionCard}>
             <View style={styles.vendorHeader}>
               <View style={styles.vendorAvatarWrapper}>
-                {vendorProfile.avatar ? (
-                  <Image source={{ uri: vendorProfile.avatar }} style={styles.vendorAvatar} />
+                {vendorAvatar ? (
+                  <Image source={{ uri: vendorAvatar }} style={styles.vendorAvatar} />
                 ) : (
                   <View style={styles.vendorAvatarPlaceholder}>
                     <Ionicons name="storefront-outline" size={20} color={theme.colors.white} />
@@ -754,6 +861,35 @@ const ProductDetailScreen = ({ navigation, route }) => {
           </View>
         </ScrollView>
       )}
+
+      {viewerVisible ? (
+        <Modal visible transparent animationType="fade" onRequestClose={closeGalleryViewer}>
+          <View style={styles.viewerModal}>
+            <FlatList
+              ref={viewerListRef}
+              data={gallery}
+              extraData={gallery.length}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              keyExtractor={(item, index) => `${item || 'image'}-${index}`}
+              renderItem={renderViewerItem}
+              onMomentumScrollEnd={handleViewerMomentum}
+              initialScrollIndex={viewerInitialIndex}
+              getItemLayout={(_, index) => ({ length: width, offset: width * index, index })}
+            />
+            <View style={styles.viewerControls}>
+              <Text style={styles.viewerCounter}>
+                {gallery.length ? viewerInitialIndex + 1 : 0}/{gallery.length}
+              </Text>
+              <TouchableOpacity onPress={closeGalleryViewer} style={styles.viewerCloseButton} activeOpacity={0.85}>
+                <Ionicons name="close" size={20} color={theme.colors.white} />
+                <Text style={styles.viewerCloseText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+      ) : null}
 
       <View style={styles.contactBar}>
         <TouchableOpacity
@@ -1068,7 +1204,7 @@ const buildLocationLabel = ({ location, city, state, country }) => {
   if (!parts.length && location) {
     parts.push(location);
   }
-  if (country && !parts.includes(country)) {
+  if (country && !/nigeria/i.test(country) && !parts.includes(country)) {
     parts.push(country);
   }
   return parts.filter(Boolean).join(', ');
@@ -1093,6 +1229,15 @@ const buildListingModel = (source = {}, fallbackId) => {
   const categoryLabel = [category, subcategory && subcategory !== category ? subcategory : null]
     .filter(Boolean)
     .join(' / ');
+  const city = pickFirstString(data.city, data.vendorCity);
+  const state = pickFirstString(data.state, data.vendorState);
+  const country = pickFirstString(data.country, data.vendorCountry);
+  const locationLabel = buildLocationLabel({
+    location: data.location ?? data.vendorLocation,
+    city,
+    state,
+    country,
+  });
 
   return {
     id,
@@ -1105,7 +1250,6 @@ const buildListingModel = (source = {}, fallbackId) => {
     badges: dedupeArray([
       ...(Array.isArray(data.badges) ? data.badges : []),
       data.isFeatured || data.featured ? 'Featured' : null,
-      data.vendorPlan ? buildPlanLabel(data.vendorPlan) : null,
     ]),
     tags: dedupeArray([
       ...(Array.isArray(data.tags) ? data.tags : []),
@@ -1116,12 +1260,10 @@ const buildListingModel = (source = {}, fallbackId) => {
     category,
     subcategory,
     categoryLabel,
-    location: buildLocationLabel({
-      location: data.location ?? data.vendorLocation,
-      city: data.city ?? data.vendorCity,
-      state: data.state ?? data.vendorState,
-      country: data.country,
-    }),
+    location: locationLabel,
+    city,
+    state,
+    country,
     createdAt: parseTimestamp(data.createdAt),
     vendorUid: pickFirstString(data.vendorUid, data.vendorFirebaseUid, data.vendor_uid),
     vendorFirebaseUid: pickFirstString(data.vendorFirebaseUid, data.vendor_uid),
@@ -1134,7 +1276,12 @@ const buildListingModel = (source = {}, fallbackId) => {
     vendorPhone: pickFirstString(data.vendorPhone, data.phone, data.contactPhone),
     vendorWhatsapp: pickFirstString(data.vendorWhatsapp, data.whatsapp),
     vendorEmail: pickFirstString(data.vendorEmail, data.email, data.contactEmail),
-    vendorLocation: pickFirstString(data.vendorLocation, data.location),
+    vendorLocation: buildLocationLabel({
+      location: data.vendorLocation ?? data.location,
+      city: pickFirstString(data.vendorCity, city),
+      state: pickFirstString(data.vendorState, state),
+      country,
+    }),
     vendorSlug: pickFirstString(
       data.vendorSlug,
       data.storefrontSlug,
@@ -1334,9 +1481,57 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.white,
   },
   heroImage: {
+    ...StyleSheet.absoluteFillObject,
+    width: undefined,
+    height: undefined,
+    backgroundColor: theme.colors.backgroundLight,
+  },
+  heroRail: {
+    flexDirection: 'row',
+  },
+  heroSlide: {
     width,
     height: HERO_HEIGHT,
+    overflow: 'hidden',
     backgroundColor: theme.colors.backgroundLight,
+  },
+  heroImagePlaceholder: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: theme.spacing.xs,
+  },
+  heroImagePlaceholderText: {
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.textSecondary,
+  },
+  heroAction: {
+    position: 'absolute',
+    top: theme.spacing.lg,
+    right: theme.spacing.lg,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: `${theme.colors.overlayDark}80`,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroWatermark: {
+    position: 'absolute',
+    left: theme.spacing.lg,
+    right: theme.spacing.lg,
+    bottom: theme.spacing.lg,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.xs,
+    borderRadius: theme.radius.full,
+    backgroundColor: `${theme.colors.overlayDark}70`,
+  },
+  heroWatermarkText: {
+    textAlign: 'center',
+    fontFamily: theme.typography.fontFamily.interSemiBold,
+    fontSize: theme.typography.fontSize.xs,
+    color: `${theme.colors.white}CC`,
   },
   paginationDots: {
     position: 'absolute',
@@ -1551,6 +1746,79 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.fontFamily.interMedium,
     fontSize: theme.typography.fontSize.sm,
     color: theme.colors.emerald,
+  },
+  viewerModal: {
+    flex: 1,
+    backgroundColor: `${theme.colors.overlayDark}F2`,
+    justifyContent: 'center',
+  },
+  viewerSlide: {
+    width,
+    height: HERO_HEIGHT,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  viewerImage: {
+    width: width * 0.9,
+    height: HERO_HEIGHT * 0.95,
+  },
+  viewerFallback: {
+    width: width * 0.9,
+    height: HERO_HEIGHT * 0.95,
+    borderWidth: 1,
+    borderColor: `${theme.colors.white}30`,
+    borderStyle: 'dashed',
+    borderRadius: theme.radius['2xl'],
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: theme.spacing.sm,
+  },
+  viewerFallbackText: {
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.sm,
+    color: `${theme.colors.white}CC`,
+  },
+  viewerControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.md,
+  },
+  viewerCounter: {
+    fontFamily: theme.typography.fontFamily.interSemiBold,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.white,
+  },
+  viewerCloseButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.xs,
+    borderRadius: theme.radius.full,
+    backgroundColor: `${theme.colors.overlayDark}B0`,
+  },
+  viewerCloseText: {
+    fontFamily: theme.typography.fontFamily.interMedium,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.white,
+  },
+  viewerWatermark: {
+    position: 'absolute',
+    bottom: theme.spacing.xl,
+    left: theme.spacing.lg,
+    right: theme.spacing.lg,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.xs,
+    borderRadius: theme.radius.full,
+    backgroundColor: `${theme.colors.overlayDark}70`,
+  },
+  viewerWatermarkText: {
+    textAlign: 'center',
+    fontFamily: theme.typography.fontFamily.interSemiBold,
+    fontSize: theme.typography.fontSize.xs,
+    color: `${theme.colors.white}CC`,
   },
   contactBar: {
     position: 'absolute',

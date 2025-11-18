@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Image,
   ScrollView,
   StyleSheet,
@@ -10,13 +11,19 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { collection, getDocs, limit, orderBy, query as buildQuery } from 'firebase/firestore';
 import theme from '../../theme';
 import { useAuth } from '../../context/AuthContext';
 import { db } from '../../config/firebase';
 import { formatNaira } from '../../utils/formatters';
 import { normalizeFirestoreListing, normalizeStaticListing } from '../../utils/listingTransforms';
+import {
+  buildVendorBadgeMeta,
+  clampRating,
+  describeVendorStatus,
+  formatListingLocation,
+} from '../../utils/listingBranding';
 import { getFlashSaleItems, getMarketplaceProducts } from '../../data/buyerCatalog';
 import { getStoredNotificationsMeta } from '../../storage/notificationsMeta';
 
@@ -405,7 +412,21 @@ const formatRating = (rating) => {
   return Number(rating).toFixed(1);
 };
 
+const renderRatingStars = (rating) => {
+  const safe = clampRating(rating);
+  const stars = [];
+  for (let i = 1; i <= 5; i += 1) {
+    const icon = safe >= i ? 'star' : 'star-outline';
+    stars.push(<Ionicons key={`star-${i}`} name={icon} size={14} color={theme.colors.orange} />);
+  }
+  return stars;
+};
+
 const ListingCard = ({ item, onPress, variant = 'rail' }) => {
+  const displayBadges = (item.badges || []).filter((badge) => !/plan/i.test(badge));
+  const vendorMeta = buildVendorBadgeMeta(item);
+  const locationLabel = formatListingLocation(item);
+  const handleVendorInfo = () => Alert.alert('Vendor authenticity', describeVendorStatus(item));
   return (
     <TouchableOpacity
       style={[styles.listingCard, variant === 'grid' && styles.listingCardGrid]}
@@ -424,9 +445,9 @@ const ListingCard = ({ item, onPress, variant = 'rail' }) => {
             <Text style={styles.listingImagePlaceholderText}>No image</Text>
           </View>
         )}
-        {item.badges?.length ? (
+        {displayBadges.length ? (
           <View style={styles.listingBadge}>
-            <Text style={styles.listingBadgeText}>{item.badges[0]}</Text>
+            <Text style={styles.listingBadgeText}>{displayBadges[0]}</Text>
           </View>
         ) : null}
       </View>
@@ -440,28 +461,44 @@ const ListingCard = ({ item, onPress, variant = 'rail' }) => {
       </View>
       <View style={styles.listingMetaRow}>
         <View style={styles.listingRatingRow}>
-          <Ionicons name="star" size={14} color={theme.colors.orange} />
-          <Text style={styles.listingRatingValue}>{formatRating(item.rating)}</Text>
+          <View style={styles.ratingStarsRow}>{renderRatingStars(item.rating)}</View>
           {item.reviews ? <Text style={styles.listingRatingCount}>({item.reviews})</Text> : null}
         </View>
-        {item.location ? (
+        {locationLabel ? (
           <View style={styles.listingLocationRow}>
             <Ionicons name="location-outline" size={14} color={theme.colors.textSecondary} />
             <Text style={styles.listingLocationText} numberOfLines={1}>
-              {item.location}
+              {locationLabel}
             </Text>
           </View>
         ) : null}
       </View>
       <View style={styles.listingVendorRow}>
-        <Text style={styles.listingVendorName} numberOfLines={1}>
-          {item.vendor}
-        </Text>
-        {item.vendorPlan ? (
-          <View style={styles.listingPlanBadge}>
-            <Text style={styles.listingPlanText}>{item.vendorPlan.toUpperCase()}</Text>
+        <View style={styles.vendorInfo}>
+          <View style={styles.vendorNameRow}>
+            <Text style={styles.listingVendorName} numberOfLines={1}>
+              {item.vendor}
+            </Text>
+            {vendorMeta.verificationState === 'verified' ? (
+              <MaterialCommunityIcons
+                name="check-decagram"
+                size={16}
+                color={vendorMeta.palette.background}
+                style={styles.vendorTick}
+              />
+            ) : null}
           </View>
-        ) : null}
+        </View>
+        <TouchableOpacity
+          style={[
+            styles.vendorBadgeButton,
+            { borderColor: vendorMeta.palette.border || vendorMeta.palette.background },
+          ]}
+          onPress={handleVendorInfo}
+          activeOpacity={0.85}
+        >
+          <Ionicons name="shield-checkmark-outline" size={16} color={vendorMeta.palette.background} />
+        </TouchableOpacity>
       </View>
     </TouchableOpacity>
   );
@@ -690,13 +727,16 @@ const styles = StyleSheet.create({
   railContent: {
     gap: theme.spacing.md,
     paddingRight: theme.spacing.lg,
+    paddingBottom: theme.spacing.md,
   },
   listingCard: {
     width: 240,
     borderRadius: theme.radius['2xl'],
     backgroundColor: theme.colors.white,
-    padding: theme.spacing.md,
-    gap: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.md,
+    paddingTop: theme.spacing.md,
+    paddingBottom: theme.spacing.xl,
+    gap: theme.spacing.xs,
     ...theme.shadows.card,
   },
   listingCardGrid: {
@@ -749,12 +789,13 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.fontFamily.inter,
     fontSize: theme.typography.fontSize.xs,
     color: theme.colors.textSecondary,
+    marginBottom: 2,
   },
   listingTitle: {
     fontFamily: theme.typography.fontFamily.interSemiBold,
     fontSize: theme.typography.fontSize.base,
     color: theme.colors.textPrimary,
-    minHeight: 44,
+    marginBottom: theme.spacing.xs / 2,
   },
   listingPriceRow: {
     flexDirection: 'row',
@@ -783,6 +824,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
   },
+  ratingStarsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
   listingRatingValue: {
     fontFamily: theme.typography.fontFamily.interSemiBold,
     fontSize: theme.typography.fontSize.sm,
@@ -809,22 +855,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  listingVendorName: {
+  vendorInfo: {
     flex: 1,
+    marginRight: theme.spacing.sm,
+  },
+  vendorNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs / 2,
+  },
+  listingVendorName: {
     fontFamily: theme.typography.fontFamily.interSemiBold,
     fontSize: theme.typography.fontSize.sm,
     color: theme.colors.textPrimary,
   },
-  listingPlanBadge: {
-    paddingHorizontal: theme.spacing.sm,
-    paddingVertical: 4,
-    borderRadius: theme.radius.full,
-    backgroundColor: theme.colors.backgroundLight,
+  vendorTick: {
+    marginTop: 1,
   },
-  listingPlanText: {
-    fontFamily: theme.typography.fontFamily.inter,
-    fontSize: theme.typography.fontSize.xs,
-    color: theme.colors.textSecondary,
+  vendorBadgeButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.white,
   },
   listingGrid: {
     flexDirection: 'row',
