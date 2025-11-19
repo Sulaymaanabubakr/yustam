@@ -31,6 +31,7 @@ import {
   buildOptionsFromLabels,
   getSubcategoriesForCategory,
 } from '../../data/categories';
+import { getCategoryFieldDefinitions } from '../../data/listingFieldConfig';
 import { db } from '../../config/firebase';
 
 const CONDITIONS = ['New', 'Used - Like New', 'Used - Good', 'Used - Fair', 'Refurbished'];
@@ -41,6 +42,80 @@ const DEFAULT_COUNTRY = 'Nigeria';
 const FALLBACK_CATEGORY_OPTIONS = CATEGORY_OPTION_LIST;
 const MIN_IMAGE_COUNT = 2;
 const MAX_IMAGE_COUNT = 8;
+const GENERAL_FIELD_NAMES = new Set(
+  [
+    'title',
+    'listingtitle',
+    'producttitle',
+    'productname',
+    'name',
+    'description',
+    'price',
+    'location',
+    'city',
+    'state',
+    'country',
+    'condition',
+    'status',
+  ].map((value) => value.toLowerCase())
+);
+
+const normalizeFieldName = (value) => String(value || '').trim().toLowerCase();
+
+const filterDynamicFields = (fields = []) =>
+  fields.filter((field) => field?.name && !GENERAL_FIELD_NAMES.has(normalizeFieldName(field.name)));
+
+const formatAttributeInputValue = (field, value) => {
+  if (value === undefined || value === null) {
+    return '';
+  }
+  if (field?.type === 'number') {
+    return String(value).replace(/[^0-9.]/g, '');
+  }
+  return String(value);
+};
+
+const buildAttributePayload = (fields = [], values = {}) => {
+  const payload = {};
+  fields.forEach((field) => {
+    const key = field?.name;
+    if (!key) {
+      return;
+    }
+    const rawValue = values[key];
+    if (rawValue === undefined || rawValue === null || rawValue === '') {
+      return;
+    }
+    if (field.type === 'number') {
+      const numeric = Number(String(rawValue).replace(/[^0-9.]/g, ''));
+      if (!Number.isNaN(numeric)) {
+        payload[key] = numeric;
+      }
+      return;
+    }
+    payload[key] = String(rawValue).trim();
+  });
+  return payload;
+};
+
+const extractAttributeValuesFromListing = (listing, fields = []) => {
+  if (!listing) {
+    return {};
+  }
+  const attributes = {};
+  fields.forEach((field) => {
+    const key = field?.name;
+    if (!key) {
+      return;
+    }
+    const sourceValue = listing[key];
+    if (sourceValue === undefined || sourceValue === null || sourceValue === '') {
+      return;
+    }
+    attributes[key] = formatAttributeInputValue(field, sourceValue);
+  });
+  return attributes;
+};
 
 const createDefaultFormState = () => ({
   title: '',
@@ -96,9 +171,22 @@ const ListingEditorScreen = ({ route, navigation }) => {
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState({ visible: false, message: '', type: 'info' });
+  const [attributeValues, setAttributeValues] = useState({});
   const subcategoryOptions = useMemo(
     () => (formData.category ? getSubcategoriesForCategory(formData.category) : []),
     [formData.category]
+  );
+  const categoryFieldDefinitions = useMemo(
+    () => getCategoryFieldDefinitions(formData.category),
+    [formData.category]
+  );
+  const dynamicFieldDefinitions = useMemo(
+    () => filterDynamicFields(categoryFieldDefinitions),
+    [categoryFieldDefinitions]
+  );
+  const attributePayload = useMemo(
+    () => buildAttributePayload(dynamicFieldDefinitions, attributeValues),
+    [attributeValues, dynamicFieldDefinitions]
   );
   const hasPresetSubcategories = subcategoryOptions.length > 0;
   const vendorProfile = user?.vendor || {};
@@ -123,6 +211,8 @@ const ListingEditorScreen = ({ route, navigation }) => {
       const trimmedTitle = formData.title.trim() || 'Marketplace Listing';
       const priceValue = normalisePriceValue(formData.price) ?? 0;
       const countryValue = formData.country || DEFAULT_COUNTRY;
+      const attributeEntries = attributePayload;
+      const hasAttributeEntries = Object.keys(attributeEntries).length > 0;
       return {
         title: trimmedTitle,
         productTitle: trimmedTitle,
@@ -151,6 +241,8 @@ const ListingEditorScreen = ({ route, navigation }) => {
         city: locationValue,
         state: formData.state,
         country: countryValue,
+        ...(hasAttributeEntries ? attributeEntries : {}),
+        ...(hasAttributeEntries ? { categoryAttributes: attributeEntries } : {}),
       };
     },
     [
@@ -172,6 +264,7 @@ const ListingEditorScreen = ({ route, navigation }) => {
       vendorPlanLabel,
       vendorPhone,
       defaultVendorLocation,
+      attributePayload,
     ]
   );
 
@@ -233,11 +326,48 @@ const ListingEditorScreen = ({ route, navigation }) => {
       } else {
         setImages([]);
       }
+      const initialAttributes = extractAttributeValuesFromListing(
+        listing,
+        filterDynamicFields(getCategoryFieldDefinitions(listing.category))
+      );
+      setAttributeValues(initialAttributes);
     } else {
       setFormData(createDefaultFormState());
       setImages([]);
+      setAttributeValues({});
     }
   }, [listing]);
+
+  useEffect(() => {
+    setAttributeValues((prev) => {
+      if (!dynamicFieldDefinitions.length) {
+        return {};
+      }
+      const next = {};
+      dynamicFieldDefinitions.forEach((field) => {
+        const key = field?.name;
+        if (key && prev[key] !== undefined) {
+          next[key] = prev[key];
+        }
+      });
+      const prevKeys = Object.keys(prev);
+      const nextKeys = Object.keys(next);
+      if (prevKeys.length === nextKeys.length) {
+        let unchanged = true;
+        for (let i = 0; i < nextKeys.length; i += 1) {
+          const key = nextKeys[i];
+          if (prev[key] !== next[key]) {
+            unchanged = false;
+            break;
+          }
+        }
+        if (unchanged) {
+          return prev;
+        }
+      }
+      return next;
+    });
+  }, [dynamicFieldDefinitions]);
 
   useEffect(() => {
     let isMounted = true;
@@ -285,6 +415,86 @@ const ListingEditorScreen = ({ route, navigation }) => {
       [key]: value,
       ...(key === 'category' ? { subcategory: '' } : {}),
     }));
+  };
+
+  const updateAttributeField = useCallback((field, value) => {
+    const key = field?.name;
+    if (!key) {
+      return;
+    }
+    const normalisedValue =
+      field.type === 'number' ? String(value || '').replace(/[^0-9.]/g, '') : String(value || '');
+    setAttributeValues((prev) => {
+      if (!normalisedValue) {
+        if (!(key in prev)) {
+          return prev;
+        }
+        const { [key]: _, ...rest } = prev;
+        return rest;
+      }
+      if (prev[key] === normalisedValue) {
+        return prev;
+      }
+      return {
+        ...prev,
+        [key]: normalisedValue,
+      };
+    });
+  }, []);
+
+  const shouldShowCategoryDetails =
+    dynamicFieldDefinitions.length > 0 &&
+    formData.category &&
+    (!hasPresetSubcategories || !!formData.subcategory);
+
+  const renderDynamicField = (field) => {
+    const key = field?.name;
+    if (!key) {
+      return null;
+    }
+    const label = field.label || key;
+    const placeholder =
+      field.placeholder ||
+      (field.type === 'select' ? `Select ${label.toLowerCase()}` : `Enter ${label.toLowerCase()}`);
+    const fieldType = field.type === 'datalist' || field.type === 'date' ? 'text' : field.type;
+    const value = attributeValues[key] ?? '';
+
+    if (fieldType === 'select') {
+      return (
+        <View key={key} style={styles.dynamicField}>
+          <SelectField
+            label={`${label} (optional)`}
+            placeholder={placeholder}
+            value={value || null}
+            options={field.options || []}
+            onSelect={(nextValue) => updateAttributeField(field, nextValue)}
+            searchable={(field.options || []).length > 6}
+          />
+        </View>
+      );
+    }
+
+    const isTextarea = fieldType === 'textarea';
+    const keyboardType = fieldType === 'number' ? 'numeric' : 'default';
+
+    return (
+      <View key={key} style={styles.dynamicField}>
+        <Text style={styles.label}>
+          {label} <Text style={styles.optionalTag}>(optional)</Text>
+        </Text>
+        <TextInput
+          style={[styles.input, isTextarea && styles.textArea]}
+          value={value}
+          onChangeText={(text) => updateAttributeField(field, text)}
+          placeholder={placeholder}
+          placeholderTextColor={theme.colors.textSecondary}
+          keyboardType={keyboardType}
+          multiline={isTextarea}
+          numberOfLines={isTextarea ? 4 : 1}
+          textAlignVertical={isTextarea ? 'top' : 'center'}
+        />
+      </View>
+    );
   };
 
   const handlePriceInputChange = (text) => {
@@ -491,6 +701,11 @@ const ListingEditorScreen = ({ route, navigation }) => {
         firestoreId: resolvedFirestoreId,
       };
 
+      if (Object.keys(attributePayload).length) {
+        payload.categoryAttributes = attributePayload;
+        Object.assign(payload, attributePayload);
+      }
+
       if (vendorId) {
         payload.ownerId = `vendor:${vendorId}`;
       }
@@ -661,6 +876,16 @@ const ListingEditorScreen = ({ route, navigation }) => {
           )}
         </View>
 
+        {shouldShowCategoryDetails ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Category-specific details</Text>
+            <Text style={styles.helperText}>
+              Everything here is optional but helps buyers understand your offer.
+            </Text>
+            {dynamicFieldDefinitions.map((field) => renderDynamicField(field))}
+          </View>
+        ) : null}
+
         {/* Condition */}
         <View style={styles.section}>
           <SelectField
@@ -754,6 +979,9 @@ const styles = StyleSheet.create({
   section: {
     marginBottom: theme.spacing.xl,
   },
+  dynamicField: {
+    marginTop: theme.spacing.md,
+  },
   sectionTitle: {
     fontFamily: theme.typography.fontFamilyBody,
     fontSize: theme.typography.sizes.base,
@@ -767,6 +995,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: theme.colors.textPrimary,
     marginBottom: theme.spacing.xs,
+  },
+  optionalTag: {
+    fontFamily: theme.typography.fontFamilyBody,
+    fontSize: theme.typography.sizes.xs,
+    color: theme.colors.textSecondary,
+    fontWeight: '400',
   },
   helperText: {
     fontFamily: theme.typography.fontFamilyBody,

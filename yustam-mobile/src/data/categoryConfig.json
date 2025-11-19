@@ -1,0 +1,1184 @@
+{
+  "Phones & Tablets": {
+    "subcategories": [
+      "Smartphones",
+      "Feature Phones",
+      "Tablets",
+      "Smartwatches & Wearables",
+      "Accessories"
+    ],
+    "fields": [
+      {
+        "label": "Brand",
+        "name": "brand",
+        "type": "select",
+        "options": [
+          "Alcatel",
+          "Apple",
+          "Asus",
+          "BlackBerry",
+          "Blackview",
+          "Blu",
+          "Cat",
+          "Cubot",
+          "Doogee",
+          "Gionee",
+          "Google",
+          "Honor",
+          "HTC",
+          "Huawei",
+          "Infinix",
+          "iQOO",
+          "itel",
+          "Lenovo",
+          "LG",
+          "Meizu",
+          "Micromax",
+          "Motorola",
+          "Nokia",
+          "Nothing",
+          "OnePlus",
+          "Oppo",
+          "Oukitel",
+          "Panasonic",
+          "Philips",
+          "POCO",
+          "Realme",
+          "Redmi",
+          "Samsung",
+          "Sharp",
+          "Tecno",
+          "Ulefone",
+          "Umidigi",
+          "Vivo",
+          "Wiko",
+          "Xiaomi",
+          "ZTE"
+        ],
+        "required": true
+      },
+      {
+        "label": "Model",
+        "name": "model",
+        "type": "datalist",
+        "datalistId": "phone-model-options",
+        "placeholder": "Start typing model name",
+        "required": true
+      },
+      {
+        "label": "RAM",
+        "name": "ram",
+        "type": "select",
+        "options": [
+          "2GB",
+          "3GB",
+          "4GB",
+          "6GB",
+          "8GB",
+          "12GB",
+          "16GB"
+        ],
+        "required": true
+      },
+      {
+        "label": "Storage",
+        "name": "storage",
+        "type": "select",
+        "options": [
+          "16GB",
+          "32GB",
+          "64GB",
+          "128GB",
+          "256GB",
+          "512GB",
+          "1TB"
+        ],
+        "required": true
+      },
+      {
+        "label": "Condition",
+        "name": "condition",
+        "type": "select",
+        "options": [
+          "New",
+          "Like New",
+          "Used",
+          "For Parts"
+        ],
+        "required": true
+      },
+      {
+        "label": "Network",
+        "name": "network",
+        "type": "select",
+        "options": [
+          "2G",
+          "3G",
+          "4G",
+          "5G"
+        ],
+        "required": true
+      },
+      {
+        "label": "Display Size (inches)",
+        "name": "displaySize",
+        "type": "text",
+        "placeholder": "e.g., 6.1",
+        "required": true
+      },
+      {
+        "label": "Battery Capacity (mAh)",
+        "name": "batteryCapacity",
+        "type": "number",
+        "placeholder": "e.g., 4500",
+        "required": true
+      },
+      {
+        "label": "Camera (Megapixels)",
+        "name": "camera",
+        "type": "text",
+        "placeholder": "e.g., 50MP + 12MP",
+        "required": true
+      },
+      {
+        "label": "Colour",
+        "name": "colour",
+        "type": "text",
+        "required": true
+      },
+      {
+        "label": "Dual SIM",
+        "name": "dualSim",
+        "type": "select",
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "required": true
+      },
+      {
+        "label": "Warranty Offered",
+        "name": "warrantyOffered",
+        "type": "select",
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "required": true
+      },
+      {
+        "label": "Warranty Duration",
+        "name": "warrantyDuration",
+        "type": "text",
+        "placeholder": "e.g., 6 months",
+        "required": false
+      },
+      {
+        "label": "Price (₦)",
+        "name": "price",
+        "type": "number",
+        "min": 0,
+        "required": true
+      },
+      {
+        "label": "State / City",
+        "name": "location",
+        "type": "text",
+        "placeholder": "e.g., Lekki, Lagos",
+        "required": true
+      },
+      {
+        "label": "Highlight Features / Description",
+        "name": "description",
+        "type": "textarea",
+        "required": false
+      }
+    ]
+  },
+  "Electronics": {
+    "subcategories": [
+      "Televisions",
+      "Audio & Home Theatre",
+      "Cameras & Lenses",
+      "Drones",
+      "Fridges & Freezers",
+      "Air Conditioners & Fans",
+      "Cookers & Microwaves",
+      "Washing Machines",
+      "Small Appliances",
+      "Other Electronics"
+    ],
+    "fields": [
+      {
+        "label": "Brand",
+        "name": "brand",
+        "type": "text",
+        "required": true
+      },
+      {
+        "label": "Type",
+        "name": "type",
+        "type": "text",
+        "required": true
+      },
+      {
+        "label": "Size / Capacity",
+        "name": "sizeCapacity",
+        "type": "text",
+        "placeholder": "e.g., 55\" / 450L",
+        "required": true
+      },
+      {
+        "label": "Energy Rating",
+        "name": "energyRating",
+        "type": "text",
+        "required": false
+      },
+      {
+        "label": "Smart Features",
+        "name": "smartFeatures",
+        "type": "textarea",
+        "required": false
+      },
+      {
+        "label": "Condition",
+        "name": "condition",
+        "type": "select",
+        "options": [
+          "New",
+          "Like New",
+          "Used",
+          "For Parts"
+        ],
+        "required": true
+      },
+      {
+        "label": "Warranty",
+        "name": "warranty",
+        "type": "text",
+        "required": false
+      },
+      {
+        "label": "Price (₦)",
+        "name": "price",
+        "type": "number",
+        "min": 0,
+        "required": true
+      },
+      {
+        "label": "Location",
+        "name": "location",
+        "type": "text",
+        "required": true
+      },
+      {
+        "label": "Description",
+        "name": "description",
+        "type": "textarea",
+        "required": false
+      }
+    ]
+  },
+  "Computing": {
+    "subcategories": [
+      "Laptops",
+      "Desktops",
+      "Monitors",
+      "Printers & Scanners",
+      "Components (RAM, SSD, GPU)",
+      "Networking",
+      "Accessories"
+    ],
+    "fields": [
+      {
+        "label": "Brand",
+        "name": "brand",
+        "type": "text",
+        "required": true
+      },
+      {
+        "label": "Model",
+        "name": "model",
+        "type": "text",
+        "required": true
+      },
+      {
+        "label": "CPU",
+        "name": "cpu",
+        "type": "text",
+        "required": true
+      },
+      {
+        "label": "RAM",
+        "name": "ram",
+        "type": "text",
+        "placeholder": "e.g., 16GB",
+        "required": true
+      },
+      {
+        "label": "Storage",
+        "name": "storage",
+        "type": "text",
+        "placeholder": "e.g., 512GB SSD",
+        "required": true
+      },
+      {
+        "label": "GPU",
+        "name": "gpu",
+        "type": "text",
+        "required": false
+      },
+      {
+        "label": "Screen Size",
+        "name": "screenSize",
+        "type": "text",
+        "placeholder": "e.g., 15.6\"",
+        "required": false
+      },
+      {
+        "label": "Battery Health",
+        "name": "batteryHealth",
+        "type": "text",
+        "required": false
+      },
+      {
+        "label": "Operating System",
+        "name": "os",
+        "type": "text",
+        "required": true
+      },
+      {
+        "label": "Condition",
+        "name": "condition",
+        "type": "select",
+        "options": [
+          "New",
+          "Like New",
+          "Used",
+          "For Parts"
+        ],
+        "required": true
+      },
+      {
+        "label": "Warranty",
+        "name": "warranty",
+        "type": "text",
+        "required": false
+      },
+      {
+        "label": "Price (₦)",
+        "name": "price",
+        "type": "number",
+        "min": 0,
+        "required": true
+      },
+      {
+        "label": "Description",
+        "name": "description",
+        "type": "textarea",
+        "required": false
+      }
+    ]
+  },
+  "Fashion": {
+    "subcategories": [
+      "Men's Clothing",
+      "Women's Clothing",
+      "Kids",
+      "Footwear",
+      "Bags & Accessories",
+      "Jewellery & Watches",
+      "Modestwear / Abayas",
+      "Traditional Wear (Agbada, Kaftan, Ankara)"
+    ],
+    "fields": [
+      {
+        "label": "Item Type",
+        "name": "itemType",
+        "type": "text",
+        "required": true
+      },
+      {
+        "label": "Gender",
+        "name": "gender",
+        "type": "select",
+        "options": [
+          "Unisex",
+          "Male",
+          "Female",
+          "Boys",
+          "Girls"
+        ],
+        "required": true
+      },
+      {
+        "label": "Size",
+        "name": "size",
+        "type": "text",
+        "required": true
+      },
+      {
+        "label": "Colour",
+        "name": "colour",
+        "type": "text",
+        "required": true
+      },
+      {
+        "label": "Material",
+        "name": "material",
+        "type": "text",
+        "required": false
+      },
+      {
+        "label": "Brand",
+        "name": "brand",
+        "type": "text",
+        "required": false
+      },
+      {
+        "label": "Condition",
+        "name": "condition",
+        "type": "select",
+        "options": [
+          "New",
+          "Used"
+        ],
+        "required": true
+      },
+      {
+        "label": "Price (₦)",
+        "name": "price",
+        "type": "number",
+        "min": 0,
+        "required": true
+      },
+      {
+        "label": "Description",
+        "name": "description",
+        "type": "textarea",
+        "required": false
+      }
+    ]
+  },
+  "Beauty & Self-Care": {
+    "subcategories": [
+      "Skincare",
+      "Haircare",
+      "Makeup",
+      "Perfume & Fragrance",
+      "Health & Wellness",
+      "Tools & Appliances"
+    ],
+    "fields": [
+      {
+        "label": "Product Type",
+        "name": "productType",
+        "type": "text",
+        "required": true
+      },
+      {
+        "label": "Brand",
+        "name": "brand",
+        "type": "text",
+        "required": true
+      },
+      {
+        "label": "Volume / Weight",
+        "name": "volume",
+        "type": "text",
+        "placeholder": "e.g., 100ml",
+        "required": true
+      },
+      {
+        "label": "Expiry / Best-Before Date",
+        "name": "expiryDate",
+        "type": "date",
+        "required": true
+      },
+      {
+        "label": "Condition",
+        "name": "condition",
+        "type": "select",
+        "options": [
+          "New"
+        ],
+        "required": true
+      },
+      {
+        "label": "Ingredients (optional)",
+        "name": "ingredients",
+        "type": "textarea",
+        "required": false
+      },
+      {
+        "label": "Authenticity / Sealed",
+        "name": "authenticity",
+        "type": "select",
+        "options": [
+          "Sealed",
+          "Unsealed"
+        ],
+        "required": true
+      },
+      {
+        "label": "Price (₦)",
+        "name": "price",
+        "type": "number",
+        "min": 0,
+        "required": true
+      },
+      {
+        "label": "Description",
+        "name": "description",
+        "type": "textarea",
+        "required": false
+      }
+    ]
+  },
+  "Home & Kitchen": {
+    "subcategories": [
+      "Cookware / Utensils",
+      "Bedding & Linen",
+      "Cleaning Supplies",
+      "Home Decor",
+      "Small Appliances",
+      "Storage & Organisation"
+    ],
+    "fields": [
+      {
+        "label": "Item Type",
+        "name": "itemType",
+        "type": "text",
+        "required": true
+      },
+      {
+        "label": "Brand",
+        "name": "brand",
+        "type": "text",
+        "required": false
+      },
+      {
+        "label": "Material",
+        "name": "material",
+        "type": "text",
+        "required": false
+      },
+      {
+        "label": "Dimensions / Size",
+        "name": "dimensions",
+        "type": "text",
+        "required": false
+      },
+      {
+        "label": "Condition",
+        "name": "condition",
+        "type": "select",
+        "options": [
+          "New",
+          "Like New",
+          "Used"
+        ],
+        "required": true
+      },
+      {
+        "label": "Price (₦)",
+        "name": "price",
+        "type": "number",
+        "min": 0,
+        "required": true
+      },
+      {
+        "label": "Description",
+        "name": "description",
+        "type": "textarea",
+        "required": false
+      }
+    ]
+  },
+  "Furniture": {
+    "subcategories": [
+      "Living Room",
+      "Bedroom",
+      "Office",
+      "Outdoor",
+      "Custom / Handmade"
+    ],
+    "fields": [
+      {
+        "label": "Furniture Type",
+        "name": "type",
+        "type": "text",
+        "required": true
+      },
+      {
+        "label": "Material",
+        "name": "material",
+        "type": "text",
+        "required": true
+      },
+      {
+        "label": "Dimensions",
+        "name": "dimensions",
+        "type": "text",
+        "placeholder": "e.g., 200cm x 180cm",
+        "required": true
+      },
+      {
+        "label": "Condition",
+        "name": "condition",
+        "type": "select",
+        "options": [
+          "New",
+          "Like New",
+          "Used"
+        ],
+        "required": true
+      },
+      {
+        "label": "Assembly Needed",
+        "name": "assemblyNeeded",
+        "type": "select",
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "required": true
+      },
+      {
+        "label": "Price (₦)",
+        "name": "price",
+        "type": "number",
+        "min": 0,
+        "required": true
+      },
+      {
+        "label": "Description",
+        "name": "description",
+        "type": "textarea",
+        "required": false
+      }
+    ]
+  },
+  "Vehicles": {
+    "subcategories": [
+      "Cars",
+      "Motorcycles",
+      "Tricycles",
+      "Trucks & Buses",
+      "Parts & Accessories",
+      "Boats"
+    ],
+    "fields": [
+      {
+        "label": "Make",
+        "name": "make",
+        "type": "text",
+        "required": true
+      },
+      {
+        "label": "Model",
+        "name": "model",
+        "type": "text",
+        "required": true
+      },
+      {
+        "label": "Year",
+        "name": "year",
+        "type": "number",
+        "min": 1950,
+        "max": 2026,
+        "required": true
+      },
+      {
+        "label": "Trim",
+        "name": "trim",
+        "type": "text",
+        "required": false
+      },
+      {
+        "label": "Transmission",
+        "name": "transmission",
+        "type": "select",
+        "options": [
+          "Automatic",
+          "Manual",
+          "CVT"
+        ],
+        "required": true
+      },
+      {
+        "label": "Mileage (km)",
+        "name": "mileage",
+        "type": "number",
+        "min": 0,
+        "required": true
+      },
+      {
+        "label": "Fuel Type",
+        "name": "fuelType",
+        "type": "select",
+        "options": [
+          "Petrol",
+          "Diesel",
+          "Hybrid",
+          "Electric"
+        ],
+        "required": true
+      },
+      {
+        "label": "Condition",
+        "name": "condition",
+        "type": "select",
+        "options": [
+          "Brand New",
+          "Foreign Used",
+          "Nigerian Used"
+        ],
+        "required": true
+      },
+      {
+        "label": "Colour",
+        "name": "colour",
+        "type": "text",
+        "required": true
+      },
+      {
+        "label": "Registered",
+        "name": "registered",
+        "type": "select",
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "required": true
+      },
+      {
+        "label": "Price (₦)",
+        "name": "price",
+        "type": "number",
+        "min": 0,
+        "required": true
+      },
+      {
+        "label": "Location",
+        "name": "location",
+        "type": "text",
+        "placeholder": "e.g., Ikeja, Lagos",
+        "required": true
+      },
+      {
+        "label": "Description",
+        "name": "description",
+        "type": "textarea",
+        "required": false
+      }
+    ]
+  },
+  "Property": {
+    "subcategories": [
+      "Rent (Apartments)",
+      "Rent (Houses)",
+      "Sale (Apartments)",
+      "Sale (Houses)",
+      "Land",
+      "Commercial Property",
+      "Short Lets"
+    ],
+    "fields": [
+      {
+        "label": "Property Type",
+        "name": "propertyType",
+        "type": "text",
+        "required": true
+      },
+      {
+        "label": "Bedrooms",
+        "name": "bedrooms",
+        "type": "number",
+        "min": 0,
+        "required": true
+      },
+      {
+        "label": "Bathrooms",
+        "name": "bathrooms",
+        "type": "number",
+        "min": 0,
+        "required": true
+      },
+      {
+        "label": "Size (sqm)",
+        "name": "size",
+        "type": "number",
+        "min": 0,
+        "required": true
+      },
+      {
+        "label": "Furnished",
+        "name": "furnished",
+        "type": "select",
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "required": true
+      },
+      {
+        "label": "Serviced",
+        "name": "serviced",
+        "type": "select",
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "required": true
+      },
+      {
+        "label": "Parking",
+        "name": "parking",
+        "type": "select",
+        "options": [
+          "Yes",
+          "No"
+        ],
+        "required": true
+      },
+      {
+        "label": "Location (Area)",
+        "name": "location",
+        "type": "text",
+        "placeholder": "Estate / Street / Area",
+        "required": true
+      },
+      {
+        "label": "State",
+        "name": "state",
+        "type": "select",
+        "options": [
+          "Abia",
+          "Adamawa",
+          "Akwa Ibom",
+          "Anambra",
+          "Bauchi",
+          "Bayelsa",
+          "Benue",
+          "Borno",
+          "Cross River",
+          "Delta",
+          "Ebonyi",
+          "Edo",
+          "Ekiti",
+          "Enugu",
+          "Federal Capital Territory",
+          "Gombe",
+          "Imo",
+          "Jigawa",
+          "Kaduna",
+          "Kano",
+          "Katsina",
+          "Kebbi",
+          "Kogi",
+          "Kwara",
+          "Lagos",
+          "Nasarawa",
+          "Niger",
+          "Ogun",
+          "Ondo",
+          "Osun",
+          "Oyo",
+          "Plateau",
+          "Rivers",
+          "Sokoto",
+          "Taraba",
+          "Yobe",
+          "Zamfara"
+        ],
+        "required": true
+      },
+      {
+        "label": "Price (₦)",
+        "name": "price",
+        "type": "number",
+        "min": 0,
+        "required": true
+      },
+      {
+        "label": "Description",
+        "name": "description",
+        "type": "textarea",
+        "required": false
+      }
+    ]
+  },
+  "Power Solutions": {
+    "subcategories": [
+      "Generators",
+      "Inverters & Batteries",
+      "Solar Panels & Systems",
+      "Stabilizers / UPS"
+    ],
+    "fields": [
+      {
+        "label": "Brand",
+        "name": "brand",
+        "type": "text",
+        "required": true
+      },
+      {
+        "label": "Capacity (kVA / W)",
+        "name": "capacity",
+        "type": "text",
+        "required": true
+      },
+      {
+        "label": "Voltage",
+        "name": "voltage",
+        "type": "text",
+        "required": false
+      },
+      {
+        "label": "Phase",
+        "name": "phase",
+        "type": "select",
+        "options": [
+          "Single Phase",
+          "Three Phase"
+        ],
+        "required": false
+      },
+      {
+        "label": "Fuel / Solar Type",
+        "name": "powerType",
+        "type": "text",
+        "required": true
+      },
+      {
+        "label": "Condition",
+        "name": "condition",
+        "type": "select",
+        "options": [
+          "New",
+          "Like New",
+          "Used"
+        ],
+        "required": true
+      },
+      {
+        "label": "Warranty",
+        "name": "warranty",
+        "type": "text",
+        "required": false
+      },
+      {
+        "label": "Price (₦)",
+        "name": "price",
+        "type": "number",
+        "min": 0,
+        "required": true
+      },
+      {
+        "label": "Description",
+        "name": "description",
+        "type": "textarea",
+        "required": false
+      }
+    ]
+  },
+  "Food & Groceries": {
+    "subcategories": [
+      "Staples",
+      "Oils & Seasonings",
+      "Spices & Condiments",
+      "Canned & Packaged Foods",
+      "Snacks",
+      "Beverages",
+      "Dairy & Eggs",
+      "Fresh Produce",
+      "Meat & Fish",
+      "Frozen Foods",
+      "Bakery",
+      "Baby Food",
+      "Pet Food"
+    ],
+    "fields": [
+      {
+        "label": "Product Name",
+        "name": "productName",
+        "type": "text",
+        "required": true
+      },
+      {
+        "label": "Brand",
+        "name": "brand",
+        "type": "text",
+        "required": true
+      },
+      {
+        "label": "Weight / Quantity",
+        "name": "weight",
+        "type": "text",
+        "required": true
+      },
+      {
+        "label": "Pack Size",
+        "name": "packSize",
+        "type": "text",
+        "required": false
+      },
+      {
+        "label": "Expiry / Best-Before Date",
+        "name": "expiryDate",
+        "type": "date",
+        "required": true
+      },
+      {
+        "label": "Storage Type",
+        "name": "storageType",
+        "type": "select",
+        "options": [
+          "Ambient",
+          "Chilled",
+          "Frozen"
+        ],
+        "required": true
+      },
+      {
+        "label": "Certification (NAFDAC No.)",
+        "name": "certification",
+        "type": "text",
+        "required": false
+      },
+      {
+        "label": "Price (₦)",
+        "name": "price",
+        "type": "number",
+        "min": 0,
+        "required": true
+      },
+      {
+        "label": "Location",
+        "name": "location",
+        "type": "text",
+        "required": true
+      },
+      {
+        "label": "Description",
+        "name": "description",
+        "type": "textarea",
+        "required": false
+      }
+    ]
+  },
+  "Services": {
+    "subcategories": [
+      "Home Services",
+      "Education & Training",
+      "Health & Wellness",
+      "Photography & Videography",
+      "Events & Catering",
+      "Tailoring & Fashion Services",
+      "IT & Digital",
+      "Logistics & Delivery"
+    ],
+    "fields": [
+      {
+        "label": "Service Name",
+        "name": "serviceName",
+        "type": "text",
+        "required": true
+      },
+      {
+        "label": "Service Description",
+        "name": "description",
+        "type": "textarea",
+        "required": true
+      },
+      {
+        "label": "Rate Type",
+        "name": "rateType",
+        "type": "select",
+        "options": [
+          "Hourly",
+          "Daily",
+          "Per Project",
+          "Retainer"
+        ],
+        "required": true
+      },
+      {
+        "label": "Price (₦)",
+        "name": "price",
+        "type": "number",
+        "min": 0,
+        "required": true
+      },
+      {
+        "label": "Coverage Area",
+        "name": "coverageArea",
+        "type": "text",
+        "placeholder": "Cities or regions served",
+        "required": true
+      },
+      {
+        "label": "Availability",
+        "name": "availability",
+        "type": "text",
+        "placeholder": "e.g., Weekdays 9am-5pm",
+        "required": true
+      },
+      {
+        "label": "Additional Notes",
+        "name": "notes",
+        "type": "textarea",
+        "required": false
+      }
+    ]
+  },
+  "Others": {
+    "subcategories": [
+      "Miscellaneous",
+      "Hobbies & Art",
+      "Pets & Animals",
+      "Agriculture",
+      "Books & Stationery",
+      "Collectibles"
+    ],
+    "fields": [
+      {
+        "label": "Title",
+        "name": "title",
+        "type": "text",
+        "required": true
+      },
+      {
+        "label": "Description",
+        "name": "description",
+        "type": "textarea",
+        "required": true
+      },
+      {
+        "label": "Condition",
+        "name": "condition",
+        "type": "select",
+        "options": [
+          "New",
+          "Like New",
+          "Used"
+        ],
+        "required": true
+      },
+      {
+        "label": "Price (₦)",
+        "name": "price",
+        "type": "number",
+        "min": 0,
+        "required": true
+      },
+      {
+        "label": "Location",
+        "name": "location",
+        "type": "text",
+        "required": true
+      }
+    ]
+  }
+}
