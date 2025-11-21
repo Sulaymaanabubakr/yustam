@@ -6,7 +6,8 @@
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "postinstall": "patch-package"
   },
   "dependencies": {
     "@expo-google-fonts/anton": "^0.2.3",
@@ -36,16 +37,18 @@
     "react-native": "^0.81.5",
     "react-native-gesture-handler": "~2.28.0",
     "react-native-paystack-webview": "^5.0.2",
-    "react-native-reanimated": "~3.16.1",
+    "react-native-reanimated": "~4.1.1",
     "react-native-safe-area-context": "~5.6.0",
     "react-native-screens": "~4.16.0",
     "react-native-web": "^0.21.0",
-    "react-native-webview": "13.15.0"
+    "react-native-webview": "13.15.0",
+    "react-native-worklets": "0.5.1"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
     "babel-preset-expo": "^54.0.6",
     "expo-build-properties": "^1.0.9",
+    "patch-package": "^8.0.0",
     "react-native-dotenv": "^3.4.11"
   },
   "private": true

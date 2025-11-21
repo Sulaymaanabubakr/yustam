@@ -15,11 +15,11 @@
       },
       "oauth_client": [
         {
-          "client_id": "472601563195-69933qseueisjpc3kq9ssejdg9asmha0.apps.googleusercontent.com",
+          "client_id": "472601563195-inr31f3gtnv3sqqp2829umnmuef8nru0.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.yustam.marketplace",
-            "certificate_hash": "0c96a2682821c6faa9c2af95a757662f00c0f00b"
+            "certificate_hash": "a3f065d49f504c8cce280b81cb93e7ed045cd173"
           }
         },
         {
