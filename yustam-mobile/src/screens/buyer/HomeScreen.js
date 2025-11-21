@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { collection, getDocs, limit, orderBy, query as buildQuery } from 'firebase/firestore';
 import theme from '../../theme';
 import { useAuth } from '../../context/AuthContext';
@@ -26,6 +27,7 @@ import {
 } from '../../utils/listingBranding';
 import { getFlashSaleItems, getMarketplaceProducts } from '../../data/buyerCatalog';
 import { getStoredNotificationsMeta } from '../../storage/notificationsMeta';
+import { describePreference, filterListingsByPreference, getBotPreferences } from '../../utils/aiPreferences';
 
 const CATEGORY_ITEMS = [
   { id: 'phones-tablets', label: 'Phones & Tablets', icon: 'phone-portrait-outline' },
@@ -85,6 +87,13 @@ const BuyerHomeScreen = ({ navigation }) => {
   const [flashDeals, setFlashDeals] = useState([]);
   const [trendingListings, setTrendingListings] = useState([]);
   const [latestListings, setLatestListings] = useState([]);
+  const [rawFlashDeals, setRawFlashDeals] = useState([]);
+  const [rawTrendingListings, setRawTrendingListings] = useState([]);
+  const [rawLatestListings, setRawLatestListings] = useState([]);
+  const [preference, setPreference] = useState(null);
+  const [preferenceLabel, setPreferenceLabel] = useState(null);
+  const [preferenceLoaded, setPreferenceLoaded] = useState(false);
+  const [localityFallbackActive, setLocalityFallbackActive] = useState(false);
   const [loadingFeed, setLoadingFeed] = useState(true);
   const [error, setError] = useState('');
   const [hasNewNotifications, setHasNewNotifications] = useState(false);
@@ -110,9 +119,20 @@ const BuyerHomeScreen = ({ navigation }) => {
 
     const fallbackMarketplace = getMarketplaceProducts().map((item) => normalizeStaticListing(item));
 
-    setFlashDeals(fallbackFlash.slice(0, SECTION_LIMITS.flash));
-    setTrendingListings(fallbackMarketplace.slice(0, SECTION_LIMITS.trending));
-    setLatestListings(fallbackMarketplace.slice(SECTION_LIMITS.trending, SECTION_LIMITS.trending + SECTION_LIMITS.latest));
+    const flash = fallbackFlash.slice(0, SECTION_LIMITS.flash);
+    const trending = fallbackMarketplace.slice(0, SECTION_LIMITS.trending);
+    const latest = fallbackMarketplace.slice(
+      SECTION_LIMITS.trending,
+      SECTION_LIMITS.trending + SECTION_LIMITS.latest
+    );
+
+    setRawFlashDeals(flash);
+    setRawTrendingListings(trending);
+    setRawLatestListings(latest);
+
+    setFlashDeals(flash);
+    setTrendingListings(trending);
+    setLatestListings(latest);
   }, []);
 
   const hydrateFromRecords = useCallback(
@@ -121,9 +141,17 @@ const BuyerHomeScreen = ({ navigation }) => {
         hydrateFromFallbacks();
         return;
       }
-      setFlashDeals(selectFlashDeals(records));
-      setTrendingListings(selectTrendingListings(records));
-      setLatestListings(records.slice(0, SECTION_LIMITS.latest));
+      const flash = selectFlashDeals(records);
+      const trending = selectTrendingListings(records);
+      const latest = records.slice(0, SECTION_LIMITS.latest);
+
+      setRawFlashDeals(flash);
+      setRawTrendingListings(trending);
+      setRawLatestListings(latest);
+
+      setFlashDeals(flash);
+      setTrendingListings(trending);
+      setLatestListings(latest);
     },
     [hydrateFromFallbacks]
   );
@@ -158,6 +186,84 @@ const BuyerHomeScreen = ({ navigation }) => {
   useEffect(() => {
     fetchHomeFeed();
   }, [fetchHomeFeed]);
+
+  useFocusEffect(
+    useCallback(() => {
+      let isActive = true;
+
+      const syncPreference = async () => {
+        try {
+          const settings = await getBotPreferences();
+          if (!isActive) {
+            return;
+          }
+          setPreference(settings);
+          setPreferenceLabel(describePreference(settings));
+        } catch (prefError) {
+          console.warn('BuyerHomeScreen preference error:', prefError);
+          if (!isActive) {
+            return;
+          }
+          setPreference(null);
+          setPreferenceLabel(null);
+        } finally {
+          if (isActive) {
+            setPreferenceLoaded(true);
+          }
+        }
+      };
+
+      const syncNotificationMeta = async () => {
+        try {
+          const meta = await getStoredNotificationsMeta();
+          if (!isActive) {
+            return;
+          }
+          setHasNewNotifications(Boolean(meta?.unread && meta.unread > 0));
+        } catch (metaError) {
+          console.warn('BuyerHomeScreen notification meta error:', metaError);
+        }
+      };
+
+      syncPreference();
+      syncNotificationMeta();
+
+      return () => {
+        isActive = false;
+      };
+    }, [])
+  );
+
+  useEffect(() => {
+    const applyFilter = (items = []) => {
+      if (!Array.isArray(items) || !items.length) {
+        return { items: Array.isArray(items) ? items : [], fallback: false };
+      }
+      if (!preference || preference.mode !== 'local') {
+        return { items, fallback: false };
+      }
+      const filtered = filterListingsByPreference(items, preference);
+      if (filtered.length) {
+        return { items: filtered, fallback: false };
+      }
+      return { items, fallback: true };
+    };
+
+    const flashResult = applyFilter(rawFlashDeals);
+    const trendingResult = applyFilter(rawTrendingListings);
+    const latestResult = applyFilter(rawLatestListings);
+
+    setFlashDeals(flashResult.items);
+    setTrendingListings(trendingResult.items);
+    setLatestListings(latestResult.items);
+
+    const fallbackActive =
+      preference &&
+      preference.mode === 'local' &&
+      (flashResult.fallback || trendingResult.fallback || latestResult.fallback);
+
+    setLocalityFallbackActive(Boolean(fallbackActive));
+  }, [preference, rawFlashDeals, rawTrendingListings, rawLatestListings]);
 
   useEffect(() => {
     let isMounted = true;
@@ -271,6 +377,33 @@ const BuyerHomeScreen = ({ navigation }) => {
             <Text style={styles.searchButtonText}>Search</Text>
           </TouchableOpacity>
         </View>
+
+        {preferenceLoaded && preference?.mode === 'local' ? (
+          <View
+            style={[
+              styles.preferenceBanner,
+              localityFallbackActive && styles.preferenceBannerWarning,
+            ]}
+          >
+            <Ionicons
+              name={localityFallbackActive ? 'alert-circle' : 'location'}
+              size={16}
+              color={localityFallbackActive ? theme.colors.warning : theme.colors.emerald}
+            />
+            <Text style={styles.preferenceBannerText}>
+              {localityFallbackActive
+                ? `No listings near ${preferenceLabel || 'your location'} yet. Showing nationwide results for now.`
+                : `Showing listings near ${preferenceLabel || 'your location'}.`}
+            </Text>
+            <TouchableOpacity
+              style={styles.preferenceBannerButton}
+              onPress={() => navigation.navigate('Bot')}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.preferenceBannerButtonText}>Adjust</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
 
         <ScrollView
           horizontal
@@ -598,6 +731,37 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.fontFamily.interSemiBold,
     fontSize: theme.typography.fontSize.sm,
     color: theme.colors.white,
+  },
+  preferenceBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    backgroundColor: `${theme.colors.emerald}12`,
+    borderRadius: theme.radius.lg,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+  },
+  preferenceBannerWarning: {
+    backgroundColor: `${theme.colors.warning}12`,
+  },
+  preferenceBannerText: {
+    flex: 1,
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.textSecondary,
+  },
+  preferenceBannerButton: {
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: theme.spacing.xs,
+    borderRadius: theme.radius.full,
+    backgroundColor: theme.colors.white,
+    borderWidth: 1,
+    borderColor: `${theme.colors.emerald}35`,
+  },
+  preferenceBannerButtonText: {
+    fontFamily: theme.typography.fontFamily.interSemiBold,
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.emerald,
   },
   categoriesCard: {
     backgroundColor: theme.colors.white,

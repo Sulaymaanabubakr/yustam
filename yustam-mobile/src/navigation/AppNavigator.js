@@ -38,6 +38,7 @@ import VendorChangePasswordScreen from '../screens/vendor/ChangePasswordScreen';
 import VendorRenewPlanScreen from '../screens/vendor/RenewPlanScreen';
 import VendorManageSubscriptionScreen from '../screens/vendor/ManageSubscriptionScreen';
 import VendorDeleteAccountScreen from '../screens/vendor/DeleteAccountScreen';
+import VendorRewardsScreen from '../screens/vendor/VendorRewardsScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -122,6 +123,7 @@ const AppNavigator = () => {
             <Stack.Screen name="VendorRenewPlan" component={VendorRenewPlanScreen} />
             <Stack.Screen name="VendorManageSubscription" component={VendorManageSubscriptionScreen} />
             <Stack.Screen name="VendorDeleteAccount" component={VendorDeleteAccountScreen} />
+            <Stack.Screen name="VendorRewards" component={VendorRewardsScreen} />
           </>
         )}
       </Stack.Navigator>

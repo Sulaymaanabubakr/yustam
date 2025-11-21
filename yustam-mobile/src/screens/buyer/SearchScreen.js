@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import theme from '../../theme';
 import { CATEGORIES, STATES } from '../../config/constants';
 import {
@@ -35,6 +36,7 @@ import {
   describeVendorStatus,
   formatListingLocation,
 } from '../../utils/listingBranding';
+import { describePreference, filterListingsByPreference, getBotPreferences } from '../../utils/aiPreferences';
 
 const PAGE_SIZE = 40;
 
@@ -135,6 +137,10 @@ const BuyerSearchScreen = ({ navigation, route }) => {
   const [error, setError] = useState('');
   const [activeFilterKey, setActiveFilterKey] = useState(null);
   const [pageMeta, setPageMeta] = useState({ page: 1, perPage: PAGE_SIZE, hasMore: false });
+  const [preference, setPreference] = useState(null);
+  const [preferenceLabel, setPreferenceLabel] = useState(null);
+  const [preferenceLoaded, setPreferenceLoaded] = useState(false);
+  const [localityFallbackActive, setLocalityFallbackActive] = useState(false);
   const lastVisibleRef = useRef(null);
 
   useEffect(() => {
@@ -155,6 +161,40 @@ const BuyerSearchScreen = ({ navigation, route }) => {
       setSelectedCategory(incomingCategory);
     }
   }, [route?.params?.query, route?.params?.category]);
+
+  useFocusEffect(
+    useCallback(() => {
+      let isActive = true;
+
+      const syncPreference = async () => {
+        try {
+          const settings = await getBotPreferences();
+          if (!isActive) {
+            return;
+          }
+          setPreference(settings);
+          setPreferenceLabel(describePreference(settings));
+        } catch (prefError) {
+          console.warn('BuyerSearchScreen preference error:', prefError);
+          if (!isActive) {
+            return;
+          }
+          setPreference(null);
+          setPreferenceLabel(null);
+        } finally {
+          if (isActive) {
+            setPreferenceLoaded(true);
+          }
+        }
+      };
+
+      syncPreference();
+
+      return () => {
+        isActive = false;
+      };
+    }, [])
+  );
 
   const fetchListings = useCallback(
     async ({ page: pageOverride = 1, reset = false } = {}) => {
@@ -223,6 +263,26 @@ const BuyerSearchScreen = ({ navigation, route }) => {
     fetchListings({ page: 1, reset: true });
   }, [fetchListings]);
 
+  const { items: preferenceScopedListings, fallback: localityFallback, applied: localityApplied } = useMemo(() => {
+    const manualOverride = Boolean(selectedLocation);
+    if (!preference || preference.mode !== 'local' || manualOverride) {
+      return {
+        items: listings,
+        fallback: false,
+        applied: !manualOverride && preference?.mode === 'local',
+      };
+    }
+    const filtered = filterListingsByPreference(listings, preference);
+    if (filtered.length) {
+      return { items: filtered, fallback: false, applied: true };
+    }
+    return { items: listings, fallback: Boolean(listings.length), applied: true };
+  }, [listings, preference, selectedLocation]);
+
+  useEffect(() => {
+    setLocalityFallbackActive(Boolean(localityApplied && localityFallback));
+  }, [localityApplied, localityFallback]);
+
   const handleSelect = (item) => {
     navigation.navigate('BuyerProductDetail', { productId: item.id });
   };
@@ -250,7 +310,7 @@ const BuyerSearchScreen = ({ navigation, route }) => {
   }, [fetchListings, loading, loadingMore, pageMeta]);
 
   const filteredResults = useMemo(() => {
-    const matches = listings.filter((item) => {
+    const matches = preferenceScopedListings.filter((item) => {
       const normalizedQuery = debouncedQuery.toLowerCase();
       const matchesQuery = normalizedQuery
         ? [item.name, item.category, item.vendor]
@@ -267,7 +327,14 @@ const BuyerSearchScreen = ({ navigation, route }) => {
     });
 
     return sortResults(matches, selectedSort);
-  }, [debouncedQuery, listings, selectedCategory, selectedLocation, selectedPriceRange, selectedSort]);
+  }, [
+    debouncedQuery,
+    preferenceScopedListings,
+    selectedCategory,
+    selectedLocation,
+    selectedPriceRange,
+    selectedSort,
+  ]);
 
   const activeFilters = useMemo(() => {
     const filters = [];
@@ -534,6 +601,33 @@ const BuyerSearchScreen = ({ navigation, route }) => {
           <TouchableOpacity onPress={handleClearFilters} style={styles.clearAllButton} activeOpacity={0.8}>
             <Ionicons name="refresh" size={14} color={theme.colors.primary} />
             <Text style={styles.clearAllText}>Reset</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+
+      {preferenceLoaded && preference?.mode === 'local' && !selectedLocation ? (
+        <View
+          style={[
+            styles.preferenceBanner,
+            localityFallbackActive && styles.preferenceBannerWarning,
+          ]}
+        >
+          <Ionicons
+            name={localityFallbackActive ? 'alert-circle' : 'location'}
+            size={16}
+            color={localityFallbackActive ? theme.colors.warning : theme.colors.emerald}
+          />
+          <Text style={styles.preferenceBannerText}>
+            {localityFallbackActive
+              ? `No matches near ${preferenceLabel || 'your location'} yet. Showing nationwide results.`
+              : `Prioritising listings near ${preferenceLabel || 'your location'}.`}
+          </Text>
+          <TouchableOpacity
+            style={styles.preferenceBannerButton}
+            onPress={() => navigation.navigate('Bot')}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.preferenceBannerButtonText}>Adjust</Text>
           </TouchableOpacity>
         </View>
       ) : null}
@@ -867,6 +961,37 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.fontFamily.interSemiBold,
     fontSize: theme.typography.fontSize.xs,
     color: theme.colors.primary,
+  },
+  preferenceBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    backgroundColor: `${theme.colors.emerald}12`,
+    borderRadius: theme.radius.lg,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+  },
+  preferenceBannerWarning: {
+    backgroundColor: `${theme.colors.warning}12`,
+  },
+  preferenceBannerText: {
+    flex: 1,
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.textSecondary,
+  },
+  preferenceBannerButton: {
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: theme.spacing.xs,
+    borderRadius: theme.radius.full,
+    backgroundColor: theme.colors.white,
+    borderWidth: 1,
+    borderColor: `${theme.colors.emerald}35`,
+  },
+  preferenceBannerButtonText: {
+    fontFamily: theme.typography.fontFamily.interSemiBold,
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.emerald,
   },
   resultsMeta: {
     fontFamily: theme.typography.fontFamily.inter,

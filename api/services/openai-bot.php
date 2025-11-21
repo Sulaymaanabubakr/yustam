@@ -357,11 +357,15 @@ function yustam_bot_emit_wishlist_notification(array $user, array $snapshot): vo
         'intent' => $snapshot['intent'] ?? null,
         'listings' => $snapshot['listings'] ?? [],
         'syncedAt' => $snapshot['syncedAt'] ?? time(),
+        'route' => [
+            'name' => 'BuyerSaved',
+            'params' => [],
+        ],
     ];
 
     $stmt = $db->prepare('INSERT INTO `app_notifications` (user_ref, title, body, type, data) VALUES (?, ?, ?, ?, ?)');
     if ($stmt instanceof mysqli_stmt) {
-        $type = 'wishlist-alert';
+        $type = 'wishlist';
         $payload = json_encode($data, YUSTAM_API_JSON_FLAGS);
         $stmt->bind_param('sssss', $user['id'], $title, $body, $type, $payload);
         $stmt->execute();

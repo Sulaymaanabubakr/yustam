@@ -3754,13 +3754,53 @@ function yustam_api_notifications_list(): array
     $notifications = [];
     if ($result instanceof mysqli_result) {
         while ($row = $result->fetch_assoc()) {
+            $rawData = $row['data'] ? json_decode($row['data'], true) : null;
+            $payload = is_array($rawData) ? $rawData : null;
+
+            $type = strtolower((string) ($row['type'] ?? 'system'));
+            if ($type === 'wishlist-alert') {
+                $type = 'wishlist';
+            } elseif ($type === 'reward-alert') {
+                $type = 'rewards';
+            }
+
+            $link = null;
+            if ($payload && isset($payload['link'])) {
+                $linkCandidate = trim((string) $payload['link']);
+                $link = $linkCandidate !== '' ? $linkCandidate : null;
+            }
+
+            $route = null;
+            if ($payload && isset($payload['route']) && is_array($payload['route'])) {
+                $routeName = trim((string) ($payload['route']['name'] ?? ''));
+                $routeParams = isset($payload['route']['params']) && is_array($payload['route']['params'])
+                    ? $payload['route']['params']
+                    : [];
+                if ($routeName !== '') {
+                    $route = [
+                        'name' => $routeName,
+                        'params' => $routeParams,
+                    ];
+                }
+            }
+
+            if ($route === null && $type === 'wishlist') {
+                $route = [
+                    'name' => 'BuyerSaved',
+                    'params' => [],
+                ];
+            }
+
             $notifications[] = [
-                'id' => (int) $row['id'],
+                'id' => (string) $row['id'],
                 'title' => $row['title'],
+                'message' => $row['body'],
                 'body' => $row['body'],
-                'type' => $row['type'],
-                'data' => $row['data'] ? json_decode($row['data'], true) : null,
-                'isRead' => (bool) $row['is_read'],
+                'type' => $type,
+                'data' => $payload,
+                'link' => $link,
+                'route' => $route,
+                'read' => (bool) $row['is_read'],
                 'createdAt' => $row['created_at'],
                 'readAt' => $row['read_at'],
             ];

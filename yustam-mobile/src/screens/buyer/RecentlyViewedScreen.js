@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import theme from '../../theme';
 import { formatNaira } from '../../utils/formatters';
+import { describePreference, filterListingsByPreference, getBotPreferences } from '../../utils/aiPreferences';
 import {
   getRecentlyViewedListings,
   clearRecentlyViewedListings,
@@ -20,18 +21,52 @@ import {
 
 const BuyerRecentlyViewedScreen = ({ navigation }) => {
   const [items, setItems] = useState([]);
+  const [rawItems, setRawItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [preference, setPreference] = useState(null);
+  const [preferenceLabel, setPreferenceLabel] = useState(null);
+  const [preferenceLoaded, setPreferenceLoaded] = useState(false);
+  const [localityFallbackActive, setLocalityFallbackActive] = useState(false);
 
   const loadListings = useCallback(async () => {
     setLoading(true);
     const listings = await getRecentlyViewedListings();
-    setItems(listings);
+    setRawItems(listings);
     setLoading(false);
   }, []);
 
   useFocusEffect(
     useCallback(() => {
-      loadListings();
+      let isActive = true;
+
+      const syncData = async () => {
+        try {
+          await loadListings();
+          const settings = await getBotPreferences();
+          if (!isActive) {
+            return;
+          }
+          setPreference(settings);
+          setPreferenceLabel(describePreference(settings));
+        } catch (prefError) {
+          console.warn('BuyerRecentlyViewedScreen preference error:', prefError);
+          if (!isActive) {
+            return;
+          }
+          setPreference(null);
+          setPreferenceLabel(null);
+        } finally {
+          if (isActive) {
+            setPreferenceLoaded(true);
+          }
+        }
+      };
+
+      syncData();
+
+      return () => {
+        isActive = false;
+      };
     }, [loadListings])
   );
 
@@ -39,6 +74,55 @@ const BuyerRecentlyViewedScreen = ({ navigation }) => {
     await clearRecentlyViewedListings();
     loadListings();
   };
+
+  useEffect(() => {
+    if (!preference || preference.mode !== 'local') {
+      setItems(rawItems);
+      setLocalityFallbackActive(false);
+      return;
+    }
+
+    const filtered = filterListingsByPreference(rawItems, preference);
+    if (filtered.length) {
+      setItems(filtered);
+      setLocalityFallbackActive(false);
+    } else {
+      setItems(rawItems);
+      setLocalityFallbackActive(Boolean(rawItems.length));
+    }
+  }, [preference, rawItems]);
+
+  const listHeader = useMemo(() => {
+    if (!preferenceLoaded || preference?.mode !== 'local') {
+      return null;
+    }
+    return (
+      <View
+        style={[
+          styles.preferenceBanner,
+          localityFallbackActive && styles.preferenceBannerWarning,
+        ]}
+      >
+        <Ionicons
+          name={localityFallbackActive ? 'alert-circle' : 'location'}
+          size={16}
+          color={localityFallbackActive ? theme.colors.warning : theme.colors.emerald}
+        />
+        <Text style={styles.preferenceBannerText}>
+          {localityFallbackActive
+            ? `No recently viewed items near ${preferenceLabel || 'your location'} yet. Showing your full history instead.`
+            : `Showing recently viewed items near ${preferenceLabel || 'your location'}.`}
+        </Text>
+        <TouchableOpacity
+          style={styles.preferenceBannerButton}
+          onPress={() => navigation.navigate('Bot')}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.preferenceBannerButtonText}>Adjust</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }, [preferenceLoaded, preference?.mode, localityFallbackActive, preferenceLabel, navigation]);
 
   const renderItem = ({ item }) => (
     <TouchableOpacity
@@ -105,6 +189,7 @@ const BuyerRecentlyViewedScreen = ({ navigation }) => {
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
           contentContainerStyle={styles.listContent}
+          ListHeaderComponent={listHeader}
           ListEmptyComponent={renderEmpty}
         />
       )}
@@ -158,6 +243,38 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.lg,
     paddingBottom: theme.spacing['3xl'],
     gap: theme.spacing.sm,
+  },
+  preferenceBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    backgroundColor: `${theme.colors.emerald}12`,
+    borderRadius: theme.radius.lg,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    marginBottom: theme.spacing.sm,
+  },
+  preferenceBannerWarning: {
+    backgroundColor: `${theme.colors.warning}12`,
+  },
+  preferenceBannerText: {
+    flex: 1,
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.textSecondary,
+  },
+  preferenceBannerButton: {
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: theme.spacing.xs,
+    borderRadius: theme.radius.full,
+    backgroundColor: theme.colors.white,
+    borderWidth: 1,
+    borderColor: `${theme.colors.emerald}35`,
+  },
+  preferenceBannerButtonText: {
+    fontFamily: theme.typography.fontFamily.interSemiBold,
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.emerald,
   },
   card: {
     flexDirection: 'row',

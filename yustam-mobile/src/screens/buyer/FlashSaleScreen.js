@@ -1,12 +1,69 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, Image, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import theme from '../../theme';
 import { getFlashSaleItems } from '../../data/buyerCatalog';
+import { describePreference, filterListingsByPreference, getBotPreferences } from '../../utils/aiPreferences';
 
 const BuyerFlashSaleScreen = ({ navigation }) => {
-  const flashDeals = useMemo(() => getFlashSaleItems(), []);
+  const baseDeals = useMemo(() => getFlashSaleItems(), []);
+  const [flashDeals, setFlashDeals] = useState(baseDeals);
+  const [preference, setPreference] = useState(null);
+  const [preferenceLabel, setPreferenceLabel] = useState(null);
+  const [preferenceLoaded, setPreferenceLoaded] = useState(false);
+  const [localityFallbackActive, setLocalityFallbackActive] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      let isActive = true;
+
+      const syncPreference = async () => {
+        try {
+          const settings = await getBotPreferences();
+          if (!isActive) {
+            return;
+          }
+          setPreference(settings);
+          setPreferenceLabel(describePreference(settings));
+        } catch (prefError) {
+          console.warn('BuyerFlashSaleScreen preference error:', prefError);
+          if (!isActive) {
+            return;
+          }
+          setPreference(null);
+          setPreferenceLabel(null);
+        } finally {
+          if (isActive) {
+            setPreferenceLoaded(true);
+          }
+        }
+      };
+
+      syncPreference();
+
+      return () => {
+        isActive = false;
+      };
+    }, [])
+  );
+
+  useEffect(() => {
+    if (!preference || preference.mode !== 'local') {
+      setFlashDeals(baseDeals);
+      setLocalityFallbackActive(false);
+      return;
+    }
+    const filtered = filterListingsByPreference(baseDeals, preference);
+    if (filtered.length) {
+      setFlashDeals(filtered);
+      setLocalityFallbackActive(false);
+    } else {
+      setFlashDeals(baseDeals);
+      setLocalityFallbackActive(Boolean(baseDeals.length));
+    }
+  }, [baseDeals, preference]);
 
   const renderItem = ({ item }) => (
     <TouchableOpacity
@@ -55,6 +112,33 @@ const BuyerFlashSaleScreen = ({ navigation }) => {
         <Text style={styles.title}>Flash Sale</Text>
         <View style={styles.headerSpacer} />
       </View>
+
+      {preferenceLoaded && preference?.mode === 'local' ? (
+        <View
+          style={[
+            styles.preferenceBanner,
+            localityFallbackActive && styles.preferenceBannerWarning,
+          ]}
+        >
+          <Ionicons
+            name={localityFallbackActive ? 'alert-circle' : 'location'}
+            size={16}
+            color={localityFallbackActive ? theme.colors.warning : theme.colors.emerald}
+          />
+          <Text style={styles.preferenceBannerText}>
+            {localityFallbackActive
+              ? `No flash deals near ${preferenceLabel || 'your location'} yet. Showing nationwide picks.`
+              : `Flash deals curated for ${preferenceLabel || 'your location'}.`}
+          </Text>
+          <TouchableOpacity
+            style={styles.preferenceBannerButton}
+            onPress={() => navigation.navigate('Bot')}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.preferenceBannerButtonText}>Adjust</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
 
       <FlatList
         data={flashDeals}
@@ -110,6 +194,39 @@ const styles = StyleSheet.create({
   },
   headerSpacer: {
     width: 40,
+  },
+  preferenceBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    backgroundColor: `${theme.colors.emerald}12`,
+    borderRadius: theme.radius.lg,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    marginHorizontal: theme.spacing.lg,
+    marginBottom: theme.spacing.md,
+  },
+  preferenceBannerWarning: {
+    backgroundColor: `${theme.colors.warning}12`,
+  },
+  preferenceBannerText: {
+    flex: 1,
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.textSecondary,
+  },
+  preferenceBannerButton: {
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: theme.spacing.xs,
+    borderRadius: theme.radius.full,
+    backgroundColor: theme.colors.white,
+    borderWidth: 1,
+    borderColor: `${theme.colors.emerald}35`,
+  },
+  preferenceBannerButtonText: {
+    fontFamily: theme.typography.fontFamily.interSemiBold,
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.emerald,
   },
   listContainer: {
     paddingHorizontal: theme.spacing.lg,

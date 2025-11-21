@@ -17,7 +17,7 @@ import Toast from '../../components/Toast';
 import Button from '../../components/Button';
 import { vendorAPI } from '../../services/api';
 import useBotQuery from '../../hooks/useBotQuery';
-import { formatNumber, timeAgo } from '../../utils/formatters';
+import { formatNumber, formatNaira, timeAgo } from '../../utils/formatters';
 import { resolveUserUid } from '../../utils/user';
 import { deriveSubscriptionStatusMeta, normalizeAutoRenewFlag, cleanPlanDisplayName } from '../../utils/subscription';
 
@@ -33,6 +33,15 @@ const formatVerificationStatusLabel = (value) => {
     return 'Needs attention';
   }
   return 'Not submitted';
+};
+
+const defaultRewardsSummary = {
+  balance: 0,
+  lifetimeEarned: 0,
+  lifetimeRedeemed: 0,
+  updatedAt: null,
+  lastEarnedAt: null,
+  lastRedeemedAt: null,
 };
 
 const VendorDashboardScreen = ({ navigation }) => {
@@ -55,6 +64,7 @@ const VendorDashboardScreen = ({ navigation }) => {
     planRenewalLabel: 'Next billing',
     verificationStatus: 'Pending',
   });
+  const [rewards, setRewards] = useState({ summary: defaultRewardsSummary, recent: [] });
 
   const { latestResponse: botResponse, integrations: botIntegrations, syncIntegrations: syncBotIntegrations } =
     useBotQuery();
@@ -85,6 +95,63 @@ const VendorDashboardScreen = ({ navigation }) => {
     ? timeAgo(vendorRewardsIntegration.lastSynced)
     : null;
 
+  const rewardSummary = useMemo(
+    () => ({
+      ...defaultRewardsSummary,
+      ...(rewards.summary || {}),
+    }),
+    [rewards.summary]
+  );
+  const rewardsBalanceDisplay = useMemo(
+    () => formatNaira(Number(rewardSummary.balance) || 0),
+    [rewardSummary.balance]
+  );
+  const rewardsLifetimeEarnedDisplay = useMemo(
+    () => formatNaira(Number(rewardSummary.lifetimeEarned) || 0),
+    [rewardSummary.lifetimeEarned]
+  );
+  const rewardsLifetimeRedeemedDisplay = useMemo(
+    () => formatNaira(Number(rewardSummary.lifetimeRedeemed) || 0),
+    [rewardSummary.lifetimeRedeemed]
+  );
+  const rewardsUpdatedLabel = useMemo(
+    () => (rewardSummary.updatedAt ? timeAgo(rewardSummary.updatedAt) : null),
+    [rewardSummary.updatedAt]
+  );
+  const rewardsRecentEntries = useMemo(
+    () => (Array.isArray(rewards.recent) ? rewards.recent.slice(0, 3) : []),
+    [rewards.recent]
+  );
+
+  const resolveRecentType = useCallback((entry) => {
+    const raw = (entry?.type || entry?.action || '').toString().toLowerCase();
+    if (raw.includes('redeem') || raw.includes('debit')) {
+      return 'redeem';
+    }
+    if (raw.includes('earn') || raw.includes('credit')) {
+      return 'earn';
+    }
+    return 'activity';
+  }, []);
+
+  const resolveRecentLabel = useCallback((entry) => {
+    if (!entry) {
+      return 'Reward activity';
+    }
+    return entry.title || entry.description || entry.summary || entry.notes || 'Reward activity';
+  }, []);
+
+  const resolveRecentAmountDisplay = useCallback(
+    (entry) => {
+      const amount = Number(entry?.amount ?? entry?.points ?? 0);
+      const safe = Number.isNaN(amount) ? 0 : amount;
+      return formatNaira(Math.abs(safe));
+    },
+    []
+  );
+
+  const resolveRecentTimestamp = useCallback((entry) => entry?.timestamp || entry?.createdAt || entry?.created_at, []);
+
   useEffect(() => {
     fetchDashboard();
   }, [vendorUid]);
@@ -111,6 +178,13 @@ const VendorDashboardScreen = ({ navigation }) => {
       const planSummary = plansResponse?.data?.data?.currentPlan;
       const subscription = payload.subscription || {};
       const profile = payload.profile || {};
+      const rewardsPayload = payload.rewards || {};
+      const resolvedRewardsSummary = {
+        ...defaultRewardsSummary,
+        ...(rewardsPayload.summary || {}),
+      };
+      const resolvedRewardsRecent = Array.isArray(rewardsPayload.recent) ? rewardsPayload.recent : [];
+      setRewards({ summary: resolvedRewardsSummary, recent: resolvedRewardsRecent });
 
       const totalListings = stats.total_listings || 0;
       const activeListings = stats.active_listings || 0;
@@ -182,6 +256,7 @@ const VendorDashboardScreen = ({ navigation }) => {
         planRenewal: dashboardPlanRenewal,
         planRenewalLabel: dashboardPlanRenewalLabel,
         verificationStatus,
+        rewardsBalance: Number(resolvedRewardsSummary.balance) || 0,
       });
     } catch (error) {
       console.error('Error fetching dashboard:', error);
@@ -329,12 +404,97 @@ const VendorDashboardScreen = ({ navigation }) => {
               onPress={() => navigation.navigate('Analytics')}
             />
             <QuickStatCard
+              icon="wallet-outline"
+              label="Rewards"
+              value={rewardsBalanceDisplay}
+              color="#FF9800"
+              onPress={() => navigation.navigate('VendorRewards')}
+            />
+            <QuickStatCard
               icon="eye-outline"
               label="Views"
               value={dashboard.totalViews}
               color={theme.colors.orange}
               onPress={() => navigation.navigate('Analytics')}
             />
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <View style={styles.rewardsCard}>
+            <View style={styles.rewardsHeader}>
+              <View>
+                <Text style={styles.rewardsLabel}>Rewards balance</Text>
+                <Text style={styles.rewardsValue}>{rewardsBalanceDisplay}</Text>
+                {rewardsUpdatedLabel ? (
+                  <Text style={styles.rewardsUpdated}>Updated {rewardsUpdatedLabel}</Text>
+                ) : null}
+              </View>
+              <Button
+                title="Manage"
+                onPress={() => navigation.navigate('VendorRewards')}
+                variant="outline"
+                size="small"
+                icon="wallet-outline"
+              />
+            </View>
+            <View style={styles.rewardsMetaRow}>
+              <View style={styles.rewardsMetaItem}>
+                <Text style={styles.rewardsMetaLabel}>Lifetime earned</Text>
+                <Text style={styles.rewardsMetaValue}>{rewardsLifetimeEarnedDisplay}</Text>
+              </View>
+              <View style={styles.rewardsMetaDivider} />
+              <View style={styles.rewardsMetaItem}>
+                <Text style={styles.rewardsMetaLabel}>Redeemed</Text>
+                <Text style={styles.rewardsMetaValue}>{rewardsLifetimeRedeemedDisplay}</Text>
+              </View>
+            </View>
+            {rewardsRecentEntries.length ? (
+              <View style={styles.rewardsRecentList}>
+                {rewardsRecentEntries.map((entry, index) => {
+                  const type = resolveRecentType(entry);
+                  const timestamp = resolveRecentTimestamp(entry);
+                  return (
+                    <View key={`rewards-recent-${entry?.id || index}`} style={styles.rewardsRecentRow}>
+                      <View style={styles.rewardsRecentIcon}>
+                        <Ionicons
+                          name={type === 'redeem' ? 'arrow-down-circle-outline' : 'arrow-up-circle-outline'}
+                          size={18}
+                          color={type === 'redeem' ? theme.colors.error : theme.colors.emerald}
+                        />
+                      </View>
+                      <View style={styles.rewardsRecentCopy}>
+                        <Text style={styles.rewardsRecentLabel}>{resolveRecentLabel(entry)}</Text>
+                        <Text style={styles.rewardsRecentMeta}>
+                          {timestamp ? timeAgo(timestamp) : 'Just now'}
+                        </Text>
+                      </View>
+                      <Text
+                        style={[
+                          styles.rewardsRecentAmount,
+                          type === 'redeem' ? styles.rewardsRecentAmountDebit : styles.rewardsRecentAmountCredit,
+                        ]}
+                      >
+                        {type === 'redeem' ? '-' : '+'}
+                        {resolveRecentAmountDisplay(entry)}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+            ) : (
+              <Text style={styles.rewardsPlaceholder}>
+                Encourage buyers with rewards campaigns. New earnings will appear here.
+              </Text>
+            )}
+            <TouchableOpacity
+              style={styles.rewardsFooterLink}
+              onPress={() => navigation.navigate('VendorRewards')}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.rewardsFooterText}>View full activity</Text>
+              <Ionicons name="chevron-forward" size={16} color={theme.colors.emerald} />
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -508,6 +668,13 @@ const VendorDashboardScreen = ({ navigation }) => {
               subtitle="Get assistance"
               color="#00897B"
               onPress={() => navigation.navigate('HelpSupport')}
+            />
+            <QuickActionCard
+              icon="wallet-outline"
+              title="Rewards"
+              subtitle="Balance & ledger"
+              color="#FF9800"
+              onPress={() => navigation.navigate('VendorRewards')}
             />
           </View>
         </View>
@@ -767,6 +934,120 @@ const styles = StyleSheet.create({
     borderRadius: theme.borderRadius.lg,
     padding: theme.spacing.lg,
     ...theme.shadows.medium,
+  },
+  rewardsCard: {
+    backgroundColor: theme.colors.white,
+    borderRadius: theme.borderRadius.lg,
+    padding: theme.spacing.lg,
+    gap: theme.spacing.md,
+    ...theme.shadows.medium,
+  },
+  rewardsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  rewardsLabel: {
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.textSecondary,
+  },
+  rewardsValue: {
+    fontFamily: theme.typography.fontFamily.anton,
+    fontSize: theme.typography.fontSize['2xl'],
+    color: theme.colors.emerald,
+    letterSpacing: theme.typography.letterSpacing.wide,
+  },
+  rewardsUpdated: {
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.textSecondary,
+    marginTop: 2,
+  },
+  rewardsMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: `${theme.colors.emerald}08`,
+    borderRadius: theme.borderRadius.lg,
+    padding: theme.spacing.sm,
+    gap: theme.spacing.sm,
+  },
+  rewardsMetaItem: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 2,
+  },
+  rewardsMetaDivider: {
+    width: 1,
+    height: '100%',
+    backgroundColor: `${theme.colors.emerald}20`,
+  },
+  rewardsMetaLabel: {
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.textSecondary,
+    textTransform: 'uppercase',
+  },
+  rewardsMetaValue: {
+    fontFamily: theme.typography.fontFamily.interSemiBold,
+    fontSize: theme.typography.fontSize.base,
+    color: theme.colors.textPrimary,
+  },
+  rewardsRecentList: {
+    gap: theme.spacing.sm,
+  },
+  rewardsRecentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+  },
+  rewardsRecentIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rewardsRecentCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  rewardsRecentLabel: {
+    fontFamily: theme.typography.fontFamily.interSemiBold,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.textPrimary,
+  },
+  rewardsRecentMeta: {
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.textSecondary,
+  },
+  rewardsRecentAmount: {
+    fontFamily: theme.typography.fontFamily.interSemiBold,
+    fontSize: theme.typography.fontSize.sm,
+  },
+  rewardsRecentAmountCredit: {
+    color: theme.colors.emerald,
+  },
+  rewardsRecentAmountDebit: {
+    color: theme.colors.error,
+  },
+  rewardsPlaceholder: {
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.textSecondary,
+  },
+  rewardsFooterLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: theme.spacing.xs,
+  },
+  rewardsFooterText: {
+    fontFamily: theme.typography.fontFamily.interSemiBold,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.emerald,
   },
   planHeader: {
     flexDirection: 'row',
