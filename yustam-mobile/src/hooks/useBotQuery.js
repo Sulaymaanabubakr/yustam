@@ -162,6 +162,39 @@ const normaliseFollowUps = (followUps) => {
     .filter((item) => item.length);
 };
 
+const buildVendorRewardsSyncPayload = (responsePayload, summaryLines) => {
+  if (!Array.isArray(summaryLines) || !summaryLines.length) {
+    return null;
+  }
+
+  const listings = Array.isArray(responsePayload?.listings) ? responsePayload.listings : [];
+  const highlightedListings = listings.slice(0, 5).map((listing) => ({
+    id: listing?.id ?? listing?.public_id ?? listing?.firestoreId ?? null,
+    title: listing?.title ?? listing?.name ?? 'Marketplace listing',
+    price: listing?.price ?? null,
+    location: listing?.city || listing?.state || listing?.location || null,
+  }));
+
+  const basePoints = summaryLines.length * 5;
+  const listingPoints = highlightedListings.length * 10;
+  const rewardPoints = Math.min(250, Math.max(0, basePoints + listingPoints));
+
+  if (!rewardPoints) {
+    return null;
+  }
+
+  return {
+    earn: rewardPoints,
+    reason: 'yustam-ai-recommendations',
+    description: `Synced ${highlightedListings.length || 'several'} curated matches from YustaAI insights.`,
+    meta: {
+      listings: highlightedListings,
+      summary: summaryLines,
+      followUps: Array.isArray(responsePayload?.followUps) ? responsePayload.followUps : [],
+    },
+  };
+};
+
 const useBotQuery = () => {
   const [history, setHistory] = useState([]);
   const [latestResponse, setLatestResponse] = useState(null);
@@ -477,7 +510,9 @@ const useBotQuery = () => {
       }
 
       if (integrationCapabilitiesRef.current.vendorRewards?.ready) {
-        tasks.push(runIntegrationSync('vendorRewards', () => botAPI.syncVendorRewards(requestPayload)));
+        const rewardsPayload = buildVendorRewardsSyncPayload(responsePayload, summary);
+        const vendorPayload = rewardsPayload ? { ...requestPayload, rewards: rewardsPayload } : requestPayload;
+        tasks.push(runIntegrationSync('vendorRewards', () => botAPI.syncVendorRewards(vendorPayload)));
       }
 
       if (tasks.length) {

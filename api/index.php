@@ -193,6 +193,18 @@ function yustam_api_handle_vendor(string $method, array $segments): array
             return yustam_api_vendor_notifications_action();
         }
     }
+    if ($action === 'points') {
+        $subAction = strtolower($segments[1] ?? '');
+        if ($method === 'GET' && ($subAction === '' || $subAction === 'summary')) {
+            return yustam_api_vendor_points_summary();
+        }
+        if ($method === 'GET' && $subAction === 'ledger') {
+            return yustam_api_vendor_points_ledger();
+        }
+        if ($method === 'POST' && $subAction === 'redeem') {
+            return yustam_api_vendor_points_redeem();
+        }
+    }
     if ($action === 'password' && $method === 'POST') {
         return yustam_api_vendor_change_password();
     }
@@ -679,6 +691,11 @@ function yustam_api_bot_sync_vendor_rewards(): array
     $changed = false;
     $snapshot = yustam_bot_store_integration_snapshot($user, 'vendorRewards', $payload, $changed);
 
+    $vendorId = (int) ($user['vendorId'] ?? 0);
+    if ($vendorId > 0 && !empty($payload['rewards'])) {
+        yustam_vendor_rewards_apply_snapshot($vendorId, (array) $payload['rewards'], $snapshot);
+    }
+
     if ($changed && !empty($config['notifications'])) {
         yustam_bot_emit_vendor_rewards_notification($user, $snapshot);
     }
@@ -686,6 +703,7 @@ function yustam_api_bot_sync_vendor_rewards(): array
     return [
         'success' => true,
         'integration' => yustam_bot_integration_state($user, 'vendorRewards', $snapshot),
+        'snapshot' => $snapshot,
     ];
 }
 
@@ -1941,6 +1959,8 @@ function yustam_api_vendor_dashboard(): array
     $subscription = yustam_vendor_subscription_format_state($vendor);
     $reviewStats = yustam_reviews_vendor_stats($vendorId);
     $recentReviews = yustam_reviews_vendor_recent($vendorId, 5);
+    $rewardsSummary = yustam_vendor_rewards_get_summary($db, $vendorId);
+    $recentRewardEvents = yustam_vendor_rewards_get_ledger($db, $vendorId, 5);
 
     return [
         'success' => true,
@@ -1951,6 +1971,10 @@ function yustam_api_vendor_dashboard(): array
         'reviews' => [
             'stats' => $reviewStats,
             'recent' => $recentReviews,
+        ],
+        'rewards' => [
+            'summary' => $rewardsSummary,
+            'recent' => $recentRewardEvents,
         ],
     ];
 }
@@ -2767,6 +2791,398 @@ function yustam_api_vendor_notifications_action(): array
     }
 
     yustam_api_error(400, 'Unsupported notification action.');
+}
+
+/**
+ * --------------------------------------------------------------------------
+ * Vendor Rewards & Points
+ * --------------------------------------------------------------------------
+ */
+
+function yustam_vendor_rewards_ensure_tables(mysqli $db): void
+{
+    static $ensured = false;
+    if ($ensured) {
+        return;
+    }
+
+    $snapshotSql = <<<SQL
+CREATE TABLE IF NOT EXISTS `vendor_reward_snapshots` (
+    `vendor_id` INT UNSIGNED NOT NULL,
+    `balance` INT NOT NULL DEFAULT 0,
+    `lifetime_earned` INT NOT NULL DEFAULT 0,
+    `lifetime_redeemed` INT NOT NULL DEFAULT 0,
+    `meta` TEXT NULL,
+    `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`vendor_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+SQL;
+
+    $ledgerSql = <<<SQL
+CREATE TABLE IF NOT EXISTS `vendor_reward_ledger` (
+    `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `vendor_id` INT UNSIGNED NOT NULL,
+    `points` INT NOT NULL,
+    `direction` VARCHAR(16) NOT NULL,
+    `reason` VARCHAR(191) NOT NULL,
+    `description` TEXT NULL,
+    `meta` TEXT NULL,
+    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    INDEX `vendor_reward_ledger_vendor_idx` (`vendor_id`),
+    INDEX `vendor_reward_ledger_direction_idx` (`direction`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+SQL;
+
+    $db->query($snapshotSql);
+    if ($db->errno) {
+        error_log('Unable to ensure vendor_reward_snapshots table: ' . $db->error);
+    }
+
+    $db->query($ledgerSql);
+    if ($db->errno) {
+        error_log('Unable to ensure vendor_reward_ledger table: ' . $db->error);
+    }
+
+    $ensured = true;
+}
+
+function yustam_vendor_rewards_encode_meta(array $meta = []): string
+{
+    $encoded = json_encode($meta, YUSTAM_API_JSON_FLAGS);
+    return $encoded !== false ? $encoded : '{}';
+}
+
+function yustam_vendor_rewards_snapshot_fetch(mysqli $db, int $vendorId): array
+{
+    yustam_vendor_rewards_ensure_tables($db);
+
+    $defaults = [
+        'vendor_id' => $vendorId,
+        'balance' => 0,
+        'lifetime_earned' => 0,
+        'lifetime_redeemed' => 0,
+        'meta' => null,
+        'updated_at' => null,
+    ];
+
+    $stmt = $db->prepare('SELECT vendor_id, balance, lifetime_earned, lifetime_redeemed, meta, updated_at FROM `vendor_reward_snapshots` WHERE vendor_id = ? LIMIT 1');
+    if (!($stmt instanceof mysqli_stmt)) {
+        return $defaults;
+    }
+
+    $stmt->bind_param('i', $vendorId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $row = $result ? $result->fetch_assoc() : null;
+    $stmt->close();
+
+    if (!$row) {
+        return $defaults;
+    }
+
+    if (isset($row['meta']) && is_string($row['meta'])) {
+        $row['meta'] = json_decode($row['meta'], true);
+    }
+
+    return $row + $defaults;
+}
+
+function yustam_vendor_rewards_snapshot_save(mysqli $db, int $vendorId, int $balance, int $earned, int $redeemed, array $meta = []): void
+{
+    yustam_vendor_rewards_ensure_tables($db);
+    $metaString = yustam_vendor_rewards_encode_meta($meta);
+
+    $stmt = $db->prepare(
+        'INSERT INTO `vendor_reward_snapshots` (vendor_id, balance, lifetime_earned, lifetime_redeemed, meta, updated_at)
+         VALUES (?, ?, ?, ?, ?, NOW())
+         ON DUPLICATE KEY UPDATE balance = VALUES(balance), lifetime_earned = VALUES(lifetime_earned), lifetime_redeemed = VALUES(lifetime_redeemed), meta = VALUES(meta), updated_at = NOW()'
+    );
+
+    if (!($stmt instanceof mysqli_stmt)) {
+        error_log('Failed to prepare vendor_reward_snapshots upsert: ' . $db->error);
+        return;
+    }
+
+    $stmt->bind_param('iiiis', $vendorId, $balance, $earned, $redeemed, $metaString);
+    $stmt->execute();
+    $stmt->close();
+}
+
+function yustam_vendor_rewards_record_event(mysqli $db, int $vendorId, int $points, string $direction, string $reason, string $description = '', array $meta = []): void
+{
+    $points = (int) $points;
+    if ($points === 0 || $vendorId <= 0) {
+        return;
+    }
+
+    $direction = strtolower($direction);
+    if (!in_array($direction, ['earn', 'redeem', 'adjust'], true)) {
+        $direction = $points >= 0 ? 'earn' : 'adjust';
+    }
+
+    $snapshot = yustam_vendor_rewards_snapshot_fetch($db, $vendorId);
+    $currentBalance = (int) ($snapshot['balance'] ?? 0);
+    $earned = (int) ($snapshot['lifetime_earned'] ?? 0);
+    $redeemed = (int) ($snapshot['lifetime_redeemed'] ?? 0);
+
+    $delta = $direction === 'redeem' ? -abs($points) : ($direction === 'earn' ? abs($points) : $points);
+    $nextBalance = max(0, $currentBalance + $delta);
+    if ($direction === 'earn' || ($direction === 'adjust' && $delta > 0)) {
+        $earned += abs($delta);
+    } elseif ($direction === 'redeem' || ($direction === 'adjust' && $delta < 0)) {
+        $redeemed += abs($delta);
+    }
+
+    $metaPayload = $snapshot['meta'];
+    if (!is_array($metaPayload)) {
+        $metaPayload = [];
+    }
+    $metaPayload['lastEvent'] = [
+        'direction' => $direction,
+        'points' => $delta,
+        'reason' => $reason,
+        'description' => $description,
+        'meta' => $meta,
+        'timestamp' => gmdate('c'),
+    ];
+
+    yustam_vendor_rewards_snapshot_save($db, $vendorId, $nextBalance, $earned, $redeemed, $metaPayload);
+
+    $metaString = yustam_vendor_rewards_encode_meta($meta);
+    $stmt = $db->prepare('INSERT INTO `vendor_reward_ledger` (vendor_id, points, direction, reason, description, meta) VALUES (?, ?, ?, ?, ?, ?)');
+    if (!($stmt instanceof mysqli_stmt)) {
+        error_log('Failed to prepare vendor_reward_ledger insert: ' . $db->error);
+        return;
+    }
+
+    $stmt->bind_param('iissss', $vendorId, $delta, $direction, $reason, $description, $metaString);
+    $stmt->execute();
+    $stmt->close();
+}
+
+function yustam_vendor_rewards_apply_snapshot(int $vendorId, array $pointsPayload, array $integrationSnapshot = []): void
+{
+    if ($vendorId <= 0 || empty($pointsPayload)) {
+        return;
+    }
+
+    $db = get_db_connection();
+    $metaBase = [
+        'entryId' => $integrationSnapshot['entryId'] ?? null,
+        'intent' => $integrationSnapshot['intent'] ?? null,
+        'syncedAt' => $integrationSnapshot['syncedAt'] ?? time(),
+    ];
+
+    if (isset($pointsPayload['balance'])) {
+        $targetBalance = (int) $pointsPayload['balance'];
+        $snapshot = yustam_vendor_rewards_snapshot_fetch($db, $vendorId);
+        $currentBalance = (int) ($snapshot['balance'] ?? 0);
+        $difference = $targetBalance - $currentBalance;
+        if ($difference !== 0) {
+            $reason = $pointsPayload['balanceReason'] ?? 'balance-adjustment';
+            $description = $pointsPayload['balanceDescription'] ?? 'YustaAI balance reconciliation';
+            $meta = array_merge($metaBase, (array) ($pointsPayload['balanceMeta'] ?? []));
+            $direction = $difference > 0 ? 'earn' : 'redeem';
+            yustam_vendor_rewards_record_event($db, $vendorId, abs($difference), $direction, $reason, $description, $meta);
+        }
+    }
+
+    if (isset($pointsPayload['earn'])) {
+        $points = (int) $pointsPayload['earn'];
+        if ($points > 0) {
+            $reason = $pointsPayload['reason'] ?? 'ai-insight';
+            $description = $pointsPayload['description'] ?? 'Reward points earned from YustaAI insights.';
+            $meta = array_merge($metaBase, (array) ($pointsPayload['meta'] ?? []));
+            yustam_vendor_rewards_record_event($db, $vendorId, $points, 'earn', $reason, $description, $meta);
+        }
+    }
+
+    if (isset($pointsPayload['redeem'])) {
+        $points = (int) $pointsPayload['redeem'];
+        if ($points > 0) {
+            $reason = $pointsPayload['redeemReason'] ?? ($pointsPayload['reason'] ?? 'reward-redemption');
+            $description = $pointsPayload['redeemDescription'] ?? ($pointsPayload['description'] ?? 'Reward redemption synced from YustaAI.');
+            $meta = array_merge($metaBase, (array) ($pointsPayload['redeemMeta'] ?? $pointsPayload['meta'] ?? []));
+            yustam_vendor_rewards_record_event($db, $vendorId, $points, 'redeem', $reason, $description, $meta);
+        }
+    }
+
+    if (!empty($pointsPayload['events']) && is_array($pointsPayload['events'])) {
+        foreach ($pointsPayload['events'] as $event) {
+            $points = (int) ($event['points'] ?? 0);
+            if ($points === 0) {
+                continue;
+            }
+            $direction = strtolower((string) ($event['direction'] ?? 'earn'));
+            $reason = $event['reason'] ?? ($direction === 'redeem' ? 'reward-redemption' : 'ai-insight');
+            $description = $event['description'] ?? '';
+            $meta = array_merge($metaBase, (array) ($event['meta'] ?? []));
+            yustam_vendor_rewards_record_event($db, $vendorId, $points, $direction, $reason, $description, $meta);
+        }
+    }
+}
+
+function yustam_vendor_rewards_get_summary(mysqli $db, int $vendorId): array
+{
+    $snapshot = yustam_vendor_rewards_snapshot_fetch($db, $vendorId);
+    $summary = [
+        'balance' => (int) ($snapshot['balance'] ?? 0),
+        'lifetimeEarned' => (int) ($snapshot['lifetime_earned'] ?? 0),
+        'lifetimeRedeemed' => (int) ($snapshot['lifetime_redeemed'] ?? 0),
+        'updatedAt' => $snapshot['updated_at'] ?? null,
+        'meta' => $snapshot['meta'] ?? null,
+        'lastEarnedAt' => null,
+        'lastRedeemedAt' => null,
+    ];
+
+    $stmt = $db->prepare('SELECT direction, created_at FROM `vendor_reward_ledger` WHERE vendor_id = ? ORDER BY created_at DESC LIMIT 20');
+    if ($stmt instanceof mysqli_stmt) {
+        $stmt->bind_param('i', $vendorId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result instanceof mysqli_result) {
+            while ($row = $result->fetch_assoc()) {
+                $direction = strtolower((string) ($row['direction'] ?? ''));
+                if ($direction === 'earn' && $summary['lastEarnedAt'] === null) {
+                    $summary['lastEarnedAt'] = $row['created_at'] ?? null;
+                }
+                if ($direction === 'redeem' && $summary['lastRedeemedAt'] === null) {
+                    $summary['lastRedeemedAt'] = $row['created_at'] ?? null;
+                }
+                if ($summary['lastEarnedAt'] && $summary['lastRedeemedAt']) {
+                    break;
+                }
+            }
+        }
+        $stmt->close();
+    }
+
+    return $summary;
+}
+
+function yustam_vendor_rewards_get_ledger(mysqli $db, int $vendorId, int $limit = 20): array
+{
+    yustam_vendor_rewards_ensure_tables($db);
+    $limit = max(1, min(100, $limit));
+
+    $stmt = $db->prepare('SELECT id, points, direction, reason, description, meta, created_at FROM `vendor_reward_ledger` WHERE vendor_id = ? ORDER BY created_at DESC LIMIT ?');
+    if (!($stmt instanceof mysqli_stmt)) {
+        error_log('Failed to prepare vendor_reward_ledger select: ' . $db->error);
+        return [];
+    }
+
+    $stmt->bind_param('ii', $vendorId, $limit);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $entries = [];
+    if ($result instanceof mysqli_result) {
+        while ($row = $result->fetch_assoc()) {
+            $meta = [];
+            if (isset($row['meta']) && is_string($row['meta']) && $row['meta'] !== '') {
+                $decoded = json_decode($row['meta'], true);
+                if (is_array($decoded)) {
+                    $meta = $decoded;
+                }
+            }
+            $entries[] = [
+                'id' => (int) ($row['id'] ?? 0),
+                'points' => (int) ($row['points'] ?? 0),
+                'direction' => strtolower((string) ($row['direction'] ?? 'adjust')),
+                'reason' => $row['reason'] ?? '',
+                'description' => $row['description'] ?? '',
+                'meta' => $meta,
+                'createdAt' => $row['created_at'] ?? null,
+            ];
+        }
+    }
+    $stmt->close();
+
+    return $entries;
+}
+
+function yustam_api_vendor_points_summary(): array
+{
+    $auth = yustam_api_require_auth(['vendor', 'admin']);
+    $vendorId = $auth['role'] === 'vendor'
+        ? (int) ($auth['vendorId'] ?? 0)
+        : (int) ($_GET['vendorId'] ?? $_GET['vendor'] ?? 0);
+
+    if ($vendorId <= 0) {
+        yustam_api_error(404, 'Vendor not found.');
+    }
+
+    $db = get_db_connection();
+    $summary = yustam_vendor_rewards_get_summary($db, $vendorId);
+    $ledger = yustam_vendor_rewards_get_ledger($db, $vendorId, 20);
+
+    return [
+        'success' => true,
+        'data' => [
+            'summary' => $summary,
+            'ledger' => $ledger,
+        ],
+    ];
+}
+
+function yustam_api_vendor_points_ledger(): array
+{
+    $auth = yustam_api_require_auth(['vendor', 'admin']);
+    $vendorId = $auth['role'] === 'vendor'
+        ? (int) ($auth['vendorId'] ?? 0)
+        : (int) ($_GET['vendorId'] ?? $_GET['vendor'] ?? 0);
+
+    if ($vendorId <= 0) {
+        yustam_api_error(404, 'Vendor not found.');
+    }
+
+    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 50;
+    $db = get_db_connection();
+    $ledger = yustam_vendor_rewards_get_ledger($db, $vendorId, $limit);
+
+    return [
+        'success' => true,
+        'data' => $ledger,
+    ];
+}
+
+function yustam_api_vendor_points_redeem(): array
+{
+    $auth = yustam_api_require_auth('vendor');
+    $vendorId = (int) ($auth['vendorId'] ?? 0);
+    if ($vendorId <= 0) {
+        yustam_api_error(404, 'Vendor not found.');
+    }
+
+    $body = yustam_api_read_json_body();
+    $points = (int) ($body['points'] ?? 0);
+    if ($points <= 0) {
+        yustam_api_error(422, 'A positive points value is required.');
+    }
+
+    $reason = trim((string) ($body['reason'] ?? 'reward-redemption'));
+    $description = trim((string) ($body['description'] ?? ''));
+    $meta = is_array($body['meta'] ?? null) ? $body['meta'] : [];
+
+    $db = get_db_connection();
+    $summary = yustam_vendor_rewards_get_summary($db, $vendorId);
+    if ($points > (int) ($summary['balance'] ?? 0)) {
+        yustam_api_error(409, 'Insufficient reward points.');
+    }
+
+    yustam_vendor_rewards_record_event($db, $vendorId, $points, 'redeem', $reason !== '' ? $reason : 'reward-redemption', $description, $meta);
+
+    $updatedSummary = yustam_vendor_rewards_get_summary($db, $vendorId);
+    $ledger = yustam_vendor_rewards_get_ledger($db, $vendorId, 20);
+
+    return [
+        'success' => true,
+        'message' => 'Redemption successful.',
+        'data' => [
+            'summary' => $updatedSummary,
+            'ledger' => $ledger,
+        ],
+    ];
 }
 
 function yustam_api_vendor_table_exists(mysqli $db, string $table): bool

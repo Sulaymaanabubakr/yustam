@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   Image,
   TouchableOpacity,
   Linking,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -16,10 +17,11 @@ import Toast from '../../components/Toast';
 import Button from '../../components/Button';
 import theme from '../../theme';
 import { collection, getDocs, limit, query, where } from 'firebase/firestore';
-import { vendorAPI } from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
+import { vendorAPI, reviewsAPI } from '../../services/api';
 import resolveMediaUrl from '../../utils/url';
 import { goBackOrNavigate } from '../../utils/navigation';
-import { formatDate, formatNaira } from '../../utils/formatters';
+import { formatDate, formatNaira, timeAgo } from '../../utils/formatters';
 import { db } from '../../config/firebase';
 
 const sanitizePhoneNumber = (value = '') => value.replace(/[^0-9]/g, '');
@@ -231,6 +233,9 @@ const VendorStorefrontScreen = ({ navigation, route }) => {
     vendorSlug = '',
     vendorName = 'Marketplace Vendor',
     initialVendorProfile = null,
+    listingId: routeListingId = null,
+    listingPublicId: routeListingPublicId = '',
+    listingTitle: routeListingTitle = '',
   } = route.params || {};
 
   const initialStorefront = useMemo(
@@ -259,6 +264,98 @@ const VendorStorefrontScreen = ({ navigation, route }) => {
   const [error, setError] = useState('');
   const [warning, setWarning] = useState('');
   const [toast, setToast] = useState({ visible: false, message: '', type: 'info' });
+  const [activeTab, setActiveTab] = useState('listings');
+  const [reviews, setReviews] = useState({ items: [], summary: { stats: {}, recent: [] } });
+  const [reviewsLoading, setReviewsLoading] = useState(false);
+  const [reviewsError, setReviewsError] = useState('');
+  const [reviewForm, setReviewForm] = useState({ rating: 0, comment: '' });
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const { user, role, isAuthenticated } = useAuth();
+  const reviewsFetchedRef = useRef(false);
+
+  const reviewVendorIdentifiers = useMemo(() => {
+    const identifiers = {};
+    const id = storefront?.vendorId || vendorId;
+    if (id) {
+      identifiers.vendorId = id;
+    }
+    const slugValue = storefront?.vendorSlug || vendorSlug;
+    if (slugValue) {
+      identifiers.vendorSlug = slugValue;
+    }
+    const uidValue = storefront?.vendorUid || vendorUid;
+    if (uidValue) {
+      identifiers.vendorUid = uidValue;
+    }
+    return identifiers;
+  }, [storefront?.vendorId, vendorId, storefront?.vendorSlug, vendorSlug, storefront?.vendorUid, vendorUid]);
+
+  const hasVendorIdentifiers = useMemo(
+    () => Boolean(reviewVendorIdentifiers.vendorId || reviewVendorIdentifiers.vendorSlug || reviewVendorIdentifiers.vendorUid),
+    [reviewVendorIdentifiers]
+  );
+
+  const listingContext = useMemo(() => {
+    if (!routeListingId && !routeListingPublicId && !routeListingTitle) {
+      return null;
+    }
+    return {
+      listingId: routeListingId,
+      listingPublicId: routeListingPublicId,
+      title: routeListingTitle,
+    };
+  }, [routeListingId, routeListingPublicId, routeListingTitle]);
+
+  const isBuyer = useMemo(() => {
+    const resolvedRole = (role || user?.role || '').toString().toLowerCase();
+    return resolvedRole === 'buyer';
+  }, [role, user?.role]);
+
+  const reviewerDisplayName = useMemo(
+    () => user?.fullName || user?.displayName || user?.email || 'Buyer',
+    [user?.displayName, user?.email, user?.fullName]
+  );
+
+  const reviewItems = useMemo(() => {
+    if (Array.isArray(reviews.items) && reviews.items.length) {
+      return reviews.items;
+    }
+    return Array.isArray(reviews.summary?.recent) ? reviews.summary.recent : [];
+  }, [reviews.items, reviews.summary?.recent]);
+
+  const totalReviewsCount = useMemo(() => {
+    if (typeof reviews.summary?.stats?.totalReviews === 'number') {
+      return reviews.summary.stats.totalReviews;
+    }
+    return typeof storefront?.totalReviews === 'number' ? storefront.totalReviews : reviewItems.length;
+  }, [reviews.summary?.stats?.totalReviews, storefront?.totalReviews, reviewItems.length]);
+
+  const averageRating = useMemo(() => {
+    if (typeof reviews.summary?.stats?.averageRating === 'number') {
+      return reviews.summary.stats.averageRating;
+    }
+    return typeof storefront?.rating === 'number' ? storefront.rating : null;
+  }, [reviews.summary?.stats?.averageRating, storefront?.rating]);
+
+  const distributionEntries = useMemo(() => {
+    const source = reviews.summary?.stats?.distribution || {};
+    const entries = [];
+    for (let ratingValue = 5; ratingValue >= 1; ratingValue -= 1) {
+      const rawCount = Number(source?.[ratingValue] ?? 0);
+      const count = Number.isNaN(rawCount) ? 0 : rawCount;
+      const percentage = totalReviewsCount > 0 ? Math.round((count / totalReviewsCount) * 100) : 0;
+      entries.push({ value: ratingValue, count, percentage });
+    }
+    return entries;
+  }, [reviews.summary?.stats?.distribution, totalReviewsCount]);
+
+  const canSubmitReview = isAuthenticated && isBuyer;
+  const submitDisabled =
+    submittingReview ||
+    !hasVendorIdentifiers ||
+    reviewForm.rating < 1 ||
+    reviewForm.comment.trim().length < 10;
+  const hasReviews = reviewItems.length > 0;
 
   useEffect(() => {
     if (initialStorefront) {
@@ -268,6 +365,167 @@ const VendorStorefrontScreen = ({ navigation, route }) => {
 
   const showToast = (message, type = 'success') => setToast({ visible: true, message, type });
   const hideToast = () => setToast({ ...toast, visible: false });
+
+  const tabs = useMemo(
+    () => [
+      { key: 'listings', label: 'Listings' },
+      { key: 'reviews', label: 'Reviews' },
+      { key: 'about', label: 'About' },
+    ],
+    []
+  );
+
+  const loadReviews = useCallback(
+    async (force = false) => {
+      if (!hasVendorIdentifiers) {
+        return;
+      }
+      if (!force && reviewsFetchedRef.current) {
+        return;
+      }
+      setReviewsLoading(true);
+      setReviewsError('');
+      try {
+        const identifierPayload = { ...reviewVendorIdentifiers };
+        const [summaryPayload, listPayload] = await Promise.all([
+          reviewsAPI.summary(identifierPayload),
+          reviewsAPI.list({ ...identifierPayload, status: 'published', pageSize: 25 }),
+        ]);
+        const nextSummary = summaryPayload || { stats: {}, recent: [] };
+        const listItems = Array.isArray(listPayload?.reviews) ? listPayload.reviews : [];
+        setReviews({ summary: nextSummary, items: listItems });
+        reviewsFetchedRef.current = true;
+      } catch (fetchError) {
+        console.error('Vendor reviews load error:', fetchError);
+        setReviewsError(fetchError?.message || 'Unable to load reviews right now.');
+      } finally {
+        setReviewsLoading(false);
+      }
+    },
+    [hasVendorIdentifiers, reviewVendorIdentifiers]
+  );
+
+  useEffect(() => {
+    if (activeTab === 'reviews') {
+      loadReviews();
+    }
+  }, [activeTab, loadReviews]);
+
+  useEffect(() => {
+    reviewsFetchedRef.current = false;
+    setReviews({ items: [], summary: { stats: {}, recent: [] } });
+  }, [reviewVendorIdentifiers]);
+
+  const handleSelectRating = (value) => {
+    setReviewForm((prev) => ({ ...prev, rating: value }));
+  };
+
+  const handleChangeReviewComment = (text) => {
+    setReviewForm((prev) => ({ ...prev, comment: text }));
+  };
+
+  const formatReviewMeta = (timestamp) => (timestamp ? timeAgo(timestamp) : 'Just now');
+
+  const renderRatingIcons = (value, size = 16) => {
+    const safe = Number(value) || 0;
+    return Array.from({ length: 5 }, (_, index) => {
+      const starValue = index + 1;
+      const icon = safe >= starValue ? 'star' : 'star-outline';
+      return (
+        <Ionicons
+          key={`display-star-${starValue}`}
+          name={icon}
+          size={size}
+          color={theme.colors.orange}
+        />
+      );
+    });
+  };
+
+  const handleSubmitReview = async () => {
+    if (!isAuthenticated) {
+      showToast('Sign in to share your experience.', 'info');
+      navigation.navigate('Auth');
+      return;
+    }
+    if (!isBuyer) {
+      showToast('Switch to a buyer account to leave reviews.', 'info');
+      return;
+    }
+    if (!hasVendorIdentifiers) {
+      showToast('Unable to find this vendor.', 'error');
+      return;
+    }
+
+    const ratingValue = Number(reviewForm.rating) || 0;
+    if (ratingValue < 1) {
+      showToast('Select a rating before submitting.', 'info');
+      return;
+    }
+
+    const comment = reviewForm.comment.trim();
+    if (comment.length < 10) {
+      showToast('Please share at least 10 characters about your experience.', 'info');
+      return;
+    }
+
+    setSubmittingReview(true);
+    try {
+      const payload = {
+        ...reviewVendorIdentifiers,
+        rating: ratingValue,
+        comment,
+        reviewerName: reviewerDisplayName,
+      };
+      if (listingContext?.listingId) {
+        payload.listingId = listingContext.listingId;
+      }
+      if (listingContext?.listingPublicId) {
+        payload.listingPublicId = listingContext.listingPublicId;
+      }
+      if (listingContext?.title) {
+        payload.listingTitle = listingContext.title;
+      }
+
+      const response = await reviewsAPI.create(payload);
+      const body = response?.data ?? response ?? {};
+      const summaryRecord = body.summary ?? body.data?.summary ?? null;
+      const createdFlag = Boolean(body.created ?? body.data?.created ?? true);
+
+      if (summaryRecord?.stats) {
+        setStorefront((prev) =>
+          prev
+            ? {
+                ...prev,
+                rating:
+                  typeof summaryRecord.stats.averageRating === 'number'
+                    ? summaryRecord.stats.averageRating
+                    : prev.rating,
+                totalReviews:
+                  typeof summaryRecord.stats.totalReviews === 'number'
+                    ? summaryRecord.stats.totalReviews
+                    : prev.totalReviews,
+              }
+            : prev
+        );
+      }
+
+      setReviewForm({ rating: 0, comment: '' });
+      showToast(createdFlag ? 'Thanks! Your review was submitted.' : 'Your review has been updated.');
+
+      reviewsFetchedRef.current = false;
+      await loadReviews(true);
+    } catch (submitError) {
+      console.error('Submit review error:', submitError);
+      const message =
+        submitError?.response?.data?.message ||
+        submitError?.message ||
+        'Unable to submit review right now.';
+      showToast(message, 'error');
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
 
   const fetchStorefront = useCallback(async () => {
     if (!identifierCandidates.length) {
@@ -438,6 +696,26 @@ const VendorStorefrontScreen = ({ navigation, route }) => {
         </Text>
         <View style={styles.headerSpacer} />
       </View>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.tabRow}
+      >
+        {tabs.map((tab) => (
+          <TouchableOpacity
+            key={tab.key}
+            style={[styles.tabChip, activeTab === tab.key && styles.tabChipActive]}
+            onPress={() => setActiveTab(tab.key)}
+            activeOpacity={0.8}
+          >
+            <Text
+              style={[styles.tabChipText, activeTab === tab.key && styles.tabChipTextActive]}
+            >
+              {tab.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
 
       {loading ? (
         <View style={styles.centerContent}>
@@ -561,12 +839,211 @@ const VendorStorefrontScreen = ({ navigation, route }) => {
             </TouchableOpacity>
           </View>
 
-          {storefront.description || storefront.email || storefront.website || storefront.joinedDate ? (
+          {activeTab === 'listings' && (
+            <View style={styles.listingsSection}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Listings</Text>
+                <Text style={styles.sectionHint}>
+                  {listingsAvailable ? `${listingsAvailable} available` : 'No listings yet'}
+                </Text>
+              </View>
+
+              {listings.length ? (
+                <View style={styles.listingsGrid}>
+                  {listings.map((listing) => (
+                    <TouchableOpacity
+                      key={listing.id || listing.title}
+                      style={styles.listingCard}
+                      onPress={() =>
+                        listing.id
+                          ? navigation.navigate('BuyerProductDetail', { productId: listing.id })
+                          : null
+                      }
+                      activeOpacity={0.8}
+                    >
+                      <View style={styles.listingImageContainer}>
+                        {listing.image ? (
+                          <>
+                            <Image source={{ uri: listing.image }} style={styles.listingImage} resizeMode="cover" />
+                            <View style={styles.listingImageSheen} />
+                          </>
+                        ) : (
+                          <View style={styles.listingPlaceholder}>
+                            <Ionicons name="image-outline" size={28} color={theme.colors.textSecondary} />
+                            <Text style={styles.listingPlaceholderText}>No image</Text>
+                          </View>
+                        )}
+                      </View>
+                      <View style={styles.listingInfo}>
+                        <Text style={styles.listingTitle} numberOfLines={2}>
+                          {listing.title}
+                        </Text>
+                        <Text style={styles.listingPrice}>{formatNaira(listing.price)}</Text>
+                        {listing.location ? (
+                          <Text style={styles.listingLocation} numberOfLines={1}>
+                            {listing.location}
+                          </Text>
+                        ) : null}
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              ) : (
+                <View style={styles.emptyListings}>
+                  <Ionicons name="cube-outline" size={40} color={theme.colors.textSecondary} />
+                  <Text style={styles.emptyText}>This vendor has no listings yet.</Text>
+                </View>
+              )}
+            </View>
+          )}
+
+          {activeTab === 'reviews' && (
+            <View style={styles.reviewsSection}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Reviews</Text>
+                <Text style={styles.sectionHint}>
+                  {totalReviewsCount ? `${totalReviewsCount} received` : 'No reviews yet'}
+                </Text>
+              </View>
+
+              {reviewsLoading ? (
+                <View style={styles.reviewsLoading}>
+                  <ActivityIndicator size="small" color={theme.colors.primary} />
+                  <Text style={styles.reviewsLoadingText}>Fetching reviews...</Text>
+                </View>
+              ) : reviewsError ? (
+                <View style={styles.inlineErrorCard}>
+                  <Ionicons name="warning-outline" size={18} color={theme.colors.orange} />
+                  <Text style={styles.inlineErrorMessage}>{reviewsError}</Text>
+                  <Button title="Try again" onPress={() => loadReviews(true)} />
+                </View>
+              ) : (
+                <>
+                  <View style={styles.reviewSummaryCard}>
+                    <View style={styles.reviewSummaryValue}>
+                      <Text style={styles.reviewAverageValue}>
+                        {averageRating ? Number(averageRating).toFixed(1) : '—'}
+                      </Text>
+                      <View style={styles.reviewAverageStars}>{renderRatingIcons(averageRating, 20)}</View>
+                      <Text style={styles.reviewCountText}>
+                        {totalReviewsCount ? `${totalReviewsCount} review${totalReviewsCount > 1 ? 's' : ''}` : 'No reviews yet'}
+                      </Text>
+                    </View>
+                    <View style={styles.reviewDistribution}>
+                      {distributionEntries.map((entry) => (
+                        <View key={`distribution-${entry.value}`} style={styles.distributionRow}>
+                          <Text style={styles.distributionLabel}>{entry.value}★</Text>
+                          <View style={styles.distributionBar}>
+                            <View style={[styles.distributionFill, { width: `${entry.percentage}%` }]} />
+                          </View>
+                          <Text style={styles.distributionCount}>{entry.count}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+
+                  {hasReviews ? (
+                    <View style={styles.reviewList}>
+                      {reviewItems.map((review, index) => {
+                        const key =
+                          review.id ||
+                          review.reviewId ||
+                          `${review.reviewerName || 'buyer'}-${review.createdAt || review.created_at || review.updatedAt || index}`;
+                        const listingTitle = review.listingTitle || review.listing_name || review.listingTitleText;
+                        return (
+                          <View key={key} style={styles.reviewCard}>
+                            <View style={styles.reviewCardHeader}>
+                              <Text style={styles.reviewAuthor}>{review.reviewerName || review.reviewer || 'Buyer'}</Text>
+                              <Text style={styles.reviewTimestamp}>
+                                {formatReviewMeta(review.createdAt || review.created_at || review.updatedAt)}
+                              </Text>
+                            </View>
+                            <View style={styles.reviewRatingRow}>{renderRatingIcons(review.rating, 16)}</View>
+                            {review.comment ? (
+                              <Text style={styles.reviewComment}>{review.comment}</Text>
+                            ) : null}
+                            {listingTitle ? (
+                              <Text style={styles.reviewListingRef}>Listing: {listingTitle}</Text>
+                            ) : null}
+                          </View>
+                        );
+                      })}
+                    </View>
+                  ) : (
+                    <View style={styles.emptyReviews}>
+                      <Ionicons name="chatbox-ellipses-outline" size={40} color={theme.colors.textSecondary} />
+                      <Text style={styles.emptyText}>No reviews yet. Be the first to share your experience.</Text>
+                    </View>
+                  )}
+                </>
+              )}
+
+              <View style={styles.reviewFormCard}>
+                <Text style={styles.reviewFormTitle}>Share your experience</Text>
+                <Text style={styles.reviewFormSubtitle}>
+                  {canSubmitReview
+                    ? 'How would you rate this vendor?'
+                    : 'Sign in as a buyer to leave a review.'}
+                </Text>
+                <View style={styles.reviewInputRatingRow}>
+                  {Array.from({ length: 5 }, (_, index) => {
+                    const starValue = index + 1;
+                    const icon = reviewForm.rating >= starValue ? 'star' : 'star-outline';
+                    return (
+                      <TouchableOpacity
+                        key={`input-star-${starValue}`}
+                        onPress={() => handleSelectRating(starValue)}
+                        activeOpacity={0.8}
+                        disabled={!canSubmitReview || submittingReview}
+                      >
+                        <Ionicons
+                          name={icon}
+                          size={28}
+                          color={
+                            reviewForm.rating >= starValue
+                              ? theme.colors.orange
+                              : theme.colors.textSecondary
+                          }
+                        />
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                <TextInput
+                  style={styles.reviewCommentInput}
+                  placeholder="Share details about your experience..."
+                  value={reviewForm.comment}
+                  onChangeText={handleChangeReviewComment}
+                  multiline
+                  numberOfLines={4}
+                  editable={canSubmitReview && !submittingReview}
+                  placeholderTextColor={theme.colors.textTertiary}
+                  textAlignVertical="top"
+                />
+                <View style={styles.reviewSubmitWrapper}>
+                  <Button
+                    title={submittingReview ? 'Submitting...' : 'Submit review'}
+                    onPress={handleSubmitReview}
+                    disabled={!canSubmitReview || submitDisabled}
+                  />
+                </View>
+                {!canSubmitReview ? (
+                  <Text style={styles.reviewAuthHint}>
+                    You need a buyer account to share reviews.
+                  </Text>
+                ) : null}
+              </View>
+            </View>
+          )}
+
+          {activeTab === 'about' && (
             <View style={styles.detailsCard}>
               <Text style={styles.detailsTitle}>Vendor details</Text>
               {storefront.description ? (
                 <Text style={styles.detailDescription}>{storefront.description}</Text>
-              ) : null}
+              ) : (
+                <Text style={styles.detailPlaceholder}>Vendor has not added a storefront bio yet.</Text>
+              )}
               {storefront.email ? (
                 <TouchableOpacity
                   style={styles.detailRow}
@@ -603,63 +1080,7 @@ const VendorStorefrontScreen = ({ navigation, route }) => {
                 </View>
               ) : null}
             </View>
-          ) : null}
-
-          <View style={styles.listingsSection}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Listings</Text>
-              <Text style={styles.sectionHint}>
-                {listingsAvailable ? `${listingsAvailable} available` : 'No listings yet'}
-              </Text>
-            </View>
-
-            {listings.length ? (
-              <View style={styles.listingsGrid}>
-                {listings.map((listing) => (
-                  <TouchableOpacity
-                    key={listing.id || listing.title}
-                    style={styles.listingCard}
-                    onPress={() =>
-                      listing.id
-                        ? navigation.navigate('BuyerProductDetail', { productId: listing.id })
-                        : null
-                    }
-                    activeOpacity={0.8}
-                  >
-                    <View style={styles.listingImageContainer}>
-                      {listing.image ? (
-                        <>
-                          <Image source={{ uri: listing.image }} style={styles.listingImage} resizeMode="cover" />
-                          <View style={styles.listingImageSheen} />
-                        </>
-                      ) : (
-                        <View style={styles.listingPlaceholder}>
-                          <Ionicons name="image-outline" size={28} color={theme.colors.textSecondary} />
-                          <Text style={styles.listingPlaceholderText}>No image</Text>
-                        </View>
-                      )}
-                    </View>
-                    <View style={styles.listingInfo}>
-                      <Text style={styles.listingTitle} numberOfLines={2}>
-                        {listing.title}
-                      </Text>
-                      <Text style={styles.listingPrice}>{formatNaira(listing.price)}</Text>
-                      {listing.location ? (
-                        <Text style={styles.listingLocation} numberOfLines={1}>
-                          {listing.location}
-                        </Text>
-                      ) : null}
-                    </View>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            ) : (
-              <View style={styles.emptyListings}>
-                <Ionicons name="cube-outline" size={40} color={theme.colors.textSecondary} />
-                <Text style={styles.emptyText}>This vendor has no listings yet.</Text>
-              </View>
-            )}
-          </View>
+          )}
         </ScrollView>
       )}
     </SafeAreaView>
@@ -1017,6 +1438,179 @@ const styles = StyleSheet.create({
   emptyText: {
     fontFamily: theme.typography.fontFamily.interSemiBold,
     fontSize: theme.typography.fontSize.base,
+    color: theme.colors.textSecondary,
+  },
+  reviewsSection: {
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing['2xl'],
+    gap: theme.spacing.lg,
+  },
+  reviewsLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+  },
+  reviewsLoadingText: {
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.textSecondary,
+  },
+  inlineErrorCard: {
+    gap: theme.spacing.sm,
+    padding: theme.spacing.md,
+    borderRadius: theme.borderRadius.xl,
+    backgroundColor: `${theme.colors.orange}12`,
+  },
+  inlineErrorMessage: {
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.orange,
+  },
+  reviewSummaryCard: {
+    flexDirection: 'row',
+    gap: theme.spacing.lg,
+    padding: theme.spacing.lg,
+    borderRadius: theme.borderRadius.xl,
+    backgroundColor: theme.colors.white,
+    ...theme.shadows.small,
+  },
+  reviewSummaryValue: {
+    width: '35%',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+  },
+  reviewAverageValue: {
+    fontFamily: theme.typography.fontFamily.anton,
+    fontSize: theme.typography.fontSize['3xl'],
+    color: theme.colors.textPrimary,
+  },
+  reviewAverageStars: {
+    flexDirection: 'row',
+    gap: 2,
+  },
+  reviewCountText: {
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.textSecondary,
+  },
+  reviewDistribution: {
+    flex: 1,
+    gap: theme.spacing.xs,
+  },
+  distributionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+  },
+  distributionLabel: {
+    width: 36,
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.textSecondary,
+  },
+  distributionBar: {
+    flex: 1,
+    height: 8,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.backgroundLight,
+    overflow: 'hidden',
+  },
+  distributionFill: {
+    height: '100%',
+    backgroundColor: theme.colors.orange,
+  },
+  distributionCount: {
+    width: 24,
+    textAlign: 'right',
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.textSecondary,
+  },
+  reviewList: {
+    gap: theme.spacing.md,
+  },
+  reviewCard: {
+    padding: theme.spacing.md,
+    borderRadius: theme.borderRadius.xl,
+    backgroundColor: theme.colors.white,
+    gap: theme.spacing.sm,
+    ...theme.shadows.small,
+  },
+  reviewCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  reviewAuthor: {
+    fontFamily: theme.typography.fontFamily.interSemiBold,
+    fontSize: theme.typography.fontSize.base,
+    color: theme.colors.textPrimary,
+  },
+  reviewTimestamp: {
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.textSecondary,
+  },
+  reviewRatingRow: {
+    flexDirection: 'row',
+    gap: 2,
+  },
+  reviewComment: {
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.base,
+    color: theme.colors.textSecondary,
+    lineHeight: theme.typography.lineHeight.relaxed * theme.typography.fontSize.base,
+  },
+  reviewListingRef: {
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.textTertiary,
+  },
+  emptyReviews: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: theme.spacing.sm,
+    paddingVertical: theme.spacing['2xl'],
+  },
+  reviewFormCard: {
+    padding: theme.spacing.lg,
+    borderRadius: theme.borderRadius.xl,
+    backgroundColor: theme.colors.white,
+    gap: theme.spacing.md,
+    ...theme.shadows.small,
+  },
+  reviewFormTitle: {
+    fontFamily: theme.typography.fontFamily.interSemiBold,
+    fontSize: theme.typography.fontSize.lg,
+    color: theme.colors.textPrimary,
+  },
+  reviewFormSubtitle: {
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.textSecondary,
+  },
+  reviewInputRatingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+  },
+  reviewCommentInput: {
+    minHeight: 120,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.borderRadius.lg,
+    padding: theme.spacing.md,
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.base,
+    color: theme.colors.textPrimary,
+    backgroundColor: theme.colors.background,
+  },
+  reviewSubmitWrapper: {
+    alignItems: 'flex-start',
+  },
+  reviewAuthHint: {
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.xs,
     color: theme.colors.textSecondary,
   },
   centerContent: {

@@ -360,6 +360,18 @@ export const vendorAPI = {
   verifyToken: (payload = {}) => api.post('/vendor/verify', payload),
   activate: (payload = {}) => api.post('/vendor/activate', payload),
   refreshSubscription: (payload = {}) => api.post('/vendor/subscription/refresh', payload),
+  getPointsSummary: async () => {
+    const response = await api.get('/vendor/points');
+    return response.data ?? { success: false, data: { summary: null, ledger: [] } };
+  },
+  getPointsLedger: async (params = {}) => {
+    const response = await api.get('/vendor/points/ledger', { params });
+    return response.data ?? { success: false, data: [] };
+  },
+  redeemPoints: async (payload = {}) => {
+    const response = await api.post('/vendor/points/redeem', payload);
+    return response.data ?? { success: false };
+  },
   getDashboard: async () => {
     const response = await api.get('/vendor/me/dashboard');
     const dashboard = response.data ?? {};
@@ -372,28 +384,46 @@ export const vendorAPI = {
       draft_listings: listings.drafts ?? 0,
       archived_listings: listings.archived ?? 0,
     };
-    const subscription = plan?.plan
-      ? {
-          displayName: plan.plan.name,
-          status: plan.status ?? 'ACTIVE',
-          statusLabel: plan.status ?? 'ACTIVE',
-          nextBillingDisplay: plan.endsAt ?? null,
-        }
-      : {};
+    const subscription = {
+      ...plan,
+      displayName: plan?.plan?.name ?? plan?.name ?? plan?.displayName ?? 'Free',
+      status: plan?.status ?? plan?.state ?? 'ACTIVE',
+      statusLabel: plan?.status ?? plan?.state ?? 'ACTIVE',
+      nextBillingDisplay: plan?.endsAt ?? plan?.renewsAt ?? plan?.nextBillingDisplay ?? null,
+    };
     const profile = {
       ...(dashboard.profile ?? {}),
       plan: subscription.displayName,
       planStatus: subscription.statusLabel,
       planRenewal: subscription.nextBillingDisplay,
     };
+    const defaultRewardsSummary = {
+      balance: 0,
+      lifetimeEarned: 0,
+      lifetimeRedeemed: 0,
+      updatedAt: null,
+      lastEarnedAt: null,
+      lastRedeemedAt: null,
+      meta: null,
+    };
+    const rewards = {
+      summary: {
+        ...defaultRewardsSummary,
+        ...(dashboard.rewards?.summary ?? {}),
+      },
+      recent: Array.isArray(dashboard.rewards?.recent) ? dashboard.rewards.recent : [],
+    };
     return {
       data: {
-        success: true,
+        success: dashboard.success ?? true,
         data: {
           stats,
           subscription,
           profile,
           verification: dashboard.verificationStatus,
+          reviews: dashboard.reviews ?? { stats: {}, recent: [] },
+          rewards,
+          raw: dashboard,
         },
       },
     };
@@ -594,24 +624,24 @@ export const vendorAPI = {
     }
     const catalogEntry = catalog[currentPlan.slug] || catalog[`${currentPlan.slug}-plan`] || {};
     const durations = mapPlanDurationOptions(catalogEntry);
-  return {
-    data: {
-      success: true,
+    return {
       data: {
-        planName: currentPlan.displayName,
-        planBadge: currentPlan.statusLabel || currentPlan.status,
-        monthlyPrice: currentPlan.price || (durations[0]?.amount ?? 0),
-        currency: currentPlan.currency || 'NGN',
-        expiresOn: currentPlan.nextBillingDisplay || currentPlan.expiryDisplay || '--',
-        remainingListings: currentPlan.listings ?? null,
-        contactEmail: 'support@yustam.com.ng',
-        vendorName: currentPlan.vendorName || 'Yustam Vendor',
-        slug: currentPlan.slug,
-         planCode: currentPlan.planCode || catalogEntry?.planCode || null,
-        durationOptions: durations,
+        success: true,
+        data: {
+          planName: currentPlan.displayName,
+          planBadge: currentPlan.statusLabel || currentPlan.status,
+          monthlyPrice: currentPlan.price || (durations[0]?.amount ?? 0),
+          currency: currentPlan.currency || 'NGN',
+          expiresOn: currentPlan.nextBillingDisplay || currentPlan.expiryDisplay || '--',
+          remainingListings: currentPlan.listings ?? null,
+          contactEmail: 'support@yustam.com.ng',
+          vendorName: currentPlan.vendorName || 'Yustam Vendor',
+          slug: currentPlan.slug,
+          planCode: currentPlan.planCode || catalogEntry?.planCode || null,
+          durationOptions: durations,
+        },
       },
-    },
-  };
+    };
   },
   getSubscriptionDetails: async () => {
     const [catalog, subscription] = await Promise.all([fetchPlanCatalog(), fetchCurrentSubscription()]);
@@ -641,9 +671,7 @@ export const vendorAPI = {
           expiryDisplay: currentPlan.nextBillingDisplay || currentPlan.expiryDisplay || '--',
           autoRenew: currentPlan.autoRenew,
           renewalLabel: currentPlan.renewalLabel || 'Next billing',
-          canCancel: Boolean(
-            subscription?.canCancel ?? subscription?.subscriptionCode
-          ),
+          canCancel: Boolean(subscription?.canCancel ?? subscription?.subscriptionCode),
           cancelled: Boolean(subscription?.cancelled),
           subscriptionCode: subscription?.subscriptionCode || '',
           usage,
@@ -827,6 +855,27 @@ export const vendorAPI = {
     api.post('/subscription/toggle-autorenew', { enabled }),
   cancelSubscription: (reason) =>
     api.post('/subscription/cancel', { reason }),
+};
+
+export const reviewsAPI = {
+  create: (payload = {}) => api.post('/reviews', payload),
+  list: async (params = {}) => {
+    const response = await api.get('/reviews', { params });
+    const payload = response.data?.data ?? response.data ?? {};
+    const reviews = Array.isArray(payload.reviews)
+      ? payload.reviews
+      : Array.isArray(payload.items)
+        ? payload.items
+        : [];
+    return {
+      reviews,
+      pagination: payload.pagination ?? null,
+    };
+  },
+  summary: async (params = {}) => {
+    const response = await api.get('/reviews/summary', { params });
+    return response.data?.data ?? { stats: {}, recent: [] };
+  },
 };
 
 export const profileAPI = {
