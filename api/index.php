@@ -268,11 +268,34 @@ function yustam_api_handle_bot(string $method, array $segments): array
     }
 
     if ($method === 'GET' && ($action === 'status' || $action === '')) {
-        return [
-            'success' => true,
-            'configured' => yustam_bot_is_openai_configured(),
-            'model' => yustam_bot_is_openai_configured() ? yustam_bot_select_model() : null,
-        ];
+        return yustam_api_bot_status();
+    }
+
+    if ($action === 'integrations') {
+        $integrationKey = yustam_bot_resolve_integration_key($segments[1] ?? '');
+
+        if ($integrationKey === 'wishlist' && $method === 'POST') {
+            return yustam_api_bot_sync_wishlist();
+        }
+
+        if ($integrationKey === 'vendorRewards' && $method === 'POST') {
+            return yustam_api_bot_sync_vendor_rewards();
+        }
+
+        if ($method === 'GET') {
+            $user = yustam_api_require_auth();
+            if ($integrationKey === '') {
+                $states = [];
+                foreach (array_keys(yustam_bot_integration_catalog()) as $key) {
+                    $states[$key] = yustam_bot_integration_state($user, $key);
+                }
+                return ['success' => true, 'integrations' => $states];
+            }
+            return [
+                'success' => true,
+                'integration' => yustam_bot_integration_state($user, $integrationKey),
+            ];
+        }
     }
 
     yustam_api_error(404, 'Bot endpoint not found.');
@@ -422,6 +445,89 @@ function yustam_api_bot_query(): array
         $usedFallback,
         $fromCache
     );
+}
+
+function yustam_api_bot_status(): array
+{
+    $user = yustam_api_require_auth();
+    $configured = yustam_bot_is_openai_configured();
+    $model = $configured ? yustam_bot_select_model() : null;
+
+    $integrations = [];
+    foreach (array_keys(yustam_bot_integration_catalog()) as $key) {
+        $integrations[$key] = yustam_bot_integration_state($user, $key);
+    }
+
+    return [
+        'success' => true,
+        'configured' => $configured,
+        'model' => $model,
+        'integrations' => $integrations,
+    ];
+}
+
+function yustam_api_bot_sync_wishlist(): array
+{
+    $user = yustam_api_require_auth();
+    $catalog = yustam_bot_integration_catalog();
+    $config = $catalog['wishlist'] ?? ['enabled' => false, 'roles' => ['buyer']];
+
+    if (empty($config['enabled'])) {
+        yustam_api_error(501, 'Wishlist integration is disabled.');
+    }
+    if (($user['role'] ?? '') !== 'buyer') {
+        yustam_api_error(403, 'Wishlist sync is only available for buyers.');
+    }
+
+    $payload = yustam_api_read_json_body();
+    $entryId = isset($payload['entryId']) ? trim((string) $payload['entryId']) : '';
+    if ($entryId === '') {
+        yustam_api_error(422, 'entryId is required to sync wishlist insights.');
+    }
+
+    $changed = false;
+    $snapshot = yustam_bot_store_integration_snapshot($user, 'wishlist', $payload, $changed);
+
+    if ($changed && !empty($config['notifications'])) {
+        yustam_bot_emit_wishlist_notification($user, $snapshot);
+    }
+
+    return [
+        'success' => true,
+        'integration' => yustam_bot_integration_state($user, 'wishlist', $snapshot),
+    ];
+}
+
+function yustam_api_bot_sync_vendor_rewards(): array
+{
+    $user = yustam_api_require_auth();
+    $catalog = yustam_bot_integration_catalog();
+    $config = $catalog['vendorRewards'] ?? ['enabled' => false, 'roles' => ['vendor']];
+
+    if (empty($config['enabled'])) {
+        yustam_api_error(501, 'Vendor rewards integration is disabled.');
+    }
+    if (($user['role'] ?? '') !== 'vendor' || empty($user['vendorId'])) {
+        yustam_api_error(403, 'Vendor rewards sync is only available for vendors.');
+    }
+
+    $payload = yustam_api_read_json_body();
+    $entryId = isset($payload['entryId']) ? trim((string) $payload['entryId']) : '';
+    if ($entryId === '') {
+        yustam_api_error(422, 'entryId is required to sync vendor reward insights.');
+    }
+
+    $changed = false;
+    $snapshot = yustam_bot_store_integration_snapshot($user, 'vendorRewards', $payload, $changed);
+
+    if ($changed && !empty($config['notifications'])) {
+        yustam_bot_emit_vendor_rewards_notification($user, $snapshot);
+    }
+
+    return [
+        'success' => true,
+        'integration' => yustam_bot_integration_state($user, 'vendorRewards', $snapshot),
+    ];
 }
 
 function yustam_api_handle_chats(string $method, array $segments): array

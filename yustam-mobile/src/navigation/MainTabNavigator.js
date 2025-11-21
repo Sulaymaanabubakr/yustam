@@ -74,12 +74,12 @@ const MainTabNavigator = () => {
         return focused ? 'speedometer' : 'speedometer-outline';
       case 'VendorListings':
         return focused ? 'albums' : 'albums-outline';
+      case 'Bot':
+        return focused ? 'bulb' : 'bulb-outline';
       default:
         return focused ? 'ellipse' : 'ellipse-outline';
     }
   };
-
-          <Tab.Screen name="Bot" component={BotScreen} options={{ tabBarLabel: 'AI Bot' }} />
   return (
     <Tab.Navigator
       initialRouteName={isVendor ? 'VendorDashboard' : 'Home'}
@@ -91,7 +91,6 @@ const MainTabNavigator = () => {
         ),
         tabBarActiveTintColor: theme.colors.orange,
         tabBarInactiveTintColor: theme.colors.textSecondary,
-          <Tab.Screen name="Bot" component={BotScreen} options={{ tabBarLabel: 'Bot' }} />
         tabBarStyle: isVendor ? vendorTabBarStyle : buyerTabBarStyle,
         tabBarLabelStyle: {
           fontFamily: theme.typography.fontFamily.interMedium,
@@ -116,6 +115,11 @@ const MainTabNavigator = () => {
             options={{ tabBarLabel: 'Listings' }}
           />
           <Tab.Screen
+            name="Bot"
+            component={BotScreen}
+            options={{ tabBarLabel: 'YustaAI' }}
+          />
+          <Tab.Screen
             name="VendorChats"
             component={VendorChatsScreen}
             options={{ tabBarLabel: 'Chats' }}
@@ -134,6 +138,11 @@ const MainTabNavigator = () => {
             name="BuyerSearch"
             component={BuyerSearchScreen}
             options={{ tabBarLabel: 'Shop' }}
+          />
+          <Tab.Screen
+            name="Bot"
+            component={BotScreen}
+            options={{ tabBarLabel: 'YustaAI' }}
           />
           <Tab.Screen name="Chat" component={ChatScreen} />
           <Tab.Screen

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -16,7 +16,8 @@ import theme from '../../theme';
 import Toast from '../../components/Toast';
 import Button from '../../components/Button';
 import { vendorAPI } from '../../services/api';
-import { formatNumber } from '../../utils/formatters';
+import useBotQuery from '../../hooks/useBotQuery';
+import { formatNumber, timeAgo } from '../../utils/formatters';
 import { resolveUserUid } from '../../utils/user';
 import { deriveSubscriptionStatusMeta, normalizeAutoRenewFlag, cleanPlanDisplayName } from '../../utils/subscription';
 
@@ -54,6 +55,35 @@ const VendorDashboardScreen = ({ navigation }) => {
     planRenewalLabel: 'Next billing',
     verificationStatus: 'Pending',
   });
+
+  const { latestResponse: botResponse, integrations: botIntegrations, syncIntegrations: syncBotIntegrations } =
+    useBotQuery();
+  const vendorRewardsIntegration = botIntegrations?.vendorRewards ?? {};
+
+  const vendorSummary = useMemo(() => {
+    if (!vendorRewardsIntegration.ready || !botResponse?.summary) {
+      return [];
+    }
+    return botResponse.summary
+      .map((line) => (typeof line === 'string' ? line.trim() : ''))
+      .filter((line, index, array) => line && array.indexOf(line) === index)
+      .slice(0, 3);
+  }, [botResponse?.summary, vendorRewardsIntegration.ready]);
+
+  const vendorFollowUps = useMemo(() => {
+    if (!vendorRewardsIntegration.ready || !botResponse?.followUps) {
+      return [];
+    }
+    return botResponse.followUps
+      .map((line) => (typeof line === 'string' ? line.trim() : ''))
+      .filter((line, index, array) => line && array.indexOf(line) === index)
+      .slice(0, 2);
+  }, [botResponse?.followUps, vendorRewardsIntegration.ready]);
+
+  const vendorIntent = vendorRewardsIntegration.ready ? botResponse?.intent : null;
+  const vendorLastSyncedLabel = vendorRewardsIntegration.lastSynced
+    ? timeAgo(vendorRewardsIntegration.lastSynced)
+    : null;
 
   useEffect(() => {
     fetchDashboard();
@@ -175,6 +205,20 @@ const VendorDashboardScreen = ({ navigation }) => {
     setToast({ ...toast, visible: false });
   };
 
+  const handleVendorSync = useCallback(() => {
+    if (!vendorRewardsIntegration.ready || vendorRewardsIntegration.syncing) {
+      return;
+    }
+    const outcome = syncBotIntegrations();
+    if (!outcome?.success && outcome?.error) {
+      showToast(outcome.error, 'info');
+    }
+  }, [syncBotIntegrations, vendorRewardsIntegration.ready, vendorRewardsIntegration.syncing, showToast]);
+
+  const handleOpenYustaAI = useCallback(() => {
+    navigation.navigate('Bot');
+  }, [navigation]);
+
   const QuickStatCard = ({ icon, label, value, color, onPress }) => {
     const displayValue =
       typeof value === 'number' ? formatNumber(value) : value ?? '--';
@@ -293,6 +337,91 @@ const VendorDashboardScreen = ({ navigation }) => {
             />
           </View>
         </View>
+
+        {(vendorRewardsIntegration.ready || vendorRewardsIntegration.syncing || vendorSummary.length || vendorRewardsIntegration.error) && (
+          <View style={styles.section}>
+            <View style={styles.aiCard}>
+              <View style={styles.aiHeader}>
+                <View style={styles.aiHeaderTitle}>
+                  <Ionicons name="rocket-outline" size={20} color={theme.colors.orange} style={styles.aiIcon} />
+                  <View>
+                    <Text style={styles.aiTitle}>YustaAI reward ideas</Text>
+                    <Text style={styles.aiSubtitle}>
+                      {vendorRewardsIntegration.syncing
+                        ? 'Syncing shopper signals…'
+                        : vendorRewardsIntegration.ready
+                          ? vendorLastSyncedLabel
+                            ? `Updated ${vendorLastSyncedLabel}`
+                            : 'Ready when you are'
+                          : 'Activation pending'}
+                    </Text>
+                  </View>
+                </View>
+                <TouchableOpacity
+                  style={[styles.aiRefreshButton, (!vendorRewardsIntegration.ready || vendorRewardsIntegration.syncing) && styles.aiRefreshButtonDisabled]}
+                  onPress={handleVendorSync}
+                  disabled={!vendorRewardsIntegration.ready || vendorRewardsIntegration.syncing}
+                  activeOpacity={0.8}
+                >
+                  {vendorRewardsIntegration.syncing ? (
+                    <ActivityIndicator size="small" color={theme.colors.orange} />
+                  ) : (
+                    <Ionicons name="refresh" size={16} color={theme.colors.orange} />
+                  )}
+                </TouchableOpacity>
+              </View>
+
+              {vendorIntent ? (
+                <View style={styles.aiIntentBadge}>
+                  <Ionicons name="sparkles" size={14} color={theme.colors.orange} />
+                  <Text style={styles.aiIntentText}>{vendorIntent}</Text>
+                </View>
+              ) : null}
+
+              {vendorSummary.length ? (
+                <View style={styles.aiSummaryWrapper}>
+                  {vendorSummary.map((line, index) => (
+                    <Text key={`vendor-summary-${index}`} style={styles.aiSummaryLine}>
+                      <Text style={styles.aiSummaryBullet}>• </Text>
+                      {line}
+                    </Text>
+                  ))}
+                </View>
+              ) : (
+                <Text style={styles.aiPlaceholder}>
+                  {vendorRewardsIntegration.ready
+                    ? 'Ask YustaAI how to reward loyal buyers or boost conversions to unlock tailored coaching here.'
+                    : 'We will activate reward coaching as soon as your vendor rewards service is connected.'}
+                </Text>
+              )}
+
+              {vendorRewardsIntegration.error ? (
+                <Text style={styles.aiErrorText}>{vendorRewardsIntegration.error}</Text>
+              ) : null}
+
+              {vendorFollowUps.length ? (
+                <View style={styles.aiFollowUpsRow}>
+                  {vendorFollowUps.map((item, index) => (
+                    <TouchableOpacity
+                      key={`vendor-followup-${index}`}
+                      style={styles.aiFollowUpChip}
+                      onPress={handleOpenYustaAI}
+                      activeOpacity={0.85}
+                    >
+                      <Ionicons name="chatbubble-ellipses-outline" size={14} color={theme.colors.white} />
+                      <Text style={styles.aiFollowUpText}>{item}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              ) : null}
+
+              <TouchableOpacity style={styles.aiCtaButton} onPress={handleOpenYustaAI} activeOpacity={0.85}>
+                <Ionicons name="bulb-outline" size={16} color={theme.colors.orange} />
+                <Text style={styles.aiCtaText}>Open YustaAI</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
 
         {/* Plan Status */}
         <View style={styles.section}>
@@ -514,6 +643,124 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.fontFamily.anton,
     fontSize: theme.typography.fontSize.xl,
     letterSpacing: theme.typography.letterSpacing.wide,
+  },
+  aiCard: {
+    backgroundColor: theme.colors.white,
+    borderRadius: theme.borderRadius.lg,
+    padding: theme.spacing.lg,
+    gap: theme.spacing.md,
+    ...theme.shadows.medium,
+  },
+  aiHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  aiHeaderTitle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    flex: 1,
+  },
+  aiIcon: {
+    backgroundColor: `${theme.colors.orange}12`,
+    borderRadius: theme.borderRadius.full,
+    padding: theme.spacing.xs,
+  },
+  aiTitle: {
+    fontFamily: theme.typography.fontFamily.interSemiBold,
+    fontSize: theme.typography.fontSize.base,
+    color: theme.colors.textPrimary,
+  },
+  aiSubtitle: {
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.textSecondary,
+  },
+  aiRefreshButton: {
+    width: 36,
+    height: 36,
+    borderRadius: theme.borderRadius.full,
+    borderWidth: 1,
+    borderColor: `${theme.colors.orange}35`,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  aiRefreshButtonDisabled: {
+    opacity: 0.4,
+  },
+  aiIntentBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: theme.spacing.xs,
+    backgroundColor: `${theme.colors.orange}12`,
+    borderRadius: theme.borderRadius.full,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: theme.spacing.xs / 1.5,
+  },
+  aiIntentText: {
+    fontFamily: theme.typography.fontFamily.interMedium,
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.orange,
+  },
+  aiSummaryWrapper: {
+    gap: theme.spacing.sm,
+  },
+  aiSummaryLine: {
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.textPrimary,
+    lineHeight: theme.typography.lineHeight.relaxed * theme.typography.fontSize.sm,
+  },
+  aiSummaryBullet: {
+    color: theme.colors.orange,
+    fontWeight: '600',
+  },
+  aiPlaceholder: {
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.textSecondary,
+    lineHeight: theme.typography.lineHeight.relaxed * theme.typography.fontSize.sm,
+  },
+  aiErrorText: {
+    fontFamily: theme.typography.fontFamily.inter,
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.error,
+  },
+  aiFollowUpsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: theme.spacing.sm,
+  },
+  aiFollowUpChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+    backgroundColor: theme.colors.orange,
+    borderRadius: theme.borderRadius.full,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.xs,
+  },
+  aiFollowUpText: {
+    fontFamily: theme.typography.fontFamily.interSemiBold,
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.white,
+  },
+  aiCtaButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: theme.spacing.xs,
+    borderRadius: theme.borderRadius.full,
+    borderWidth: 1,
+    borderColor: `${theme.colors.orange}35`,
+    paddingVertical: theme.spacing.sm,
+  },
+  aiCtaText: {
+    fontFamily: theme.typography.fontFamily.interSemiBold,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.orange,
   },
   planCard: {
     backgroundColor: theme.colors.white,

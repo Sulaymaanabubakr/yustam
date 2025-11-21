@@ -18,12 +18,28 @@ OPENAI_MODEL=gpt-4o-mini
 BOT_RATE_LIMIT=8
 BOT_RATE_LIMIT_WINDOW=60
 BOT_CACHE_TTL=300
+BOT_WISHLIST_ENABLED=1
+BOT_VENDOR_REWARDS_ENABLED=1
+BOT_WISHLIST_NOTIFICATIONS=1
+BOT_VENDOR_NOTIFICATIONS=1
 ```
 
 - `OPENAI_API_KEY` is required for live OpenAI calls.
 - `OPENAI_MODEL` is optional and falls back to `gpt-4o-mini`.
 - `BOT_RATE_LIMIT` controls per-user requests within the window (`BOT_RATE_LIMIT_WINDOW` seconds).
 - `BOT_CACHE_TTL` caches successful AI interpretations to reduce repeat OpenAI calls.
+- `BOT_WISHLIST_ENABLED` / `BOT_VENDOR_REWARDS_ENABLED` toggle downstream integrations without redeploying the app.
+- `BOT_WISHLIST_NOTIFICATIONS` / `BOT_VENDOR_NOTIFICATIONS` enable automated alert delivery when integration payloads change.
+
+## Integration Endpoints
+
+| Route | Method | Description |
+| --- | --- | --- |
+| `/api/bot/status` | `GET` | Returns OpenAI readiness, model name, and per-integration readiness/meta scoped to the authenticated user. |
+| `/api/bot/integrations/wishlist` | `POST` | Syncs the latest buyer-facing YustaAI insight bundle, stores a snapshot, and (optionally) emits a wishlist notification. |
+| `/api/bot/integrations/vendor-rewards` | `POST` | Syncs the latest vendor reward summary, persists it for dashboards, and (optionally) creates a vendor notification. |
+
+The sync payload mirrors what `useBotQuery` forwards (`entryId`, `query`, `summary`, `followUps`, `intent`, `listings`, `mode`, `location`, `model`, `timestamp`). When the snapshot changes, notifications are emitted automatically subject to the feature flags above.
 
 ## Request Contract
 
@@ -110,11 +126,12 @@ When OpenAI is unavailable or rate limiting blocks the request, the response fal
 
 ## Frontend Integration Notes
 
-1. **API Client:** Extend `yustam-mobile/src/services/api.js` with `botAPI.query(payload)` that posts to `/bot/query`.
-2. **Hook:** Build a dedicated hook under `src/hooks/useBotQuery.ts` (or .js) to wrap React Query or simple state management.
-3. **Screen:** Replace the placeholder in `BotScreen.js` with a conversational UI that calls `botAPI.query` and renders `response.ai.summary`, `listings.items`, and `response.ai.followUps` suggestions.
-4. **Error States:** Display friendly messaging when `fallbackUsed` is `true` and highlight the retry wait when HTTP 429 is returned.
-5. **Mode Toggle:** Use existing filter panels (see `BuyerSearchScreen` components) to allow users to toggle between `local` and `global` before invoking the bot.
+1. **API Client:** `yustam-mobile/src/services/api.js` exposes `botAPI.query`, `botAPI.status`, and the integration helpers `botAPI.syncWishlist` and `botAPI.syncVendorRewards` (wrapping `/bot/query`, `/bot/status`, and the `/bot/integrations/*` routes).
+2. **Hook:** `src/hooks/useBotQuery.js` manages history, persistence, rate-limit feedback, and now surfaces `latestResponse`, `integrations`, and `syncIntegrations` alongside the existing `sendQuery`, `setMode`, `updateLocation`, and `clearHistory` helpers.
+3. **Screen:** `src/screens/shared/BotScreen.js` renders the full YustaAI conversation UI, including summaries, listings, follow-up prompts, and mode toggles.
+4. **Error States:** The hook surfaces rate-limit responses (429) and falls back to marketplace search when OpenAI is offline; UI messaging highlights these cases.
+5. **Mode Toggle:** Local vs global marketplace behaviour is controlled via the hook and UI toggle, with optional state/city filters persisted in AsyncStorage.
+6. **Downstream Integrations:** Once `/bot/status` reports wishlist or vendor reward integrations as ready (or an override enables them), the hook pushes the latest YustaAI summary to those services automatically and keeps retry utilities available via `syncIntegrations`.
 
 ## Testing Checklist
 
@@ -126,6 +143,6 @@ When OpenAI is unavailable or rate limiting blocks the request, the response fal
 
 ## Next Steps
 
-- Wire wishlist alert summaries once the notification service is ready.
+- Confirm `/bot/integrations/wishlist` and `/bot/integrations/vendor-rewards` endpoints surface readiness flags via `/bot/status` once deployed.
 - Feed vendor points metadata into `response.ai.summary` from the rewards service when available.
 - Log AI interactions for analytics/auditing once the data warehouse events pipeline is ready.

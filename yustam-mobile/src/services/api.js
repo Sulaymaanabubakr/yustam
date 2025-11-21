@@ -939,5 +939,24 @@ export const supportAPI = {
   addMessage: (ticketId, payload) => api.post(`/support/${ticketId}/messages`, payload),
 };
 
+export const botAPI = {
+  query: async (payload = {}) => {
+    const response = await api.post('/bot/query', payload);
+    return response.data;
+  },
+  status: async () => {
+    const response = await api.get('/bot/status');
+    return response.data;
+  },
+  syncWishlist: async (payload = {}) => {
+    const response = await api.post('/bot/integrations/wishlist', payload);
+    return response.data;
+  },
+  syncVendorRewards: async (payload = {}) => {
+    const response = await api.post('/bot/integrations/vendor-rewards', payload);
+    return response.data;
+  },
+};
+
 export default api;
 

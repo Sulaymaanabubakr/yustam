@@ -120,6 +120,281 @@ function yustam_bot_rate_limit_check(array $user, array $context = []): void
     file_put_contents($path, $payload === false ? '{}' : $payload, LOCK_EX);
 }
 
+function yustam_bot_env_flag(string $key, bool $default = true): bool
+{
+    $value = yustam_api_env($key);
+    if ($value === null) {
+        return $default;
+    }
+    $normalized = strtolower(trim($value));
+    if ($normalized === '') {
+        return $default;
+    }
+    return in_array($normalized, ['1', 'true', 'yes', 'on', 'enable', 'enabled'], true);
+}
+
+function yustam_bot_resolve_integration_key(string $key): string
+{
+    $normalized = strtolower(trim($key));
+    if ($normalized === 'vendor-rewards' || $normalized === 'vendor_rewards' || $normalized === 'vendor') {
+        return 'vendorRewards';
+    }
+    if ($normalized === 'wishlist' || $normalized === 'favorites' || $normalized === 'saved') {
+        return 'wishlist';
+    }
+    return $normalized;
+}
+
+function yustam_bot_integration_catalog(): array
+{
+    static $catalog = null;
+    if ($catalog !== null) {
+        return $catalog;
+    }
+
+    $catalog = [
+        'wishlist' => [
+            'enabled' => yustam_bot_env_flag('BOT_WISHLIST_ENABLED', true),
+            'roles' => ['buyer'],
+            'notifications' => yustam_bot_env_flag('BOT_WISHLIST_NOTIFICATIONS', true),
+        ],
+        'vendorRewards' => [
+            'enabled' => yustam_bot_env_flag('BOT_VENDOR_REWARDS_ENABLED', true),
+            'roles' => ['vendor'],
+            'notifications' => yustam_bot_env_flag('BOT_VENDOR_NOTIFICATIONS', true),
+        ],
+    ];
+
+    return $catalog;
+}
+
+function yustam_bot_integration_file(array $user, string $integration): string
+{
+    $userRef = strtolower((string) ($user['id'] ?? 'anonymous'));
+    $safeUser = preg_replace('/[^a-z0-9]+/i', '-', $userRef);
+    if ($safeUser === '') {
+        $safeUser = sha1($userRef ?: uniqid('', true));
+    }
+    $prefix = 'integration-' . strtolower($integration);
+    return yustam_bot_storage_file($prefix, $safeUser);
+}
+
+function yustam_bot_read_integration_snapshot(array $user, string $integration): ?array
+{
+    $path = yustam_bot_integration_file($user, $integration);
+    if (!is_file($path)) {
+        return null;
+    }
+    $contents = file_get_contents($path);
+    if ($contents === false) {
+        return null;
+    }
+    $decoded = json_decode($contents, true);
+    return is_array($decoded) ? $decoded : null;
+}
+
+function yustam_bot_normalise_followups($followUps, int $limit = 5): array
+{
+    if (!is_array($followUps)) {
+        return [];
+    }
+    $items = [];
+    foreach ($followUps as $item) {
+        if (!is_string($item)) {
+            continue;
+        }
+        $line = trim($item);
+        if ($line === '') {
+            continue;
+        }
+        if (!in_array($line, $items, true)) {
+            $items[] = $line;
+        }
+        if (count($items) >= $limit) {
+            break;
+        }
+    }
+    return $items;
+}
+
+function yustam_bot_compact_listings($listings, int $limit = 3): array
+{
+    if (!is_array($listings)) {
+        return [];
+    }
+    $result = [];
+    foreach ($listings as $entry) {
+        if (!is_array($entry)) {
+            continue;
+        }
+        $result[] = [
+            'id' => isset($entry['id']) ? (string) $entry['id'] : null,
+            'title' => isset($entry['title']) ? trim((string) $entry['title']) : null,
+            'price' => isset($entry['price']) ? (float) $entry['price'] : null,
+            'state' => $entry['state'] ?? null,
+            'city' => $entry['city'] ?? null,
+            'primaryImage' => $entry['primaryImage'] ?? ($entry['image'] ?? null),
+            'vendor' => isset($entry['vendor']) && is_array($entry['vendor'])
+                ? array_filter([
+                    'id' => $entry['vendor']['id'] ?? null,
+                    'displayName' => $entry['vendor']['displayName'] ?? ($entry['vendor']['business_name'] ?? null),
+                ])
+                : null,
+        ];
+        if (count($result) >= $limit) {
+            break;
+        }
+    }
+    return $result;
+}
+
+function yustam_bot_store_integration_snapshot(array $user, string $integration, array $payload, ?bool &$changed = null): array
+{
+    $integrationKey = yustam_bot_resolve_integration_key($integration);
+    $existing = yustam_bot_read_integration_snapshot($user, $integrationKey);
+
+    $entryId = isset($payload['entryId']) ? (string) $payload['entryId'] : '';
+    $summary = yustam_bot_format_summary($payload['summary'] ?? [], $payload['listings'] ?? []);
+    $followUps = yustam_bot_normalise_followups($payload['followUps'] ?? []);
+    $listings = yustam_bot_compact_listings($payload['listings'] ?? []);
+    $syncedAt = isset($payload['timestamp']) && is_numeric($payload['timestamp'])
+        ? (int) $payload['timestamp']
+        : time();
+
+    $record = [
+        'userRef' => $user['id'] ?? null,
+        'integration' => $integrationKey,
+        'entryId' => $entryId,
+        'query' => isset($payload['query']) ? (string) $payload['query'] : '',
+        'intent' => $payload['intent'] ?? null,
+        'summary' => $summary,
+        'followUps' => $followUps,
+        'listings' => $listings,
+        'mode' => isset($payload['mode']) ? (string) $payload['mode'] : null,
+        'location' => isset($payload['location']) && is_array($payload['location']) ? array_filter($payload['location']) : [],
+        'model' => $payload['model'] ?? null,
+        'syncedAt' => $syncedAt,
+        'meta' => [
+            'summary' => $summary,
+            'followUps' => $followUps,
+            'intent' => $payload['intent'] ?? null,
+            'mode' => isset($payload['mode']) ? (string) $payload['mode'] : null,
+            'location' => isset($payload['location']) && is_array($payload['location']) ? array_filter($payload['location']) : [],
+            'listings' => $listings,
+            'entryId' => $entryId,
+            'syncedAt' => $syncedAt,
+        ],
+    ];
+
+    $isChanged = true;
+    if ($existing) {
+        $comparableFields = ['entryId', 'intent', 'summary', 'followUps', 'listings'];
+        $isChanged = false;
+        foreach ($comparableFields as $field) {
+            if (($existing[$field] ?? null) !== ($record[$field] ?? null)) {
+                $isChanged = true;
+                break;
+            }
+        }
+        if (!$isChanged) {
+            // Preserve latest timestamp for freshness even if content unchanged.
+            if (($existing['syncedAt'] ?? null) !== $record['syncedAt']) {
+                $existing['syncedAt'] = $record['syncedAt'];
+                $existing['meta']['syncedAt'] = $record['syncedAt'];
+                $record = $existing;
+            } else {
+                $record = $existing;
+            }
+        }
+    }
+
+    $path = yustam_bot_integration_file($user, $integrationKey);
+    file_put_contents($path, json_encode($record, YUSTAM_API_JSON_FLAGS), LOCK_EX);
+
+    if ($changed !== null) {
+        $changed = $isChanged;
+    }
+
+    return $record;
+}
+
+function yustam_bot_integration_state(array $user, string $integration, ?array $snapshot = null): array
+{
+    $integrationKey = yustam_bot_resolve_integration_key($integration);
+    $catalog = yustam_bot_integration_catalog();
+    $config = $catalog[$integrationKey] ?? ['enabled' => false, 'roles' => []];
+    $enabled = (bool) ($config['enabled'] ?? false);
+    $roles = $config['roles'] ?? [];
+    $allowRole = !$roles || in_array($user['role'] ?? '', $roles, true);
+    $ready = $enabled && $allowRole;
+
+    if ($snapshot === null && $enabled) {
+        $snapshot = yustam_bot_read_integration_snapshot($user, $integrationKey);
+    }
+
+    return [
+        'enabled' => $enabled,
+        'ready' => $ready,
+        'lastSynced' => $snapshot['syncedAt'] ?? null,
+        'meta' => $snapshot['meta'] ?? null,
+        'error' => '',
+    ];
+}
+
+function yustam_bot_emit_wishlist_notification(array $user, array $snapshot): void
+{
+    if (($user['role'] ?? '') !== 'buyer') {
+        return;
+    }
+    yustam_api_ensure_notifications_table();
+    $db = get_db_connection();
+    $title = 'New wishlist matches ready';
+    $summary = $snapshot['summary'][0] ?? $snapshot['meta']['summary'][0] ?? null;
+    $body = $summary ?: 'We found fresh picks that match your wishlist preferences.';
+    $data = [
+        'integration' => 'wishlist',
+        'entryId' => $snapshot['entryId'] ?? null,
+        'intent' => $snapshot['intent'] ?? null,
+        'listings' => $snapshot['listings'] ?? [],
+        'syncedAt' => $snapshot['syncedAt'] ?? time(),
+    ];
+
+    $stmt = $db->prepare('INSERT INTO `app_notifications` (user_ref, title, body, type, data) VALUES (?, ?, ?, ?, ?)');
+    if ($stmt instanceof mysqli_stmt) {
+        $type = 'wishlist-alert';
+        $payload = json_encode($data, YUSTAM_API_JSON_FLAGS);
+        $stmt->bind_param('sssss', $user['id'], $title, $body, $type, $payload);
+        $stmt->execute();
+        $stmt->close();
+    }
+}
+
+function yustam_bot_emit_vendor_rewards_notification(array $user, array $snapshot): void
+{
+    if (($user['role'] ?? '') !== 'vendor' || empty($user['vendorId'])) {
+        return;
+    }
+    $db = get_db_connection();
+    $title = 'YustaAI reward ideas updated';
+    $primary = $snapshot['summary'][0] ?? $snapshot['meta']['summary'][0] ?? null;
+    $message = $primary ?: 'Open your dashboard to review fresh ways to delight loyal buyers.';
+    $detail = json_encode([
+        'integration' => 'vendorRewards',
+        'intent' => $snapshot['intent'] ?? null,
+        'followUps' => $snapshot['followUps'] ?? [],
+        'syncedAt' => $snapshot['syncedAt'] ?? time(),
+    ], YUSTAM_API_JSON_FLAGS);
+
+    yustam_vendor_notifications_insert(
+        $db,
+        (int) $user['vendorId'],
+        $title,
+        $message,
+        $detail,
+        'sparkles'
+    );
+}
+
 function yustam_bot_is_openai_configured(): bool
 {
     $key = yustam_api_env('OPENAI_API_KEY');
