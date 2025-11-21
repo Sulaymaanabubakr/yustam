@@ -17,7 +17,7 @@ import Input from '../../components/Input';
 import Button from '../../components/Button';
 import Toast from '../../components/Toast';
 import SelectField from '../../components/SelectField';
-import { configureGoogleSignIn, hasGoogleOAuthConfig } from '../../config/googleAuth';
+import { configureGoogleSignIn, hasGoogleOAuthConfig, fetchGoogleIdToken } from '../../config/googleAuth';
 const RegisterForm = ({ navigation }) => {
   const { register: registerUser, signInWithGoogle, role: currentRole } = useAuth();
   const [role, setRole] = useState('buyer'); // Default role
@@ -166,7 +166,7 @@ const RegisterForm = ({ navigation }) => {
         await GoogleSignin.signOut().catch(() => undefined);
       }
       const account = await GoogleSignin.signIn();
-      const idToken = account?.idToken;
+      const idToken = await fetchGoogleIdToken(account);
 
       if (!idToken) {
         throw new Error('Unable to retrieve Google credentials. Please try again.');

@@ -5,6 +5,7 @@ const DEFAULT_CLIENT_IDS = {
   expoClientId: '',
   iosClientId: '',
   webClientId: '',
+  androidClientId: '',
 };
 
 const readExtraConfig = () => {
@@ -31,6 +32,7 @@ export const GOOGLE_OAUTH_CONFIG = {
   expoClientId: extraConfig.expoClientId,
   iosClientId: extraConfig.iosClientId,
   webClientId: extraConfig.webClientId,
+  androidClientId: extraConfig.androidClientId,
 };
 
 export const GOOGLE_OAUTH_SCOPES = ['openid', 'profile', 'email'];
@@ -58,9 +60,27 @@ export const configureGoogleSignIn = () => {
     if (GOOGLE_OAUTH_CONFIG.iosClientId) {
       config.iosClientId = GOOGLE_OAUTH_CONFIG.iosClientId;
     }
+    if (GOOGLE_OAUTH_CONFIG.androidClientId) {
+      config.androidClientId = GOOGLE_OAUTH_CONFIG.androidClientId;
+    }
     GoogleSignin.configure(config);
     googleSignInConfigured = true;
   } catch (error) {
     console.warn('Unable to configure native Google Sign-In', error);
   }
+};
+
+export const fetchGoogleIdToken = async (account) => {
+  if (account?.idToken) {
+    return account.idToken;
+  }
+  try {
+    const tokens = await GoogleSignin.getTokens();
+    if (tokens?.idToken) {
+      return tokens.idToken;
+    }
+  } catch (tokenError) {
+    console.warn('Unable to fetch cached Google tokens', tokenError);
+  }
+  return null;
 };

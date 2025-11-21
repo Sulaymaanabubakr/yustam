@@ -468,8 +468,15 @@ export const vendorAPI = {
     if (!identifier) {
       throw new Error('Storefront identifier is required');
     }
-    const response = await api.get(`/vendor/storefront/${identifier}`);
-    return response.data;
+    try {
+      const response = await api.get(`/vendor/storefront/${identifier}`);
+      return response.data;
+    } catch (error) {
+      const status = error?.response?.status;
+      const data = error?.response?.data;
+      console.warn('vendorAPI.getStorefront failed', identifier, status, data);
+      throw error;
+    }
   },
   getListings: async (params = {}) => {
     const result = await listingsAPI.getAll({ includeDrafts: true, ...params });
@@ -853,8 +860,15 @@ export const planAPI = {
 
 export const chatAPI = {
   openChat: async (payload = {}) => {
-    const response = await api.post('/chats', payload);
-    return response.data?.thread ?? response.data;
+    try {
+      const response = await api.post('/chats', payload);
+      return response.data?.thread ?? response.data;
+    } catch (error) {
+      const status = error?.response?.status;
+      const data = error?.response?.data;
+      console.warn('chatAPI.openChat failed', status, data, payload?.listing_id || payload?.listingId);
+      throw error;
+    }
   },
   listThreads: async () => {
     const response = await api.get('/chats');

@@ -15,7 +15,7 @@ import theme from '../../theme';
 import Input from '../../components/Input';
 import Button from '../../components/Button';
 import Toast from '../../components/Toast';
-import { hasGoogleOAuthConfig, configureGoogleSignIn } from '../../config/googleAuth';
+import { hasGoogleOAuthConfig, configureGoogleSignIn, fetchGoogleIdToken } from '../../config/googleAuth';
 
 const LoginForm = ({ navigation }) => {
   const { login, signInWithGoogle, role: currentRole } = useAuth();
@@ -96,7 +96,7 @@ const LoginForm = ({ navigation }) => {
         await GoogleSignin.signOut().catch(() => undefined);
       }
       const account = await GoogleSignin.signIn();
-      const idToken = account?.idToken;
+      const idToken = await fetchGoogleIdToken(account);
 
       if (!idToken) {
         throw new Error('Unable to retrieve Google credentials. Please try again.');

@@ -1009,10 +1009,18 @@ function yustam_api_vendor_storefront(string $identifier): array
     }
 
     $vendorPayload = yustam_api_vendor_profile_payload($vendor);
-    $listings = yustam_api_fetch_listings([
-        'ownerId' => yustam_api_user_reference('vendor', (int) $vendor['id']),
-        'limit' => 36,
-    ])['items'];
+
+    $listings = [];
+    try {
+        $listingResult = yustam_api_fetch_listings([
+            'ownerId' => yustam_api_user_reference('vendor', (int) $vendor['id']),
+            'limit' => 36,
+        ]);
+        $listings = $listingResult['items'] ?? [];
+    } catch (Throwable $storefrontError) {
+        error_log('Storefront listings fetch failed for vendor ' . $vendor['id'] . ': ' . $storefrontError->getMessage());
+        $listings = [];
+    }
 
     return [
         'success' => true,
