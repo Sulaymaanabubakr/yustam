@@ -4,6 +4,7 @@ import {
   Dimensions,
   Image,
   Linking,
+  Modal,
   ScrollView,
   Share,
   StyleSheet,
@@ -14,6 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { doc, getDoc } from 'firebase/firestore';
+import { Video, ResizeMode } from 'expo-av';
 import theme from '../../theme';
 import Toast from '../../components/Toast';
 import { db } from '../../config/firebase';
@@ -26,6 +28,7 @@ import { addRecentlyViewedListing } from '../../storage/recentlyViewed';
 
 const { width } = Dimensions.get('window');
 const HERO_HEIGHT = width * 0.78;
+const LIGHTBOX_MAX_HEIGHT = width * 1.2;
 const FEATURE_FIELDS = [
   'keyFeatures',
   'highlights',
@@ -135,8 +138,11 @@ const ProductDetailScreen = ({ navigation, route }) => {
   const [vendorRecord, setVendorRecord] = useState(null);
   const [vendorLoading, setVendorLoading] = useState(false);
   const [reloadToken, setReloadToken] = useState(0);
+  const [lightboxVisible, setLightboxVisible] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
   const vendorLookupKeyRef = useRef('');
   const scrollRef = useRef(null);
+  const lightboxScrollRef = useRef(null);
 
   const listing = useMemo(() => buildListingModel(listingSource, listingId), [listingSource, listingId]);
   const listingData = listing?.raw || listingSource || {};
@@ -204,18 +210,32 @@ const ProductDetailScreen = ({ navigation, route }) => {
   useEffect(() => {
     setGallery(deriveGallery(listingSource));
     setActiveImageIndex(0);
+    setLightboxIndex(0);
   }, [listingSource]);
+
+  useEffect(() => {
+    if (!lightboxVisible) {
+      return;
+    }
+    requestAnimationFrame(() => {
+      if (lightboxScrollRef.current) {
+        lightboxScrollRef.current.scrollTo({ x: lightboxIndex * width, animated: false });
+      }
+    });
+  }, [lightboxVisible, lightboxIndex]);
 
   useEffect(() => {
     if (!listing) {
       return;
     }
+    const heroAsset = gallery?.[0];
+    const heroPreview = heroAsset?.preview || heroAsset?.uri || PLACEHOLDER_IMAGE;
     const entry = {
       id: listing.id,
       title: listing.title,
       name: listing.title,
       price: listing.price,
-      image: gallery?.[0],
+      image: heroPreview,
       location: listing.location,
       category: listing.category,
     };
@@ -401,7 +421,8 @@ const ProductDetailScreen = ({ navigation, route }) => {
 
     setChatLoading(true);
     try {
-      const coverImage = gallery[activeImageIndex] || gallery[0] || PLACEHOLDER_IMAGE;
+      const coverAsset = gallery[activeImageIndex] || gallery[0] || null;
+      const coverImage = coverAsset?.preview || coverAsset?.uri || PLACEHOLDER_IMAGE;
       const payload = {
         buyer_uid: user.uid,
         buyer_name: user.fullName || user.displayName || user.email || 'Buyer',
@@ -447,7 +468,8 @@ const ProductDetailScreen = ({ navigation, route }) => {
             vendorUid: vendorProfile.vendorUid,
             listingTitle: fallbackThread.listingTitle || listing?.title,
             listingId: fallbackThread.listingId || listing?.id,
-            listingImage: fallbackThread.listingImage || gallery[activeImageIndex] || gallery[0] || PLACEHOLDER_IMAGE,
+            listingImage:
+              fallbackThread.listingImage || coverImage || gallery[0]?.preview || gallery[0]?.uri || PLACEHOLDER_IMAGE,
             buyerId: fallbackThread.buyerUid || user?.uid,
             buyerName: fallbackThread.buyerName || user?.fullName || user?.displayName || user?.email || 'Buyer',
           });
@@ -477,16 +499,60 @@ const ProductDetailScreen = ({ navigation, route }) => {
     vendorProfile.vendorUid,
   ]);
 
-  const handleGalleryScroll = useCallback((event) => {
-    const offsetX = event.nativeEvent.contentOffset.x;
-    const index = Math.round(offsetX / width);
-    setActiveImageIndex(index);
-  }, []);
+  const handleGalleryScroll = useCallback(
+    (event) => {
+      const offsetX = event.nativeEvent.contentOffset.x;
+      const index = Math.round(offsetX / width);
+      const clamped = Math.max(0, Math.min(index, Math.max(gallery.length - 1, 0)));
+      setActiveImageIndex(clamped);
+      setLightboxIndex(clamped);
+    },
+    [gallery.length]
+  );
 
   const handleRetry = useCallback(() => {
     setReloadToken((prev) => prev + 1);
     setError('');
   }, []);
+
+  const openLightbox = useCallback(
+    (index) => {
+      const clamped = Math.max(0, Math.min(index, Math.max(gallery.length - 1, 0)));
+      setLightboxIndex(clamped);
+      setLightboxVisible(true);
+    },
+    [gallery.length]
+  );
+
+  const closeLightbox = useCallback(() => {
+    setLightboxVisible(false);
+  }, []);
+
+  const goToMedia = useCallback(
+    (index) => {
+      if (!gallery.length) {
+        return;
+      }
+      const clamped = Math.max(0, Math.min(index, gallery.length - 1));
+      setLightboxIndex(clamped);
+      setActiveImageIndex(clamped);
+      if (lightboxScrollRef.current) {
+        lightboxScrollRef.current.scrollTo({ x: clamped * width, animated: true });
+      }
+    },
+    [gallery.length]
+  );
+
+  const handleLightboxScroll = useCallback(
+    (event) => {
+      const offsetX = event.nativeEvent.contentOffset.x;
+      const index = Math.round(offsetX / width);
+      const clamped = Math.max(0, Math.min(index, Math.max(gallery.length - 1, 0)));
+      setLightboxIndex(clamped);
+      setActiveImageIndex(clamped);
+    },
+    [gallery.length]
+  );
 
   const renderStatus = () => {
     if (!listing?.statusLabel) {
@@ -554,9 +620,42 @@ const ProductDetailScreen = ({ navigation, route }) => {
               showsHorizontalScrollIndicator={false}
               onMomentumScrollEnd={handleGalleryScroll}
             >
-              {gallery.map((img, index) => (
-                <Image key={`${img}-${index}`} source={{ uri: img }} style={styles.heroImage} resizeMode="cover" />
-              ))}
+              {gallery.map((media, index) => {
+                const isVideo = media.type === 'video';
+                const usePoster = isVideo && media.preview && media.preview !== media.uri;
+                return (
+                  <TouchableOpacity
+                    key={media.id || `${media.uri}-${index}`}
+                    activeOpacity={0.9}
+                    style={styles.heroSlide}
+                    onPress={() => openLightbox(index)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Open media viewer"
+                  >
+                    {isVideo ? (
+                      <View style={styles.heroVideoWrapper}>
+                        <Video
+                          source={{ uri: media.uri }}
+                          style={styles.heroVideo}
+                          resizeMode={ResizeMode.COVER}
+                          shouldPlay={false}
+                          isLooping
+                          muted
+                          useNativeControls={false}
+                          posterSource={usePoster ? { uri: media.preview } : undefined}
+                          posterStyle={styles.heroVideo}
+                          usePoster={usePoster}
+                        />
+                        <View style={styles.heroPlayOverlay} pointerEvents="none">
+                          <Ionicons name="play-circle" size={64} color={theme.colors.white} />
+                        </View>
+                      </View>
+                    ) : (
+                      <Image source={{ uri: media.preview }} style={styles.heroImage} resizeMode="cover" />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
             </ScrollView>
             {gallery.length > 1 ? (
               <View style={styles.paginationDots}>
@@ -737,6 +836,81 @@ const ProductDetailScreen = ({ navigation, route }) => {
         </ScrollView>
       )}
 
+      <Modal
+        visible={lightboxVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={closeLightbox}
+        presentationStyle="overFullScreen"
+      >
+        <View style={styles.lightboxContainer}>
+          <TouchableOpacity
+            style={styles.lightboxClose}
+            onPress={closeLightbox}
+            accessibilityRole="button"
+            accessibilityLabel="Close media viewer"
+          >
+            <Ionicons name="close" size={26} color={theme.colors.white} />
+          </TouchableOpacity>
+
+          {gallery.length > 1 ? (
+            <>
+              <TouchableOpacity
+                style={[styles.lightboxNav, styles.lightboxPrev, lightboxIndex === 0 && styles.lightboxNavDisabled]}
+                onPress={() => goToMedia(lightboxIndex - 1)}
+                disabled={lightboxIndex === 0}
+                accessibilityRole="button"
+                accessibilityLabel="Previous media"
+              >
+                <Ionicons name="chevron-back" size={28} color={theme.colors.white} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.lightboxNav,
+                  styles.lightboxNext,
+                  lightboxIndex === gallery.length - 1 && styles.lightboxNavDisabled,
+                ]}
+                onPress={() => goToMedia(lightboxIndex + 1)}
+                disabled={lightboxIndex === gallery.length - 1}
+                accessibilityRole="button"
+                accessibilityLabel="Next media"
+              >
+                <Ionicons name="chevron-forward" size={28} color={theme.colors.white} />
+              </TouchableOpacity>
+            </>
+          ) : null}
+
+          <ScrollView
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            ref={lightboxScrollRef}
+            onMomentumScrollEnd={handleLightboxScroll}
+          >
+            {gallery.map((media, index) => (
+              <View key={`lightbox-${media.id}`} style={styles.lightboxSlide}>
+                {media.type === 'video' ? (
+                  <Video
+                    source={{ uri: media.uri }}
+                    style={styles.lightboxVideo}
+                    resizeMode={ResizeMode.CONTAIN}
+                    shouldPlay={lightboxVisible && lightboxIndex === index}
+                    isLooping
+                    useNativeControls
+                  />
+                ) : (
+                  <Image source={{ uri: media.uri }} style={styles.lightboxImage} resizeMode="contain" />
+                )}
+              </View>
+            ))}
+          </ScrollView>
+
+          <View style={styles.lightboxFooter}>
+            <Text style={styles.lightboxCounter}>{`${lightboxIndex + 1} / ${gallery.length}`}</Text>
+          </View>
+        </View>
+      </Modal>
+
       <View style={styles.contactBar}>
         <TouchableOpacity
           style={[styles.secondaryCta, !vendorProfile.phone && styles.disabledCta]}
@@ -862,30 +1036,96 @@ const parseTimestamp = (value) => {
   return Number.isNaN(parsed) ? null : new Date(parsed);
 };
 
-const deriveGallery = (source) => {
-  if (!source) {
-    return [PLACEHOLDER_IMAGE];
-  }
-  const values = [];
-  const candidateArrays = [source.images, source.imageUrls, source.gallery, source.photos];
-  candidateArrays.forEach((collection) => {
-    if (Array.isArray(collection)) {
-      collection.forEach((item) => {
-        const resolved = resolveMediaUrl(item);
-        if (resolved) {
-          values.push(resolved);
-        }
+const deriveGallery = (source = {}) => {
+  const items = [];
+  const seen = new Set();
+
+  const pushEntry = (type, uriCandidate, extras = {}) => {
+    if (!uriCandidate) {
+      return;
+    }
+    const resolvedUri = resolveMediaUrl(uriCandidate);
+    if (!resolvedUri) {
+      return;
+    }
+    const key = `${type}:${resolvedUri}`;
+    if (seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    const previewCandidate =
+      type === 'video'
+        ? resolveMediaUrl(extras.preview) || resolveMediaUrl(extras.thumbnail) || resolveMediaUrl(extras.poster)
+        : resolvedUri;
+    const preview = previewCandidate || resolvedUri;
+    items.push({
+      id: extras.id || `${type}-${items.length}`,
+      type,
+      uri: resolvedUri,
+      preview,
+    });
+  };
+
+  if (Array.isArray(source.media)) {
+    source.media.forEach((entry, index) => {
+      const uriCandidate = entry?.url || entry?.secureUrl || entry?.secure_url;
+      const resource = String(entry?.resourceType || entry?.type || '').toLowerCase();
+      const type = resource === 'video' ? 'video' : 'image';
+      const preview = entry?.preview || entry?.thumbnail || entry?.poster || entry?.image;
+      pushEntry(type, uriCandidate, {
+        id: entry?.publicId || entry?.public_id || `${type}-media-${index}`,
+        preview,
+        thumbnail: entry?.thumbnail,
+        poster: entry?.poster,
       });
-    }
+    });
+  }
+
+  const videoFields = [
+    source.video,
+    source.videoUrl,
+    source.video_url,
+    source.videoLink,
+    source.video_link,
+  ];
+  videoFields.forEach((candidate, index) => {
+    pushEntry('video', candidate, {
+      id: `video-field-${index}`,
+      preview: source.videoPoster || source.videoThumbnail || source.primaryImage || source.image,
+    });
   });
-  const singleImages = [source.image, source.primaryImage, source.coverImage, source.thumbnail];
-  singleImages.forEach((item) => {
-    const resolved = resolveMediaUrl(item);
-    if (resolved) {
-      values.push(resolved);
+
+  const imageCollections = [source.images, source.imageUrls, source.gallery, source.photos];
+  imageCollections.forEach((collection, groupIndex) => {
+    if (!Array.isArray(collection)) {
+      return;
     }
+    collection.forEach((item, index) => {
+      const uriCandidate =
+        typeof item === 'string' ? item : item?.url || item?.uri || item?.secureUrl || item?.secure_url;
+      pushEntry('image', uriCandidate, {
+        id: `image-${groupIndex}-${index}`,
+      });
+    });
   });
-  return values.length ? dedupeArray(values) : [PLACEHOLDER_IMAGE];
+
+  const imageFields = [source.image, source.primaryImage, source.coverImage, source.thumbnail];
+  imageFields.forEach((candidate, index) => {
+    pushEntry('image', candidate, {
+      id: `image-field-${index}`,
+    });
+  });
+
+  if (!items.length) {
+    items.push({
+      id: 'placeholder',
+      type: 'image',
+      uri: PLACEHOLDER_IMAGE,
+      preview: PLACEHOLDER_IMAGE,
+    });
+  }
+
+  return items;
 };
 
 const extractFeaturesFromListing = (source = {}) => {
@@ -1315,10 +1555,35 @@ const styles = StyleSheet.create({
     height: HERO_HEIGHT,
     backgroundColor: theme.colors.white,
   },
+  heroSlide: {
+    width,
+    height: HERO_HEIGHT,
+  },
   heroImage: {
     width,
     height: HERO_HEIGHT,
     backgroundColor: theme.colors.backgroundLight,
+  },
+  heroVideoWrapper: {
+    width,
+    height: HERO_HEIGHT,
+    backgroundColor: '#000000',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  heroVideo: {
+    width,
+    height: HERO_HEIGHT,
+    backgroundColor: '#000000',
+  },
+  heroPlayOverlay: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   paginationDots: {
     position: 'absolute',
@@ -1518,6 +1783,73 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.fontFamily.inter,
     fontSize: theme.typography.fontSize.xs,
     color: theme.colors.textSecondary,
+  },
+  lightboxContainer: {
+    flex: 1,
+    backgroundColor: `${theme.colors.overlayDark}F2`,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  lightboxSlide: {
+    width,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: theme.spacing.lg,
+  },
+  lightboxImage: {
+    width: width - theme.spacing['2xl'],
+    height: LIGHTBOX_MAX_HEIGHT,
+  },
+  lightboxVideo: {
+    width: width - theme.spacing['2xl'],
+    height: LIGHTBOX_MAX_HEIGHT,
+    backgroundColor: '#000000',
+  },
+  lightboxClose: {
+    position: 'absolute',
+    top: 40,
+    right: 24,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: `${theme.colors.overlayDark}AA`,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
+  lightboxNav: {
+    position: 'absolute',
+    top: '50%',
+    marginTop: -28,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: `${theme.colors.overlayDark}88`,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
+  lightboxPrev: {
+    left: 16,
+  },
+  lightboxNext: {
+    right: 16,
+  },
+  lightboxNavDisabled: {
+    opacity: 0.35,
+  },
+  lightboxFooter: {
+    position: 'absolute',
+    bottom: 40,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.xs,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: `${theme.colors.overlayDark}88`,
+  },
+  lightboxCounter: {
+    fontFamily: theme.typography.fontFamily.interMedium,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.white,
   },
   statusChip: {
     flexDirection: 'row',
