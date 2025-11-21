@@ -1,8 +1,9 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js';
-    import { getAuth, onAuthStateChanged, signOut, getIdTokenResult } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js';
-    import { getFirestore, collection, getDocs, doc, getDoc, updateDoc, addDoc, serverTimestamp, query } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
-    import { app as firebaseApp, auth as firebaseAuth, db as firebaseDb } from './firebase.js';
-    import { displayPlanLabel, normalisePlanSlug } from './plan-utils.js';
+  import { getAuth, onAuthStateChanged, signOut, getIdTokenResult } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js';
+  import { getFirestore, collection, getDocs, doc, getDoc, updateDoc, addDoc, serverTimestamp, query } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
+  import { app as firebaseApp, auth as firebaseAuth, db as firebaseDb } from './firebase.js';
+  import { displayPlanLabel, normalisePlanSlug } from './plan-utils.js';
+  import { storeAdminSession, clearAdminSession } from './admin-api.js';
 
     const app = firebaseApp || initializeApp({});
     const auth = firebaseAuth || getAuth(app);
@@ -31,11 +32,19 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.4/fireba
         const response = await fetch('admin-session-status.php', {
           method: 'GET',
           credentials: 'same-origin',
+          headers: { Accept: 'application/json' },
         });
         if (!response.ok) throw new Error('Session invalid');
-        return await response.json();
+        const data = await response.json();
+        if (data?.authenticated && data?.token) {
+          storeAdminSession({ token: data.token, user: data.admin });
+        } else {
+          clearAdminSession();
+        }
+        return data;
       } catch (error) {
         console.error('Admin session validation failed:', error);
+        clearAdminSession();
         window.location.href = 'admin-login.php';
         return null;
       }
@@ -87,6 +96,7 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.4/fireba
       } catch (error) {
         console.error('logout error', error);
       } finally {
+        clearAdminSession();
         window.location.href = 'admin-login.php';
       }
     });
@@ -395,6 +405,7 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.4/fireba
           if(!isAdmin){
             await signOut(auth);
             await fetch('admin-logout.php', { method: 'GET', credentials: 'same-origin' });
+            clearAdminSession();
             window.location.href = 'index.html';
             return;
           }

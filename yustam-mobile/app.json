@@ -1,7 +1,8 @@
 {
   "expo": {
     "name": "YUSTAM Marketplace",
-    "slug": "yustam-mobile",
+    "slug": "yustam",
+    "owner": "yustammarketplaces-organization",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -60,7 +61,7 @@
         "webClientId": "472601563195-kmhmdbdllugsc25b7j4sbsgika5g6n5n.apps.googleusercontent.com"
       },
       "eas": {
-        "projectId": "90d55016-8f70-4e40-926d-2643f95548cd"
+        "projectId": "93ce8fc3-ddba-49c1-ab0a-259d1b64f867"
       },
       "appDownload": {
         "landing": "https://yustam.com.ng/app",

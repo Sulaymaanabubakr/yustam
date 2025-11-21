@@ -10,6 +10,8 @@ import {
   where,
 } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
 
+import { storeAdminSession, clearAdminSession } from './admin-api.js';
+
 const logoutBtn = document.getElementById('logoutBtn');
 const searchInput = document.getElementById('searchInput');
 const categoryFilter = document.getElementById('categoryFilter');
@@ -40,11 +42,19 @@ const notificationBadge = document.getElementById('notificationBadge');
         const response = await fetch('admin-session-status.php', {
           method: 'GET',
           credentials: 'same-origin',
+          headers: { Accept: 'application/json' },
         });
         if (!response.ok) throw new Error('Session invalid');
-        return await response.json();
+        const data = await response.json();
+        if (data?.authenticated && data?.token) {
+          storeAdminSession({ token: data.token, user: data.admin });
+        } else {
+          clearAdminSession();
+        }
+        return data;
       } catch (error) {
         console.error('Admin session validation failed:', error);
+        clearAdminSession();
         window.location.href = 'admin-login.php';
         return null;
       }
@@ -588,6 +598,7 @@ const notificationBadge = document.getElementById('notificationBadge');
       try {
         await signOut(auth);
         await fetch('admin-logout.php', { method: 'GET', credentials: 'same-origin' });
+        clearAdminSession();
         window.location.href = 'admin-login.php';
       } catch (error) {
         console.error(error);

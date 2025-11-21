@@ -1,4 +1,5 @@
 import { displayPlanLabel, normalisePlanSlug } from './plan-utils.js';
+import { storeAdminSession, clearAdminSession } from './admin-api.js';
 
 const authLoader = document.getElementById('authLoader');
 const mainContent = document.getElementById('mainContent');
@@ -100,7 +101,13 @@ const ensureSession = async () => {
       headers: { Accept: 'application/json' },
     });
     if (!response.ok) throw new Error('Session invalid');
-    return response.json();
+    const data = await response.json();
+    if (data?.authenticated && data?.token) {
+      storeAdminSession({ token: data.token, user: data.admin });
+    } else {
+      clearAdminSession();
+    }
+    return data;
   } catch (error) {
     console.error('Admin session validation failed:', error);
     window.location.href = 'admin-login.php';
@@ -274,7 +281,8 @@ const buildVendorRow = (vendor) => {
 
   return tr;
 };
-
+    clearAdminSession();
+    window.location.href = 'admin-login.php';
 const buildVendorCard = (vendor) => {
   const card = document.createElement('article');
   card.className = 'vendor-card';
@@ -516,6 +524,7 @@ const bindEvents = () => {
     } catch (error) {
       console.error('Logout failed:', error);
     } finally {
+      clearAdminSession();
       window.location.href = 'admin-login.php';
     }
   });

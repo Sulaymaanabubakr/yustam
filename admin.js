@@ -1,6 +1,6 @@
 import { auth, db } from './firebase.js';
 import { displayPlanLabel, normalisePlanSlug } from './plan-utils.js';
-import { adminAPI } from './admin-api.js';
+import { adminAPI, storeAdminSession, clearAdminSession } from './admin-api.js';
 import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js';
 import {
     collection,
@@ -1066,12 +1066,22 @@ import {
             try {
                 const response = await fetch('admin-session-status.php', {
                     method: 'GET',
-                    credentials: 'same-origin'
+                    credentials: 'same-origin',
+                    headers: { Accept: 'application/json' },
                 });
-                if (!response.ok) throw new Error('Session invalid');
-                return await response.json();
+                if (!response.ok) {
+                    throw new Error('Session invalid');
+                }
+                const data = await response.json();
+                if (data?.authenticated && data?.token) {
+                    storeAdminSession({ token: data.token, user: data.admin });
+                } else {
+                    clearAdminSession();
+                }
+                return data;
             } catch (error) {
                 console.error('Admin session validation failed:', error);
+                clearAdminSession();
                 window.location.href = 'admin-login.php';
                 return null;
             }
@@ -1166,6 +1176,7 @@ import {
                 } catch (logoutError) {
                     console.error('Admin session logout failed:', logoutError);
                 }
+                clearAdminSession();
                 window.location.href = 'admin-login.php';
             }
         });

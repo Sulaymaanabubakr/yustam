@@ -1,8 +1,9 @@
 {
   "expo": {
+    "owner": "YustamMarketplace",
     "extra": {
       "eas": {
-        "projectId": "10f76990-b5b5-411a-9700-29986bad8b7a"
+        "projectId": "93ce8fc3-ddba-49c1-ab0a-259d1b64f867"
       }
     }
   }
