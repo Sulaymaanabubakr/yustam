@@ -69,6 +69,8 @@ function yustam_api_dispatch(): array
             return yustam_api_handle_subscription($method, $subSegments);
         case 'paystack':
             return yustam_api_handle_paystack($method, $subSegments);
+        case 'bot':
+            return yustam_api_handle_bot($method, $subSegments);
         default:
             yustam_api_error(404, 'Endpoint not found.');
     }
@@ -257,6 +259,25 @@ function yustam_api_handle_notifications(string $method, array $segments): array
     yustam_api_error(405, 'Notifications endpoint not found.');
 }
 
+function yustam_api_handle_bot(string $method, array $segments): array
+{
+    $action = strtolower($segments[0] ?? '');
+
+    if ($method === 'POST' && $action === 'query') {
+        return yustam_api_bot_query();
+    }
+
+    if ($method === 'GET' && ($action === 'status' || $action === '')) {
+        return [
+            'success' => true,
+            'configured' => yustam_bot_is_openai_configured(),
+            'model' => yustam_bot_is_openai_configured() ? yustam_bot_select_model() : null,
+        ];
+    }
+
+    yustam_api_error(404, 'Bot endpoint not found.');
+}
+
 function yustam_api_handle_support(string $method, array $segments): array
 {
     if ($method === 'GET' && empty($segments)) {
@@ -297,6 +318,110 @@ function yustam_api_handle_verification(string $method, array $segments): array
         }
     }
     yustam_api_error(404, 'Verification endpoint not found.');
+}
+
+function yustam_api_bot_query(): array
+{
+    $user = yustam_api_require_auth();
+    $payload = yustam_api_read_json_body();
+
+    $query = trim((string) ($payload['query'] ?? ''));
+    if ($query === '') {
+        yustam_api_error(422, 'Please enter a query for the AI assistant.');
+    }
+
+    $modeRaw = strtolower(trim((string) ($payload['mode'] ?? 'global')));
+    $mode = in_array($modeRaw, ['local', 'global'], true) ? $modeRaw : 'global';
+
+    $location = yustam_bot_resolve_location($user, $payload);
+
+    $cacheKey = yustam_bot_cache_key($query, [
+        'mode' => $mode,
+        'role' => $user['role'] ?? '',
+        'state' => $location['state'] ?? '',
+        'city' => $location['city'] ?? '',
+    ]);
+
+    $aiResult = yustam_bot_cache_get($cacheKey);
+    $fromCache = is_array($aiResult);
+
+    if (!$fromCache) {
+        yustam_bot_rate_limit_check($user, ['mode' => $mode]);
+        $aiResult = yustam_bot_call_openai($query, [
+            'role' => $user['role'] ?? 'buyer',
+            'mode' => $mode,
+            'location' => $location,
+            'user' => [
+                'id' => $user['id'] ?? null,
+                'role' => $user['role'] ?? null,
+            ],
+        ]);
+
+        if (($aiResult['success'] ?? false) === true) {
+            yustam_bot_cache_set($cacheKey, $aiResult);
+        }
+    }
+
+    $usedFallback = false;
+    $listingOptions = [];
+    $aiPayload = [
+        'model' => $aiResult['model'] ?? null,
+        'intent' => $aiResult['intent'] ?? null,
+        'filters' => [],
+        'summary' => $aiResult['summary'] ?? [],
+        'followUps' => $aiResult['followUps'] ?? [],
+    ];
+
+    if (($aiResult['success'] ?? false) === true) {
+        $normalized = yustam_bot_normalise_filters($aiResult['filters'] ?? [], $location, $mode);
+        $listingOptions = yustam_bot_build_listing_filters($normalized);
+        if (!isset($listingOptions['search']) || trim((string) $listingOptions['search']) === '') {
+            if (!empty($normalized['keywords'])) {
+                $listingOptions['search'] = implode(' ', $normalized['keywords']);
+            } else {
+                $listingOptions['search'] = $query;
+            }
+        }
+        if ($mode === 'local') {
+            if (empty($listingOptions['locationState']) && !empty($location['state'])) {
+                $listingOptions['locationState'] = $location['state'];
+            }
+            if (empty($listingOptions['locationCity']) && !empty($location['city'])) {
+                $listingOptions['locationCity'] = $location['city'];
+            }
+        }
+        $aiPayload['filters'] = $normalized;
+    } else {
+        $usedFallback = true;
+        $listingOptions = yustam_bot_fallback_filters($query, $mode, $location);
+        if (empty($aiPayload['summary'])) {
+            $aiPayload['summary'] = ['Showing the closest matches based on current marketplace data.'];
+        }
+    }
+
+    if (!isset($listingOptions['limit'])) {
+        $listingOptions['limit'] = 20;
+    }
+
+    $listingsResult = yustam_api_fetch_listings($listingOptions);
+    $listings = $listingsResult['items'] ?? [];
+    $pagination = $listingsResult['pagination'] ?? [
+        'page' => 1,
+        'pageSize' => count($listings),
+        'total' => count($listings),
+        'totalPages' => 1,
+    ];
+
+    return yustam_bot_create_meta_response(
+        $query,
+        $mode,
+        $location,
+        $aiPayload,
+        $listings,
+        $pagination,
+        $usedFallback,
+        $fromCache
+    );
 }
 
 function yustam_api_handle_chats(string $method, array $segments): array

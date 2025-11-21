@@ -17,6 +17,7 @@ import VendorDashboardScreen from '../screens/vendor/VendorDashboardScreen';
 import VendorListingsScreen from '../screens/vendor/VendorListingsScreen';
 import VendorChatsScreen from '../screens/vendor/VendorChatsScreen';
 import VendorNotificationsScreen from '../screens/vendor/VendorNotificationsScreen';
+import BotScreen from '../screens/shared/BotScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -63,6 +64,8 @@ const MainTabNavigator = () => {
       case 'Notifications':
       case 'VendorNotifications':
         return focused ? 'notifications' : 'notifications-outline';
+      case 'Bot':
+        return focused ? 'bulb' : 'bulb-outline';
       case 'BuyerSaved':
         return focused ? 'bookmark' : 'bookmark-outline';
       case 'Profile':
@@ -76,6 +79,7 @@ const MainTabNavigator = () => {
     }
   };
 
+          <Tab.Screen name="Bot" component={BotScreen} options={{ tabBarLabel: 'AI Bot' }} />
   return (
     <Tab.Navigator
       initialRouteName={isVendor ? 'VendorDashboard' : 'Home'}
@@ -87,6 +91,7 @@ const MainTabNavigator = () => {
         ),
         tabBarActiveTintColor: theme.colors.orange,
         tabBarInactiveTintColor: theme.colors.textSecondary,
+          <Tab.Screen name="Bot" component={BotScreen} options={{ tabBarLabel: 'Bot' }} />
         tabBarStyle: isVendor ? vendorTabBarStyle : buyerTabBarStyle,
         tabBarLabelStyle: {
           fontFamily: theme.typography.fontFamily.interMedium,

@@ -9,6 +9,7 @@ require_once __DIR__ . '/../buyer-storage.php';
 require_once __DIR__ . '/../vendor-subscriptions.php';
 require_once __DIR__ . '/../notifications-storage.php';
 require_once __DIR__ . '/chat/firebase.php';
+require_once __DIR__ . '/services/openai-bot.php';
 
 const YUSTAM_API_DEFAULT_TTL = 604800; // 7 days
 const YUSTAM_API_JSON_FLAGS = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES;

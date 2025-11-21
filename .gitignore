@@ -8,6 +8,8 @@ firebase-admin-key.json
 .env
 .env.*
 *.env.local
+yustam-mobile/.env
+yustam-mobile/.env.*
 **/google-services.json
 **/GoogleService-Info.plist
 
