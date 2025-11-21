@@ -10,6 +10,7 @@ require_once __DIR__ . '/../vendor-subscriptions.php';
 require_once __DIR__ . '/../notifications-storage.php';
 require_once __DIR__ . '/chat/firebase.php';
 require_once __DIR__ . '/services/openai-bot.php';
+require_once __DIR__ . '/services/cloudinary.php';
 
 const YUSTAM_API_DEFAULT_TTL = 604800; // 7 days
 const YUSTAM_API_JSON_FLAGS = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES;
@@ -612,6 +613,23 @@ function yustam_api_normalise_listing_row(array $row, ?array $vendor = null): ar
         }
     }
     $primary = $row['primary_image'] ?? ($images[0] ?? null);
+    $videoUrl = trim((string) ($row['video_url'] ?? $row['videoUrl'] ?? ''));
+    if ($videoUrl === '') {
+        $videoUrl = null;
+    }
+    $mediaAssets = [];
+    foreach ($images as $imageUrl) {
+        $mediaAssets[] = [
+            'type' => 'image',
+            'url' => $imageUrl,
+        ];
+    }
+    if ($videoUrl) {
+        $mediaAssets[] = [
+            'type' => 'video',
+            'url' => $videoUrl,
+        ];
+    }
     $vendor = $vendor ?: [];
     $vendorDisplayName = $vendor ? yustam_vendor_business_name($vendor) : ($row['vendor_name'] ?? 'Vendor');
     return [
@@ -629,6 +647,8 @@ function yustam_api_normalise_listing_row(array $row, ?array $vendor = null): ar
         'tags' => [],
         'primaryImage' => $primary,
         'images' => $images,
+        'videoUrl' => $videoUrl,
+        'media' => $mediaAssets,
         'ownerId' => isset($vendor['id']) ? yustam_api_user_reference('vendor', (int) $vendor['id']) : null,
         'vendor' => $vendor ? [
             'id' => yustam_api_user_reference('vendor', (int) $vendor['id']),

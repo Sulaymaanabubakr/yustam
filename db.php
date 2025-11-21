@@ -676,6 +676,7 @@ function yustam_listings_ensure_table(mysqli $conn): void
             `status` VARCHAR(32) NOT NULL DEFAULT \'pending\',
             `primary_image` VARCHAR(255) NULL,
             `image_urls` LONGTEXT NULL,
+            `video_url` VARCHAR(255) NULL,
             `category` VARCHAR(120) NULL,
             `subcategory` VARCHAR(120) NULL,
             `location` VARCHAR(255) NULL,
@@ -702,6 +703,15 @@ function yustam_listings_ensure_table(mysqli $conn): void
     }
     if (!$hasPublicId) {
         $conn->query("ALTER TABLE `{$table}` ADD COLUMN `public_id` VARCHAR(128) DEFAULT NULL AFTER `firestore_id`");
+    }
+
+    $videoColumnCheck = $conn->query("SHOW COLUMNS FROM `{$table}` LIKE 'video_url'");
+    $hasVideoColumn = $videoColumnCheck instanceof mysqli_result && $videoColumnCheck->num_rows > 0;
+    if ($videoColumnCheck instanceof mysqli_result) {
+        $videoColumnCheck->free();
+    }
+    if (!$hasVideoColumn) {
+        $conn->query("ALTER TABLE `{$table}` ADD COLUMN `video_url` VARCHAR(255) NULL AFTER `image_urls`");
     }
 
     $indexCheck = $conn->query("SHOW INDEX FROM `{$table}` WHERE Key_name = 'uniq_public_id'");
@@ -769,6 +779,14 @@ function yustam_listings_upsert(mysqli $conn, array $listing): void
         }
     }
 
+    $columnVideoUrl = null;
+    foreach (['video_url', 'videoUrl'] as $candidate) {
+        if ($hasColumn($candidate)) {
+            $columnVideoUrl = $candidate;
+            break;
+        }
+    }
+
     $columnPublicId = $hasColumn('public_id') ? 'public_id' : null;
 
     $vendorId = isset($listing['vendor_id']) ? (int) $listing['vendor_id'] : 0;
@@ -816,6 +834,13 @@ function yustam_listings_upsert(mysqli $conn, array $listing): void
         $imageUrls = trim($imagePayload);
     } else {
         $imageUrls = '';
+    }
+
+    $videoUrlValue = '';
+    if (array_key_exists('video_url', $listing) && is_string($listing['video_url'])) {
+        $videoUrlValue = trim($listing['video_url']);
+    } elseif (array_key_exists('videoUrl', $listing) && is_string($listing['videoUrl'])) {
+        $videoUrlValue = trim($listing['videoUrl']);
     }
 
     $category = trim((string) ($listing['category'] ?? ''));
@@ -902,6 +927,14 @@ function yustam_listings_upsert(mysqli $conn, array $listing): void
         $types .= 's';
         $values[] = $imageUrls;
         $updateClauses[] = '`' . $columnImageUrls . '` = VALUES(`' . $columnImageUrls . '`)';
+    }
+
+    if ($columnVideoUrl !== null) {
+        $insertColumns[] = '`' . $columnVideoUrl . '`';
+        $placeholders[] = '?';
+        $types .= 's';
+        $values[] = $videoUrlValue;
+        $updateClauses[] = '`' . $columnVideoUrl . '` = VALUES(`' . $columnVideoUrl . '`)';
     }
 
     if ($hasColumn('category')) {

@@ -19,7 +19,7 @@ import { useAuth } from '../../context/AuthContext';
 import theme from '../../theme';
 import Toast from '../../components/Toast';
 import Button from '../../components/Button';
-import { CLOUDINARY_UPLOAD_PRESET, CLOUDINARY_CLOUD_NAME } from '../../config/cloudinary';
+import { uploadMedia } from '../../config/cloudinary';
 import { STATES } from '../../config/constants';
 import { addDoc, collection, deleteDoc, doc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { goBackOrNavigate } from '../../utils/navigation';
@@ -42,6 +42,15 @@ const DEFAULT_COUNTRY = 'Nigeria';
 const FALLBACK_CATEGORY_OPTIONS = CATEGORY_OPTION_LIST;
 const MIN_IMAGE_COUNT = 2;
 const MAX_IMAGE_COUNT = 8;
+const VIDEO_FILE_EXTENSIONS = ['mp4', 'mov', 'm4v', 'avi'];
+
+const inferMediaTypeFromUri = (uri) => {
+  const value = (uri || '').toLowerCase();
+  if (VIDEO_FILE_EXTENSIONS.some((ext) => value.includes(`.${ext}`))) {
+    return 'video';
+  }
+  return 'image';
+};
 const GENERAL_FIELD_NAMES = new Set(
   [
     'title',
@@ -205,7 +214,7 @@ const ListingEditorScreen = ({ route, navigation }) => {
     [vendorProfile.city, vendorProfile.state].filter(Boolean).join(', ');
 
   const buildFirestoreDocument = useCallback(
-    (imageUrls) => {
+    (imageUrls, videoUrl) => {
       const locationValue = (formData.location || '').trim();
       const mergedLocation = [locationValue, formData.state].filter(Boolean).join(', ');
       const trimmedTitle = formData.title.trim() || 'Marketplace Listing';
@@ -226,7 +235,13 @@ const ListingEditorScreen = ({ route, navigation }) => {
         listingPrice: priceValue,
         imageUrls,
         images: imageUrls,
+        media: [
+          ...imageUrls.map((url) => ({ type: 'image', url })),
+          ...(videoUrl ? [{ type: 'video', url: videoUrl }] : []),
+        ],
         coverImage: imageUrls[0] || '',
+        videoUrl: videoUrl || '',
+        video: videoUrl || '',
         vendorUid: vendorUid || user?.uid || '',
         vendorFirebaseUid: user?.uid || '',
         vendorID: vendorId || null,
@@ -269,8 +284,9 @@ const ListingEditorScreen = ({ route, navigation }) => {
   );
 
   const syncListingWithFirestore = useCallback(
-    async (imageUrls) => {
-      const payload = buildFirestoreDocument(imageUrls);
+    async ({ imageUrls, videoUrl }) => {
+      const sanitizedImages = Array.isArray(imageUrls) ? imageUrls : [];
+      const payload = buildFirestoreDocument(sanitizedImages, videoUrl || '');
       if (isEditMode && listing?.firestoreId) {
         const listingRef = doc(db, 'listings', listing.firestoreId);
         await updateDoc(listingRef, {
@@ -318,14 +334,62 @@ const ListingEditorScreen = ({ route, navigation }) => {
         status: listing.status_raw || listing.status || 'pending',
       });
 
-      if (Array.isArray(listing.images) && listing.images.length > 0) {
-        const limitedImages = listing.images.slice(0, MAX_IMAGE_COUNT);
-        setImages(limitedImages.map((url) => ({ uri: url, uploaded: true })));
-      } else if (listing.image || listing.primaryImage) {
-        setImages([{ uri: listing.image || listing.primaryImage, uploaded: true }]);
-      } else {
-        setImages([]);
+      const preparedMedia = [];
+
+      if (Array.isArray(listing.media) && listing.media.length > 0) {
+        listing.media.forEach((entry) => {
+          const mediaUrl = typeof entry === 'string' ? entry : entry?.url;
+          if (!mediaUrl) {
+            return;
+          }
+          const type = typeof entry === 'object' && entry?.type ? entry.type : inferMediaTypeFromUri(mediaUrl);
+          preparedMedia.push({
+            uri: mediaUrl,
+            uploaded: true,
+            type: type === 'video' ? 'video' : 'image',
+            publicId: entry?.publicId || null,
+            resourceType: type === 'video' ? 'video' : 'image',
+          });
+        });
       }
+
+      if (!preparedMedia.length && Array.isArray(listing.images) && listing.images.length > 0) {
+        listing.images.slice(0, MAX_IMAGE_COUNT).forEach((url) => {
+          if (!url) {
+            return;
+          }
+          preparedMedia.push({
+            uri: url,
+            uploaded: true,
+            type: 'image',
+            publicId: null,
+            resourceType: 'image',
+          });
+        });
+      }
+
+      if (!preparedMedia.length && (listing.image || listing.primaryImage)) {
+        const singleUrl = listing.image || listing.primaryImage;
+        preparedMedia.push({
+          uri: singleUrl,
+          uploaded: true,
+          type: inferMediaTypeFromUri(singleUrl),
+          publicId: null,
+          resourceType: inferMediaTypeFromUri(singleUrl),
+        });
+      }
+
+      if (listing.videoUrl && !preparedMedia.some((item) => item.type === 'video')) {
+        preparedMedia.push({
+          uri: listing.videoUrl,
+          uploaded: true,
+          type: 'video',
+          publicId: null,
+          resourceType: 'video',
+        });
+      }
+
+      setImages(preparedMedia.slice(0, MAX_IMAGE_COUNT));
       const initialAttributes = extractAttributeValuesFromListing(
         listing,
         filterDynamicFields(getCategoryFieldDefinitions(listing.category))
@@ -519,9 +583,9 @@ const ListingEditorScreen = ({ route, navigation }) => {
     return true;
   };
 
-  const pickImage = async () => {
+  const pickMedia = async () => {
     if (images.length >= MAX_IMAGE_COUNT) {
-      showToast(`You can only upload up to ${MAX_IMAGE_COUNT} images`, 'error');
+      showToast(`You can only upload up to ${MAX_IMAGE_COUNT} media files`, 'error');
       return;
     }
 
@@ -531,7 +595,7 @@ const ListingEditorScreen = ({ route, navigation }) => {
     try {
       const remainingSlots = MAX_IMAGE_COUNT - images.length;
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ImagePicker.MediaTypeOptions.All,
         allowsMultipleSelection: true,
         selectionLimit: remainingSlots,
         quality: 0.85,
@@ -545,19 +609,24 @@ const ListingEditorScreen = ({ route, navigation }) => {
       const selections = assets
         .filter((asset) => asset?.uri)
         .slice(0, remainingSlots)
-        .map((asset) => ({ uri: asset.uri, uploaded: false }));
+        .map((asset) => ({
+          uri: asset.uri,
+          uploaded: false,
+          type: asset?.type === 'video' ? 'video' : 'image',
+          resourceType: asset?.type === 'video' ? 'video' : 'image',
+        }));
 
       if (selections.length) {
         setImages((prev) => [...prev, ...selections]);
         showToast(
           selections.length > 1
-            ? `${selections.length} images added. Remember to save the listing.`
-            : 'Image added. Remember to save the listing.'
+            ? `${selections.length} media files added. Remember to save the listing.`
+            : `${selections[0].type === 'video' ? 'Video' : 'Image'} added. Remember to save the listing.`
         );
       }
     } catch (error) {
-      console.error('Error picking image:', error);
-      showToast('Failed to pick image', 'error');
+      console.error('Error picking media:', error);
+      showToast('Failed to pick media', 'error');
     }
   };
 
@@ -578,51 +647,59 @@ const ListingEditorScreen = ({ route, navigation }) => {
     );
   };
 
-  const uploadImagesToCloudinary = async () => {
-    const imagesToUpload = images.filter(img => !img.uploaded);
-    if (imagesToUpload.length === 0) {
-      const uploaded = images.filter((img) => img.uploaded).map((img) => img.uri);
-      setImages(uploaded.map((url) => ({ uri: url, uploaded: true })));
-      return uploaded;
+  const uploadListingMedia = async () => {
+    const pendingMedia = images.filter((item) => !item.uploaded);
+    if (pendingMedia.length === 0) {
+      const uploadedCopy = images.map((item) => ({ ...item, uploaded: true }));
+      setImages(uploadedCopy);
+      const imageUrls = uploadedCopy.filter((item) => item.type !== 'video').map((item) => item.uri);
+      const videoItem = uploadedCopy.find((item) => item.type === 'video');
+      return {
+        images: imageUrls,
+        video: videoItem ? videoItem.uri : null,
+        media: uploadedCopy,
+      };
     }
 
     setUploading(true);
-    const uploadedUrls = [];
+    const updatedItems = images.map((item) => ({ ...item }));
 
     try {
-      for (const image of imagesToUpload) {
-        const formData = new FormData();
-        formData.append('file', {
-          uri: image.uri,
-          type: 'image/jpeg',
-          name: `listing_${Date.now()}.jpg`,
-        });
-        formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-        formData.append('folder', `listings/${vendorUid || 'vendor'}`);
-
-        const uploadUrl = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
-        const response = await fetch(uploadUrl,
-          {
-            method: 'POST',
-            body: formData,
-          }
-        );
-
-        if (!response.ok) {
-          throw new Error('Image upload failed');
+      for (let index = 0; index < images.length; index += 1) {
+        const item = images[index];
+        if (item.uploaded) {
+          continue;
         }
+        const resourceType = item.type === 'video' ? 'video' : 'image';
+        const uploadResult = await uploadMedia(item.uri, {
+          folder: `listings/${vendorUid || 'vendor'}`,
+          resourceType,
+          watermark: true,
+          vendorName: vendorFriendlyName,
+          format: resourceType === 'video' ? 'mp4' : undefined,
+        });
 
-        const data = await response.json();
-        uploadedUrls.push(data.secure_url);
+        updatedItems[index] = {
+          ...item,
+          uri: uploadResult.url,
+          uploaded: true,
+          publicId: uploadResult.publicId,
+          originalUrl: uploadResult.originalUrl,
+          resourceType: uploadResult.resourceType || resourceType,
+        };
       }
 
-      // Add already uploaded images
-      const existingUrls = images.filter(img => img.uploaded).map(img => img.uri);
-      const combined = [...existingUrls, ...uploadedUrls];
-      setImages(combined.map((url) => ({ uri: url, uploaded: true })));
-      return combined;
+      setImages(updatedItems);
+      const imageUrls = updatedItems.filter((item) => item.type !== 'video').map((item) => item.uri);
+      const videoItem = updatedItems.find((item) => item.type === 'video');
+      return {
+        images: imageUrls,
+        video: videoItem ? videoItem.uri : null,
+        media: updatedItems,
+      };
     } catch (error) {
-      console.error('Error uploading images:', error);
+      console.error('Error uploading media:', error);
+      showToast('Failed to upload media. Please try again.', 'error');
       throw error;
     } finally {
       setUploading(false);
@@ -659,12 +736,14 @@ const ListingEditorScreen = ({ route, navigation }) => {
       showToast('Please enter your city or location', 'error');
       return false;
     }
-    if (images.length < MIN_IMAGE_COUNT) {
-      showToast(`Please add at least ${MIN_IMAGE_COUNT} images`, 'error');
+    const photoCount = images.filter((item) => item.type !== 'video').length;
+    const mediaCount = images.length;
+    if (photoCount < MIN_IMAGE_COUNT) {
+      showToast(`Please add at least ${MIN_IMAGE_COUNT} photos`, 'error');
       return false;
     }
-    if (images.length > MAX_IMAGE_COUNT) {
-      showToast(`You can only upload up to ${MAX_IMAGE_COUNT} images`, 'error');
+    if (mediaCount > MAX_IMAGE_COUNT) {
+      showToast(`You can only upload up to ${MAX_IMAGE_COUNT} media files`, 'error');
       return false;
     }
     return true;
@@ -678,8 +757,18 @@ const ListingEditorScreen = ({ route, navigation }) => {
 
     try {
       setSaving(true);
-      const imageUrls = await uploadImagesToCloudinary();
-      const firestoreSyncResult = await syncListingWithFirestore(imageUrls);
+      const mediaUploadResult = await uploadListingMedia();
+      const imageUrls = mediaUploadResult.images;
+      const videoUrl = mediaUploadResult.video;
+      const mediaPayload = mediaUploadResult.media.map((item) => ({
+        url: item.uri,
+        type: item.type || (item.resourceType === 'video' ? 'video' : 'image'),
+        publicId: item.publicId || null,
+        resourceType: item.resourceType || (item.type === 'video' ? 'video' : 'image'),
+        originalUrl: item.originalUrl || null,
+      }));
+
+      const firestoreSyncResult = await syncListingWithFirestore({ imageUrls, videoUrl });
       rollbackFirestore = firestoreSyncResult?.rollback;
       const resolvedFirestoreId =
         firestoreSyncResult?.firestoreId || listing?.firestoreId || listingIdentifier || null;
@@ -698,6 +787,9 @@ const ListingEditorScreen = ({ route, navigation }) => {
         status: isEditMode ? formData.status : 'pending',
         images: imageUrls,
         primaryImage: imageUrls[0] || '',
+        media: mediaPayload,
+        videoUrl: videoUrl || '',
+        video: videoUrl || '',
         firestoreId: resolvedFirestoreId,
       };
 
@@ -762,15 +854,22 @@ const ListingEditorScreen = ({ route, navigation }) => {
         {/* Images Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>
-            Product Images ({images.length}/{MAX_IMAGE_COUNT}) *
+            Product Media ({images.length}/{MAX_IMAGE_COUNT}) *
           </Text>
           <Text style={styles.helperText}>
-            Add at least {MIN_IMAGE_COUNT} and at most {MAX_IMAGE_COUNT} clear photos.
+            Add at least {MIN_IMAGE_COUNT} clear photos. Videos are optional. Maximum {MAX_IMAGE_COUNT} items.
           </Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imagesContainer}>
             {images.map((image, index) => (
               <View key={index} style={styles.imageWrapper}>
-                <Image source={{ uri: image.uri }} style={styles.image} resizeMode="cover" />
+                {image.type === 'video' ? (
+                  <View style={styles.videoPreview}>
+                    <Ionicons name="videocam" size={36} color="#fff" />
+                    <Text style={styles.videoLabel}>Video</Text>
+                  </View>
+                ) : (
+                  <Image source={{ uri: image.uri }} style={styles.image} resizeMode="cover" />
+                )}
                 <TouchableOpacity
                   style={styles.removeImageButton}
                   onPress={() => removeImage(index)}
@@ -779,10 +878,10 @@ const ListingEditorScreen = ({ route, navigation }) => {
                 </TouchableOpacity>
               </View>
             ))}
-            <TouchableOpacity style={styles.addImageButton} onPress={pickImage}>
+            <TouchableOpacity style={styles.addImageButton} onPress={pickMedia}>
               <Ionicons name="add-circle-outline" size={40} color={theme.colors.accent} />
               <Text style={styles.addImageText}>
-                {images.length >= MAX_IMAGE_COUNT ? 'Limit Reached' : 'Add Photos'}
+                {images.length >= MAX_IMAGE_COUNT ? 'Limit Reached' : 'Add Media'}
               </Text>
             </TouchableOpacity>
           </ScrollView>
@@ -933,7 +1032,7 @@ const ListingEditorScreen = ({ route, navigation }) => {
           <View style={styles.uploadingContainer}>
             <ActivityIndicator size="small" color={theme.colors.accent} />
             <Text style={styles.uploadingText}>
-              {uploading ? 'Uploading images...' : 'Saving listing...'}
+              {uploading ? 'Uploading media...' : 'Saving listing...'}
             </Text>
           </View>
         )}
@@ -1035,6 +1134,22 @@ const styles = StyleSheet.create({
     height: 120,
     borderRadius: theme.borderRadius.md,
     backgroundColor: theme.colors.beige,
+  },
+  videoPreview: {
+    width: 120,
+    height: 120,
+    borderRadius: theme.borderRadius.md,
+    backgroundColor: '#1F2933',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  videoLabel: {
+    marginTop: 8,
+    color: '#FFFFFF',
+    fontFamily: theme.typography.fontFamilyBody,
+    fontSize: theme.typography.sizes.xs,
+    fontWeight: '600',
+    letterSpacing: 0.5,
   },
   removeImageButton: {
     position: 'absolute',

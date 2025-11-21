@@ -59,6 +59,8 @@ function yustam_api_dispatch(): array
             return yustam_api_handle_notifications($method, $subSegments);
         case 'support':
             return yustam_api_handle_support($method, $subSegments);
+        case 'media':
+            return yustam_api_handle_media($method, $subSegments);
         case 'verification':
             return yustam_api_handle_verification($method, $subSegments);
         case 'chats':
@@ -303,6 +305,21 @@ function yustam_api_handle_bot(string $method, array $segments): array
     yustam_api_error(404, 'Bot endpoint not found.');
 }
 
+function yustam_api_handle_media(string $method, array $segments): array
+{
+    $action = strtolower($segments[0] ?? '');
+
+    if ($method === 'POST' && $action === 'signature') {
+        return yustam_api_media_signature();
+    }
+
+    if ($method === 'POST' && $action === 'watermark') {
+        return yustam_api_media_watermark();
+    }
+
+    yustam_api_error(404, 'Media endpoint not found.');
+}
+
 function yustam_api_handle_support(string $method, array $segments): array
 {
     if ($method === 'GET' && empty($segments)) {
@@ -322,6 +339,146 @@ function yustam_api_handle_support(string $method, array $segments): array
         return yustam_api_support_add_message($ticketId);
     }
     yustam_api_error(405, 'Support endpoint not found.');
+}
+
+function yustam_api_media_signature(): array
+{
+    $user = yustam_api_require_auth();
+    yustam_cloudinary_check_credentials();
+
+    $payload = yustam_api_read_json_body();
+
+    $resourceTypeRaw = strtolower(trim((string) ($payload['resourceType'] ?? 'image')));
+    $resourceType = in_array($resourceTypeRaw, ['image', 'video', 'auto'], true) ? $resourceTypeRaw : 'image';
+
+    $folder = yustam_cloudinary_sanitize_folder($payload['folder'] ?? '');
+    if ($folder === '') {
+        $baseFolder = $resourceType === 'video' ? 'yustam/videos' : 'yustam/images';
+        $folderSuffix = ($user['role'] ?? '') === 'vendor' ? 'vendors' : 'users';
+        $folder = $baseFolder . '/' . $folderSuffix;
+    }
+
+    $credentials = yustam_cloudinary_credentials();
+    if (empty($credentials['uploadPreset'])) {
+        yustam_api_error(500, 'Cloudinary upload preset is not configured.');
+    }
+
+    $publicIdInput = $payload['publicId'] ?? $payload['public_id'] ?? '';
+    $publicId = yustam_cloudinary_sanitize_public_id($publicIdInput);
+    if ($publicId === '') {
+        $publicId = yustam_cloudinary_generate_public_id($user, $resourceType === 'video' ? 'video' : 'image');
+    }
+
+    $tags = [];
+    if (!empty($payload['tags'])) {
+        $rawTags = is_array($payload['tags']) ? $payload['tags'] : explode(',', (string) $payload['tags']);
+        foreach ($rawTags as $tag) {
+            $sanitised = preg_replace('/[^A-Za-z0-9_\-]/', '', trim((string) $tag)) ?? '';
+            if ($sanitised !== '') {
+                $tags[] = strtolower($sanitised);
+            }
+            if (count($tags) >= 10) {
+                break;
+            }
+        }
+    }
+
+    $timestamp = time();
+    $params = [
+        'timestamp' => $timestamp,
+        'upload_preset' => $credentials['uploadPreset'],
+        'folder' => $folder,
+        'overwrite' => 'true',
+        'public_id' => $publicId,
+    ];
+    if ($tags) {
+        $params['tags'] = implode(',', $tags);
+    }
+
+    $signature = yustam_cloudinary_sign($params);
+
+    $fields = $params;
+    $fields['signature'] = $signature;
+    $fields['api_key'] = $credentials['apiKey'];
+
+    $uploadResource = $resourceType;
+    if ($uploadResource === 'auto') {
+        $uploadResource = 'auto';
+    } elseif ($uploadResource === 'video') {
+        $uploadResource = 'video';
+    } else {
+        $uploadResource = 'image';
+    }
+
+    $stringFields = array_map(static function ($value) {
+        return (string) $value;
+    }, $fields);
+
+    return [
+        'success' => true,
+        'signature' => [
+            'uploadUrl' => sprintf(
+                'https://api.cloudinary.com/v1_1/%s/%s/upload',
+                rawurlencode((string) $credentials['cloudName']),
+                $uploadResource
+            ),
+            'resourceType' => $uploadResource,
+            'timestamp' => $timestamp,
+            'expiresAt' => $timestamp + 600,
+            'publicId' => $publicId,
+            'folder' => $folder,
+            'fields' => $stringFields,
+        ],
+    ];
+}
+
+function yustam_api_media_watermark(): array
+{
+    $user = yustam_api_require_auth();
+    yustam_cloudinary_check_credentials();
+
+    $payload = yustam_api_read_json_body();
+    $publicId = trim((string) ($payload['publicId'] ?? $payload['public_id'] ?? ''));
+    if ($publicId === '') {
+        yustam_api_error(422, 'Cloudinary public ID is required.');
+    }
+
+    $resourceTypeRaw = strtolower(trim((string) ($payload['resourceType'] ?? 'image')));
+    $resourceType = in_array($resourceTypeRaw, ['image', 'video'], true) ? $resourceTypeRaw : 'image';
+
+    $vendorName = trim((string) ($payload['vendorName'] ?? ($user['displayName'] ?? 'Yustam Vendor')));
+    if ($vendorName === '' && ($user['role'] ?? '') === 'vendor') {
+        $vendorName = 'Marketplace Vendor';
+    }
+
+    $options = [];
+    if (!empty($payload['format'])) {
+        $options['format'] = preg_replace('/[^A-Za-z0-9]/', '', (string) $payload['format']) ?? null;
+    }
+
+    try {
+        $watermarked = yustam_cloudinary_apply_watermark($publicId, $vendorName, $resourceType, $options);
+    } catch (Throwable $error) {
+        error_log('Cloudinary watermark failed: ' . $error->getMessage());
+        yustam_api_error(500, 'Failed to apply watermark. Please try again.');
+    }
+
+    if (empty($watermarked['secure_url'])) {
+        yustam_api_error(500, 'Watermarked asset url missing.');
+    }
+
+    return [
+        'success' => true,
+        'asset' => [
+            'publicId' => $watermarked['public_id'],
+            'secureUrl' => $watermarked['secure_url'],
+            'resourceType' => $watermarked['resource_type'],
+            'width' => $watermarked['width'],
+            'height' => $watermarked['height'],
+            'duration' => $watermarked['duration'],
+            'transformation' => $watermarked['transformation'],
+        ],
+    ];
 }
 
 function yustam_api_handle_verification(string $method, array $segments): array
@@ -4567,24 +4724,71 @@ function yustam_api_products_create(): array
     }
     $vendorUid = yustam_vendor_assign_uid_if_missing($db, $vendor);
 
-    $images = $payload['images'] ?? $payload['media'] ?? [];
-    if (is_string($images)) {
-        $decoded = json_decode($images, true);
-        if (is_array($decoded)) {
-            $images = $decoded;
+    $imageUrls = [];
+    $videoUrl = trim((string) ($payload['video'] ?? $payload['videoUrl'] ?? ''));
+
+    $appendImage = static function (string $url) use (&$imageUrls): void {
+        $normalised = trim($url);
+        if ($normalised === '') {
+            return;
+        }
+        $imageUrls[$normalised] = $normalised;
+    };
+
+    $mediaPayload = $payload['media'] ?? null;
+    if (is_string($mediaPayload)) {
+        $decodedMedia = json_decode($mediaPayload, true);
+        if (is_array($decodedMedia)) {
+            $mediaPayload = $decodedMedia;
         }
     }
-    $imageUrls = [];
-    if (is_array($images)) {
-        foreach ($images as $image) {
-            if (is_string($image) && trim($image) !== '') {
-                $imageUrls[] = trim($image);
-            } elseif (is_array($image) && isset($image['url'])) {
-                $imageUrls[] = trim((string) $image['url']);
+
+    if (is_array($mediaPayload)) {
+        foreach ($mediaPayload as $entry) {
+            if (is_array($entry)) {
+                $mediaUrl = trim((string) ($entry['url'] ?? ''));
+                if ($mediaUrl === '') {
+                    continue;
+                }
+                $type = strtolower((string) ($entry['type'] ?? ''));
+                if ($type === 'video' && $videoUrl === '') {
+                    $videoUrl = $mediaUrl;
+                    continue;
+                }
+                $appendImage($mediaUrl);
+            } elseif (is_string($entry)) {
+                $appendImage($entry);
             }
         }
     }
+
+    $imagesPayload = $payload['images'] ?? null;
+    if ($imagesPayload === null && !is_array($mediaPayload)) {
+        $imagesPayload = $payload['media'] ?? [];
+    }
+
+    if (is_string($imagesPayload)) {
+        $decodedImages = json_decode($imagesPayload, true);
+        if (is_array($decodedImages)) {
+            $imagesPayload = $decodedImages;
+        }
+    }
+
+    if (is_array($imagesPayload)) {
+        foreach ($imagesPayload as $imageItem) {
+            if (is_string($imageItem)) {
+                $appendImage($imageItem);
+            } elseif (is_array($imageItem) && isset($imageItem['url'])) {
+                $appendImage((string) $imageItem['url']);
+            }
+        }
+    }
+
+    $imageUrls = array_values($imageUrls);
     $primaryImage = trim((string) ($payload['primaryImage'] ?? $imageUrls[0] ?? ''));
+    if ($primaryImage === '' && $imageUrls) {
+        $primaryImage = $imageUrls[0];
+    }
 
     $providedFirestoreId = trim((string) ($payload['firestoreId'] ?? $payload['firestore_id'] ?? ''));
     $providedPublicId = trim((string) ($payload['publicId'] ?? $payload['public_id'] ?? ''));
@@ -4602,6 +4806,7 @@ function yustam_api_products_create(): array
         'status' => $payload['status'] ?? 'active',
         'primary_image' => $primaryImage,
         'image_urls' => $imageUrls,
+        'video_url' => $videoUrl,
         'category' => $payload['category'] ?? '',
         'subcategory' => $payload['subcategory'] ?? '',
         'location' => $payload['location'] ?? '',
@@ -4630,24 +4835,78 @@ function yustam_api_products_update(string $productId): array
     $vendor = yustam_vendor_find_by_id($vendorId, $db);
     $vendorUid = $vendor ? yustam_vendor_assign_uid_if_missing($db, $vendor) : ($row['vendor_uid'] ?? '');
 
-    $images = $payload['images'] ?? $payload['media'] ?? null;
     $imageUrls = null;
-    if ($images !== null) {
-        $imageUrls = [];
-        if (is_string($images)) {
-            $decoded = json_decode($images, true);
-            if (is_array($decoded)) {
-                $images = $decoded;
+    $videoUrl = null;
+    $videoProvided = false;
+
+    if (array_key_exists('video', $payload) || array_key_exists('videoUrl', $payload)) {
+        $videoUrl = trim((string) ($payload['video'] ?? $payload['videoUrl'] ?? ''));
+        $videoProvided = true;
+    }
+
+    $mediaPayload = $payload['media'] ?? null;
+    if ($mediaPayload !== null) {
+        if (is_string($mediaPayload)) {
+            $decodedMedia = json_decode($mediaPayload, true);
+            if (is_array($decodedMedia)) {
+                $mediaPayload = $decodedMedia;
             }
         }
-        if (is_array($images)) {
-            foreach ($images as $image) {
-                if (is_string($image) && trim($image) !== '') {
-                    $imageUrls[] = trim($image);
-                } elseif (is_array($image) && isset($image['url'])) {
-                    $imageUrls[] = trim((string) $image['url']);
+        if (is_array($mediaPayload)) {
+            $imageAccumulator = [];
+            $appendImage = static function (string $url) use (&$imageAccumulator): void {
+                $normalised = trim($url);
+                if ($normalised === '') {
+                    return;
+                }
+                $imageAccumulator[$normalised] = $normalised;
+            };
+            foreach ($mediaPayload as $entry) {
+                if (is_array($entry)) {
+                    $mediaUrl = trim((string) ($entry['url'] ?? ''));
+                    if ($mediaUrl === '') {
+                        continue;
+                    }
+                    $type = strtolower((string) ($entry['type'] ?? ''));
+                    if ($type === 'video' && !$videoProvided) {
+                        $videoUrl = $mediaUrl;
+                        $videoProvided = true;
+                        continue;
+                    }
+                    $appendImage($mediaUrl);
+                } elseif (is_string($entry)) {
+                    $appendImage($entry);
                 }
             }
+            $imageUrls = array_values($imageAccumulator);
+        }
+    }
+
+    $imagesPayload = $payload['images'] ?? null;
+    if ($imagesPayload !== null) {
+        if (is_string($imagesPayload)) {
+            $decodedImages = json_decode($imagesPayload, true);
+            if (is_array($decodedImages)) {
+                $imagesPayload = $decodedImages;
+            }
+        }
+        if (is_array($imagesPayload)) {
+            $imageAccumulator = $imageUrls !== null ? array_flip($imageUrls) : [];
+            $appendImage = static function (string $url) use (&$imageAccumulator): void {
+                $normalised = trim($url);
+                if ($normalised === '') {
+                    return;
+                }
+                $imageAccumulator[$normalised] = $normalised;
+            };
+            foreach ($imagesPayload as $imageItem) {
+                if (is_string($imageItem)) {
+                    $appendImage($imageItem);
+                } elseif (is_array($imageItem) && isset($imageItem['url'])) {
+                    $appendImage((string) $imageItem['url']);
+                }
+            }
+            $imageUrls = array_values($imageAccumulator);
         }
     }
 
@@ -4679,6 +4938,9 @@ function yustam_api_products_update(string $productId): array
     }
     if ($imageUrls !== null) {
         $updatePayload['image_urls'] = $imageUrls;
+    }
+    if ($videoProvided) {
+        $updatePayload['video_url'] = $videoUrl;
     }
 
     yustam_listings_upsert($db, $updatePayload);

@@ -907,6 +907,21 @@ export const notificationsAPI = {
   },
 };
 
+export const mediaAPI = {
+  createUploadSignature: async (payload = {}) => {
+    const response = await api.post('/media/signature', payload);
+    const signature = response.data?.signature;
+    if (!signature) {
+      throw new Error('Failed to obtain upload signature.');
+    }
+    return signature;
+  },
+  applyWatermark: async (payload = {}) => {
+    const response = await api.post('/media/watermark', payload);
+    return response.data?.asset || null;
+  },
+};
+
 export const favoritesAPI = {
   list: async () => {
     const response = await api.get('/favorites');

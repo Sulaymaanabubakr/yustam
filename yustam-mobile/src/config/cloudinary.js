@@ -1,38 +1,105 @@
+import { mediaAPI } from '../services/api';
+
 // Cloudinary configuration from YUSTAM web app
 export const CLOUDINARY_CLOUD_NAME = 'dpc16a0vd';
 export const CLOUDINARY_UPLOAD_PRESET = 'yustam_unsigned';
 export const CLOUDINARY_UPLOAD_URL = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/upload`;
 
-/**
- * Upload image to Cloudinary
- * @param {string} uri - Local file URI
- * @param {Object} options - Upload options
- * @returns {Promise<Object>} Upload result with URL
- */
-export const uploadImage = async (uri, options = {}) => {
-  const { folder = 'yustam', onProgress } = options;
+const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp', 'heic'];
+const VIDEO_EXTENSIONS = ['mp4', 'mov', 'm4v', 'avi'];
+
+const inferExtension = (uri, fallback = 'jpg') => {
+  if (!uri || typeof uri !== 'string') {
+    return fallback;
+  }
+  const match = uri.match(/\.([a-zA-Z0-9]+)(?:\?|$)/);
+  if (!match) {
+    return fallback;
+  }
+  const extension = match[1].toLowerCase();
+  if ([...IMAGE_EXTENSIONS, ...VIDEO_EXTENSIONS].includes(extension)) {
+    return extension;
+  }
+  return fallback;
+};
+
+const inferResourceType = (extension, requestedType = 'auto') => {
+  if (requestedType && requestedType !== 'auto') {
+    return requestedType;
+  }
+  if (VIDEO_EXTENSIONS.includes(extension)) {
+    return 'video';
+  }
+  return 'image';
+};
+
+const deriveMimeFromExtension = (extension, resourceType) => {
+  if (resourceType === 'video') {
+    if (extension === 'mov') {
+      return 'video/quicktime';
+    }
+    if (extension === 'm4v') {
+      return 'video/x-m4v';
+    }
+    return 'video/mp4';
+  }
+  if (extension === 'png') {
+    return 'image/png';
+  }
+  if (extension === 'webp') {
+    return 'image/webp';
+  }
+  if (extension === 'heic') {
+    return 'image/heic';
+  }
+  return 'image/jpeg';
+};
+
+const safeStringValue = (value) => (value === undefined || value === null ? '' : String(value));
+
+export const uploadMedia = async (uri, options = {}) => {
+  const {
+    folder = 'yustam',
+    resourceType: requestedType = 'auto',
+    watermark = false,
+    vendorName = '',
+    format,
+    fileName,
+    mimeType,
+  } = options;
 
   try {
+    const extension = inferExtension(uri, requestedType === 'video' ? 'mp4' : 'jpg');
+    const resourceType = inferResourceType(extension, requestedType);
+
+    const signature = await mediaAPI.createUploadSignature({
+      folder,
+      resourceType,
+    });
+
+    const uploadUrl = signature.uploadUrl;
+    const fields = signature.fields || {};
+    const resolvedMime = mimeType || deriveMimeFromExtension(extension, resourceType);
+    const resolvedFileName = fileName || `${signature.publicId || `asset_${Date.now()}`}.${extension}`;
+
     const formData = new FormData();
-    
-    // Get file extension from URI
-    const uriParts = uri.split('.');
-    const fileType = uriParts[uriParts.length - 1];
-    
     formData.append('file', {
       uri,
-      type: `image/${fileType}`,
-      name: `upload.${fileType}`,
+      type: resolvedMime,
+      name: resolvedFileName,
     });
-    formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-    formData.append('folder', folder);
 
-    const response = await fetch(CLOUDINARY_UPLOAD_URL, {
+    Object.entries(fields).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        formData.append(key, safeStringValue(value));
+      }
+    });
+
+    const response = await fetch(uploadUrl, {
       method: 'POST',
       body: formData,
       headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'multipart/form-data',
+        Accept: 'application/json',
       },
     });
 
@@ -41,16 +108,57 @@ export const uploadImage = async (uri, options = {}) => {
     }
 
     const data = await response.json();
-    
+
+    let finalUrl = data.secure_url;
+    let finalPublicId = data.public_id;
+    let finalResourceType = data.resource_type || resourceType;
+    let watermarkResult = null;
+
+    if (watermark) {
+      try {
+        watermarkResult = await mediaAPI.applyWatermark({
+          publicId: finalPublicId,
+          resourceType: finalResourceType === 'video' ? 'video' : 'image',
+          vendorName,
+          format,
+        });
+        if (watermarkResult?.secureUrl) {
+          finalUrl = watermarkResult.secureUrl;
+          finalPublicId = watermarkResult.publicId || finalPublicId;
+          if (watermarkResult.resourceType) {
+            finalResourceType = watermarkResult.resourceType;
+          }
+        }
+      } catch (error) {
+        console.warn('Watermark application failed, falling back to original asset.', error);
+      }
+    }
+
     return {
-      url: data.secure_url,
-      publicId: data.public_id,
-      width: data.width,
-      height: data.height,
-      format: data.format,
+      url: finalUrl,
+      publicId: finalPublicId,
+      width: watermarkResult?.width ?? data.width ?? null,
+      height: watermarkResult?.height ?? data.height ?? null,
+      duration: watermarkResult?.duration ?? data.duration ?? null,
+      format: data.format ?? format ?? null,
+      resourceType: finalResourceType,
+      originalUrl: data.secure_url,
+      originalPublicId: data.public_id,
     };
   } catch (error) {
     console.error('Cloudinary upload error:', error);
-    throw new Error('Failed to upload image. Please try again.');
+    throw new Error('Failed to upload media. Please try again.');
   }
+};
+
+export const uploadImage = (uri, options = {}) =>
+  uploadMedia(uri, { ...options, resourceType: 'image' });
+
+export const uploadVideo = (uri, options = {}) =>
+  uploadMedia(uri, { ...options, resourceType: 'video' });
+
+export const cloudinaryConfig = {
+  cloudName: CLOUDINARY_CLOUD_NAME,
+  uploadPreset: CLOUDINARY_UPLOAD_PRESET,
+  uploadUrl: CLOUDINARY_UPLOAD_URL,
 };
