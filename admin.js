@@ -1,7 +1,20 @@
 import { auth, db } from './firebase.js';
-        import { displayPlanLabel, normalisePlanSlug } from './plan-utils.js';
-        import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js';
-        import { collection, doc, getDoc, setDoc, query, orderBy, limit, onSnapshot, updateDoc, addDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
+import { displayPlanLabel, normalisePlanSlug } from './plan-utils.js';
+import { adminAPI } from './admin-api.js';
+import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js';
+import {
+    collection,
+    doc,
+    getDoc,
+    setDoc,
+    query,
+    orderBy,
+    limit,
+    onSnapshot,
+    updateDoc,
+    addDoc,
+    serverTimestamp,
+} from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
 
         const dashboardContent = document.getElementById('dashboardContent');
         const loader = document.getElementById('loader');
@@ -26,6 +39,37 @@ import { auth, db } from './firebase.js';
             pro: document.querySelector('[data-plan-count="pro"]'),
             elite: document.querySelector('[data-plan-count="elite"]'),
             power: document.querySelector('[data-plan-count="power"]')
+        };
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const parseVendorIdParam = (value) => {
+            const parsed = Number(value);
+            return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+        };
+
+        const initialReviewVendorId = parseVendorIdParam(
+            urlParams.get('reviewVendor') || urlParams.get('vendorId') || urlParams.get('vendor')
+        );
+
+        const reviewSelectors = {
+            list: document.getElementById('reviewsList'),
+            average: document.getElementById('reviewsAverage'),
+            total: document.getElementById('reviewsTotal'),
+            message: document.getElementById('reviewsMessage'),
+            empty: document.getElementById('reviewsEmpty'),
+            filter: document.getElementById('reviewStatusFilter'),
+            refresh: document.getElementById('refreshReviewsBtn'),
+        };
+
+        const reviewState = {
+            status: 'pending',
+            loading: false,
+            vendorId: initialReviewVendorId,
+            items: [],
+            summary: {
+                averageRating: null,
+                totalReviews: 0,
+            },
         };
 
         const vendorDirectory = new Map();
@@ -169,6 +213,407 @@ import { auth, db } from './firebase.js';
             setTimeout(() => toast.classList.remove('show'), duration);
         };
 
+        const setReviewsMessage = (message = '', tone = 'info') => {
+            const messageEl = reviewSelectors.message;
+            if (!messageEl) return;
+            if (!message) {
+                messageEl.style.display = 'none';
+                messageEl.textContent = '';
+                return;
+            }
+            messageEl.style.display = 'block';
+            messageEl.textContent = message;
+            let color = 'rgba(17, 17, 17, 0.68)';
+            if (tone === 'success') color = 'rgba(0, 77, 64, 0.82)';
+            if (tone === 'danger') color = 'rgba(183, 28, 28, 0.88)';
+            messageEl.style.color = color;
+        };
+
+        const formatReviewDate = (value) => {
+            if (!value) return '—';
+            try {
+                const parsed = new Date(value);
+                if (Number.isNaN(parsed.getTime())) {
+                    return typeof value === 'string' ? value : '—';
+                }
+                return new Intl.DateTimeFormat('en-NG', {
+                    dateStyle: 'medium',
+                    timeStyle: 'short',
+                }).format(parsed);
+            } catch (error) {
+                return typeof value === 'string' ? value : '—';
+            }
+        };
+
+        const createStatusChip = (status) => {
+            const chip = document.createElement('span');
+            const normalized = String(status || '').toLowerCase();
+            const classMap = {
+                published: 'status-chip status-published',
+                pending: 'status-chip status-pending',
+                hidden: 'status-chip status-hidden',
+                flagged: 'status-chip status-flagged',
+            };
+            chip.className = classMap[normalized] || 'status-chip status-pending';
+            const label = normalized ? normalized.charAt(0).toUpperCase() + normalized.slice(1) : 'Pending';
+            chip.textContent = label;
+            return chip;
+        };
+
+        const determineReviewActions = (status) => {
+            const normalized = String(status || '').toLowerCase();
+            const actions = [];
+            if (normalized !== 'published') {
+                actions.push({ action: 'published', label: 'Publish', className: 'btn btn-approve' });
+            }
+            if (normalized !== 'pending') {
+                actions.push({ action: 'pending', label: 'Mark Pending', className: 'btn btn-outline' });
+            }
+            if (normalized !== 'hidden') {
+                actions.push({ action: 'hidden', label: 'Hide', className: 'btn btn-reject' });
+            }
+            if (normalized !== 'flagged') {
+                actions.push({ action: 'flagged', label: 'Flag', className: 'btn btn-danger' });
+            }
+            actions.push({ action: 'delete', label: 'Delete', className: 'btn btn-danger' });
+            return actions;
+        };
+
+        const renderReviewSummary = () => {
+            if (!reviewSelectors.average || !reviewSelectors.total) return;
+            const total = Number(reviewState.summary.totalReviews || 0);
+            reviewSelectors.total.textContent = total.toString();
+            const avg = reviewState.summary.averageRating;
+            reviewSelectors.average.textContent = avg === null || Number.isNaN(avg)
+                ? '—'
+                : avg.toFixed(2);
+        };
+
+        const createReviewCard = (review) => {
+            const card = document.createElement('article');
+            card.className = 'review-card';
+            card.dataset.reviewId = String(review.id ?? '');
+
+            const header = document.createElement('div');
+            header.className = 'review-header';
+
+            const headerInfo = document.createElement('div');
+            headerInfo.style.flex = '1 1 auto';
+
+            const ratingValue = Number(review.rating ?? 0);
+            const rounded = Math.max(0, Math.min(5, Math.round(ratingValue)));
+            const stars = '★'.repeat(rounded).padEnd(5, '☆');
+
+            const ratingEl = document.createElement('div');
+            ratingEl.className = 'review-rating';
+            ratingEl.textContent = `${stars} (${ratingValue}/5)`;
+
+            const meta = document.createElement('div');
+            meta.className = 'review-meta';
+
+            const vendorSpan = document.createElement('span');
+            const vendorId = Number(review.vendorId ?? review.vendor_id ?? 0);
+            const vendorRecord = vendorDirectory.get(`id:${vendorId}`);
+            const vendorLabel = vendorRecord ? vendorLabelFromRecord(vendorRecord) : `Vendor #${vendorId || '—'}`;
+            vendorSpan.innerHTML = `<i class="ri-store-2-line"></i> ${vendorLabel}`;
+            meta.appendChild(vendorSpan);
+
+            if (review.listingPublicId) {
+                const listingSpan = document.createElement('span');
+                const link = document.createElement('a');
+                link.href = `product.php?id=${encodeURIComponent(review.listingPublicId)}`;
+                link.textContent = 'View listing';
+                link.target = '_blank';
+                link.rel = 'noopener';
+                listingSpan.appendChild(link);
+                meta.appendChild(listingSpan);
+            } else if (review.listingId) {
+                const listingSpan = document.createElement('span');
+                listingSpan.innerHTML = `<i class="ri-hashtag"></i> Listing ${escapeHtml(String(review.listingId))}`;
+                meta.appendChild(listingSpan);
+            }
+
+            const reviewerName = review.reviewer && (review.reviewer.name || review.reviewer.ref) ? (review.reviewer.name || review.reviewer.ref) : '';
+            if (reviewerName) {
+                const reviewerSpan = document.createElement('span');
+                reviewerSpan.innerHTML = `<i class="ri-user-smile-line"></i> ${escapeHtml(reviewerName)}`;
+                meta.appendChild(reviewerSpan);
+            }
+
+            const timestampSpan = document.createElement('span');
+            timestampSpan.innerHTML = `<i class="ri-time-line"></i> ${formatReviewDate(review.createdAt || review.updatedAt)}`;
+            meta.appendChild(timestampSpan);
+
+            headerInfo.appendChild(ratingEl);
+            headerInfo.appendChild(meta);
+            header.appendChild(headerInfo);
+            header.appendChild(createStatusChip(review.status));
+            card.appendChild(header);
+
+            if (review.comment) {
+                const commentEl = document.createElement('div');
+                commentEl.className = 'review-comment';
+                commentEl.textContent = review.comment;
+                card.appendChild(commentEl);
+            }
+
+            const actions = document.createElement('div');
+            actions.className = 'review-actions';
+            determineReviewActions(review.status).forEach((action) => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = action.className;
+                button.dataset.reviewId = String(review.id ?? '');
+                button.dataset.reviewAction = action.action;
+                button.textContent = action.label;
+                actions.appendChild(button);
+            });
+            card.appendChild(actions);
+
+            return card;
+        };
+
+        const renderReviews = () => {
+            const { list, empty } = reviewSelectors;
+            if (!list) return;
+            list.innerHTML = '';
+            if (!reviewState.vendorId) {
+                if (empty) {
+                    empty.hidden = true;
+                    empty.style.display = 'none';
+                }
+                return;
+            }
+            if (!reviewState.items.length) {
+                if (empty) {
+                    empty.hidden = false;
+                    empty.style.display = 'flex';
+                }
+                return;
+            }
+            if (empty) {
+                empty.hidden = true;
+                empty.style.display = 'none';
+            }
+            const fragment = document.createDocumentFragment();
+            reviewState.items.forEach((review) => {
+                fragment.appendChild(createReviewCard(review));
+            });
+            list.appendChild(fragment);
+        };
+
+        const loadReviews = async ({ status, force } = {}) => {
+            const listEl = reviewSelectors.list;
+            if (!listEl) return;
+            if (reviewState.loading && !force) return;
+
+            const nextStatus = typeof status === 'string' ? status : reviewState.status;
+            const vendorId = reviewState.vendorId;
+
+            if (!vendorId) {
+                reviewState.status = nextStatus;
+                reviewState.items = [];
+                reviewState.summary.averageRating = null;
+                reviewState.summary.totalReviews = 0;
+                renderReviewSummary();
+                renderReviews();
+                setReviewsMessage('Select a vendor to view reviews.', 'info');
+                listEl.removeAttribute('aria-busy');
+                reviewState.loading = false;
+                return;
+            }
+
+            reviewState.loading = true;
+            listEl.setAttribute('aria-busy', 'true');
+            setReviewsMessage('Loading reviews…');
+            try {
+                const params = { pageSize: 20, vendorId };
+                if (nextStatus && nextStatus !== 'all') {
+                    params.status = nextStatus;
+                }
+                const payload = await adminAPI.reviews(params);
+                if (payload && typeof payload === 'object' && payload.success === false && payload.message) {
+                    throw new Error(payload.message);
+                }
+
+                const container = payload && typeof payload === 'object'
+                    ? (payload.data && typeof payload.data === 'object' ? payload.data : payload)
+                    : {};
+                if (container && typeof container === 'object' && container.success === false && container.message) {
+                    throw new Error(container.message);
+                }
+                const reviews = Array.isArray(container.reviews)
+                    ? container.reviews
+                    : Array.isArray(container.items) ? container.items : [];
+                const pagination = container.pagination || {};
+
+                reviewState.status = nextStatus;
+                reviewState.items = reviews;
+
+                const paginationTotal = Number(pagination?.total ?? pagination?.count ?? null);
+                const containerTotal = Number(container?.total ?? container?.count ?? null);
+                const total = Number.isFinite(paginationTotal)
+                    ? paginationTotal
+                    : Number.isFinite(containerTotal)
+                        ? containerTotal
+                        : reviews.length;
+                reviewState.summary.totalReviews = total;
+
+                const averageCandidate = container?.averageRating ?? container?.avg ?? container?.summary?.averageRating ?? null;
+                const averageNumber = Number(averageCandidate);
+
+                if (Number.isFinite(averageNumber)) {
+                    reviewState.summary.averageRating = averageNumber;
+                } else if (reviews.length) {
+                    const sum = reviews.reduce((acc, item) => acc + (Number(item.rating) || 0), 0);
+                    reviewState.summary.averageRating = sum / reviews.length;
+                } else {
+                    reviewState.summary.averageRating = null;
+                }
+
+                renderReviewSummary();
+                renderReviews();
+
+                if (reviews.length) {
+                    const label = reviews.length === 1 ? '1 review' : `${reviews.length} reviews`;
+                    const suffix = total > reviews.length ? ` (of ${total})` : '';
+                    setReviewsMessage(`Showing ${label}${suffix}.`, 'success');
+                } else {
+                    setReviewsMessage('No reviews matched this filter.', 'info');
+                }
+            } catch (error) {
+                console.error('[admin] load reviews failed', error);
+                reviewState.items = [];
+                reviewState.summary.averageRating = null;
+                renderReviewSummary();
+                renderReviews();
+                const message = error?.message || 'Unable to load reviews.';
+                setReviewsMessage(message, 'danger');
+            } finally {
+                reviewState.loading = false;
+                listEl.removeAttribute('aria-busy');
+            }
+        };
+
+        const handleReviewAction = async (reviewId, action, trigger) => {
+            if (!reviewId || !action) return;
+            const isDelete = action === 'delete';
+            if (isDelete) {
+                const confirmed = window.confirm('Delete this review permanently? This action cannot be undone.');
+                if (!confirmed) {
+                    return;
+                }
+            }
+            try {
+                if (trigger) trigger.disabled = true;
+                if (isDelete) {
+                    setReviewsMessage('Removing review…');
+                    await adminAPI.deleteReview(reviewId);
+                    showToast('Review deleted.');
+                } else {
+                    setReviewsMessage('Updating review…');
+                    await adminAPI.updateReviewStatus(reviewId, action);
+                    const statusLabel = action.charAt(0).toUpperCase() + action.slice(1);
+                    showToast(`Review marked as ${statusLabel}.`);
+                }
+                await loadReviews({ status: reviewState.status, force: true });
+            } catch (error) {
+                console.error('[admin] review action failed', error);
+                setReviewsMessage(error.message || 'Unable to update review.', 'danger');
+                showToast(error.message || 'Unable to update review.', 2800);
+            } finally {
+                if (trigger) trigger.disabled = false;
+            }
+        };
+
+        const updateReviewVendorQueryParam = (vendorId) => {
+            const nextParams = new URLSearchParams(window.location.search);
+            if (vendorId) {
+                nextParams.set('reviewVendor', String(vendorId));
+                nextParams.set('vendorId', String(vendorId));
+                nextParams.set('vendor', String(vendorId));
+            } else {
+                nextParams.delete('reviewVendor');
+                nextParams.delete('vendorId');
+                nextParams.delete('vendor');
+            }
+            const queryString = nextParams.toString();
+            const nextUrl = queryString ? `${window.location.pathname}?${queryString}` : window.location.pathname;
+            const hash = window.location.hash || '';
+            if (typeof history.replaceState === 'function') {
+                history.replaceState(null, '', `${nextUrl}${hash}`);
+            }
+        };
+
+        const highlightSelectedVendorCard = (selectedId) => {
+            if (!recentVendorsWrap) return;
+            const cards = recentVendorsWrap.querySelectorAll('.vendor-card[role="button"]');
+            const numericSelected = Number(selectedId);
+            const hasSelection = Number.isFinite(numericSelected) && numericSelected > 0;
+            cards.forEach((card) => {
+                const cardId = Number(card.getAttribute('data-vendor-id') || 0);
+                const isActive = hasSelection && cardId === numericSelected;
+                card.classList.toggle('selected', Boolean(isActive));
+                card.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+            });
+        };
+
+        const setReviewVendor = (vendorId, options = {}) => {
+            const numericId = Number(vendorId);
+            const isValid = Number.isFinite(numericId) && numericId > 0;
+            if (!isValid) {
+                reviewState.vendorId = null;
+                reviewState.items = [];
+                reviewState.summary.averageRating = null;
+                reviewState.summary.totalReviews = 0;
+                renderReviewSummary();
+                renderReviews();
+                setReviewsMessage('Select a vendor to view reviews.', 'info');
+                highlightSelectedVendorCard(null);
+                updateReviewVendorQueryParam(null);
+                return;
+            }
+
+            const vendorChanged = reviewState.vendorId !== numericId;
+            reviewState.vendorId = numericId;
+            highlightSelectedVendorCard(numericId);
+            updateReviewVendorQueryParam(numericId);
+
+            if (vendorChanged || options.force) {
+                loadReviews({ status: reviewState.status, force: true });
+            }
+
+            if (options.autoScroll) {
+                document.getElementById('reviews')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        };
+
+        const bindReviewEvents = () => {
+            if (reviewSelectors.filter) {
+                reviewSelectors.filter.value = reviewState.status;
+                reviewSelectors.filter.addEventListener('change', (event) => {
+                    const next = typeof event.target.value === 'string' ? event.target.value : 'pending';
+                    reviewState.status = next;
+                    loadReviews({ status: next, force: true });
+                });
+            }
+
+            reviewSelectors.refresh?.addEventListener('click', () => {
+                loadReviews({ status: reviewState.status, force: true });
+            });
+
+            reviewSelectors.list?.addEventListener('click', (event) => {
+                const target = event.target;
+                if (!(target instanceof HTMLElement)) return;
+                const button = target.closest('button[data-review-action]');
+                if (!(button instanceof HTMLButtonElement)) return;
+                const action = button.dataset.reviewAction;
+                const reviewId = Number(button.dataset.reviewId || 0);
+                if (!action || !reviewId) return;
+                handleReviewAction(reviewId, action, button);
+            });
+        };
+
         const closeNotifications = () => {
             notificationsPanel.classList.remove('active');
             notificationBtn.setAttribute('aria-expanded', 'false');
@@ -310,6 +755,12 @@ import { auth, db } from './firebase.js';
                 storeVendorRecord(vendor);
                 const card = document.createElement('article');
                 card.className = 'vendor-card';
+                card.dataset.vendorId = vendor.id ? String(vendor.id) : '';
+                card.setAttribute('role', 'button');
+                card.tabIndex = 0;
+                const vendorLabel = (vendor.name || vendor.businessName || vendor.email || 'Vendor').toString();
+                card.setAttribute('aria-label', `Filter reviews for ${vendorLabel}`);
+                card.title = `Filter reviews for ${vendorLabel}`;
                 card.innerHTML = `
                     <img class="vendor-avatar" src="${escapeHtml(avatar)}" alt="${escapeHtml(vendor.name || 'Vendor')} avatar">
                     <div class="vendor-meta">
@@ -320,6 +771,24 @@ import { auth, db } from './firebase.js';
                         ${joinedMarkup}
                     </div>
                 `;
+                const numericId = Number(vendor.id || 0);
+                if (reviewState.vendorId && Number(reviewState.vendorId) === numericId) {
+                    card.classList.add('selected');
+                    card.setAttribute('aria-pressed', 'true');
+                } else {
+                    card.setAttribute('aria-pressed', 'false');
+                }
+                const selectVendor = () => {
+                    if (!numericId) return;
+                    setReviewVendor(numericId, { autoScroll: true, force: true });
+                };
+                card.addEventListener('click', selectVendor);
+                card.addEventListener('keydown', (event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        selectVendor();
+                    }
+                });
                 recentVendorsWrap.appendChild(card);
             });
         };
@@ -392,6 +861,12 @@ import { auth, db } from './firebase.js';
                 statsElements.vendors.textContent = total.toString();
                 vendorSummaryErrorShown = false;
                 refreshListingVendorLabels();
+                if (!reviewState.vendorId && vendors.length) {
+                    setReviewVendor(vendors[0].id, { force: true });
+                } else {
+                    highlightSelectedVendorCard(reviewState.vendorId);
+                    renderReviews();
+                }
             } catch (error) {
                 console.error('Vendor summary load failed:', error);
                 if (!vendorSummaryErrorShown) {
@@ -603,6 +1078,8 @@ import { auth, db } from './firebase.js';
         };
 
         handleInternalNavLinks();
+        bindReviewEvents();
+        highlightSelectedVendorCard(reviewState.vendorId);
 
         const initAuth = () => {
             onAuthStateChanged(auth, async (user) => {
@@ -628,6 +1105,13 @@ import { auth, db } from './firebase.js';
                     dashboardContent.hidden = false;
                     attachListingActions();
                     hydrateData();
+                    if (reviewState.vendorId) {
+                        setReviewVendor(reviewState.vendorId, { force: true });
+                    } else {
+                        loadReviews({ status: reviewState.status }).catch((error) => {
+                            console.error('[admin] initial review load failed', error);
+                        });
+                    }
                 } catch (error) {
                     console.error('auth guard error', error);
                     window.location.href = 'index.html';

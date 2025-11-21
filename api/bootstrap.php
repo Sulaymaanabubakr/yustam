@@ -691,6 +691,343 @@ SQL;
     $ensured = true;
 }
 
+function yustam_reviews_table_name(): string
+{
+    if (defined('YUSTAM_VENDOR_REVIEWS_TABLE')) {
+        $table = (string) YUSTAM_VENDOR_REVIEWS_TABLE;
+        if ($table !== '' && preg_match('/^[A-Za-z0-9_]+$/', $table)) {
+            return $table;
+        }
+    }
+    return 'vendor_reviews';
+}
+
+function yustam_reviews_ensure_table(): void
+{
+    static $ensured = false;
+    if ($ensured) {
+        return;
+    }
+    $db = get_db_connection();
+    $table = yustam_reviews_table_name();
+    $sql = <<<SQL
+CREATE TABLE IF NOT EXISTS `{$table}` (
+    `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `vendor_id` INT UNSIGNED NOT NULL,
+    `listing_id` INT UNSIGNED NULL,
+    `listing_public_id` VARCHAR(64) NULL,
+    `reviewer_ref` VARCHAR(64) NOT NULL,
+    `reviewer_name` VARCHAR(120) NULL,
+    `rating` TINYINT UNSIGNED NOT NULL,
+    `comment` TEXT NULL,
+    `status` VARCHAR(24) NOT NULL DEFAULT 'published',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_vendor_id` (`vendor_id`),
+    KEY `idx_listing_id` (`listing_id`),
+    KEY `idx_reviewer_ref` (`reviewer_ref`),
+    KEY `idx_status_created` (`status`, `created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+SQL;
+    $db->query($sql);
+    $ensured = true;
+}
+
+function yustam_reviews_format_record(array $record): array
+{
+    return [
+        'id' => (int) ($record['id'] ?? 0),
+        'vendorId' => (int) ($record['vendor_id'] ?? 0),
+        'listingId' => isset($record['listing_id']) ? (int) $record['listing_id'] : null,
+        'listingPublicId' => $record['listing_public_id'] ?? null,
+        'rating' => isset($record['rating']) ? (int) $record['rating'] : null,
+        'comment' => $record['comment'] ?? '',
+        'status' => $record['status'] ?? 'published',
+        'reviewer' => [
+            'ref' => $record['reviewer_ref'] ?? null,
+            'name' => $record['reviewer_name'] ?? null,
+        ],
+        'createdAt' => $record['created_at'] ?? null,
+        'updatedAt' => $record['updated_at'] ?? null,
+    ];
+}
+
+function yustam_reviews_find_existing(mysqli $db, int $vendorId, string $reviewerRef, int $listingId = 0): ?array
+{
+    yustam_reviews_ensure_table();
+    $table = yustam_reviews_table_name();
+    $sql = "SELECT * FROM `{$table}` WHERE `vendor_id` = ? AND `reviewer_ref` = ? AND `listing_id` = ? LIMIT 1";
+    $stmt = $db->prepare($sql);
+    if (!$stmt instanceof mysqli_stmt) {
+        return null;
+    }
+    $stmt->bind_param('isi', $vendorId, $reviewerRef, $listingId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $row = $result ? $result->fetch_assoc() : null;
+    $stmt->close();
+    return $row ?: null;
+}
+
+function yustam_reviews_find_by_id(mysqli $db, int $id): ?array
+{
+    yustam_reviews_ensure_table();
+    $table = yustam_reviews_table_name();
+    $sql = "SELECT * FROM `{$table}` WHERE `id` = ? LIMIT 1";
+    $stmt = $db->prepare($sql);
+    if (!$stmt instanceof mysqli_stmt) {
+        return null;
+    }
+    $stmt->bind_param('i', $id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $row = $result ? $result->fetch_assoc() : null;
+    $stmt->close();
+    return $row ?: null;
+}
+
+function yustam_reviews_upsert(mysqli $db, array $review): array
+{
+    yustam_reviews_ensure_table();
+    $table = yustam_reviews_table_name();
+    $vendorId = (int) ($review['vendor_id'] ?? 0);
+    $listingId = (int) ($review['listing_id'] ?? 0);
+    $reviewerRef = (string) ($review['reviewer_ref'] ?? '');
+    $existing = $vendorId > 0 && $reviewerRef !== ''
+        ? yustam_reviews_find_existing($db, $vendorId, $reviewerRef, $listingId)
+        : null;
+
+    $rating = max(1, min(5, (int) ($review['rating'] ?? 0)));
+    $comment = isset($review['comment']) ? trim((string) $review['comment']) : '';
+    $status = $review['status'] ?? 'published';
+    $reviewerName = isset($review['reviewer_name']) ? trim((string) $review['reviewer_name']) : '';
+    $listingPublicId = isset($review['listing_public_id']) ? trim((string) $review['listing_public_id']) : '';
+
+    if ($existing) {
+        $sql = "UPDATE `{$table}` SET `rating` = ?, `comment` = ?, `status` = ?, `reviewer_name` = ?, `listing_public_id` = ? WHERE `id` = ? LIMIT 1";
+        $stmt = $db->prepare($sql);
+        if ($stmt instanceof mysqli_stmt) {
+            $stmt->bind_param('issssi', $rating, $comment, $status, $reviewerName, $listingPublicId, $existing['id']);
+            $stmt->execute();
+            $stmt->close();
+        }
+        $row = yustam_reviews_find_by_id($db, (int) $existing['id']);
+        return $row ? yustam_reviews_format_record($row) : yustam_reviews_format_record($existing);
+    }
+
+    $sql = "INSERT INTO `{$table}` (vendor_id, listing_id, listing_public_id, reviewer_ref, reviewer_name, rating, comment, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+    $stmt = $db->prepare($sql);
+    if ($stmt instanceof mysqli_stmt) {
+        $stmt->bind_param('iisssiss', $vendorId, $listingId, $listingPublicId, $reviewerRef, $reviewerName, $rating, $comment, $status);
+        $stmt->execute();
+        $insertId = $stmt->insert_id;
+        $stmt->close();
+        $row = yustam_reviews_find_by_id($db, (int) $insertId);
+        if ($row) {
+            return yustam_reviews_format_record($row);
+        }
+    }
+
+    return [
+        'id' => 0,
+        'vendorId' => $vendorId,
+        'listingId' => $listingId,
+        'listingPublicId' => $listingPublicId,
+        'rating' => $rating,
+        'comment' => $comment,
+        'status' => $status,
+        'reviewer' => [
+            'ref' => $reviewerRef,
+            'name' => $reviewerName,
+        ],
+        'createdAt' => null,
+        'updatedAt' => null,
+    ];
+}
+
+function yustam_reviews_list(array $filters = [], int $page = 1, int $pageSize = 20): array
+{
+    yustam_reviews_ensure_table();
+    $db = get_db_connection();
+    $table = yustam_reviews_table_name();
+
+    $page = max(1, $page);
+    $pageSize = max(1, min(100, $pageSize));
+    $offset = ($page - 1) * $pageSize;
+
+    $where = [];
+    $types = '';
+    $params = [];
+
+    if (!empty($filters['vendorId'])) {
+        $where[] = '`vendor_id` = ?';
+        $types .= 'i';
+        $params[] = (int) $filters['vendorId'];
+    }
+
+    if (!empty($filters['listingId'])) {
+        $where[] = '`listing_id` = ?';
+        $types .= 'i';
+        $params[] = (int) $filters['listingId'];
+    }
+
+    if (!empty($filters['status'])) {
+        $where[] = '`status` = ?';
+        $types .= 's';
+        $params[] = (string) $filters['status'];
+    }
+
+    $whereSql = $where ? 'WHERE ' . implode(' AND ', $where) : '';
+
+    $countSql = "SELECT COUNT(*) AS total FROM `{$table}` {$whereSql}";
+    $countStmt = $db->prepare($countSql);
+    if ($countStmt instanceof mysqli_stmt && $types !== '') {
+        $countStmt->bind_param($types, ...$params);
+    }
+    $countStmt?->execute();
+    $countResult = $countStmt ? $countStmt->get_result() : null;
+    $total = $countResult ? (int) ($countResult->fetch_assoc()['total'] ?? 0) : 0;
+    $countStmt?->close();
+
+    $listSql = "SELECT * FROM `{$table}` {$whereSql} ORDER BY `created_at` DESC LIMIT ? OFFSET ?";
+    $stmt = $db->prepare($listSql);
+    if (!$stmt instanceof mysqli_stmt) {
+        return [
+            'items' => [],
+            'pagination' => [
+                'page' => $page,
+                'pageSize' => $pageSize,
+                'total' => $total,
+                'totalPages' => max(1, (int) ceil($total / $pageSize)),
+            ],
+        ];
+    }
+    $bindTypes = $types . 'ii';
+    $bindParams = [...$params, $pageSize, $offset];
+    $stmt->bind_param($bindTypes, ...$bindParams);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $items = [];
+    if ($result instanceof mysqli_result) {
+        while ($row = $result->fetch_assoc()) {
+            $items[] = yustam_reviews_format_record($row);
+        }
+    }
+    $stmt->close();
+
+    return [
+        'items' => $items,
+        'pagination' => [
+            'page' => $page,
+            'pageSize' => $pageSize,
+            'total' => $total,
+            'totalPages' => max(1, (int) ceil($total / $pageSize)),
+        ],
+    ];
+}
+
+function yustam_reviews_vendor_stats(int $vendorId): array
+{
+    if ($vendorId <= 0) {
+        return [
+            'averageRating' => null,
+            'totalReviews' => 0,
+            'distribution' => [1 => 0, 2 => 0, 3 => 0, 4 => 0, 5 => 0],
+        ];
+    }
+    yustam_reviews_ensure_table();
+    $db = get_db_connection();
+    $table = yustam_reviews_table_name();
+
+    $summarySql = "SELECT AVG(`rating`) AS avg_rating, COUNT(*) AS total_reviews FROM `{$table}` WHERE `vendor_id` = ? AND `status` = 'published'";
+    $stmt = $db->prepare($summarySql);
+    $avgRating = null;
+    $totalReviews = 0;
+    if ($stmt instanceof mysqli_stmt) {
+        $stmt->bind_param('i', $vendorId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result instanceof mysqli_result) {
+            $row = $result->fetch_assoc();
+            if ($row) {
+                $avgRating = isset($row['avg_rating']) ? (float) $row['avg_rating'] : null;
+                $totalReviews = isset($row['total_reviews']) ? (int) $row['total_reviews'] : 0;
+            }
+        }
+        $stmt->close();
+    }
+
+    $distribution = [1 => 0, 2 => 0, 3 => 0, 4 => 0, 5 => 0];
+    $distributionSql = "SELECT `rating`, COUNT(*) AS total FROM `{$table}` WHERE `vendor_id` = ? AND `status` = 'published' GROUP BY `rating`";
+    $distStmt = $db->prepare($distributionSql);
+    if ($distStmt instanceof mysqli_stmt) {
+        $distStmt->bind_param('i', $vendorId);
+        $distStmt->execute();
+        $result = $distStmt->get_result();
+        if ($result instanceof mysqli_result) {
+            while ($row = $result->fetch_assoc()) {
+                $rating = (int) ($row['rating'] ?? 0);
+                $count = (int) ($row['total'] ?? 0);
+                if (isset($distribution[$rating])) {
+                    $distribution[$rating] = $count;
+                }
+            }
+        }
+        $distStmt->close();
+    }
+
+    return [
+        'averageRating' => $avgRating !== null ? round($avgRating, 2) : null,
+        'totalReviews' => $totalReviews,
+        'distribution' => $distribution,
+    ];
+}
+
+function yustam_reviews_vendor_recent(int $vendorId, int $limit = 10): array
+{
+    $limit = max(1, min(50, $limit));
+    $list = yustam_reviews_list([
+        'vendorId' => $vendorId,
+        'status' => 'published',
+    ], 1, $limit);
+    return $list['items'] ?? [];
+}
+
+function yustam_reviews_update_status(mysqli $db, int $reviewId, string $status): ?array
+{
+    yustam_reviews_ensure_table();
+    $table = yustam_reviews_table_name();
+    $stmt = $db->prepare("UPDATE `{$table}` SET `status` = ?, `updated_at` = CURRENT_TIMESTAMP WHERE `id` = ? LIMIT 1");
+    if (!$stmt instanceof mysqli_stmt) {
+        return null;
+    }
+    $stmt->bind_param('si', $status, $reviewId);
+    $stmt->execute();
+    $affected = $stmt->affected_rows;
+    $stmt->close();
+    if ($affected < 0) {
+        return null;
+    }
+    $row = yustam_reviews_find_by_id($db, $reviewId);
+    return $row ? yustam_reviews_format_record($row) : null;
+}
+
+function yustam_reviews_delete(mysqli $db, int $reviewId): bool
+{
+    yustam_reviews_ensure_table();
+    $table = yustam_reviews_table_name();
+    $stmt = $db->prepare("DELETE FROM `{$table}` WHERE `id` = ? LIMIT 1");
+    if (!$stmt instanceof mysqli_stmt) {
+        return false;
+    }
+    $stmt->bind_param('i', $reviewId);
+    $stmt->execute();
+    $deleted = $stmt->affected_rows > 0;
+    $stmt->close();
+    return $deleted;
+}
+
 function yustam_api_ensure_support_tables(): void
 {
     static $ensured = false;

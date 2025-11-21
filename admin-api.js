@@ -58,6 +58,18 @@ export const clearAdminSession = () => {
   }
 };
 
+const buildQueryString = (params = {}) => {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined || value === null) return;
+    const trimmed = typeof value === 'string' ? value.trim() : value;
+    if (trimmed === '' || trimmed === false) return;
+    query.append(key, String(trimmed));
+  });
+  const queryString = query.toString();
+  return queryString ? `?${queryString}` : '';
+};
+
 const extractMessage = async (response) => {
   const contentType = response.headers.get('content-type') || '';
   if (contentType.includes('application/json')) {
@@ -113,4 +125,10 @@ export const adminAPI = {
   notifications: () => adminRequest('/notifications'),
   markNotifications: (ids = []) =>
     adminRequest('/notifications/read', { method: 'POST', body: { ids } }),
+  reviews: (params = {}) => adminRequest(`/reviews${buildQueryString(params)}`),
+  review: (reviewId) => adminRequest(`/reviews/${reviewId}`),
+  updateReviewStatus: (reviewId, status) =>
+    adminRequest(`/reviews/${reviewId}`, { method: 'PATCH', body: { status } }),
+  deleteReview: (reviewId) =>
+    adminRequest(`/reviews/${reviewId}`, { method: 'DELETE' }),
 };

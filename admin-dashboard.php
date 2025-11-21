@@ -415,6 +415,21 @@ require_admin_auth();
             color: #c0392b;
         }
 
+        .status-published {
+            background: rgba(0, 128, 96, 0.15);
+            color: #006d4f;
+        }
+
+        .status-hidden {
+            background: rgba(17, 17, 17, 0.08);
+            color: rgba(17, 17, 17, 0.7);
+        }
+
+        .status-flagged {
+            background: rgba(220, 53, 69, 0.18);
+            color: #b71c1c;
+        }
+
         .listing-actions {
             display: flex;
             gap: 0.6rem;
@@ -469,6 +484,21 @@ require_admin_auth();
             gap: 0.9rem;
             align-items: start;
             border: 1px solid rgba(0, 77, 64, 0.08);
+        }
+
+        .vendor-card[role="button"] {
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .vendor-card[role="button"]:hover,
+        .vendor-card[role="button"]:focus-visible {
+            transform: translateY(-2px);
+            box-shadow: 0 14px 24px rgba(0, 77, 64, 0.18);
+        }
+
+        .vendor-card.selected {
+            box-shadow: inset 0 0 0 2px rgba(0, 77, 64, 0.45), var(--shadow);
         }
 
         .vendor-avatar {
@@ -542,6 +572,146 @@ require_admin_auth();
             text-align: center;
             font-weight: 600;
             color: rgba(17, 17, 17, 0.6);
+        }
+
+        /* Reviews moderation */
+        .reviews-section {
+            background: rgba(255, 255, 255, 0.86);
+            border-radius: var(--radius-lg);
+            padding: 1.6rem 1.4rem;
+            box-shadow: var(--shadow);
+            border: 1px solid rgba(0, 77, 64, 0.08);
+            display: grid;
+            gap: 1.2rem;
+        }
+
+        .reviews-controls {
+            display: flex;
+            gap: 0.75rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .reviews-controls select {
+            padding: 0.65rem 1rem;
+            border-radius: 12px;
+            border: 1px solid rgba(0, 77, 64, 0.25);
+            background: rgba(255, 255, 255, 0.94);
+            font-weight: 600;
+            color: var(--ink);
+        }
+
+        .reviews-summary {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .reviews-summary .summary-pill {
+            padding: 0.8rem 1.1rem;
+            border-radius: 14px;
+            background: rgba(0, 77, 64, 0.08);
+            min-width: 160px;
+        }
+
+        .summary-pill .summary-label {
+            display: block;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: rgba(17, 17, 17, 0.55);
+        }
+
+        .summary-pill .summary-value {
+            font-size: 1.35rem;
+            font-weight: 700;
+            color: var(--emerald);
+        }
+
+        .reviews-message {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: rgba(17, 17, 17, 0.68);
+        }
+
+        .reviews-empty {
+            display: none;
+            padding: 1.3rem;
+            border-radius: 14px;
+            background: rgba(17, 17, 17, 0.05);
+            font-weight: 600;
+            color: rgba(17, 17, 17, 0.6);
+            align-items: center;
+            gap: 0.6rem;
+        }
+
+        .reviews-list {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .review-card {
+            background: rgba(255, 255, 255, 0.94);
+            border-radius: var(--radius-md);
+            padding: 1.1rem 1.2rem;
+            border: 1px solid rgba(0, 77, 64, 0.08);
+            box-shadow: 0 12px 24px rgba(17, 17, 17, 0.08);
+            display: grid;
+            gap: 0.8rem;
+        }
+
+        .review-header {
+            display: flex;
+            justify-content: space-between;
+            gap: 0.75rem;
+            align-items: flex-start;
+            flex-wrap: wrap;
+        }
+
+        .review-rating {
+            font-weight: 700;
+            color: var(--orange);
+            font-size: 1.1rem;
+        }
+
+        .review-meta {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            font-size: 0.85rem;
+            color: rgba(17, 17, 17, 0.6);
+        }
+
+        .review-comment {
+            font-size: 0.95rem;
+            color: rgba(17, 17, 17, 0.85);
+            line-height: 1.5;
+        }
+
+        .review-actions {
+            display: flex;
+            gap: 0.6rem;
+            flex-wrap: wrap;
+        }
+
+        .btn-danger {
+            background: rgba(208, 48, 24, 0.14);
+            color: #c62828;
+        }
+
+        @media (max-width: 768px) {
+            .reviews-summary {
+                flex-direction: column;
+            }
+
+            .reviews-controls {
+                width: 100%;
+            }
+
+            .reviews-controls select,
+            .reviews-controls .btn {
+                width: 100%;
+            }
         }
 
         /* Notifications dropdown */
@@ -828,6 +998,42 @@ require_admin_auth();
                         </div>
                         <div class="revenue-chart">Revenue Trend (placeholder)</div>
                     </div>
+                </section>
+
+                <!-- Review Moderation -->
+                <section class="reviews-section" id="reviews">
+                    <div class="section-header">
+                        <div>
+                            <h2>Review Moderation</h2>
+                            <p class="section-subtitle">Approve, hide, or flag customer feedback before it appears live.</p>
+                        </div>
+                        <div class="reviews-controls">
+                            <select id="reviewStatusFilter" aria-label="Filter reviews by status">
+                                <option value="pending">Pending</option>
+                                <option value="published">Published</option>
+                                <option value="hidden">Hidden</option>
+                                <option value="flagged">Flagged</option>
+                                <option value="all">All</option>
+                            </select>
+                            <button class="btn btn-outline" type="button" id="refreshReviewsBtn">Refresh</button>
+                        </div>
+                    </div>
+                    <div class="reviews-summary" aria-live="polite">
+                        <div class="summary-pill">
+                            <span class="summary-label">Average rating</span>
+                            <span class="summary-value" id="reviewsAverage">—</span>
+                        </div>
+                        <div class="summary-pill">
+                            <span class="summary-label">Total reviews</span>
+                            <span class="summary-value" id="reviewsTotal">0</span>
+                        </div>
+                    </div>
+                    <div class="reviews-message" id="reviewsMessage" aria-live="polite"></div>
+                    <div class="reviews-empty" id="reviewsEmpty" hidden role="status" aria-live="polite">
+                        <i class="ri-star-smile-line" aria-hidden="true"></i>
+                        No reviews found for this filter.
+                    </div>
+                    <div class="reviews-list" id="reviewsList" aria-live="polite"></div>
                 </section>
 
                 <!-- Platform Settings -->

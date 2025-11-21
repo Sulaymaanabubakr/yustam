@@ -65,6 +65,8 @@ function yustam_api_dispatch(): array
             return yustam_api_handle_chats($method, $subSegments);
         case 'admin':
             return yustam_api_handle_admin($method, $subSegments);
+        case 'reviews':
+            return yustam_api_handle_reviews($method, $subSegments);
         case 'subscription':
             return yustam_api_handle_subscription($method, $subSegments);
         case 'paystack':
@@ -586,6 +588,370 @@ function yustam_api_handle_admin(string $method, array $segments): array
     }
 
     yustam_api_error(404, 'Admin endpoint not found.');
+}
+
+function yustam_api_handle_reviews(string $method, array $segments): array
+{
+    $action = strtolower($segments[0] ?? '');
+
+    if ($action !== '' && ctype_digit($action)) {
+        $reviewId = (int) $action;
+        if ($method === 'GET' && empty($segments[1])) {
+            return yustam_api_reviews_get($reviewId);
+        }
+        if ($method === 'PATCH' && empty($segments[1])) {
+            return yustam_api_reviews_update($reviewId);
+        }
+        if ($method === 'DELETE' && empty($segments[1])) {
+            return yustam_api_reviews_delete($reviewId);
+        }
+        yustam_api_error(404, 'Reviews endpoint not found.');
+    }
+
+    if ($method === 'POST' && $action === '') {
+        return yustam_api_reviews_create();
+    }
+
+    if ($method === 'GET' && $action === '') {
+        return yustam_api_reviews_list();
+    }
+
+    if ($method === 'GET' && $action === 'summary') {
+        return yustam_api_reviews_summary();
+    }
+
+    yustam_api_error(404, 'Reviews endpoint not found.');
+}
+
+function yustam_api_reviews_get(int $reviewId): array
+{
+    if ($reviewId <= 0) {
+        yustam_api_error(404, 'Review not found.');
+    }
+
+    $auth = yustam_api_optional_auth();
+    $role = $auth['role'] ?? null;
+    $authVendorId = (int) ($auth['vendorId'] ?? 0);
+
+    $db = get_db_connection();
+    $record = yustam_reviews_find_by_id($db, $reviewId);
+    if (!$record) {
+        yustam_api_error(404, 'Review not found.');
+    }
+
+    $vendorId = (int) ($record['vendor_id'] ?? 0);
+    if ($role === 'vendor' && $authVendorId !== $vendorId) {
+        yustam_api_error(403, 'You cannot access reviews for another vendor.');
+    }
+
+    $status = strtolower((string) ($record['status'] ?? 'published'));
+    if (!in_array($role, ['vendor', 'admin'], true) && $status !== 'published') {
+        yustam_api_error(404, 'Review not found.');
+    }
+
+    return [
+        'success' => true,
+        'review' => yustam_reviews_format_record($record),
+    ];
+}
+
+function yustam_api_reviews_create(): array
+{
+    $user = yustam_api_require_auth(['buyer', 'admin']);
+    $payload = yustam_api_read_json_body();
+
+    $vendorId = (int) ($payload['vendorId'] ?? 0);
+    $listingId = (int) ($payload['listingId'] ?? 0);
+    $listingPublicId = trim((string) ($payload['listingPublicId'] ?? ''));
+    $listingIdentifier = $listingPublicId !== '' ? $listingPublicId : ($listingId > 0 ? (string) $listingId : '');
+
+    $listing = null;
+    if ($listingIdentifier !== '') {
+        $listing = yustam_api_find_listing($listingIdentifier);
+        if (!$listing) {
+            yustam_api_error(404, 'Listing not found.');
+        }
+        $resolvedVendorId = (int) ($listing['vendor_id'] ?? 0);
+        if ($resolvedVendorId <= 0) {
+            yustam_api_error(404, 'Listing vendor missing.');
+        }
+        if ($vendorId > 0 && $vendorId !== $resolvedVendorId) {
+            yustam_api_error(409, 'Listing does not belong to the specified vendor.');
+        }
+        $vendorId = $resolvedVendorId;
+        $listingId = (int) ($listing['id'] ?? 0);
+        if ($listingPublicId === '') {
+            $listingPublicId = (string) ($listing['public_id'] ?? $listing['firestore_id'] ?? '');
+        }
+    }
+
+    if ($vendorId <= 0) {
+        yustam_api_error(422, 'vendorId is required.');
+    }
+
+    $db = get_db_connection();
+    $vendor = yustam_vendor_find_by_id($vendorId, $db);
+    if (!$vendor) {
+        yustam_api_error(404, 'Vendor not found.');
+    }
+
+    $rating = (int) ($payload['rating'] ?? 0);
+    if ($rating < 1 || $rating > 5) {
+        yustam_api_error(422, 'rating must be between 1 and 5.');
+    }
+
+    $comment = isset($payload['comment']) ? trim((string) $payload['comment']) : '';
+    $requestedStatus = strtolower(trim((string) ($payload['status'] ?? '')));
+    $status = 'published';
+    if ($requestedStatus !== '' && ($user['role'] ?? '') === 'admin') {
+        $validStatuses = ['published', 'pending', 'hidden', 'flagged'];
+        if (!in_array($requestedStatus, $validStatuses, true)) {
+            yustam_api_error(422, 'Invalid review status.');
+        }
+        $status = $requestedStatus;
+    }
+
+    $reviewerRef = (string) ($payload['reviewerRef'] ?? ($user['id'] ?? ''));
+    if ($reviewerRef === '') {
+        yustam_api_error(422, 'Unable to determine reviewer.');
+    }
+
+    $reviewerName = trim((string) ($payload['reviewerName'] ?? ($user['displayName'] ?? '')));
+    $existing = yustam_reviews_find_existing($db, $vendorId, $reviewerRef, $listingId);
+    if ($existing) {
+        if ($listingId <= 0 && isset($existing['listing_id'])) {
+            $listingId = (int) $existing['listing_id'];
+        }
+        if ($listingPublicId === '' && isset($existing['listing_public_id'])) {
+            $listingPublicId = (string) $existing['listing_public_id'];
+        }
+    }
+
+    $review = yustam_reviews_upsert($db, [
+        'vendor_id' => $vendorId,
+        'listing_id' => $listingId,
+        'listing_public_id' => $listingPublicId,
+        'reviewer_ref' => $reviewerRef,
+        'reviewer_name' => $reviewerName,
+        'rating' => $rating,
+        'comment' => $comment,
+        'status' => $status,
+    ]);
+
+    $created = !$existing || (int) ($existing['id'] ?? 0) !== (int) ($review['id'] ?? 0);
+
+    if ($created && ($user['role'] ?? '') !== 'vendor') {
+        $title = 'New review received';
+        $reviewerLabel = $reviewerName !== '' ? $reviewerName : 'A customer';
+        $message = sprintf('%s rated you %d/5%s', $reviewerLabel, (int) ($review['rating'] ?? 0), $comment !== '' ? ' and left a comment.' : '.');
+        $detail = json_encode([
+            'type' => 'review.created',
+            'reviewId' => $review['id'] ?? null,
+            'rating' => $review['rating'] ?? null,
+            'comment' => $review['comment'] ?? null,
+            'listingId' => $review['listingId'] ?? null,
+            'listingPublicId' => $review['listingPublicId'] ?? null,
+            'reviewer' => $review['reviewer'] ?? null,
+        ], YUSTAM_API_JSON_FLAGS);
+        yustam_vendor_notifications_insert($db, $vendorId, $title, $message, (string) $detail, 'review');
+    }
+
+    $summary = yustam_reviews_vendor_stats($vendorId);
+
+    return [
+        'success' => true,
+        'review' => $review,
+        'summary' => $summary,
+        'created' => $created,
+    ];
+}
+
+function yustam_api_reviews_list(): array
+{
+    $auth = yustam_api_optional_auth();
+    $role = $auth['role'] ?? null;
+    $authVendorId = (int) ($auth['vendorId'] ?? 0);
+
+    $vendorId = (int) ($_GET['vendorId'] ?? $_GET['vendor'] ?? 0);
+    if ($role === 'vendor') {
+        if ($authVendorId <= 0) {
+            yustam_api_error(404, 'Vendor profile not found.');
+        }
+        if ($vendorId > 0 && $vendorId !== $authVendorId) {
+            yustam_api_error(403, 'Cannot view reviews for another vendor.');
+        }
+        $vendorId = $authVendorId;
+    }
+
+    $listingId = (int) ($_GET['listingId'] ?? 0);
+    $listingPublicId = trim((string) ($_GET['listingPublicId'] ?? ''));
+    if ($listingId <= 0 && $listingPublicId !== '') {
+        $listing = yustam_api_find_listing($listingPublicId);
+        if ($listing) {
+            $listingId = (int) ($listing['id'] ?? 0);
+            $resolvedVendorId = (int) ($listing['vendor_id'] ?? 0);
+            if ($vendorId === 0) {
+                $vendorId = $resolvedVendorId;
+            } elseif ($resolvedVendorId > 0 && $vendorId !== $resolvedVendorId && $role !== 'admin') {
+                yustam_api_error(403, 'Listing does not belong to the specified vendor.');
+            }
+        }
+    }
+
+    if ($vendorId <= 0) {
+        yustam_api_error(422, 'vendorId is required.');
+    }
+
+    $validStatuses = ['published', 'pending', 'hidden', 'flagged'];
+    $status = strtolower(trim((string) ($_GET['status'] ?? '')));
+    $filters = ['vendorId' => $vendorId];
+
+    if ($listingId > 0) {
+        $filters['listingId'] = $listingId;
+    }
+
+    if ($status !== '') {
+        if (!in_array($status, $validStatuses, true)) {
+            yustam_api_error(422, 'Invalid status filter.');
+        }
+        if (!in_array($role, ['vendor', 'admin'], true) && $status !== 'published') {
+            yustam_api_error(403, 'Insufficient permissions for that status.');
+        }
+        $filters['status'] = $status;
+    } elseif (!in_array($role, ['vendor', 'admin'], true)) {
+        $filters['status'] = 'published';
+    }
+
+    $page = isset($_GET['page']) ? (int) $_GET['page'] : 1;
+    $pageSize = isset($_GET['pageSize']) ? (int) $_GET['pageSize'] : 20;
+
+    $result = yustam_reviews_list($filters, $page, $pageSize);
+
+    return [
+        'success' => true,
+        'data' => [
+            'vendorId' => $vendorId,
+            'filters' => $filters,
+            'reviews' => $result['items'] ?? [],
+            'pagination' => $result['pagination'] ?? null,
+        ],
+    ];
+}
+
+function yustam_api_reviews_summary(): array
+{
+    $auth = yustam_api_optional_auth();
+    $role = $auth['role'] ?? null;
+    $authVendorId = (int) ($auth['vendorId'] ?? 0);
+
+    $vendorId = (int) ($_GET['vendorId'] ?? $_GET['vendor'] ?? 0);
+    if ($role === 'vendor') {
+        if ($authVendorId <= 0) {
+            yustam_api_error(404, 'Vendor profile not found.');
+        }
+        if ($vendorId > 0 && $vendorId !== $authVendorId) {
+            yustam_api_error(403, 'Cannot view reviews summary for another vendor.');
+        }
+        $vendorId = $authVendorId;
+    }
+
+    if ($vendorId <= 0) {
+        yustam_api_error(422, 'vendorId is required.');
+    }
+
+    $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : (isset($_GET['recentLimit']) ? (int) $_GET['recentLimit'] : 5);
+    $limit = max(1, min(20, $limit));
+
+    $stats = yustam_reviews_vendor_stats($vendorId);
+    $recent = yustam_reviews_vendor_recent($vendorId, $limit);
+
+    return [
+        'success' => true,
+        'data' => [
+            'vendorId' => $vendorId,
+            'stats' => $stats,
+            'recent' => $recent,
+        ],
+    ];
+}
+
+function yustam_api_reviews_update(int $reviewId): array
+{
+    if ($reviewId <= 0) {
+        yustam_api_error(404, 'Review not found.');
+    }
+
+    $auth = yustam_api_require_auth(['admin', 'vendor']);
+    $role = $auth['role'];
+    $authVendorId = (int) ($auth['vendorId'] ?? 0);
+
+    $db = get_db_connection();
+    $existing = yustam_reviews_find_by_id($db, $reviewId);
+    if (!$existing) {
+        yustam_api_error(404, 'Review not found.');
+    }
+
+    $vendorId = (int) ($existing['vendor_id'] ?? 0);
+    if ($role === 'vendor') {
+        if ($authVendorId <= 0 || $authVendorId !== $vendorId) {
+            yustam_api_error(403, 'You cannot modify reviews for another vendor.');
+        }
+    }
+
+    $body = yustam_api_read_json_body();
+    $status = strtolower(trim((string) ($body['status'] ?? '')));
+    if ($status === '') {
+        yustam_api_error(422, 'status is required.');
+    }
+
+    $validStatuses = ['published', 'pending', 'hidden', 'flagged'];
+    if (!in_array($status, $validStatuses, true)) {
+        yustam_api_error(422, 'Invalid review status.');
+    }
+
+    if ($role === 'vendor' && !in_array($status, ['published', 'hidden'], true)) {
+        yustam_api_error(403, 'Vendors can only toggle reviews between published and hidden.');
+    }
+
+    $updated = yustam_reviews_update_status($db, $reviewId, $status);
+    if (!$updated) {
+        yustam_api_error(500, 'Unable to update review status.');
+    }
+
+    $summary = yustam_reviews_vendor_stats($vendorId);
+
+    return [
+        'success' => true,
+        'review' => $updated,
+        'summary' => $summary,
+    ];
+}
+
+function yustam_api_reviews_delete(int $reviewId): array
+{
+    if ($reviewId <= 0) {
+        yustam_api_error(404, 'Review not found.');
+    }
+
+    $auth = yustam_api_require_auth('admin');
+    $db = get_db_connection();
+    $existing = yustam_reviews_find_by_id($db, $reviewId);
+    if (!$existing) {
+        yustam_api_error(404, 'Review not found.');
+    }
+
+    $vendorId = (int) ($existing['vendor_id'] ?? 0);
+    if (!yustam_reviews_delete($db, $reviewId)) {
+        yustam_api_error(500, 'Unable to delete review.');
+    }
+
+    $summary = $vendorId > 0 ? yustam_reviews_vendor_stats($vendorId) : null;
+
+    return [
+        'success' => true,
+        'message' => 'Review removed successfully.',
+        'summary' => $summary,
+    ];
 }
 
 /**
@@ -1253,10 +1619,17 @@ function yustam_api_vendor_storefront(string $identifier): array
         $listings = [];
     }
 
+    $reviewsSummary = yustam_reviews_vendor_stats((int) $vendor['id']);
+    $recentReviews = yustam_reviews_vendor_recent((int) $vendor['id'], 5);
+
     return [
         'success' => true,
         'vendor' => $vendorPayload,
         'listings' => $listings,
+        'reviews' => [
+            'stats' => $reviewsSummary,
+            'recent' => $recentReviews,
+        ],
     ];
 }
 
@@ -1409,6 +1782,8 @@ function yustam_api_vendor_dashboard(): array
     }
 
     $subscription = yustam_vendor_subscription_format_state($vendor);
+    $reviewStats = yustam_reviews_vendor_stats($vendorId);
+    $recentReviews = yustam_reviews_vendor_recent($vendorId, 5);
 
     return [
         'success' => true,
@@ -1416,6 +1791,10 @@ function yustam_api_vendor_dashboard(): array
         'listings' => $counts,
         'plan' => $subscription,
         'verificationStatus' => $vendor['verification_status'] ?? null,
+        'reviews' => [
+            'stats' => $reviewStats,
+            'recent' => $recentReviews,
+        ],
     ];
 }
 
