@@ -159,22 +159,9 @@ export const normalizeFirestoreListing = (docSnap, { fallbackImage = FALLBACK_IM
 
   const city = pickFirstString(data.city, data.lga, data.localGovernment, data.vendorCity);
   const state = pickFirstString(data.state, data.region, data.vendorState, data.locationState);
-  const country = pickFirstString(data.country, data.vendorCountry, 'Nigeria');
-  const locationFallback = pickFirstString(
-    data.location,
-    data.vendorLocation,
-    data.city,
-    data.vendorCity,
-    data.vendorState
-  );
-  const cleanedFallback = locationFallback ? locationFallback.replace(/,\s*Nigeria$/i, '').trim() : '';
-  const locationParts = [city, state && (!city || city.toLowerCase() !== state.toLowerCase()) ? state : null]
-    .filter(Boolean)
-    .join(', ');
-  const location =
-    locationParts ||
-    cleanedFallback ||
-    (country && country.toLowerCase() !== 'nigeria' ? country : '');
+  const country = pickFirstString(data.country, 'Nigeria');
+  const locationParts = [city, state].filter(Boolean).join(', ');
+  const location = locationParts ? `${locationParts}${country ? `, ${country}` : ''}` : country;
 
   const image =
     pickFirstString(
@@ -190,6 +177,7 @@ export const normalizeFirestoreListing = (docSnap, { fallbackImage = FALLBACK_IM
   const badges = dedupeArray([
     ...(Array.isArray(data.badges) ? data.badges.filter(Boolean) : []),
     data.isFeatured || data.featured ? 'Featured' : null,
+    vendorPlan ? `${vendorPlan} Plan` : null,
   ]);
 
   const tags = dedupeArray(
@@ -208,10 +196,7 @@ export const normalizeFirestoreListing = (docSnap, { fallbackImage = FALLBACK_IM
     oldPrice,
     rating: Number.isFinite(ratingValue) ? ratingValue : null,
     reviews: formatReviewCount(reviewsRaw),
-    location,
-    city: city || '',
-    state: state || '',
-    country: country || '',
+    location: location || 'Nigeria',
     vendor,
     vendorPlan,
     verification,
@@ -230,12 +215,7 @@ export const normalizeStaticListing = (record = {}, { fallbackImage = FALLBACK_I
   oldPrice: parsePrice(record.oldPrice),
   rating: Number.isFinite(record.rating) ? record.rating : null,
   reviews: record.reviews || '',
-  location:
-    [record.city, record.state].filter(Boolean).join(', ') ||
-    (record.location ? record.location.replace(/,\s*Nigeria$/i, '').trim() : ''),
-  city: record.city || '',
-  state: record.state || '',
-  country: record.country || 'Nigeria',
+  location: record.location || 'Nigeria',
   vendor: record.vendor || record.vendorName || 'Yustam Vendor',
   vendorPlan: record.vendorPlan || record.plan || null,
   verification: record.verification || 'pending',
