@@ -6,6 +6,7 @@ if (PHP_SAPI !== 'cli') {
     exit(1);
 }
 
+define('YUSTAM_SKIP_EMAIL_LIB', true);
 require_once __DIR__ . '/../api/bootstrap.php';
 
 yustam_api_load_env();

@@ -4,7 +4,9 @@ declare(strict_types=1);
 require_once __DIR__ . '/../session-path.php';
 require_once __DIR__ . '/../db.php';
 require_once __DIR__ . '/../firebase-admin.php';
-require_once __DIR__ . '/../send-email.php';
+if (!defined('YUSTAM_SKIP_EMAIL_LIB')) {
+    require_once __DIR__ . '/../send-email.php';
+}
 require_once __DIR__ . '/../buyer-storage.php';
 require_once __DIR__ . '/../vendor-subscriptions.php';
 require_once __DIR__ . '/../notifications-storage.php';
