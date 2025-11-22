@@ -4550,18 +4550,20 @@ function yustam_api_chats_open(): array
         'unread_for_vendor' => 0,
     ];
 
+    $chatDocumentPath = yustam_firestore_document_path('chats', $chatId);
+
     try {
         yustam_firestore_commit([
             [
                 'update' => [
-                    'name' => yustam_firestore_document_path('chats', $chatId),
+                    'name' => $chatDocumentPath,
                     'fields' => $chatFields,
                 ],
                 'currentDocument' => ['exists' => false],
             ],
             [
                 'transform' => [
-                    'document' => yustam_firestore_document_path('chats', $chatId),
+                    'document' => $chatDocumentPath,
                     'fieldTransforms' => [
                         ['fieldPath' => 'last_ts', 'setToServerValue' => 'REQUEST_TIME'],
                     ],
@@ -4571,7 +4573,28 @@ function yustam_api_chats_open(): array
     } catch (Throwable $exception) {
         $message = $exception->getMessage();
         if (strpos($message, 'ALREADY_EXISTS') !== false) {
-            error_log('Chat open detected existing thread, returning cached document.');
+            error_log('Chat open detected existing thread, refreshing document.');
+            try {
+                yustam_firestore_commit([
+                    [
+                        'update' => [
+                            'name' => $chatDocumentPath,
+                            'fields' => $chatFields,
+                        ],
+                        'updateMask' => ['fieldPaths' => array_keys($chatFields)],
+                    ],
+                    [
+                        'transform' => [
+                            'document' => $chatDocumentPath,
+                            'fieldTransforms' => [
+                                ['fieldPath' => 'last_ts', 'setToServerValue' => 'REQUEST_TIME'],
+                            ],
+                        ],
+                    ],
+                ]);
+            } catch (Throwable $refreshException) {
+                error_log('Chat open refresh failed: ' . $refreshException->getMessage());
+            }
             try {
                 $document = yustam_firestore_get_document('chats/' . $chatId);
                 if ($document && isset($document['fields'])) {
