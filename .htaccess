@@ -1,3 +1,5 @@
+SetEnv FIREBASE_SERVICE_ACCOUNT_PATH "/home2/yustamco/firebase-service-account.json"
+
 RewriteEngine On
 
 # Route every /api/* request through the PHP API router unless a real file exists.
