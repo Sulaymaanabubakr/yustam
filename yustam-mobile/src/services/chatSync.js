@@ -192,7 +192,6 @@ const fetchChatsViaApi = async () => {
 
 const createChatsSubscription = (queryRef, role, uid, callback, options = {}) => {
   let active = true;
-  let seeded = false;
 
   const deliver = (records, source) => {
     if (!active || typeof callback !== 'function') {
@@ -202,19 +201,6 @@ const createChatsSubscription = (queryRef, role, uid, callback, options = {}) =>
     callback(orderChats(filterChatsByRole(hydrated, role, uid)), { source, count: hydrated.length });
   };
 
-  const fetchFallback = async () => {
-    try {
-      options.onStatus?.('fallback:start');
-      const records = await fetchChatsViaApi();
-      records.forEach((record) => hydrateChat(record));
-      deliver(records, 'api');
-      options.onStatus?.('fallback:success');
-    } catch (error) {
-      options.onStatus?.('fallback:error', error);
-      options.onError?.(error);
-    }
-  };
-
   const unsubscribe = onSnapshot(
     queryRef,
     (snapshot) => {
@@ -222,21 +208,19 @@ const createChatsSubscription = (queryRef, role, uid, callback, options = {}) =>
         return;
       }
       const docs = snapshot.docs.map(mapChatSnapshot);
-      if (!docs.length && !seeded) {
-        fetchFallback();
-        return;
-      }
-      seeded = true;
       const source = snapshot.metadata?.fromCache ? 'cache' : 'firestore';
       deliver(docs, source);
+      options.onStatus?.(`firestore:${source}`);
     },
     (error) => {
+      console.error('Firestore chat subscription error:', error);
       options.onError?.(error);
-      fetchFallback();
+      // Deliver empty array on error instead of falling back to API
+      if (typeof callback === 'function') {
+        callback([], { source: 'error', count: 0 });
+      }
     }
   );
-
-  fetchFallback();
 
   return () => {
     active = false;
@@ -341,7 +325,6 @@ export const subscribeMessages = (chatId, callback, options = {}) => {
   }
 
   let active = true;
-  let seeded = false;
 
   const deliver = (records, source) => {
     if (!active || typeof callback !== 'function') {
@@ -349,18 +332,6 @@ export const subscribeMessages = (chatId, callback, options = {}) => {
     }
     const mapped = records.map(normaliseMessageRecord);
     callback(mapped, { source, count: mapped.length });
-  };
-
-  const seedWithApi = async () => {
-    try {
-      options.onStatus?.('fallback:start');
-      const records = await fetchMessagesViaApiInternal(id);
-      deliver(records, 'api');
-      options.onStatus?.('fallback:success');
-    } catch (error) {
-      options.onStatus?.('fallback:error', error);
-      options.onError?.(error);
-    }
   };
 
   const q = query(
@@ -376,22 +347,20 @@ export const subscribeMessages = (chatId, callback, options = {}) => {
         return;
       }
       const docs = snapshot.docs.map(mapMessageSnapshot);
-      if (!docs.length && !seeded) {
-        seedWithApi();
-        return;
-      }
-      seeded = true;
       hydrateMessages(id, docs);
       const source = snapshot.metadata?.fromCache ? 'cache' : 'firestore';
       deliver(docs, source);
+      options.onStatus?.(source);
     },
     (error) => {
+      console.error('Firestore message subscription error:', error);
       options.onError?.(error);
-      seedWithApi();
+      // Deliver empty array on error instead of falling back to API
+      if (typeof callback === 'function') {
+        callback([], { source: 'error', count: 0 });
+      }
     }
   );
-
-  seedWithApi();
 
   return () => {
     active = false;

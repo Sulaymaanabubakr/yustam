@@ -14,7 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import theme from '../../theme';
 import Toast from '../../components/Toast';
-import { subscribeChatsForVendor, fetchChatsFromApi } from '../../services/chatSync';
+import { subscribeChatsForVendor } from '../../services/chatSync';
 import { goBackOrNavigate } from '../../utils/navigation';
 import resolveMediaUrl from '../../utils/url';
 import { timeAgo } from '../../utils/formatters';
@@ -77,7 +77,10 @@ const VendorChatsScreen = ({ navigation }) => {
       {
         onError: (error) => {
           console.error('Realtime chats failed:', error);
-          showToast('Realtime chat updates are unavailable. Falling back to refresh.', 'error');
+          showToast('Realtime chat updates are unavailable. Check your connection.', 'error');
+        },
+        onStatus: (status) => {
+          console.log('Chats subscription status:', status);
         },
       }
     );
@@ -88,22 +91,10 @@ const VendorChatsScreen = ({ navigation }) => {
   }, [user, vendorUid, applyThreads]);
 
   const onRefresh = useCallback(async () => {
-    if (!vendorUid) {
-      setChats([]);
-      return;
-    }
-    try {
-      setRefreshing(true);
-      const threads = await fetchChatsFromApi();
-      applyThreads(Array.isArray(threads) ? threads : []);
-    } catch (error) {
-      console.error('Manual chat refresh failed:', error);
-      showToast(error.message || 'Failed to refresh chats', 'error');
-    } finally {
-      setRefreshing(false);
-      setLoading(false);
-    }
-  }, [vendorUid, applyThreads]);
+    // Firestore listener handles updates automatically
+    // Just clear the refreshing state
+    setRefreshing(false);
+  }, []);
 
   const formatTime = (value) => timeAgo(value);
 

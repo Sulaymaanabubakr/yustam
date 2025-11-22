@@ -23,7 +23,8 @@ import Toast from '../../components/Toast';
 import Button from '../../components/Button';
 import { goBackOrNavigate } from '../../utils/navigation';
 import { chatAPI } from '../../services/api';
-import { subscribeMessages, fetchMessagesViaApi } from '../../services/chatSync';
+import { subscribeMessages } from '../../services/chatSync';
+import { sendMessageToFirestore, markChatAsReadInFirestore } from '../../services/chatFirestore';
 import { timeAgo } from '../../utils/formatters';
 import resolveMediaUrl from '../../utils/url';
 import { USER_ROLES } from '../../config/constants';
@@ -292,24 +293,23 @@ const ChatThreadScreen = ({ navigation, route }) => {
         fileName: `voice-${Date.now()}.m4a`,
         mimeType: 'audio/m4a',
       });
-      await chatAPI.sendMessage({
-        chat_id: chatId,
+      await sendMessageToFirestore({
+        chatId,
+        senderUid: resolvedUid,
+        senderRole: viewingAsVendor ? 'vendor' : 'buyer',
         text: '',
-        message: '',
-        image_url: '',
-        voice_url: upload.url,
+        imageUrl: '',
+        voiceUrl: upload.url,
         duration: durationSeconds,
-        role: viewingAsVendor ? 'vendor' : 'buyer',
-        buyer_uid: buyerUidResolved,
-        buyer_name: buyerDisplayName,
-        vendor_uid: vendorUidResolved,
-        vendor_name: vendorDisplayName,
-        vendor_business_name: vendorDisplayName,
-        listing_id: listingMeta.id,
-        listing_title: listingMeta.title,
-        listing_image: listingMeta.image,
+        buyerUid: buyerUidResolved,
+        vendorUid: vendorUidResolved,
+        buyerName: buyerDisplayName,
+        vendorName: vendorDisplayName,
+        listingId: listingMeta.id,
+        listingTitle: listingMeta.title,
+        listingImage: listingMeta.image,
       });
-      await refreshFromApi();
+      // Message will appear via real-time listener
       showToast('Voice note sent.');
     } catch (error) {
       console.error('Voice message failed:', error);
@@ -421,7 +421,10 @@ const ChatThreadScreen = ({ navigation, route }) => {
       {
         onError: (error) => {
           console.error('Realtime messages failed:', error);
-          showToast('Realtime updates unavailable. Pull to refresh.', 'error');
+          showToast('Realtime updates unavailable. Please check your connection.', 'error');
+        },
+        onStatus: (status) => {
+          console.log('Chat subscription status:', status);
         },
       }
     );
@@ -431,36 +434,14 @@ const ChatThreadScreen = ({ navigation, route }) => {
     };
   }, [chatId, handleMessagesUpdate]);
 
-  const refreshFromApi = useCallback(
-    async (showSpinner = false) => {
-      if (!chatId) {
-        setMessages([]);
-        return;
-      }
-      try {
-        if (showSpinner) {
-          setRefreshing(true);
-        }
-        const records = await fetchMessagesViaApi(chatId);
-        handleMessagesUpdate(Array.isArray(records) ? records : []);
-      } catch (error) {
-        console.error('Manual message refresh failed:', error);
-        showToast(error.message || 'Unable to refresh messages right now.', 'error');
-      } finally {
-        if (showSpinner) {
-          setRefreshing(false);
-        }
-      }
-    },
-    [chatId, handleMessagesUpdate]
-  );
-
   useFocusEffect(
     useCallback(() => {
       if (!chatId) {
         return undefined;
       }
-      chatAPI.markAsRead(chatId, viewingAsVendor ? 'vendor' : 'buyer').catch(() => {});
+      markChatAsReadInFirestore(chatId, viewingAsVendor ? 'vendor' : 'buyer').catch((error) => {
+        console.warn('Failed to mark chat as read:', error);
+      });
       return undefined;
     }, [chatId, viewingAsVendor])
   );
@@ -504,26 +485,25 @@ const ChatThreadScreen = ({ navigation, route }) => {
         uploadedImageUrl = uploadResult.url;
       }
 
-      await chatAPI.sendMessage({
-        chat_id: chatId,
+      await sendMessageToFirestore({
+        chatId,
+        senderUid: resolvedUid,
+        senderRole: viewingAsVendor ? 'vendor' : 'buyer',
         text: trimmed,
-        message: trimmed,
-        image_url: uploadedImageUrl,
-        voice_url: '',
-        role: viewingAsVendor ? 'vendor' : 'buyer',
-        buyer_uid: buyerUidResolved,
-        buyer_name: buyerDisplayName,
-        vendor_uid: vendorUidResolved,
-        vendor_name: vendorDisplayName,
-        vendor_business_name: vendorDisplayName,
-        listing_id: listingMeta.id,
-        listing_title: listingMeta.title,
-        listing_image: listingMeta.image,
+        imageUrl: uploadedImageUrl,
+        voiceUrl: '',
+        buyerUid: buyerUidResolved,
+        vendorUid: vendorUidResolved,
+        buyerName: buyerDisplayName,
+        vendorName: vendorDisplayName,
+        listingId: listingMeta.id,
+        listingTitle: listingMeta.title,
+        listingImage: listingMeta.image,
       });
       if (hasAttachment) {
         clearAttachment();
       }
-      await refreshFromApi();
+      // Message will appear via real-time listener
     } catch (error) {
       console.error('Send message failed:', error);
       setMessages((prev) => prev.filter((msg) => msg.id !== tempId));
@@ -535,8 +515,10 @@ const ChatThreadScreen = ({ navigation, route }) => {
   };
 
   const onRefresh = useCallback(() => {
-    refreshFromApi(true);
-  }, [refreshFromApi]);
+    // Firestore listener handles updates automatically
+    // Just clear the refreshing state
+    setRefreshing(false);
+  }, []);
 
   useEffect(() => {
     if (!messages.length) {

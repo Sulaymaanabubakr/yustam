@@ -24,6 +24,7 @@ import { formatDate, formatNaira } from '../../utils/formatters';
 import resolveMediaUrl from '../../utils/url';
 import { API_BASE_URL, USER_ROLES } from '../../config/constants';
 import { chatAPI, vendorAPI } from '../../services/api';
+import { openChatInFirestore } from '../../services/chatFirestore';
 import { addRecentlyViewedListing } from '../../storage/recentlyViewed';
 
 const { width } = Dimensions.get('window');
@@ -423,26 +424,21 @@ const ProductDetailScreen = ({ navigation, route }) => {
     try {
       const coverAsset = gallery[activeImageIndex] || gallery[0] || null;
       const coverImage = coverAsset?.preview || coverAsset?.uri || PLACEHOLDER_IMAGE;
-      const payload = {
-        buyer_uid: user.uid,
-        buyer_name: user.fullName || user.displayName || user.email || 'Buyer',
-        vendor_uid: vendorProfile.vendorUid,
-        vendor_name: vendorProfile.name,
-        vendor_business_name: vendorProfile.businessName || vendorProfile.name,
-        vendor_plan: vendorProfile.planLabel,
-        listing_id: listing.id,
-        listing_title: listing.title,
-        listing_image: coverImage,
-      };
-      const thread = await chatAPI.openChat(payload);
-      const chatId = thread?.id || thread?.threadId;
-      if (!chatId) {
-        throw new Error('Unable to start chat right now.');
-      }
+      
+      const chatId = await openChatInFirestore({
+        buyerUid: user.uid,
+        vendorUid: vendorProfile.vendorUid,
+        buyerName: user.fullName || user.displayName || user.email || 'Buyer',
+        vendorName: vendorProfile.businessName || vendorProfile.name,
+        buyerAvatar: user.photoURL || '',
+        vendorAvatar: vendorProfile.avatar || '',
+        listingId: listing.id,
+        listingTitle: listing.title,
+        listingImage: coverImage,
+      });
 
       navigation.navigate('ChatThread', {
         chatId,
-        firebaseThreadId: thread?.firebaseThreadId,
         vendorName: vendorProfile.name,
         vendorPhoto: vendorProfile.avatar,
         vendorPlanLabel: vendorProfile.planLabel,
@@ -455,28 +451,7 @@ const ProductDetailScreen = ({ navigation, route }) => {
       });
     } catch (chatError) {
       console.error('Chat initialisation failed:', chatError);
-      const messageText = typeof chatError?.message === 'string' ? chatError.message : '';
-      if (messageText.toLowerCase().includes('unable to open chat thread')) {
-        const fallbackThread = await resolveExistingThread();
-        if (fallbackThread) {
-          navigation.navigate('ChatThread', {
-            chatId: fallbackThread.id || fallbackThread.chat_id,
-            firebaseThreadId: fallbackThread.firebaseThreadId || null,
-            vendorName: vendorProfile.name,
-            vendorPhoto: vendorProfile.avatar,
-            vendorPlanLabel: vendorProfile.planLabel,
-            vendorUid: vendorProfile.vendorUid,
-            listingTitle: fallbackThread.listingTitle || listing?.title,
-            listingId: fallbackThread.listingId || listing?.id,
-            listingImage:
-              fallbackThread.listingImage || coverImage || gallery[0]?.preview || gallery[0]?.uri || PLACEHOLDER_IMAGE,
-            buyerId: fallbackThread.buyerUid || user?.uid,
-            buyerName: fallbackThread.buyerName || user?.fullName || user?.displayName || user?.email || 'Buyer',
-          });
-          return;
-        }
-      }
-      showToast(messageText || 'Unable to start chat.', 'error');
+      showToast(chatError?.message || 'Unable to start chat.', 'error');
     } finally {
       setChatLoading(false);
     }
