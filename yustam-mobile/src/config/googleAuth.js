@@ -5,7 +5,6 @@ const DEFAULT_CLIENT_IDS = {
   expoClientId: '',
   iosClientId: '',
   webClientId: '',
-  androidClientId: '',
 };
 
 const readExtraConfig = () => {
@@ -32,7 +31,6 @@ export const GOOGLE_OAUTH_CONFIG = {
   expoClientId: extraConfig.expoClientId,
   iosClientId: extraConfig.iosClientId,
   webClientId: extraConfig.webClientId,
-  androidClientId: extraConfig.androidClientId,
 };
 
 export const GOOGLE_OAUTH_SCOPES = ['openid', 'profile', 'email'];
@@ -59,9 +57,6 @@ export const configureGoogleSignIn = () => {
     };
     if (GOOGLE_OAUTH_CONFIG.iosClientId) {
       config.iosClientId = GOOGLE_OAUTH_CONFIG.iosClientId;
-    }
-    if (GOOGLE_OAUTH_CONFIG.androidClientId) {
-      config.androidClientId = GOOGLE_OAUTH_CONFIG.androidClientId;
     }
     GoogleSignin.configure(config);
     googleSignInConfigured = true;

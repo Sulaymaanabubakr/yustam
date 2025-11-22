@@ -4525,13 +4525,21 @@ function yustam_api_chats_list(): array
             $results = yustam_firestore_run_query($query);
             error_log(sprintf('Chat list fallback query returned %d entries for %s', count($results), $context['uid']));
             foreach ($results as $result) {
-                if (!isset($result['document']['fields'])) {
+                $document = $result['document'] ?? $result['found'] ?? null;
+                if (!is_array($document)) {
                     continue;
                 }
+
+                $fieldsRaw = isset($document['fields']) && is_array($document['fields']) ? $document['fields'] : [];
                 $fields = [];
-                foreach ($result['document']['fields'] as $key => $value) {
+                foreach ($fieldsRaw as $key => $value) {
                     $fields[$key] = yustam_firestore_decode($value);
                 }
+
+                if (isset($document['name']) && !isset($fields['chat_id'])) {
+                    $fields['chat_id'] = basename($document['name']);
+                }
+
                 $thread = yustam_api_chat_thread_from_fields($fields);
                 $threads[] = $thread;
 
@@ -4869,15 +4877,19 @@ function yustam_api_chats_list_messages(string $threadId): array
         $results = yustam_firestore_run_query($query);
         error_log(sprintf('Chat messages query returned %d raw entries for %s', count($results), $threadId));
         foreach ($results as $result) {
-            if (!isset($result['document']['fields'])) {
+            $document = $result['document'] ?? $result['found'] ?? null;
+            if (!is_array($document)) {
                 continue;
             }
+
+            $fieldsRaw = isset($document['fields']) && is_array($document['fields']) ? $document['fields'] : [];
             $fields = [];
-            foreach ($result['document']['fields'] as $key => $value) {
+            foreach ($fieldsRaw as $key => $value) {
                 $fields[$key] = yustam_firestore_decode($value);
             }
+
             $messages[] = [
-                'id' => basename($result['document']['name']),
+                'id' => isset($document['name']) ? basename($document['name']) : '',
                 'text' => $fields['text'] ?? $fields['message'] ?? '',
                 'type' => $fields['type'] ?? $fields['message_type'] ?? 'text',
                 'sender' => $fields['sender_uid'] ?? $fields['senderUid'] ?? $fields['sender'] ?? '',
