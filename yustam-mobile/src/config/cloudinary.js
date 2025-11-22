@@ -6,6 +6,7 @@ export const CLOUDINARY_UPLOAD_PRESET = 'yustam_unsigned';
 export const CLOUDINARY_UPLOAD_URL = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/upload`;
 
 const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp', 'heic'];
+const AUDIO_EXTENSIONS = ['m4a', 'aac', 'mp3', 'wav', 'ogg', 'oga', 'webm'];
 const VIDEO_EXTENSIONS = ['mp4', 'mov', 'm4v', 'avi'];
 
 const inferExtension = (uri, fallback = 'jpg') => {
@@ -17,7 +18,7 @@ const inferExtension = (uri, fallback = 'jpg') => {
     return fallback;
   }
   const extension = match[1].toLowerCase();
-  if ([...IMAGE_EXTENSIONS, ...VIDEO_EXTENSIONS].includes(extension)) {
+  if ([...IMAGE_EXTENSIONS, ...VIDEO_EXTENSIONS, ...AUDIO_EXTENSIONS].includes(extension)) {
     return extension;
   }
   return fallback;
@@ -30,10 +31,35 @@ const inferResourceType = (extension, requestedType = 'auto') => {
   if (VIDEO_EXTENSIONS.includes(extension)) {
     return 'video';
   }
+  if (AUDIO_EXTENSIONS.includes(extension)) {
+    return 'video';
+  }
   return 'image';
 };
 
 const deriveMimeFromExtension = (extension, resourceType) => {
+  if (AUDIO_EXTENSIONS.includes(extension)) {
+    if (extension === 'm4a') {
+      return 'audio/mp4';
+    }
+    if (extension === 'aac') {
+      return 'audio/aac';
+    }
+    if (extension === 'mp3') {
+      return 'audio/mpeg';
+    }
+    if (extension === 'wav') {
+      return 'audio/wav';
+    }
+    if (extension === 'ogg' || extension === 'oga') {
+      return 'audio/ogg';
+    }
+    if (extension === 'webm') {
+      return 'audio/webm';
+    }
+    return 'audio/mpeg';
+  }
+
   if (resourceType === 'video') {
     if (extension === 'mov') {
       return 'video/quicktime';
@@ -156,6 +182,13 @@ export const uploadImage = (uri, options = {}) =>
 
 export const uploadVideo = (uri, options = {}) =>
   uploadMedia(uri, { ...options, resourceType: 'video' });
+
+export const uploadAudio = (uri, options = {}) =>
+  uploadMedia(uri, {
+    ...options,
+    resourceType: 'video',
+    mimeType: options?.mimeType || 'audio/m4a',
+  });
 
 export const cloudinaryConfig = {
   cloudName: CLOUDINARY_CLOUD_NAME,
