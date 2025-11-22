@@ -77,14 +77,19 @@ try {
 
     $results = yustam_firestore_run_query($query);
     foreach ($results as $result) {
-        if (!isset($result['document']['fields'])) {
+        $document = $result['document'] ?? $result['found'] ?? null;
+        if (!is_array($document)) {
             continue;
         }
+
+        $fieldsRaw = isset($document['fields']) && is_array($document['fields']) ? $document['fields'] : [];
         $fields = [];
-        foreach ($result['document']['fields'] as $key => $value) {
+        foreach ($fieldsRaw as $key => $value) {
             $fields[$key] = yustam_firestore_decode($value);
         }
-        $fields['chat_id'] = $fields['chat_id'] ?? basename($result['document']['name']);
+        if (!isset($fields['chat_id']) && isset($document['name'])) {
+            $fields['chat_id'] = basename($document['name']);
+        }
 
         if ($role === 'buyer') {
             $vendorUid = trim((string)($fields['vendor_uid'] ?? ''));
@@ -108,6 +113,16 @@ try {
                 }
             }
         }
+
+        error_log(sprintf(
+            'list-chats candidate role=%s uid=%s chat=%s buyer=%s vendor=%s source=%s',
+            $role,
+            $uid,
+            $fields['chat_id'] ?? '',
+            $fields['buyer_uid'] ?? '',
+            $fields['vendor_uid'] ?? '',
+            isset($result['found']) ? 'found' : 'document'
+        ));
 
         $chats[] = $fields;
     }
