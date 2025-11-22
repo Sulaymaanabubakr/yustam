@@ -50,7 +50,23 @@ set_exception_handler(static function (Throwable $error): void {
         'error' => $error,
         'file' => $error->getFile(),
         'line' => $error->getLine(),
+        'sapi' => PHP_SAPI,
     ]);
+
+    if (PHP_SAPI === 'cli') {
+        $message = sprintf(
+            "[chat] uncaught_exception at %s:%d -> %s\n",
+            $error->getFile(),
+            $error->getLine(),
+            $error->getMessage()
+        );
+        fwrite(STDERR, $message);
+        if (CHAT_DEBUG) {
+            fwrite(STDERR, json_encode($payload, JSON_PRETTY_PRINT) . "\n");
+        }
+        return;
+    }
+
     header('Content-Type: application/json', true, 500);
     echo json_encode($payload);
 });
