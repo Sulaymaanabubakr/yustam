@@ -4452,48 +4452,123 @@ function yustam_api_chats_list(): array
 {
     $user = yustam_api_require_auth();
     $context = yustam_api_chat_context($user);
-    $fieldPath = $context['role'] === 'vendor' ? 'vendor_uid' : 'buyer_uid';
+    yustam_api_ensure_chat_table();
+    $db = get_db_connection();
 
-    $query = [
-        'structuredQuery' => [
-            'from' => [
-                ['collectionId' => 'chats'],
-            ],
-            'where' => [
-                'fieldFilter' => [
-                    'field' => ['fieldPath' => $fieldPath],
-                    'op' => 'EQUAL',
-                    'value' => yustam_firestore_string($context['uid']),
-                ],
-            ],
-            'orderBy' => [
-                [
-                    'field' => ['fieldPath' => 'last_ts'],
-                    'direction' => 'DESCENDING',
-                ],
-            ],
-            'limit' => 50,
-        ],
-    ];
+    $column = $context['role'] === 'vendor' ? 'vendor_uid' : 'buyer_uid';
+    $sql = sprintf(
+        'SELECT chat_id, metadata FROM `api_chat_threads` WHERE `%s` = ? ORDER BY updated_at DESC LIMIT 100',
+        $column
+    );
 
     $threads = [];
-    try {
-        $results = yustam_firestore_run_query($query);
-        error_log(sprintf('Chat list query returned %d raw entries for %s', count($results), $context['uid']));
-        foreach ($results as $result) {
-            if (!isset($result['document']['fields'])) {
-                continue;
+    $stmt = $db->prepare($sql);
+    if ($stmt instanceof mysqli_stmt) {
+        $stmt->bind_param('s', $context['uid']);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        if ($result instanceof mysqli_result) {
+            while ($row = $result->fetch_assoc()) {
+                $chatId = (string) $row['chat_id'];
+                $fields = ['chat_id' => $chatId];
+
+                try {
+                    $document = yustam_firestore_get_document('chats/' . $chatId);
+                    if ($document && isset($document['fields'])) {
+                        foreach ($document['fields'] as $key => $value) {
+                            $fields[$key] = yustam_firestore_decode($value);
+                        }
+                    }
+                } catch (Throwable $firestoreError) {
+                    error_log('Chat list fetch Firestore failed: ' . $firestoreError->getMessage());
+                }
+
+                if (!empty($row['metadata'])) {
+                    $metadata = json_decode((string) $row['metadata'], true);
+                    if (is_array($metadata)) {
+                        $fields = array_merge($metadata, $fields);
+                    }
+                }
+
+                $threads[] = yustam_api_chat_thread_from_fields($fields);
             }
-            $fields = [];
-            foreach ($result['document']['fields'] as $key => $value) {
-                $fields[$key] = yustam_firestore_decode($value);
-            }
-            $threads[] = yustam_api_chat_thread_from_fields($fields);
+            $result->free();
         }
-        error_log(sprintf('Chat list returning %d threads for %s', count($threads), $context['uid']));
-    } catch (Throwable $exception) {
-        error_log('Chat list failed: ' . $exception->getMessage());
+        $stmt->close();
     }
+
+    if (!$threads) {
+        $fieldPath = $context['role'] === 'vendor' ? 'vendor_uid' : 'buyer_uid';
+        $query = [
+            'structuredQuery' => [
+                'from' => [
+                    ['collectionId' => 'chats'],
+                ],
+                'where' => [
+                    'fieldFilter' => [
+                        'field' => ['fieldPath' => $fieldPath],
+                        'op' => 'EQUAL',
+                        'value' => yustam_firestore_string($context['uid']),
+                    ],
+                ],
+                'orderBy' => [
+                    [
+                        'field' => ['fieldPath' => 'last_ts'],
+                        'direction' => 'DESCENDING',
+                    ],
+                ],
+                'limit' => 50,
+            ],
+        ];
+
+        try {
+            $results = yustam_firestore_run_query($query);
+            error_log(sprintf('Chat list fallback query returned %d entries for %s', count($results), $context['uid']));
+            foreach ($results as $result) {
+                if (!isset($result['document']['fields'])) {
+                    continue;
+                }
+                $fields = [];
+                foreach ($result['document']['fields'] as $key => $value) {
+                    $fields[$key] = yustam_firestore_decode($value);
+                }
+                $thread = yustam_api_chat_thread_from_fields($fields);
+                $threads[] = $thread;
+
+                if (!empty($thread['id'])) {
+                    $buyerUidFallback = $fields['buyer_uid'] ?? $fields['buyerUid'] ?? ($thread['buyerUid'] ?? '');
+                    $vendorUidFallback = $fields['vendor_uid'] ?? $fields['vendorUid'] ?? ($thread['vendorUid'] ?? '');
+                    if ($buyerUidFallback !== '' || $vendorUidFallback !== '') {
+                        $cacheFields = [
+                            'buyer_uid' => $buyerUidFallback,
+                            'vendor_uid' => $vendorUidFallback,
+                            'buyer_name' => $thread['buyerName'] ?? '',
+                            'vendor_name' => $thread['vendorName'] ?? '',
+                            'listing_id' => $thread['listingId'] ?? '',
+                            'listing_title' => $thread['listingTitle'] ?? '',
+                            'listing_image' => $thread['listingImage'] ?? '',
+                            'last_text' => $thread['lastMessage'] ?? '',
+                            'last_sender_role' => $thread['lastSenderRole'] ?? '',
+                        ];
+
+                        if (!yustam_api_chat_update_cached_thread($thread['id'], $cacheFields)) {
+                            $cacheFields['buyer_ref'] = '';
+                            $cacheFields['vendor_ref'] = '';
+                            yustam_api_chat_store_metadata($thread['id'], $cacheFields);
+                        }
+                    }
+                }
+            }
+        } catch (Throwable $exception) {
+            error_log('Chat list fallback failed: ' . $exception->getMessage());
+        }
+    }
+
+    if (count($threads) > 50) {
+        $threads = array_slice($threads, 0, 50);
+    }
+
+    error_log(sprintf('Chat list returning %d threads for %s via metadata lookup', count($threads), $context['uid']));
 
     return ['success' => true, 'threads' => $threads];
 }
@@ -4616,12 +4691,29 @@ function yustam_api_chats_open(): array
         }
     }
 
-    yustam_api_chat_store_metadata($chatId, [
+    $metadataCache = [
         'buyer_ref' => $context['role'] === 'buyer' ? $user['id'] : ($body['buyerRef'] ?? ''),
         'vendor_ref' => $context['role'] === 'vendor' ? $user['id'] : ($body['vendorRef'] ?? ''),
         'buyer_uid' => $buyerUid,
         'vendor_uid' => $vendorUid,
-    ]);
+        'buyer_name' => $buyerName,
+        'vendor_name' => $vendorName,
+        'vendor_business_name' => $vendorBusinessName,
+        'listing_id' => $listingId,
+        'listing_title' => $listingTitle,
+        'listing_image' => $listingImage,
+        'last_text' => 'Conversation started',
+        'last_sender_role' => $context['role'],
+    ];
+
+    if (!empty($context['firebaseUid'])) {
+        $metadataCache['firebase_uid'] = $context['firebaseUid'];
+    }
+    if (!empty($context['vendorUid'])) {
+        $metadataCache['vendor_uid_primary'] = $context['vendorUid'];
+    }
+
+    yustam_api_chat_store_metadata($chatId, $metadataCache);
 
     return ['success' => true, 'thread' => yustam_api_chat_thread_from_fields($threadFieldsForResponse)];
 }
@@ -4736,6 +4828,23 @@ function yustam_api_chats_send_message(string $threadId): array
         yustam_api_error(500, 'Unable to send message.');
     }
 
+    $cacheUpdated = yustam_api_chat_update_cached_thread($threadId, [
+        'last_text' => $preview,
+        'last_sender_role' => $context['role'],
+        'last_ts' => time(),
+    ]);
+
+    if (!$cacheUpdated) {
+        yustam_api_chat_store_metadata($threadId, [
+            'buyer_ref' => $context['role'] === 'buyer' ? ($user['id'] ?? '') : '',
+            'vendor_ref' => $context['role'] === 'vendor' ? ($user['id'] ?? '') : '',
+            'buyer_uid' => $buyerUid,
+            'vendor_uid' => $vendorUid,
+            'last_text' => $preview,
+            'last_sender_role' => $context['role'],
+        ]);
+    }
+
     return ['success' => true, 'messageId' => $messageId];
 }
 
@@ -4811,23 +4920,46 @@ function yustam_api_chats_mark_read(string $threadId): array
 function yustam_api_chat_context(array $user): array
 {
     $role = $user['role'] === 'vendor' ? 'vendor' : 'buyer';
-    $uid = $user['firebaseUid'] ?? null;
+    $name = $user['displayName'] ?? ($role === 'vendor' ? 'Vendor' : 'Buyer');
 
-    if (!$uid && $role === 'vendor' && !empty($user['vendorId'])) {
-        $vendor = yustam_vendor_find_by_id((int) $user['vendorId'], get_db_connection());
-        if ($vendor && !empty($vendor['firebase_uid'])) {
-            $uid = $vendor['firebase_uid'];
+    $firebaseUid = trim((string) ($user['firebaseUid'] ?? $user['uid'] ?? ''));
+    $vendorUid = trim((string) ($user['vendorUid'] ?? $user['vendor_uid'] ?? ''));
+
+    if ($role === 'vendor' && ( $vendorUid === '' || $firebaseUid === '')) {
+        $vendorId = isset($user['vendorId']) ? (int) $user['vendorId'] : 0;
+        if ($vendorId > 0) {
+            $vendor = yustam_vendor_find_by_id($vendorId, get_db_connection());
+            if ($vendor) {
+                if ($vendorUid === '' && !empty($vendor['vendor_uid'])) {
+                    $vendorUid = trim((string) $vendor['vendor_uid']);
+                }
+                if ($firebaseUid === '' && !empty($vendor['firebase_uid'])) {
+                    $firebaseUid = trim((string) $vendor['firebase_uid']);
+                }
+            }
         }
     }
 
-    if (!$uid) {
-        yustam_api_error(400, 'Your Firebase session is missing. Please sign in again.');
+    $primaryUid = '';
+    if ($role === 'vendor') {
+        $primaryUid = $vendorUid !== '' ? $vendorUid : $firebaseUid;
+    } else {
+        if ($firebaseUid === '' && !empty($user['buyerId'])) {
+            $firebaseUid = trim((string) $user['buyerId']);
+        }
+        $primaryUid = $firebaseUid;
+    }
+
+    if ($primaryUid === '') {
+        yustam_api_error(400, 'Your chat identity could not be resolved. Please sign in again.');
     }
 
     return [
         'role' => $role,
-        'uid' => $uid,
-        'name' => $user['displayName'] ?? ($role === 'vendor' ? 'Vendor' : 'Buyer'),
+        'uid' => $primaryUid,
+        'name' => $name,
+        'vendorUid' => $role === 'vendor' && $vendorUid !== '' ? $vendorUid : null,
+        'firebaseUid' => $firebaseUid !== '' ? $firebaseUid : null,
     ];
 }
 
@@ -4856,6 +4988,55 @@ function yustam_api_chat_thread_from_fields(array $fields): array
         'unreadForBuyer' => (int) $pick(['unread_for_buyer', 'unreadForBuyer', 'buyer_unread_count'], 0),
         'unreadForVendor' => (int) $pick(['unread_for_vendor', 'unreadForVendor', 'vendor_unread_count'], 0),
     ];
+}
+
+function yustam_api_chat_update_cached_thread(string $chatId, array $fields): bool
+{
+    if ($chatId === '' || $fields === []) {
+        return false;
+    }
+
+    $row = null;
+    try {
+        yustam_api_ensure_chat_table();
+        $db = get_db_connection();
+        $stmt = $db->prepare('SELECT buyer_ref, vendor_ref, buyer_uid, vendor_uid, metadata FROM `api_chat_threads` WHERE chat_id = ? LIMIT 1');
+        if (!$stmt instanceof mysqli_stmt) {
+            return false;
+        }
+        $stmt->bind_param('s', $chatId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $row = $result ? $result->fetch_assoc() : null;
+        if ($result instanceof mysqli_result) {
+            $result->free();
+        }
+        $stmt->close();
+    } catch (Throwable $exception) {
+        error_log('Chat cache lookup failed: ' . $exception->getMessage());
+        return false;
+    }
+
+    if (!$row) {
+        return false;
+    }
+
+    $metadata = [];
+    if (!empty($row['metadata'])) {
+        $decoded = json_decode((string) $row['metadata'], true);
+        if (is_array($decoded)) {
+            $metadata = $decoded;
+        }
+    }
+
+    $metadata = array_merge($metadata, $fields);
+    $metadata['buyer_ref'] = $row['buyer_ref'] ?? ($metadata['buyer_ref'] ?? '');
+    $metadata['vendor_ref'] = $row['vendor_ref'] ?? ($metadata['vendor_ref'] ?? '');
+    $metadata['buyer_uid'] = $row['buyer_uid'] ?? ($metadata['buyer_uid'] ?? '');
+    $metadata['vendor_uid'] = $row['vendor_uid'] ?? ($metadata['vendor_uid'] ?? '');
+
+    yustam_api_chat_store_metadata($chatId, $metadata);
+    return true;
 }
 
 function yustam_api_chat_store_metadata(string $chatId, array $meta): void
