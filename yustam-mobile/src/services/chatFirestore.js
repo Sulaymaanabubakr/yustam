@@ -7,6 +7,10 @@ import {
   serverTimestamp,
   increment,
   getDoc,
+  getDocs,
+  query,
+  where,
+  limit,
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
@@ -30,8 +34,48 @@ export const openChatInFirestore = async ({
     throw new Error('Both buyer_uid and vendor_uid are required to open a chat');
   }
 
+  const trimmedListingId = listingId ? String(listingId).trim() : '';
+  const chatsCollection = collection(db, 'chats');
+
+  const tryFindExistingThread = async (constraints = []) => {
+    try {
+      const snapshot = await getDocs(query(chatsCollection, ...constraints, limit(1)));
+      if (!snapshot.empty) {
+        const existingDoc = snapshot.docs[0];
+        if (existingDoc?.id) {
+          return existingDoc.id;
+        }
+      }
+    } catch (lookupError) {
+      console.warn('Chat lookup failed:', lookupError);
+    }
+    return null;
+  };
+
+  // Prefer existing chats that match both participants and listing
+  const baseConstraints = [
+    where('buyer_uid', '==', buyerUid),
+    where('vendor_uid', '==', vendorUid),
+  ];
+
+  if (trimmedListingId) {
+    const existingForListing = await tryFindExistingThread([
+      ...baseConstraints,
+      where('listing_id', '==', trimmedListingId),
+    ]);
+    if (existingForListing) {
+      return existingForListing;
+    }
+  }
+
+  // Fallback: match participants regardless of listing to reuse legacy threads
+  const existingGeneric = await tryFindExistingThread(baseConstraints);
+  if (existingGeneric) {
+    return existingGeneric;
+  }
+
   // Generate consistent chat ID based on participants
-  const chatId = `${buyerUid}_${vendorUid}_${listingId || 'general'}`;
+  const chatId = `${buyerUid}_${vendorUid}_${trimmedListingId || 'general'}`;
   const chatRef = doc(db, 'chats', chatId);
 
   // Check if chat already exists
@@ -52,7 +96,7 @@ export const openChatInFirestore = async ({
     vendor_name: vendorName,
     vendor_business_name: vendorName,
     vendor_avatar: vendorAvatar,
-    listing_id: listingId,
+    listing_id: trimmedListingId,
     listing_title: listingTitle,
     listing_image: listingImage,
     last_text: '',
@@ -101,6 +145,8 @@ export const sendMessageToFirestore = async ({
   if (normalizedRole !== 'buyer' && normalizedRole !== 'vendor') {
     throw new Error('sender_role must be either "buyer" or "vendor"');
   }
+
+  const safeListingId = listingId ? String(listingId).trim() : '';
 
   // Determine message type
   let messageType = 'text';
@@ -160,7 +206,7 @@ export const sendMessageToFirestore = async ({
       vendor_uid: vendorUid,
       vendor_name: vendorName,
       vendor_business_name: vendorName,
-      listing_id: listingId,
+      listing_id: safeListingId,
       listing_title: listingTitle,
       listing_image: listingImage,
       created_at: serverTimestamp(),

@@ -1,10 +1,16 @@
-const UID_CANDIDATE_KEYS = [
+const GENERIC_UID_KEYS = [
   'uid',
   'firebaseUid',
   'firebaseUID',
   'firebase_id',
   'firebaseId',
   'firebaseID',
+  'userId',
+  'user_id',
+  'id',
+];
+
+const VENDOR_UID_KEYS = [
   'vendorUid',
   'vendorUID',
   'vendor_uid',
@@ -13,7 +19,6 @@ const UID_CANDIDATE_KEYS = [
   'vendor_firebase_uid',
   'vendorId',
   'vendorID',
-  'id',
 ];
 
 const normalizeCandidate = (value) => {
@@ -29,12 +34,37 @@ const normalizeCandidate = (value) => {
   return '';
 };
 
-export const resolveUserUid = (source, fallback = '') => {
-  if (!source || typeof source !== 'object') {
-    return fallback;
+const buildCandidateKeys = (source, options = {}) => {
+  const roleHint = options.roleHint || String(source?.role || '').toLowerCase();
+  const preferVendor = options.preferVendor ?? roleHint === 'vendor';
+  if (preferVendor) {
+    return [...VENDOR_UID_KEYS, ...GENERIC_UID_KEYS];
+  }
+  return [...GENERIC_UID_KEYS, ...VENDOR_UID_KEYS];
+};
+
+export const resolveUserUid = (source, fallback = '', options = {}) => {
+  let resolvedFallback = fallback;
+  let effectiveOptions = options;
+
+  if (resolvedFallback && typeof resolvedFallback === 'object') {
+    effectiveOptions = resolvedFallback;
+    resolvedFallback = '';
+  } else if (typeof resolvedFallback === 'string') {
+    const normalised = resolvedFallback.toLowerCase();
+    if (normalised === 'vendor' || normalised === 'buyer') {
+      effectiveOptions = { ...effectiveOptions, roleHint: normalised };
+      resolvedFallback = '';
+    }
   }
 
-  for (const key of UID_CANDIDATE_KEYS) {
+  if (!source || typeof source !== 'object') {
+    return resolvedFallback;
+  }
+
+  const candidateKeys = buildCandidateKeys(source, effectiveOptions);
+
+  for (const key of candidateKeys) {
     if (Object.prototype.hasOwnProperty.call(source, key)) {
       const candidate = normalizeCandidate(source[key]);
       if (candidate) {
@@ -46,13 +76,13 @@ export const resolveUserUid = (source, fallback = '') => {
   const nestedKeys = ['profile', 'vendorProfile', 'vendor', 'metadata', 'meta', 'auth', 'data'];
   for (const nestedKey of nestedKeys) {
     const nestedValue = source[nestedKey];
-    const resolved = resolveUserUid(nestedValue);
+    const resolved = resolveUserUid(nestedValue, resolvedFallback, effectiveOptions);
     if (resolved) {
       return resolved;
     }
   }
 
-  return fallback;
+  return resolvedFallback;
 };
 
 export default resolveUserUid;

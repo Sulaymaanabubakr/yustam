@@ -22,7 +22,7 @@ import { resolveUserUid } from '../../utils/user';
 
 const VendorChatsScreen = ({ navigation }) => {
   const { user } = useAuth();
-  const vendorUid = resolveUserUid(user);
+  const vendorUid = resolveUserUid(user, 'vendor');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [chats, setChats] = useState([]);

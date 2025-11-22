@@ -21,7 +21,7 @@ import { resolveUserUid } from '../../utils/user';
 
 const ChatScreen = ({ navigation }) => {
   const { user } = useAuth();
-  const buyerUid = resolveUserUid(user);
+  const buyerUid = resolveUserUid(user, 'buyer');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [chats, setChats] = useState([]);

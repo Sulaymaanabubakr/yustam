@@ -66,7 +66,7 @@ const ChatThreadScreen = ({ navigation, route }) => {
     vendorUid = '',
   } = route.params || {};
   const { user, role } = useAuth();
-  const resolvedUid = resolveUserUid(user);
+  const resolvedUid = resolveUserUid(user, role === USER_ROLES.VENDOR ? 'vendor' : 'buyer');
   const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState('');
   const [loading, setLoading] = useState(true);
