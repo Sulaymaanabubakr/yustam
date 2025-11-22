@@ -4534,6 +4534,22 @@ function yustam_api_chats_open(): array
         'unread_for_vendor' => yustam_firestore_integer(0),
     ];
 
+    $threadFieldsForResponse = [
+        'chat_id' => $chatId,
+        'buyer_uid' => $buyerUid,
+        'buyer_name' => $buyerName,
+        'vendor_uid' => $vendorUid,
+        'vendor_name' => $vendorName,
+        'vendor_business_name' => $vendorBusinessName,
+        'listing_id' => $listingId,
+        'listing_title' => $listingTitle,
+        'listing_image' => $listingImage,
+        'last_text' => 'Conversation started',
+        'last_sender_role' => $context['role'],
+        'unread_for_buyer' => 0,
+        'unread_for_vendor' => 0,
+    ];
+
     try {
         yustam_firestore_commit([
             [
@@ -4553,8 +4569,26 @@ function yustam_api_chats_open(): array
             ],
         ]);
     } catch (Throwable $exception) {
-        error_log('Chat open failed: ' . $exception->getMessage());
-        yustam_api_error(500, 'Unable to open chat thread.');
+        $message = $exception->getMessage();
+        if (strpos($message, 'ALREADY_EXISTS') !== false) {
+            error_log('Chat open detected existing thread, returning cached document.');
+            try {
+                $document = yustam_firestore_get_document('chats/' . $chatId);
+                if ($document && isset($document['fields'])) {
+                    $decoded = [];
+                    foreach ($document['fields'] as $key => $value) {
+                        $decoded[$key] = yustam_firestore_decode($value);
+                    }
+                    $decoded['chat_id'] = $decoded['chat_id'] ?? $chatId;
+                    $threadFieldsForResponse = array_merge($threadFieldsForResponse, $decoded);
+                }
+            } catch (Throwable $fetchException) {
+                error_log('Chat open fetch existing failed: ' . $fetchException->getMessage());
+            }
+        } else {
+            error_log('Chat open failed: ' . $message);
+            yustam_api_error(500, 'Unable to open chat thread.');
+        }
     }
 
     yustam_api_chat_store_metadata($chatId, [
@@ -4564,17 +4598,7 @@ function yustam_api_chats_open(): array
         'vendor_uid' => $vendorUid,
     ]);
 
-    return ['success' => true, 'thread' => yustam_api_chat_thread_from_fields([
-        'chat_id' => $chatId,
-        'buyer_uid' => $buyerUid,
-        'buyer_name' => $buyerName,
-        'vendor_uid' => $vendorUid,
-        'vendor_name' => $vendorBusinessName,
-        'listing_id' => $listingId,
-        'listing_title' => $listingTitle,
-        'listing_image' => $listingImage,
-        'last_text' => 'Conversation started',
-    ])];
+    return ['success' => true, 'thread' => yustam_api_chat_thread_from_fields($threadFieldsForResponse)];
 }
 
 function yustam_api_chats_assign(string $threadId): array
