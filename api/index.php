@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/bootstrap.php';
+require_once __DIR__ . '/../chat/bootstrap.php';
 
 yustam_api_headers();
 
@@ -65,6 +66,8 @@ function yustam_api_dispatch(): array
             return yustam_api_handle_verification($method, $subSegments);
         case 'chats':
             return yustam_api_handle_chats($method, $subSegments);
+        case 'chat-v2':
+            return yustam_api_handle_chats_v2($method, $subSegments);
         case 'admin':
             return yustam_api_handle_admin($method, $subSegments);
         case 'reviews':
@@ -273,6 +276,168 @@ function yustam_api_handle_notifications(string $method, array $segments): array
         return yustam_api_notifications_create();
     }
     yustam_api_error(405, 'Notifications endpoint not found.');
+}
+
+function yustam_api_handle_chats_v2(string $method, array $segments): array
+{
+    $user = yustam_api_require_auth();
+    $context = yustam_api_chat_context($user);
+
+    $threadRepository = new \Chat\Infrastructure\Firestore\FirestoreThreadRepository();
+    $threadService = new \Chat\Domain\Services\ThreadService($threadRepository);
+    $messageRepository = new \Chat\Infrastructure\Firestore\FirestoreMessageRepository();
+    $messageService = new \Chat\Domain\Services\MessageService($messageRepository);
+    $mediaService = new \Chat\Domain\Services\MediaUploadService($messageService);
+    $typingRepository = new \Chat\Infrastructure\Firestore\FirestoreTypingRepository();
+    $typingService = new \Chat\Domain\Services\TypingService($typingRepository);
+
+    $resource = strtolower($segments[0] ?? 'threads');
+    /** @var array<string, mixed> $queryParams */
+    $queryParams = $_GET ?? [];
+
+    if ($resource === 'media') {
+        $action = strtolower($segments[1] ?? '');
+
+        if ($method === 'POST' && $action === 'upload-url') {
+            $body = yustam_api_read_json_body();
+            $controller = new \Chat\Http\Controllers\MediaUploadInitController($mediaService, $context, $body);
+            $controller->handle()->send();
+            exit;
+        }
+
+        if ($method === 'POST' && $action === 'complete') {
+            $body = yustam_api_read_json_body();
+            $controller = new \Chat\Http\Controllers\MediaUploadCompleteController($mediaService, $context, $body);
+            $controller->handle()->send();
+            exit;
+        }
+
+        yustam_api_error(404, 'Chat media endpoint not found.');
+    }
+
+    if ($resource !== 'threads' && $resource !== '') {
+        yustam_api_error(404, 'Chat v2 endpoint not found.');
+    }
+
+    $threadId = $segments[1] ?? null;
+    $subResource = strtolower($segments[2] ?? '');
+
+    if ($threadId === null || $threadId === '') {
+        if ($method === 'GET') {
+            $controller = new \Chat\Http\Controllers\ThreadListController($threadService, $context['role'], $context['uid']);
+            $controller->handle()->send();
+            exit;
+        }
+
+        if ($method === 'POST') {
+            $body = yustam_api_read_json_body();
+            $controller = new \Chat\Http\Controllers\ThreadOpenController($threadService, $context, $body);
+            $controller->handle()->send();
+            exit;
+        }
+
+        yustam_api_error(405, 'Method not allowed.');
+    }
+
+    if ($subResource === '') {
+        if ($method === 'GET') {
+            $limitParam = $queryParams['messages_limit'] ?? ($queryParams['limit'] ?? 50);
+            $limit = (int) $limitParam;
+            if ($limit <= 0) {
+                $limit = 50;
+            }
+            $limit = max(1, min(200, $limit));
+
+            $controller = new \Chat\Http\Controllers\ThreadDetailController(
+                $threadService,
+                $messageService,
+                $typingService,
+                $threadId,
+                $limit,
+                $context
+            );
+            $controller->handle()->send();
+            exit;
+        }
+
+        yustam_api_error(405, 'Method not allowed.');
+    }
+
+    if ($subResource === 'read') {
+        if ($method !== 'POST') {
+            yustam_api_error(405, 'Method not allowed.');
+        }
+
+        $body = yustam_api_read_json_body();
+        $controller = new \Chat\Http\Controllers\ThreadMarkReadController($threadService, $threadId, $context, $body);
+        $controller->handle()->send();
+        exit;
+    }
+
+    if ($subResource === 'typing') {
+        if ($method === 'POST') {
+            $body = yustam_api_read_json_body();
+            $controller = new \Chat\Http\Controllers\ThreadTypingController($typingService, $threadId, $context, $body);
+            $controller->handle()->send();
+            exit;
+        }
+
+        if ($method === 'GET') {
+            $state = $typingService->getTyping($threadId);
+            \Chat\Http\Responses\JsonResponse::success(['typing' => $state])->send();
+            exit;
+        }
+
+        yustam_api_error(405, 'Method not allowed.');
+    }
+
+    if ($subResource === 'messages') {
+        if ($method === 'GET') {
+            $limitParam = $queryParams['limit'] ?? $queryParams['messages_limit'] ?? 100;
+            $limit = (int) $limitParam;
+            if ($limit <= 0) {
+                $limit = 100;
+            }
+            $limit = max(1, min(200, $limit));
+
+            $before = isset($queryParams['before']) ? (int) $queryParams['before'] : null;
+            $after = isset($queryParams['after']) ? (int) $queryParams['after'] : null;
+            $directionParam = strtolower((string) ($queryParams['direction'] ?? 'asc'));
+            $direction = in_array($directionParam, ['asc', 'desc'], true) ? $directionParam : 'asc';
+
+            $options = array_filter([
+                'before' => $before,
+                'after' => $after,
+                'direction' => $direction,
+            ], static fn($value) => $value !== null && $value !== '');
+
+            $controller = new \Chat\Http\Controllers\ThreadMessagesListController(
+                $messageService,
+                $threadId,
+                $limit,
+                $options
+            );
+            $controller->handle()->send();
+            exit;
+        }
+
+        if ($method === 'POST') {
+            $body = yustam_api_read_json_body();
+            $controller = new \Chat\Http\Controllers\MessageSendController(
+                $messageService,
+                $threadId,
+                $context['role'],
+                $context['uid'],
+                $body
+            );
+            $controller->handle()->send();
+            exit;
+        }
+
+        yustam_api_error(405, 'Method not allowed.');
+    }
+
+    yustam_api_error(404, 'Chat v2 endpoint not found.');
 }
 
 function yustam_api_handle_bot(string $method, array $segments): array
