@@ -115,11 +115,6 @@ const MainTabNavigator = () => {
             options={{ tabBarLabel: 'Listings' }}
           />
           <Tab.Screen
-            name="Bot"
-            component={BotScreen}
-            options={{ tabBarLabel: 'YustaAI' }}
-          />
-          <Tab.Screen
             name="VendorChats"
             component={VendorChatsScreen}
             options={{ tabBarLabel: 'Chats' }}

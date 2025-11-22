@@ -36,8 +36,7 @@ const BotScreen = () => {
       return { icon: 'sync-outline', label: 'Connecting to YustaAI…', tone: theme.colors.info };
     }
     if (status.configured) {
-      const modelText = status.model ? ` (${status.model})` : '';
-      return { icon: 'sparkles', label: `YustaAI online${modelText}`, tone: theme.colors.success };
+      return { icon: 'sparkles', label: 'YustaAI online', tone: theme.colors.success };
     }
     return { icon: 'warning-outline', label: status.error || 'YustaAI is unavailable', tone: theme.colors.warning };
   }, [status.configured, status.error, status.loading, status.model]);

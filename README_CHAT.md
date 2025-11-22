@@ -86,7 +86,12 @@ Ensure both the cloud name and unsigned preset remain valid for unsigned uploads
 
 ## Known Issues / Follow-Ups
 
-- Firestore REST fallbacks require a valid service-account JSON (`FIREBASE_SERVICE_ACCOUNT` or `GOOGLE_APPLICATION_CREDENTIALS`). If this is missing the PHP endpoints will respond with a 500.
+- Firestore REST fallbacks require a valid service-account JSON. Provide credentials via one of:
+  - `FIREBASE_SERVICE_ACCOUNT` (inline JSON string)
+  - `FIREBASE_SERVICE_ACCOUNT_PATH` (absolute path to JSON file)
+  - `GOOGLE_APPLICATION_CREDENTIALS` (absolute path)
+  - A server file located at `/home2/yustamco/firebase-service-account.json` or `/home2/yustamco/public_html/firebase-service-account.json`
+  If none of these are available the PHP endpoints will respond with a 500.
 - The waveform visualiser for voice notes is minimal and relies on playback progress; consider upgrading to a richer visual library if desired.
 - Phone/video call buttons in the header currently display a toast — replace with actual calling integration when available.
 - Admin-created chats (without going through the product page) must still pass through `chat-open.php` or the client `ensureChat` helper to guarantee the summary document exists.

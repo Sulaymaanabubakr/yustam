@@ -18,9 +18,26 @@ function yustam_chat_service_account(): array
         }
     }
 
+    $inlinePath = getenv('FIREBASE_SERVICE_ACCOUNT_PATH');
+    if ($inlinePath && is_file($inlinePath)) {
+        $decoded = json_decode((string)file_get_contents($inlinePath), true);
+        if (is_array($decoded)) {
+            return $serviceAccount = $decoded;
+        }
+    }
+
     $path = getenv('GOOGLE_APPLICATION_CREDENTIALS');
     if ($path && is_file($path)) {
         $decoded = json_decode((string)file_get_contents($path), true);
+        if (is_array($decoded)) {
+            return $serviceAccount = $decoded;
+        }
+    }
+
+    // Primary shared-host location outside public_html
+    $homeAccountPath = '/home2/yustamco/firebase-service-account.json';
+    if (is_file($homeAccountPath)) {
+        $decoded = json_decode((string)file_get_contents($homeAccountPath), true);
         if (is_array($decoded)) {
             return $serviceAccount = $decoded;
         }
