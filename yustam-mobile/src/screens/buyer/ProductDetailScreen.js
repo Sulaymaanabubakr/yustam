@@ -1037,6 +1037,7 @@ const parseTimestamp = (value) => {
 };
 
 const deriveGallery = (source = {}) => {
+  const listing = source && typeof source === 'object' ? source : {};
   const items = [];
   const seen = new Set();
 
@@ -1066,8 +1067,8 @@ const deriveGallery = (source = {}) => {
     });
   };
 
-  if (Array.isArray(source.media)) {
-    source.media.forEach((entry, index) => {
+  if (Array.isArray(listing.media)) {
+    listing.media.forEach((entry, index) => {
       const uriCandidate = entry?.url || entry?.secureUrl || entry?.secure_url;
       const resource = String(entry?.resourceType || entry?.type || '').toLowerCase();
       const type = resource === 'video' ? 'video' : 'image';
@@ -1082,20 +1083,20 @@ const deriveGallery = (source = {}) => {
   }
 
   const videoFields = [
-    source.video,
-    source.videoUrl,
-    source.video_url,
-    source.videoLink,
-    source.video_link,
+    listing.video,
+    listing.videoUrl,
+    listing.video_url,
+    listing.videoLink,
+    listing.video_link,
   ];
   videoFields.forEach((candidate, index) => {
     pushEntry('video', candidate, {
       id: `video-field-${index}`,
-      preview: source.videoPoster || source.videoThumbnail || source.primaryImage || source.image,
+      preview: listing.videoPoster || listing.videoThumbnail || listing.primaryImage || listing.image,
     });
   });
 
-  const imageCollections = [source.images, source.imageUrls, source.gallery, source.photos];
+  const imageCollections = [listing.images, listing.imageUrls, listing.gallery, listing.photos];
   imageCollections.forEach((collection, groupIndex) => {
     if (!Array.isArray(collection)) {
       return;
@@ -1109,7 +1110,7 @@ const deriveGallery = (source = {}) => {
     });
   });
 
-  const imageFields = [source.image, source.primaryImage, source.coverImage, source.thumbnail];
+  const imageFields = [listing.image, listing.primaryImage, listing.coverImage, listing.thumbnail];
   imageFields.forEach((candidate, index) => {
     pushEntry('image', candidate, {
       id: `image-field-${index}`,

@@ -4479,6 +4479,7 @@ function yustam_api_chats_list(): array
     $threads = [];
     try {
         $results = yustam_firestore_run_query($query);
+        error_log(sprintf('Chat list query returned %d raw entries for %s', count($results), $context['uid']));
         foreach ($results as $result) {
             if (!isset($result['document']['fields'])) {
                 continue;
@@ -4489,6 +4490,7 @@ function yustam_api_chats_list(): array
             }
             $threads[] = yustam_api_chat_thread_from_fields($fields);
         }
+        error_log(sprintf('Chat list returning %d threads for %s', count($threads), $context['uid']));
     } catch (Throwable $exception) {
         error_log('Chat list failed: ' . $exception->getMessage());
     }
@@ -4728,6 +4730,7 @@ function yustam_api_chats_send_message(string $threadId): array
                 ],
             ],
         ]);
+        error_log(sprintf('Chat message stored for thread %s by %s', $threadId, $context['uid']));
     } catch (Throwable $exception) {
         error_log('Chat send failed: ' . $exception->getMessage());
         yustam_api_error(500, 'Unable to send message.');
@@ -4755,6 +4758,7 @@ function yustam_api_chats_list_messages(string $threadId): array
     $messages = [];
     try {
         $results = yustam_firestore_run_query($query);
+        error_log(sprintf('Chat messages query returned %d raw entries for %s', count($results), $threadId));
         foreach ($results as $result) {
             if (!isset($result['document']['fields'])) {
                 continue;
@@ -4765,15 +4769,16 @@ function yustam_api_chats_list_messages(string $threadId): array
             }
             $messages[] = [
                 'id' => basename($result['document']['name']),
-                'text' => $fields['text'] ?? '',
-                'type' => $fields['type'] ?? 'text',
-                'sender' => $fields['sender_uid'] ?? '',
-                'role' => $fields['sender_role'] ?? '',
-                'image' => $fields['image_url'] ?? null,
-                'voice' => $fields['voice_url'] ?? null,
-                'timestamp' => $fields['ts'] ?? null,
+                'text' => $fields['text'] ?? $fields['message'] ?? '',
+                'type' => $fields['type'] ?? $fields['message_type'] ?? 'text',
+                'sender' => $fields['sender_uid'] ?? $fields['senderUid'] ?? $fields['sender'] ?? '',
+                'role' => $fields['sender_role'] ?? $fields['role'] ?? '',
+                'image' => $fields['image_url'] ?? $fields['imageUrl'] ?? null,
+                'voice' => $fields['voice_url'] ?? $fields['voiceUrl'] ?? null,
+                'timestamp' => $fields['ts'] ?? $fields['timestamp'] ?? null,
             ];
         }
+        error_log(sprintf('Chat messages returning %d items for %s', count($messages), $threadId));
     } catch (Throwable $exception) {
         error_log('Chat messages failed: ' . $exception->getMessage());
     }
@@ -4828,19 +4833,28 @@ function yustam_api_chat_context(array $user): array
 
 function yustam_api_chat_thread_from_fields(array $fields): array
 {
+    $pick = static function (array $options, $default = null) use ($fields) {
+        foreach ($options as $option) {
+            if (array_key_exists($option, $fields) && $fields[$option] !== null && $fields[$option] !== '') {
+                return $fields[$option];
+            }
+        }
+        return $default;
+    };
+
     return [
-        'id' => $fields['chat_id'] ?? '',
-        'buyerUid' => $fields['buyer_uid'] ?? null,
-        'buyerName' => $fields['buyer_name'] ?? null,
-        'vendorUid' => $fields['vendor_uid'] ?? null,
-        'vendorName' => $fields['vendor_business_name'] ?? $fields['vendor_name'] ?? null,
-        'listingId' => $fields['listing_id'] ?? null,
-        'listingTitle' => $fields['listing_title'] ?? null,
-        'listingImage' => $fields['listing_image'] ?? null,
-        'lastMessage' => $fields['last_text'] ?? null,
-        'lastSenderRole' => $fields['last_sender_role'] ?? null,
-        'unreadForBuyer' => (int) ($fields['unread_for_buyer'] ?? 0),
-        'unreadForVendor' => (int) ($fields['unread_for_vendor'] ?? 0),
+        'id' => (string) $pick(['chat_id', 'id', 'thread_id'], ''),
+        'buyerUid' => $pick(['buyer_uid', 'buyerUid', 'buyer_id', 'buyerId']),
+        'buyerName' => $pick(['buyer_name', 'buyerName'], $pick(['buyer_display_name', 'buyerDisplayName'], null)),
+        'vendorUid' => $pick(['vendor_uid', 'vendorUid', 'vendor_id', 'vendorId']),
+        'vendorName' => $pick(['vendor_business_name', 'vendorBusinessName', 'vendor_name', 'vendorName'], null),
+        'listingId' => $pick(['listing_id', 'listingId']),
+        'listingTitle' => $pick(['listing_title', 'listingTitle', 'product_title', 'productTitle']),
+        'listingImage' => $pick(['listing_image', 'listingImage', 'image', 'photo']),
+        'lastMessage' => $pick(['last_text', 'lastText', 'last_message', 'lastMessage']),
+        'lastSenderRole' => $pick(['last_sender_role', 'lastSenderRole'], null),
+        'unreadForBuyer' => (int) $pick(['unread_for_buyer', 'unreadForBuyer', 'buyer_unread_count'], 0),
+        'unreadForVendor' => (int) $pick(['unread_for_vendor', 'unreadForVendor', 'vendor_unread_count'], 0),
     ];
 }
 
