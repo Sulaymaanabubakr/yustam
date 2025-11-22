@@ -4457,7 +4457,7 @@ function yustam_api_chats_list(): array
 
     $column = $context['role'] === 'vendor' ? 'vendor_uid' : 'buyer_uid';
     $sql = sprintf(
-        'SELECT chat_id, metadata FROM `api_chat_threads` WHERE `%s` = ? ORDER BY updated_at DESC LIMIT 100',
+        'SELECT chat_id, metadata, updated_at FROM `api_chat_threads` WHERE `%s` = ? ORDER BY updated_at DESC LIMIT 100',
         $column
     );
 
@@ -4489,6 +4489,18 @@ function yustam_api_chats_list(): array
                         $fields = array_merge($metadata, $fields);
                     }
                 }
+
+                if (!isset($fields['last_ts']) && !empty($row['updated_at'])) {
+                    $fields['last_ts'] = $row['updated_at'];
+                }
+
+                error_log(sprintf(
+                    'Chat list cache candidate for %s: %s buyer=%s vendor=%s',
+                    $context['uid'],
+                    $chatId,
+                    $fields['buyer_uid'] ?? $fields['buyerUid'] ?? '',
+                    $fields['vendor_uid'] ?? $fields['vendorUid'] ?? ''
+                ));
 
                 $threads[] = yustam_api_chat_thread_from_fields($fields);
             }
@@ -4542,6 +4554,15 @@ function yustam_api_chats_list(): array
 
                 $thread = yustam_api_chat_thread_from_fields($fields);
                 $threads[] = $thread;
+
+                error_log(sprintf(
+                    'Chat list fallback candidate for %s: %s buyer=%s vendor=%s source=%s',
+                    $context['uid'],
+                    $thread['id'] ?? '',
+                    $thread['buyerUid'] ?? '',
+                    $thread['vendorUid'] ?? '',
+                    isset($result['found']) ? 'found' : 'document'
+                ));
 
                 if (!empty($thread['id'])) {
                     $buyerUidFallback = $fields['buyer_uid'] ?? $fields['buyerUid'] ?? ($thread['buyerUid'] ?? '');
