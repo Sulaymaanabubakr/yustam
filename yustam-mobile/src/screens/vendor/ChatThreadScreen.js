@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Image,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,10 +21,22 @@ import Toast from '../../components/Toast';
 import Button from '../../components/Button';
 import { goBackOrNavigate } from '../../utils/navigation';
 import { chatAPI } from '../../services/api';
+import { subscribeMessages, fetchMessagesViaApi } from '../../services/chatSync';
 import { timeAgo } from '../../utils/formatters';
 import resolveMediaUrl from '../../utils/url';
 import { USER_ROLES } from '../../config/constants';
 import { resolveUserUid } from '../../utils/user';
+
+const ensureIsoTimestamp = (value) => {
+  if (!value) {
+    return new Date().toISOString();
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return new Date().toISOString();
+  }
+  return parsed.toISOString();
+};
 
 const ChatThreadScreen = ({ navigation, route }) => {
   const {
@@ -77,80 +90,129 @@ const ChatThreadScreen = ({ navigation, route }) => {
 
   const mapMessage = useCallback(
     (message) => {
-      const senderRaw = String(message.sender || message.role || message.author || '').toLowerCase();
+      if (!message) {
+        return null;
+      }
+
+      const senderRoleRaw = String(message.sender_role || message.role || message.author || '')
+        .toLowerCase()
+        .trim();
       const senderUid = String(message.sender_uid || message.uid || '').trim();
       const viewerUid = (resolvedUid || '').toString();
-      const senderRole = senderRaw.includes('vendor')
+
+      const senderRole = senderRoleRaw.includes('vendor')
         ? USER_ROLES.VENDOR
-        : senderRaw.includes('buyer')
+        : senderRoleRaw.includes('buyer')
         ? USER_ROLES.BUYER
         : null;
-      const fallbackMine = senderRole
+
+      const inferredMine = senderRole
         ? senderRole === (viewingAsVendor ? USER_ROLES.VENDOR : USER_ROLES.BUYER)
         : viewingAsVendor
-        ? !senderRaw.includes('buyer')
-        : senderRaw.includes('buyer');
+        ? !senderRoleRaw.includes('buyer')
+        : senderRoleRaw.includes('buyer');
+
       const isMine =
         Boolean(message.isMine) ||
         (viewerUid && senderUid && viewerUid === senderUid) ||
-        (!viewerUid && fallbackMine);
+        (!viewerUid && inferredMine);
+
+      const attachment = resolveMediaUrl(
+        message.attachment || message.image || message.image_url || message.imageUrl
+      );
+      const voiceSource = resolveMediaUrl(message.voice_url || message.voiceUrl || '');
+      const baseType = String(message.type || message.message_type || '').toLowerCase();
+      const type = baseType || (voiceSource ? 'voice' : attachment ? 'image' : 'text');
+      const textRaw = message.text || message.message || message.body || '';
+      const text = textRaw || (type === 'image' ? 'Photo' : type === 'voice' ? 'Voice note' : '');
 
       return {
         id: message.id || message.message_id || message.clientId || `${Date.now()}-${Math.random()}`,
-        text: message.message || message.text || message.body || '',
-        type: message.type || (message.attachment ? 'image' : 'text'),
-        timestamp: message.timestamp || message.created_at || message.sent_at || new Date().toISOString(),
+        text,
+        type,
+        timestamp: ensureIsoTimestamp(
+          message.timestamp || message.created_at || message.sent_at || new Date().toISOString()
+        ),
         isMine,
         status: message.status || 'sent',
-        attachment: resolveMediaUrl(message.attachment || message.image),
+        attachment: type === 'image' ? attachment : null,
+        voice: type === 'voice' ? voiceSource : null,
       };
     },
     [resolvedUid, viewingAsVendor]
   );
 
-  const fetchMessages = useCallback(
-    async (withSpinner = true) => {
-      if (!chatId) {
-        setLoading(false);
-        setRefreshing(false);
-        return;
-      }
-
-      try {
-        if (withSpinner) {
-          setLoading(true);
-        }
-        const response = await chatAPI.listMessages(chatId);
-        const payload = response.data?.messages || response.data?.data?.messages || [];
-        const nextMessages = payload
-          .map(mapMessage)
-          .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-        setMessages(nextMessages);
-        await chatAPI
-          .markAsRead(chatId, viewingAsVendor ? 'vendor' : 'buyer')
-          .catch(() => {});
-        requestAnimationFrame(() => {
-          listRef.current?.scrollToEnd({ animated: false });
-        });
-      } catch (error) {
-        console.error('Error loading messages:', error);
-        showToast(error.message || 'Unable to load messages right now.', 'error');
-      } finally {
-        setLoading(false);
-        setRefreshing(false);
-      }
+  const handleMessagesUpdate = useCallback(
+    (records = []) => {
+      const nextMessages = records
+        .map(mapMessage)
+        .filter(Boolean)
+        .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+      setMessages(nextMessages);
+      setLoading(false);
+      setRefreshing(false);
     },
-    [chatId, mapMessage, viewingAsVendor]
+    [mapMessage]
   );
 
   useEffect(() => {
-    fetchMessages();
-  }, [fetchMessages]);
+    if (!chatId) {
+      setLoading(false);
+      setMessages([]);
+      return;
+    }
+
+    setLoading(true);
+    const unsubscribe = subscribeMessages(
+      chatId,
+      (records = []) => {
+        handleMessagesUpdate(Array.isArray(records) ? records : []);
+      },
+      {
+        onError: (error) => {
+          console.error('Realtime messages failed:', error);
+          showToast('Realtime updates unavailable. Pull to refresh.', 'error');
+        },
+      }
+    );
+
+    return () => {
+      unsubscribe?.();
+    };
+  }, [chatId, handleMessagesUpdate]);
+
+  const refreshFromApi = useCallback(
+    async (showSpinner = false) => {
+      if (!chatId) {
+        setMessages([]);
+        return;
+      }
+      try {
+        if (showSpinner) {
+          setRefreshing(true);
+        }
+        const records = await fetchMessagesViaApi(chatId);
+        handleMessagesUpdate(Array.isArray(records) ? records : []);
+      } catch (error) {
+        console.error('Manual message refresh failed:', error);
+        showToast(error.message || 'Unable to refresh messages right now.', 'error');
+      } finally {
+        if (showSpinner) {
+          setRefreshing(false);
+        }
+      }
+    },
+    [chatId, handleMessagesUpdate]
+  );
 
   useFocusEffect(
     useCallback(() => {
-      fetchMessages(false);
-    }, [fetchMessages])
+      if (!chatId) {
+        return undefined;
+      }
+      chatAPI.markAsRead(chatId, viewingAsVendor ? 'vendor' : 'buyer').catch(() => {});
+      return undefined;
+    }, [chatId, viewingAsVendor])
   );
 
   const handleSend = async () => {
@@ -192,7 +254,7 @@ const ChatThreadScreen = ({ navigation, route }) => {
         listing_title: listingMeta.title,
         listing_image: listingMeta.image,
       });
-      await fetchMessages(false);
+      await refreshFromApi();
     } catch (error) {
       console.error('Send message failed:', error);
       setMessages((prev) => prev.filter((msg) => msg.id !== tempId));
@@ -201,6 +263,26 @@ const ChatThreadScreen = ({ navigation, route }) => {
       setSending(false);
     }
   };
+
+  const onRefresh = useCallback(() => {
+    refreshFromApi(true);
+  }, [refreshFromApi]);
+
+  useEffect(() => {
+    if (!messages.length) {
+      return;
+    }
+    requestAnimationFrame(() => {
+      listRef.current?.scrollToEnd({ animated: true });
+    });
+  }, [messages]);
+
+  useEffect(() => {
+    if (!chatId || !messages.length) {
+      return;
+    }
+    chatAPI.markAsRead(chatId, viewingAsVendor ? 'vendor' : 'buyer').catch(() => {});
+  }, [chatId, messages, viewingAsVendor]);
 
   const renderMessage = ({ item }) => {
     const showTimestamp = !!item.timestamp;
@@ -287,11 +369,14 @@ const ChatThreadScreen = ({ navigation, route }) => {
             keyExtractor={(item) => item.id.toString()}
             renderItem={renderMessage}
             contentContainerStyle={styles.messagesContainer}
-            onRefresh={() => {
-              setRefreshing(true);
-              fetchMessages(false);
-            }}
-            refreshing={refreshing}
+            refreshControl={(
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                colors={[theme.colors.primary]}
+                tintColor={theme.colors.primary}
+              />
+            )}
             onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
           />
 

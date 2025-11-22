@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import theme from '../../theme';
 import Toast from '../../components/Toast';
-import { vendorAPI } from '../../services/api';
+import { subscribeChatsForVendor, fetchChatsFromApi } from '../../services/chatSync';
 import { goBackOrNavigate } from '../../utils/navigation';
 import resolveMediaUrl from '../../utils/url';
 import { timeAgo } from '../../utils/formatters';
@@ -36,62 +36,74 @@ const VendorChatsScreen = ({ navigation }) => {
     setToast({ ...toast, visible: false });
   };
 
+  const mapThreadToState = useCallback((chat) => ({
+    id: chat.chat_id || chat.id,
+    buyerName: chat.buyer_name || chat.buyerName || 'Buyer',
+    buyerPhoto: resolveMediaUrl(chat.buyer_avatar || chat.buyerAvatar),
+    lastMessage: chat.last_text || chat.last_message || chat.lastMessage || '',
+    lastMessageTime: chat.last_ts || chat.updated_at || chat.updatedAt || chat.created_at || chat.createdAt,
+    unreadCount: Number(chat.unread_for_vendor ?? chat.unreadForVendor ?? 0) || 0,
+    lastType: chat.last_type || chat.lastType || 'text',
+    buyerId: chat.buyer_uid || chat.buyerUid || '',
+    listingId: chat.listing_id || chat.listingId || '',
+    listingTitle: chat.listing_title || chat.listingTitle || '',
+    listingImage: resolveMediaUrl(chat.listing_image || chat.listingImage),
+  }), []);
+
+  const applyThreads = useCallback((threads = []) => {
+    setChats(threads.map(mapThreadToState));
+  }, [mapThreadToState]);
+
   useEffect(() => {
     if (!user) {
-      return;
+      setLoading(false);
+      return () => {};
     }
     if (!vendorUid) {
       setChats([]);
       setLoading(false);
       showToast('We could not find your vendor ID. Please re-login and try again.', 'error');
+      return () => {};
+    }
+
+    setLoading(true);
+    const unsubscribe = subscribeChatsForVendor(
+      vendorUid,
+      (threads = []) => {
+        applyThreads(Array.isArray(threads) ? threads : []);
+        setLoading(false);
+        setRefreshing(false);
+      },
+      {
+        onError: (error) => {
+          console.error('Realtime chats failed:', error);
+          showToast('Realtime chat updates are unavailable. Falling back to refresh.', 'error');
+        },
+      }
+    );
+
+    return () => {
+      unsubscribe?.();
+    };
+  }, [user, vendorUid, applyThreads]);
+
+  const onRefresh = useCallback(async () => {
+    if (!vendorUid) {
+      setChats([]);
       return;
     }
-    fetchChats(vendorUid);
-  }, [vendorUid]);
-
-  const fetchChats = async (uid = vendorUid) => {
     try {
-      setLoading(true);
-      if (!uid) {
-        setChats([]);
-        return;
-      }
-
-      const response = await vendorAPI.getChats(uid);
-      if (!response.data?.success) {
-        throw new Error(response.data?.message || 'Unable to load chats.');
-      }
-
-      const chatThreads = response.data?.chats || [];
-      setChats(
-        chatThreads.map((chat) => ({
-          id: chat.chat_id || chat.id,
-          buyerName: chat.buyer_name || 'Buyer',
-          buyerPhoto: resolveMediaUrl(chat.buyer_avatar),
-          lastMessage: chat.last_text || chat.last_message || '',
-          lastMessageTime: chat.last_ts || chat.updated_at || chat.created_at,
-          unreadCount: Number(chat.unread_for_vendor) || 0,
-          lastType: chat.last_type || 'text',
-          buyerId: chat.buyer_uid || chat.buyerUid || '',
-          listingId: chat.listing_id || chat.listingId || '',
-          listingTitle: chat.listing_title || chat.listingTitle || '',
-          listingImage: resolveMediaUrl(chat.listing_image || chat.listingImage),
-        }))
-      );
+      setRefreshing(true);
+      const threads = await fetchChatsFromApi();
+      applyThreads(Array.isArray(threads) ? threads : []);
     } catch (error) {
-      console.error('Error fetching chats:', error);
-      showToast(error.message || 'Failed to load chats', 'error');
-      setChats([]);
+      console.error('Manual chat refresh failed:', error);
+      showToast(error.message || 'Failed to refresh chats', 'error');
     } finally {
+      setRefreshing(false);
       setLoading(false);
     }
-  };
-
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await fetchChats(vendorUid);
-    setRefreshing(false);
-  };
+  }, [vendorUid, applyThreads]);
 
   const formatTime = (value) => timeAgo(value);
 
