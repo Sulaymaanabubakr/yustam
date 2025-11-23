@@ -143,10 +143,46 @@ try {
     return;
 }
 
+$keyMap = [
+    'chat_id' => 'chatId',
+    'buyer_uid' => 'buyerUid',
+    'buyer_name' => 'buyerName',
+    'vendor_uid' => 'vendorUid',
+    'vendor_name' => 'vendorName',
+    'vendor_business_name' => 'vendorBusinessName',
+    'listing_id' => 'listingId',
+    'listing_title' => 'listingTitle',
+    'listing_image' => 'listingImage',
+    'last_text' => 'lastMessage',
+    'last_sender_role' => 'lastSenderRole',
+    'last_ts' => 'lastTs',
+    'unread_for_buyer' => 'unreadForBuyer',
+    'unread_for_vendor' => 'unreadForVendor',
+    'vendor_plan' => 'vendorPlan',
+    'vendor_plan_label' => 'vendorPlanLabel',
+    'vendor_plan_slug' => 'vendorPlanSlug',
+    'vendor_verified' => 'vendorVerified',
+    'buyer_last_read_ts' => 'buyerLastReadTs',
+    'vendor_last_read_ts' => 'vendorLastReadTs',
+];
+$formatChat = static function (array $chat) use ($keyMap, $timestampNormalizer): array {
+    $camelChat = [];
+    foreach ($chat as $key => $value) {
+        $camelKey = $keyMap[$key] ?? $key;
+        $camelChat[$camelKey] = $value;
+    }
+    // Ensure timestamp is an integer
+    if (isset($camelChat['lastTs'])) {
+        $camelChat['lastTs'] = $timestampNormalizer($camelChat['lastTs']);
+    }
+    return $camelChat;
+};
+
 echo json_encode([
     'success' => true,
     'role' => $role,
     'uid' => $uid,
     'source' => 'firestore',
-    'chats' => $chats,
+    'chats' => array_map($formatChat, $chats),
 ]);
+

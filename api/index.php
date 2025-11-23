@@ -706,7 +706,9 @@ function yustam_api_bot_query(): array
 
     if (!$fromCache) {
         yustam_bot_rate_limit_check($user, ['mode' => $mode]);
-        $aiResult = yustam_bot_call_openai($query, [
+        // Automatically select provider: Deepseek if configured, else OpenAI
+        $provider = function_exists('yustam_bot_is_deepseek_configured') && yustam_bot_is_deepseek_configured() ? 'deepseek' : 'openai';
+        $aiResult = yustam_bot_call_ai($query, [
             'role' => $user['role'] ?? 'buyer',
             'mode' => $mode,
             'location' => $location,
@@ -714,7 +716,7 @@ function yustam_api_bot_query(): array
                 'id' => $user['id'] ?? null,
                 'role' => $user['role'] ?? null,
             ],
-        ]);
+        ], $provider);
 
         if (($aiResult['success'] ?? false) === true) {
             yustam_bot_cache_set($cacheKey, $aiResult);

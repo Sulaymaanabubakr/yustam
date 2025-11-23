@@ -90,57 +90,32 @@ const mergeRecords = (base, update) => {
 
 const normaliseChatRecord = (record = {}) => {
   const mapped = {
-    id: normaliseString(record.id || record.chat_id || record.chatId),
-    chat_id: normaliseString(record.chat_id || record.chatId || record.id),
-    buyer_uid: normaliseString(
-      record.buyer_uid || record.buyerUid || record.buyer_id || record.buyerId || record.userId
-    ),
-    buyer_name: normaliseString(
-      record.buyer_name || record.buyerName || record.user?.displayName || record.user?.email || 'Buyer'
-    ),
-    buyer_avatar: normaliseString(record.buyer_avatar || record.buyerAvatar || record.user?.photoUrl || ''),
-    vendor_uid: normaliseString(record.vendor_uid || record.vendorUid || record.vendor_id || record.vendorId),
-    vendor_name: normaliseString(
-      record.vendor_business_name || record.vendorBusinessName || record.vendor_name || record.vendorName || ''
-    ),
-    vendor_business_name: normaliseString(
-      record.vendor_business_name || record.vendorBusinessName || record.vendor_name || record.vendorName || ''
-    ),
-    vendor_avatar: normaliseString(record.vendor_avatar || record.vendorAvatar || ''),
-    listing_id: normaliseString(record.listing_id || record.listingId || ''),
-    listing_title: normaliseString(record.listing_title || record.listingTitle || ''),
-    listing_image: normaliseString(record.listing_image || record.listingImage || ''),
-    last_text: normaliseString(
-      record.last_text ||
-        record.lastText ||
-        record.last_message ||
-        record.lastMessage ||
-        record.lastMessagePreview ||
-        ''
-    ),
-    last_type: normaliseString((record.last_type || record.lastType || '').toLowerCase()),
-    last_sender_uid: normaliseString(record.last_sender_uid || record.lastSenderUid || ''),
-    last_sender_role: normaliseString((record.last_sender_role || record.lastSenderRole || '').toLowerCase()),
-    last_ts:
-      resolveTimestamp(
-        record.last_ts ||
-          record.lastTs ||
-          record.last_timestamp ||
-          record.updated_at ||
-          record.updatedAt ||
-          record.created_at ||
-          record.createdAt ||
-          null
-      ) || null,
-    unread_for_buyer: parseNumber(record.unread_for_buyer || record.unreadForBuyer || record.buyer_unread_count),
-    unread_for_vendor: parseNumber(record.unread_for_vendor || record.unreadForVendor || record.vendor_unread_count),
+    id: normaliseString(record.chatId || record.id),
+    chatId: normaliseString(record.chatId || record.id),
+    buyerUid: normaliseString(record.buyerUid),
+    buyerName: normaliseString(record.buyerName || 'Buyer'),
+    buyerAvatar: normaliseString(record.buyerAvatar || ''),
+    vendorUid: normaliseString(record.vendorUid),
+    vendorName: normaliseString(record.vendorBusinessName || record.vendorName || ''),
+    vendorBusinessName: normaliseString(record.vendorBusinessName || record.vendorName || ''),
+    vendorAvatar: normaliseString(record.vendorAvatar || ''),
+    listingId: normaliseString(record.listingId || ''),
+    listingTitle: normaliseString(record.listingTitle || ''),
+    listingImage: normaliseString(record.listingImage || ''),
+    lastMessage: normaliseString(record.lastMessage || ''),
+    lastType: normaliseString((record.lastType || '').toLowerCase()),
+    lastSenderUid: normaliseString(record.lastSenderUid || ''),
+    lastSenderRole: normaliseString((record.lastSenderRole || '').toLowerCase()),
+    lastTs: resolveTimestamp(record.lastTs || null),
+    unreadForBuyer: parseNumber(record.unreadForBuyer),
+    unreadForVendor: parseNumber(record.unreadForVendor),
   };
 
-  if (!mapped.vendor_name && mapped.vendor_business_name) {
-    mapped.vendor_name = mapped.vendor_business_name;
+  if (!mapped.vendorName && mapped.vendorBusinessName) {
+    mapped.vendorName = mapped.vendorBusinessName;
   }
-  if (!mapped.vendor_business_name && mapped.vendor_name) {
-    mapped.vendor_business_name = mapped.vendor_name;
+  if (!mapped.vendorBusinessName && mapped.vendorName) {
+    mapped.vendorBusinessName = mapped.vendorName;
   }
 
   return mapped;
@@ -148,11 +123,28 @@ const normaliseChatRecord = (record = {}) => {
 
 const mapChatSnapshot = (docSnap) => {
   const data = docSnap.data() || {};
-  return normaliseChatRecord({
-    ...data,
+  const camelData = {
     id: docSnap.id,
-    chat_id: data.chat_id || docSnap.id,
-  });
+    chatId: data.chat_id || docSnap.id,
+    buyerUid: data.buyer_uid,
+    buyerName: data.buyer_name,
+    buyerAvatar: data.buyer_avatar,
+    vendorUid: data.vendor_uid,
+    vendorName: data.vendor_name,
+    vendorBusinessName: data.vendor_business_name,
+    vendorAvatar: data.vendor_avatar,
+    listingId: data.listing_id,
+    listingTitle: data.listing_title,
+    listingImage: data.listing_image,
+    lastMessage: data.last_text,
+    lastType: data.last_type,
+    lastSenderUid: data.last_sender_uid,
+    lastSenderRole: data.last_sender_role,
+    lastTs: data.last_ts,
+    unreadForBuyer: data.unread_for_buyer,
+    unreadForVendor: data.unread_for_vendor,
+  };
+  return normaliseChatRecord(camelData);
 };
 
 const hydrateChat = (chat) => {
@@ -187,11 +179,21 @@ const fetchChatsViaApi = async () => {
   if (!Array.isArray(threads)) {
     return [];
   }
+  if (typeof __DEV__ !== 'undefined' && __DEV__) {
+    try {
+      const sample = threads.slice(0, 5).map(t => ({ id: t.id || t.chat_id, buyer_uid: t.userId || t.buyerUid || t.buyer_uid, vendor_uid: t.vendorUid || t.vendor_uid }));
+      console.debug('[chatSync:fetchChatsViaApi] threads', { count: threads.length, sample });
+    } catch (e) {
+      console.debug('[chatSync:fetchChatsViaApi] threads', { count: Array.isArray(threads) ? threads.length : 0 });
+    }
+  }
   return threads.map(normaliseChatRecord);
 };
 
 const createChatsSubscription = (queryRef, role, uid, callback, options = {}) => {
   let active = true;
+  let lastSource = null;
+  let didApiFallback = false;
 
   const deliver = (records, source) => {
     if (!active || typeof callback !== 'function') {
@@ -208,9 +210,40 @@ const createChatsSubscription = (queryRef, role, uid, callback, options = {}) =>
         return;
       }
       const docs = snapshot.docs.map(mapChatSnapshot);
-      const source = snapshot.metadata?.fromCache ? 'cache' : 'firestore';
+      const source = snapshot.metadata?.fromCache ? 'cache' : 'server';
+      if (typeof __DEV__ !== 'undefined' && __DEV__) {
+        try {
+          const ids = snapshot.docs.map(d => d.id);
+          console.debug('[chatSync:createChatsSubscription] snapshot', { role, uid, source, count: snapshot.size, ids });
+        } catch (e) {
+          console.debug('[chatSync:createChatsSubscription] snapshot', { role, uid, source, count: snapshot.size });
+        }
+      }
       deliver(docs, source);
-      options.onStatus?.(`firestore:${source}`);
+      // Only notify status when the source changes to avoid noisy repeated logs
+      if (source !== lastSource) {
+        lastSource = source;
+        options.onStatus?.(`firestore:${source}`);
+      }
+      // If Firestore returned no docs and we haven't attempted an API fallback yet,
+      // try fetching from the backend API so the UI can show threads while
+      // Firestore syncs from the server. This applies to both cache and server
+      // snapshots because some threads may only exist on the backend or use
+      // different doc schemas.
+      if (!didApiFallback && snapshot.size === 0) {
+        didApiFallback = true;
+        fetchChatsViaApi()
+          .then((records) => {
+            if (!active) return;
+            if (Array.isArray(records) && records.length > 0) {
+              deliver(records, 'api');
+              options.onStatus?.('api');
+            }
+          })
+          .catch((err) => {
+            options.onError?.(err);
+          });
+      }
     },
     (error) => {
       console.error('Firestore chat subscription error:', error);
@@ -272,22 +305,20 @@ export const fetchChatsFromApi = async () => {
 };
 
 const normaliseMessageRecord = (record = {}) => {
-  const typeValue = normaliseString(record.type || record.message_type || '').toLowerCase();
+  const typeValue = normaliseString(record.type || '').toLowerCase();
   return {
-    id: normaliseString(record.id || record.message_id || record.chat_message_id || ''),
-    chat_id: normaliseString(record.chat_id || record.chatId || ''),
-    sender_uid: normaliseString(record.sender_uid || record.senderUid || record.sender || ''),
-    sender_role: normaliseString((record.sender_role || record.senderRole || record.role || '').toLowerCase()),
-    client_tag: normaliseString(record.client_tag || record.clientTag || ''),
-    text: normaliseString(record.text || record.message || record.body || ''),
-    image_url: normaliseString(record.image_url || record.imageUrl || record.image || ''),
-    voice_url: normaliseString(record.voice_url || record.voiceUrl || ''),
-    duration: record.duration ?? record.voice_duration ?? null,
-    type: typeValue || (record.image_url || record.imageUrl ? 'image' : record.voice_url || record.voiceUrl ? 'voice' : 'text'),
-    timestamp:
-      resolveTimestamp(record.timestamp || record.ts || record.sent_at || record.sentAt || record.created_at || null) ||
-      new Date().toISOString(),
-    read_by: record.read_by || record.readBy || {},
+    id: normaliseString(record.id || ''),
+    chatId: normaliseString(record.chatId || ''),
+    senderUid: normaliseString(record.senderUid || ''),
+    senderRole: normaliseString((record.senderRole || '').toLowerCase()),
+    clientTag: normaliseString(record.clientTag || ''),
+    text: normaliseString(record.text || ''),
+    imageUrl: normaliseString(record.imageUrl || ''),
+    voiceUrl: normaliseString(record.voiceUrl || ''),
+    duration: record.duration ?? null,
+    type: typeValue || (record.imageUrl ? 'image' : record.voiceUrl ? 'voice' : 'text'),
+    timestamp: resolveTimestamp(record.timestamp || null) || new Date().toISOString(),
+    readBy: record.readBy || {},
   };
 };
 
@@ -325,6 +356,7 @@ export const subscribeMessages = (chatId, callback, options = {}) => {
   }
 
   let active = true;
+  let lastSource = null;
 
   const deliver = (records, source) => {
     if (!active || typeof callback !== 'function') {
@@ -348,9 +380,21 @@ export const subscribeMessages = (chatId, callback, options = {}) => {
       }
       const docs = snapshot.docs.map(mapMessageSnapshot);
       hydrateMessages(id, docs);
-      const source = snapshot.metadata?.fromCache ? 'cache' : 'firestore';
+      const source = snapshot.metadata?.fromCache ? 'cache' : 'server';
+      if (typeof __DEV__ !== 'undefined' && __DEV__) {
+        try {
+          const ids = snapshot.docs.map(d => d.id);
+          console.debug('[chatSync:subscribeMessages] snapshot', { chatId: id, source, count: snapshot.size, ids });
+        } catch (e) {
+          console.debug('[chatSync:subscribeMessages] snapshot', { chatId: id, source, count: snapshot.size });
+        }
+      }
       deliver(docs, source);
-      options.onStatus?.(source);
+      // Only notify status when the source changes to reduce repeated logs
+      if (source !== lastSource) {
+        lastSource = source;
+        options.onStatus?.(`firestore:${source}`);
+      }
     },
     (error) => {
       console.error('Firestore message subscription error:', error);

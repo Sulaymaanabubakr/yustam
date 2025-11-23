@@ -10,7 +10,7 @@ import { USER_ROLES } from '../config/constants';
 import BuyerHomeScreen from '../screens/buyer/HomeScreen';
 import BuyerSearchScreen from '../screens/buyer/SearchScreen';
 import BuyerSavedScreen from '../screens/buyer/SavedScreen';
-import ChatScreen from '../screens/shared/ChatScreen';
+import BuyerChatsScreen from '../screens/buyer/BuyerChatsScreen';
 import BuyerProfileScreen from '../screens/buyer/BuyerProfileScreen';
 import VendorProfileScreen from '../screens/vendor/VendorProfileScreen';
 import VendorDashboardScreen from '../screens/vendor/VendorDashboardScreen';
@@ -58,7 +58,7 @@ const MainTabNavigator = () => {
       case 'Search':
       case 'BuyerSearch':
         return focused ? 'bag' : 'bag-outline';
-      case 'Chat':
+      case 'BuyerChats':
       case 'VendorChats':
         return focused ? 'chatbubbles' : 'chatbubbles-outline';
       case 'Notifications':
@@ -139,7 +139,7 @@ const MainTabNavigator = () => {
             component={BotScreen}
             options={{ tabBarLabel: 'YustaAI' }}
           />
-          <Tab.Screen name="Chat" component={ChatScreen} />
+          <Tab.Screen name="BuyerChats" component={BuyerChatsScreen} options={{ tabBarLabel: 'Chats' }} />
           <Tab.Screen
             name="BuyerSaved"
             component={BuyerSavedScreen}

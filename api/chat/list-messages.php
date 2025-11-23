@@ -17,10 +17,10 @@ if (!is_array($input)) {
     $input = [];
 }
 
-$chatId = isset($input['chat_id']) ? trim((string)$input['chat_id']) : '';
+$chatId = isset($input['chat_id']) ? trim((string)$input['chat_id']) : (isset($input['chatId']) ? trim((string)$input['chatId']) : '');
 if ($chatId === '') {
     http_response_code(400);
-    echo json_encode(['success' => false, 'message' => 'chat_id is required']);
+    echo json_encode(['success' => false, 'message' => 'chatId is required']);
     exit;
 }
 
@@ -98,10 +98,54 @@ try {
     return;
 }
 
+$chatKeyMap = [
+    'chat_id' => 'chatId',
+    'buyer_uid' => 'buyerUid',
+    'buyer_name' => 'buyerName',
+    'vendor_uid' => 'vendorUid',
+    'vendor_name' => 'vendorName',
+    'vendor_business_name' => 'vendorBusinessName',
+    'listing_id' => 'listingId',
+    'listing_title' => 'listingTitle',
+    'listing_image' => 'listingImage',
+    'last_text' => 'lastMessage',
+    'last_sender_role' => 'lastSenderRole',
+    'last_ts' => 'lastTs',
+    'unread_for_buyer' => 'unreadForBuyer',
+    'unread_for_vendor' => 'unreadForVendor',
+];
+$formatChat = static function (array $chat) use ($chatKeyMap): array {
+    $camelChat = [];
+    foreach ($chat as $key => $value) {
+        $camelChat[$chatKeyMap[$key] ?? $key] = $value;
+    }
+    return $camelChat;
+};
+
+$messageKeyMap = [
+    'chat_id' => 'chatId',
+    'sender_uid' => 'senderUid',
+    'sender_role' => 'senderRole',
+    'media_url' => 'mediaUrl',
+    'image_url' => 'imageUrl',
+    'video_url' => 'videoUrl',
+    'voice_url' => 'voiceUrl',
+    'voice_duration' => 'voiceDuration',
+    'media_meta' => 'mediaMeta',
+    'ts' => 'timestamp',
+];
+$formatMessage = static function (array $msg) use ($messageKeyMap): array {
+    $camelMsg = [];
+    foreach ($msg as $key => $value) {
+        $camelMsg[$messageKeyMap[$key] ?? $key] = $value;
+    }
+    return $camelMsg;
+};
+
 echo json_encode([
     'success' => true,
-    'chat_id' => $chatId,
-    'chat' => $chatData,
-    'messages' => $messages,
+    'chatId' => $chatId,
+    'chat' => $formatChat($chatData),
+    'messages' => array_map($formatMessage, $messages),
     'source' => 'firestore',
 ]);

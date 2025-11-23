@@ -245,5 +245,23 @@ export const markChatAsReadInFirestore = async (chatId, role) => {
     ? { unread_for_buyer: 0 }
     : { unread_for_vendor: 0 };
 
-  await updateDoc(chatRef, updateData);
+  try {
+    const chatSnap = await getDoc(chatRef);
+    if (!chatSnap.exists()) {
+      // Create a minimal chat document to ensure updates succeed. Use merge
+      // to avoid overwriting any server-side fields if the doc appears later.
+      await setDoc(chatRef, {
+        chat_id: chatId,
+        updated_at: serverTimestamp(),
+        last_ts: serverTimestamp(),
+        ...updateData,
+      }, { merge: true });
+      return;
+    }
+
+    await updateDoc(chatRef, updateData);
+  } catch (err) {
+    console.warn('Failed to mark chat as read:', err);
+    throw err;
+  }
 };

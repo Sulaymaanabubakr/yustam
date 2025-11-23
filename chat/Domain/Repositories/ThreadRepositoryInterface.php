@@ -13,9 +13,9 @@ interface ThreadRepositoryInterface
      */
     public function listByParticipant(string $role, string $uid, int $limit = 50): array;
 
-    public function markRead(string $threadId, string $role, ?int $timestamp = null): void;
+    public function markRead(string $chatId, string $role, ?int $timestamp = null): void;
 
-    public function findById(string $threadId): ?Thread;
+    public function findById(string $chatId): ?Thread;
 
     /**
      * @param array<string, mixed> $fields

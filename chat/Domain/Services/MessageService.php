@@ -22,12 +22,12 @@ final class MessageService
      * @param array<string, mixed> $options
      * @return Message[]
      */
-    public function listForThread(string $threadId, int $limit = 100, array $options = []): array
+    public function listForThread(string $chatId, int $limit = 100, array $options = []): array
     {
-        $messages = $this->messages->listForThread($threadId, $limit, $options);
+        $messages = $this->messages->listForThread($chatId, $limit, $options);
 
         StructuredLogger::debug('message.list', [
-            'threadId' => $threadId,
+            'chatId' => $chatId,
             'limit' => $limit,
             'options' => $options,
             'returned' => count($messages),
@@ -48,7 +48,7 @@ final class MessageService
         $this->messages->store($message);
 
         StructuredLogger::info('message.persisted', [
-            'threadId' => $message->threadId,
+            'chatId' => $message->chatId,
             'messageId' => $message->id,
             'type' => $message->type,
             'senderUid' => $message->senderUid,

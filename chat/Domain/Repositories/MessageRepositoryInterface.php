@@ -12,7 +12,7 @@ interface MessageRepositoryInterface
      * @param array<string, mixed> $options
      * @return Message[]
      */
-    public function listForThread(string $threadId, int $limit = 100, array $options = []): array;
+    public function listForThread(string $chatId, int $limit = 100, array $options = []): array;
 
     public function store(Message $message): void;
 }

@@ -12,6 +12,7 @@ require_once __DIR__ . '/../vendor-subscriptions.php';
 require_once __DIR__ . '/../notifications-storage.php';
 require_once __DIR__ . '/chat/firebase.php';
 require_once __DIR__ . '/services/openai-bot.php';
+require_once __DIR__ . '/services/deepseek-bot.php';
 require_once __DIR__ . '/services/cloudinary.php';
 
 const YUSTAM_API_DEFAULT_TTL = 604800; // 7 days

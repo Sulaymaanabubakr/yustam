@@ -78,9 +78,6 @@ const ChatScreen = ({ navigation }) => {
           console.error('Realtime chats failed:', error);
           showToast('Realtime chat updates are unavailable. Check your connection.', 'error');
         },
-        onStatus: (status) => {
-          console.log('Chats subscription status:', status);
-        },
       }
     );
 

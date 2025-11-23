@@ -17,15 +17,15 @@ import { openChatInFirestore } from '../../services/chatFirestore';
 import ChatsListView from '../shared/ChatsListView';
 // time formatting handled in shared component
 
-const VendorChatsScreen = ({ navigation }) => {
+const BuyerChatsScreen = ({ navigation }) => {
   const { user } = useAuth();
-  const vendorUid = resolveUserUid(user, 'vendor');
+  const buyerUid = resolveUserUid(user, 'buyer');
   if (typeof __DEV__ !== 'undefined' && __DEV__) {
     try {
-      console.debug('[VendorChatsScreen] userSummary', { uid: user?.uid || user?.id || null, email: user?.email || null });
-      console.debug('[VendorChatsScreen] resolved vendorUid', { vendorUid });
+      console.debug('[BuyerChatsScreen] userSummary', { uid: user?.uid || user?.id || null, email: user?.email || null });
+      console.debug('[BuyerChatsScreen] resolved buyerUid', { buyerUid });
     } catch (e) {
-      console.debug('[VendorChatsScreen] resolved vendorUid', { vendorUid });
+      console.debug('[BuyerChatsScreen] resolved buyerUid', { buyerUid });
     }
   }
   const [toast, setToast] = useState({ visible: false, message: '', type: 'info' });
@@ -33,20 +33,21 @@ const VendorChatsScreen = ({ navigation }) => {
   const showToast = (message, type = 'success') => setToast({ visible: true, message, type });
   const hideToast = () => setToast(prev => ({ ...prev, visible: false }));
 
-  const { chats, loading, refreshing, onRefresh } = useChats({ uid: vendorUid, role: 'vendor', onError: () => {
+  const { chats, loading, refreshing, onRefresh } = useChats({ uid: buyerUid, role: 'buyer', onError: () => {
     showToast('Realtime chat updates are unavailable. Check your connection.', 'error');
   }});
   // shared component handles per-item formatting
 
   const handleChatPress = async (chat) => {
+    // Ensure Firestore chat doc exists and return the canonical chatId
     try {
       const canonicalChatId = await openChatInFirestore({
-        buyerUid: chat.buyerId || chat.buyerId || '',
-        vendorUid,
-        buyerName: chat.buyerName || 'Buyer',
-        vendorName: user?.businessName || user?.displayName || user?.fullName || 'Vendor',
-        buyerAvatar: chat.buyerPhoto || '',
-        vendorAvatar: user?.photoURL || '',
+        buyerUid,
+        vendorUid: chat.vendorId,
+        buyerName: user?.fullName || user?.displayName || user?.email || 'Buyer',
+        vendorName: chat.vendorName,
+        buyerAvatar: user?.photoURL || '',
+        vendorAvatar: chat.vendorPhoto || '',
         listingId: chat.listingId,
         listingTitle: chat.listingTitle,
         listingImage: chat.listingImage,
@@ -54,9 +55,9 @@ const VendorChatsScreen = ({ navigation }) => {
 
       navigation.navigate('ChatThread', {
         chatId: canonicalChatId,
-        buyerName: chat.buyerName || chat.vendorName || 'Buyer',
-        buyerPhoto: chat.buyerPhoto || chat.vendorPhoto,
-        buyerId: chat.buyerId || chat.vendorId,
+        vendorName: chat.vendorName,
+        vendorPhoto: chat.vendorPhoto,
+        vendorId: chat.vendorId,
         listingId: chat.listingId,
         listingTitle: chat.listingTitle,
         listingImage: chat.listingImage,
@@ -67,18 +68,10 @@ const VendorChatsScreen = ({ navigation }) => {
     }
   };
 
-  
-
   return (
     <SafeAreaView style={styles.container}>
-      <Toast
-        visible={toast.visible}
-        message={toast.message}
-        type={toast.type}
-        onDismiss={hideToast}
-      />
+      <Toast visible={toast.visible} message={toast.message} type={toast.type} onDismiss={hideToast} />
 
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => goBackOrNavigate(navigation)} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color={theme.colors.primary} />
@@ -87,25 +80,13 @@ const VendorChatsScreen = ({ navigation }) => {
         <View style={styles.headerRight}>
           {chats.length > 0 && (
             <View style={styles.totalUnreadBadge}>
-              <Text style={styles.totalUnreadText}>
-                {chats.reduce((sum, chat) => sum + chat.unreadCount, 0)}
-              </Text>
+              <Text style={styles.totalUnreadText}>{chats.reduce((sum, chat) => sum + (chat.unreadCount || 0), 0)}</Text>
             </View>
           )}
         </View>
       </View>
 
       <ChatsListView chats={chats} loading={loading} refreshing={refreshing} onRefresh={onRefresh} onChatPress={handleChatPress} />
-
-      {/* Info Banner */}
-      {chats.length > 0 && (
-        <View style={styles.infoBanner}>
-          <Ionicons name="information-circle-outline" size={20} color={theme.colors.accent} />
-          <Text style={styles.infoText}>
-            Respond quickly to maintain good buyer relationships
-          </Text>
-        </View>
-      )}
     </SafeAreaView>
   );
 };
@@ -226,7 +207,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 4,
   },
-  buyerName: {
+  vendorName: {
     fontFamily: theme.typography.fontFamilyBody,
     fontSize: theme.typography.sizes.base,
     fontWeight: '600',
@@ -266,26 +247,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 24,
   },
-  infoBanner: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: `${theme.colors.accent}15`,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.base,
-    gap: theme.spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: `${theme.colors.accent}30`,
-  },
-  infoText: {
-    flex: 1,
-    fontFamily: theme.typography.fontFamilyBody,
-    fontSize: theme.typography.sizes.sm,
-    color: theme.colors.accent,
-  },
 });
 
-export default VendorChatsScreen;
+export default BuyerChatsScreen;

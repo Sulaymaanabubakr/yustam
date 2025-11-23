@@ -36,20 +36,20 @@ final class ThreadService
         return $threads;
     }
 
-    public function markRead(string $threadId, string $role, ?int $timestamp = null): void
+    public function markRead(string $chatId, string $role, ?int $timestamp = null): void
     {
-        $this->threads->markRead($threadId, $role, $timestamp);
+        $this->threads->markRead($chatId, $role, $timestamp);
 
         StructuredLogger::info('thread.read_service_mark', [
-            'threadId' => $threadId,
+            'chatId' => $chatId,
             'role' => $role,
             'timestamp' => $timestamp,
         ]);
     }
 
-    public function getById(string $threadId): ?Thread
+    public function getById(string $chatId): ?Thread
     {
-        return $this->threads->findById($threadId);
+        return $this->threads->findById($chatId);
     }
 
     /**
@@ -58,61 +58,61 @@ final class ThreadService
      */
     public function open(array $payload, array $context = []): Thread
     {
-        $buyerUid = (string) $payload['buyer_uid'];
-        $vendorUid = (string) $payload['vendor_uid'];
+        $buyerUid = (string) $payload['buyerUid'];
+        $vendorUid = (string) $payload['vendorUid'];
         $chatId = yustam_chat_build_id($buyerUid, $vendorUid);
 
-        $buyerName = $payload['buyer_name'] ?? null;
+        $buyerName = $payload['buyerName'] ?? null;
         if ($buyerName === null || $buyerName === '') {
             $buyerName = ($context['role'] ?? '') === 'buyer' ? ($context['name'] ?? 'Buyer') : 'Buyer';
         }
 
-        $vendorName = $payload['vendor_name'] ?? null;
+        $vendorName = $payload['vendorName'] ?? null;
         if ($vendorName === null || $vendorName === '') {
             $vendorName = ($context['role'] ?? '') === 'vendor' ? ($context['name'] ?? 'Vendor') : 'Vendor';
         }
 
         $fields = [
-            'chat_id' => $chatId,
-            'buyer_uid' => $buyerUid,
-            'buyer_name' => $buyerName,
-            'vendor_uid' => $vendorUid,
-            'vendor_name' => $vendorName,
-            'vendor_business_name' => $payload['vendor_business_name'] ?? $vendorName,
-            'listing_id' => $payload['listing_id'] ?? null,
-            'listing_title' => $payload['listing_title'] ?? null,
-            'listing_image' => $payload['listing_image'] ?? null,
-            'vendor_plan' => $payload['vendor_plan'] ?? null,
-            'vendor_plan_label' => $payload['vendor_plan_label'] ?? null,
-            'vendor_plan_slug' => $payload['vendor_plan_slug'] ?? null,
-            'vendor_verified' => $payload['vendor_verified'] ?? null,
+            'chatId' => $chatId,
+            'buyerUid' => $buyerUid,
+            'buyerName' => $buyerName,
+            'vendorUid' => $vendorUid,
+            'vendorName' => $vendorName,
+            'vendorBusinessName' => $payload['vendorBusinessName'] ?? $vendorName,
+            'listingId' => $payload['listingId'] ?? null,
+            'listingTitle' => $payload['listingTitle'] ?? null,
+            'listingImage' => $payload['listingImage'] ?? null,
+            'vendorPlan' => $payload['vendorPlan'] ?? null,
+            'vendorPlanLabel' => $payload['vendorPlanLabel'] ?? null,
+            'vendorPlanSlug' => $payload['vendorPlanSlug'] ?? null,
+            'vendorVerified' => $payload['vendorVerified'] ?? null,
         ];
 
         $thread = $this->threads->upsert($fields);
 
         $cacheFields = [
-            'chat_id' => $chatId,
-            'buyer_uid' => $buyerUid,
-            'vendor_uid' => $vendorUid,
-            'buyer_name' => $buyerName,
-            'vendor_name' => $vendorName,
-            'vendor_business_name' => $payload['vendor_business_name'] ?? $vendorName,
-            'listing_id' => $payload['listing_id'] ?? null,
-            'listing_title' => $payload['listing_title'] ?? null,
-            'listing_image' => $payload['listing_image'] ?? null,
-            'vendor_plan' => $payload['vendor_plan'] ?? null,
-            'vendor_plan_label' => $payload['vendor_plan_label'] ?? null,
-            'vendor_plan_slug' => $payload['vendor_plan_slug'] ?? null,
-            'vendor_verified' => $payload['vendor_verified'] ?? null,
-            'last_ts' => $thread->lastTimestamp,
-            'last_text' => $thread->lastMessage,
-            'last_sender_role' => $thread->lastSenderRole,
+            'chatId' => $chatId,
+            'buyerUid' => $buyerUid,
+            'vendorUid' => $vendorUid,
+            'buyerName' => $buyerName,
+            'vendorName' => $vendorName,
+            'vendorBusinessName' => $payload['vendorBusinessName'] ?? $vendorName,
+            'listingId' => $payload['listingId'] ?? null,
+            'listingTitle' => $payload['listingTitle'] ?? null,
+            'listingImage' => $payload['listingImage'] ?? null,
+            'vendorPlan' => $payload['vendorPlan'] ?? null,
+            'vendorPlanLabel' => $payload['vendorPlanLabel'] ?? null,
+            'vendorPlanSlug' => $payload['vendorPlanSlug'] ?? null,
+            'vendorVerified' => $payload['vendorVerified'] ?? null,
+            'lastTs' => $thread->lastTimestamp,
+            'lastMessage' => $thread->lastMessage,
+            'lastSenderRole' => $thread->lastSenderRole,
         ];
 
         MetadataCache::updateThread($chatId, $cacheFields);
 
         StructuredLogger::info('thread.opened_service', [
-            'threadId' => $chatId,
+            'chatId' => $chatId,
             'buyerUid' => $buyerUid,
             'vendorUid' => $vendorUid,
         ]);

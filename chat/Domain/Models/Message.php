@@ -7,7 +7,7 @@ namespace Chat\Domain\Models;
 final class Message
 {
     public string $id = '';
-    public string $threadId = '';
+    public string $chatId = '';
     public string $senderUid = '';
     public string $senderRole = '';
     public string $type = 'text';
@@ -27,26 +27,26 @@ final class Message
     {
         $message = new self();
         $message->id = (string) ($data['id'] ?? '');
-        $message->threadId = (string) ($data['chat_id'] ?? $data['threadId'] ?? '');
-        $message->senderUid = (string) ($data['sender_uid'] ?? $data['senderUid'] ?? '');
-        $message->senderRole = (string) ($data['sender_role'] ?? $data['role'] ?? '');
-        $message->type = strtolower((string) ($data['type'] ?? $data['message_type'] ?? 'text'));
+        $message->chatId = (string) ($data['chatId'] ?? '');
+        $message->senderUid = (string) ($data['senderUid'] ?? '');
+        $message->senderRole = (string) ($data['role'] ?? '');
+        $message->type = strtolower((string) ($data['type'] ?? 'text'));
         $message->text = isset($data['text']) ? (string) $data['text'] : null;
-        $message->mediaUrl = isset($data['media_url']) ? (string) $data['media_url'] : null;
-        $message->imageUrl = isset($data['image_url']) ? (string) $data['image_url'] : ($data['imageUrl'] ?? null);
-        $message->videoUrl = isset($data['video_url']) ? (string) $data['video_url'] : ($data['videoUrl'] ?? null);
-        $message->voiceUrl = isset($data['voice_url']) ? (string) $data['voice_url'] : ($data['voiceUrl'] ?? null);
-        $message->voiceDuration = isset($data['voice_duration']) ? (int) $data['voice_duration'] : ($data['voiceDuration'] ?? null);
-        $message->mediaMeta = isset($data['media_meta']) && is_array($data['media_meta']) ? $data['media_meta'] : null;
+        $message->mediaUrl = isset($data['mediaUrl']) ? (string) $data['mediaUrl'] : null;
+        $message->imageUrl = isset($data['imageUrl']) ? (string) $data['imageUrl'] : null;
+        $message->videoUrl = isset($data['videoUrl']) ? (string) $data['videoUrl'] : null;
+        $message->voiceUrl = isset($data['voiceUrl']) ? (string) $data['voiceUrl'] : null;
+        $message->voiceDuration = isset($data['voiceDuration']) ? (int) $data['voiceDuration'] : null;
+        $message->mediaMeta = isset($data['mediaMeta']) && is_array($data['mediaMeta']) ? $data['mediaMeta'] : null;
         if ($message->mediaUrl === null) {
             $message->mediaUrl = $message->imageUrl ?? $message->videoUrl ?? $message->voiceUrl;
         }
-        $message->timestamp = (int) ($data['ts'] ?? $data['timestamp'] ?? time());
+        $message->timestamp = (int) ($data['timestamp'] ?? time());
         return $message;
     }
 
     public static function create(
-        string $threadId,
+        string $chatId,
         string $senderUid,
         string $senderRole,
         string $type,
@@ -55,7 +55,7 @@ final class Message
         ?array $mediaMeta = null
     ): self {
         $message = new self();
-        $message->threadId = $threadId;
+        $message->chatId = $chatId;
         $message->senderUid = $senderUid;
         $message->senderRole = $senderRole;
         $message->type = strtolower($type);
@@ -95,28 +95,18 @@ final class Message
     {
         return [
             'id' => $this->id,
-            'chatId' => $this->threadId,
-            'chat_id' => $this->threadId,
+            'chatId' => $this->chatId,
             'senderUid' => $this->senderUid,
-            'sender_uid' => $this->senderUid,
             'senderRole' => $this->senderRole,
-            'sender_role' => $this->senderRole,
             'type' => $this->type,
             'text' => $this->text,
             'mediaUrl' => $this->mediaUrl,
-            'media_url' => $this->mediaUrl,
             'imageUrl' => $this->imageUrl,
-            'image_url' => $this->imageUrl,
             'videoUrl' => $this->videoUrl,
-            'video_url' => $this->videoUrl,
             'voiceUrl' => $this->voiceUrl,
-            'voice_url' => $this->voiceUrl,
             'voiceDuration' => $this->voiceDuration,
-            'voice_duration' => $this->voiceDuration,
             'mediaMeta' => $this->mediaMeta,
-            'media_meta' => $this->mediaMeta,
             'timestamp' => $this->timestamp,
-            'ts' => $this->timestamp,
         ];
     }
 }

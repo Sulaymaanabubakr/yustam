@@ -445,7 +445,22 @@ function yustam_bot_build_system_prompt(array $context = []): string
     ]);
 }
 
-function yustam_bot_call_openai(string $query, array $context = []): array
+function yustam_bot_call_ai(string $query, array $context = [], string $provider = 'openai'): array
+{
+    // If provider is 'deepseek', use Deepseek API
+    if ($provider === 'deepseek') {
+        if (!function_exists('yustam_bot_call_deepseek')) {
+            return [
+                'success' => false,
+                'error' => 'not_configured',
+                'message' => 'Deepseek integration missing.',
+            ];
+        }
+        return yustam_bot_call_deepseek($query, $context);
+    }
+    // Default: OpenAI
+    return yustam_bot_call_openai($query, $context);
+}
 {
     if (!yustam_bot_is_openai_configured()) {
         return [
