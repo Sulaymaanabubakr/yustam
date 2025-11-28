@@ -1,0 +1,37 @@
+Running Gradle task 'assembleRelease'...                        
+Font asset "MaterialIcons-Regular.otf" was tree-shaken, reducing it from 1645184 to 11912 bytes (99.3% reduction). Tree-shaking can be disabled by providing the --no-tree-shake-icons flag when building your app.
+Font asset "CupertinoIcons.ttf" was tree-shaken, reducing it from 257628 to 848 bytes (99.7% reduction). Tree-shaking can be disabled by providing the --no-tree-shake-icons flag when building your app.
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:mergeReleaseNativeLibs'.
+> Could not resolve all files for configuration ':app:releaseRuntimeClasspath'.
+   > Failed to transform armeabi_v7a_release-1.0.0-035316565ad77281a75305515e4682e6c4c6f7ca.jar (io.flutter:armeabi_v7a_release:1.0.0-035316565ad77281a75305515e4682e6c4c6f7ca) to match attributes {artifactType=android-jni, org.gradle.category=library, org.gradle.libraryelements=jar, org.gradle.status=release, org.gradle.usage=java-runtime}.
+      > Could not download armeabi_v7a_release-1.0.0-035316565ad77281a75305515e4682e6c4c6f7ca.jar (io.flutter:armeabi_v7a_release:1.0.0-035316565ad77281a75305515e4682e6c4c6f7ca)
+         > Could not get resource 'https://storage.googleapis.com/download.flutter.io/io/flutter/armeabi_v7a_release/1.0.0-035316565ad77281a75305515e4682e6c4c6f7ca/armeabi_v7a_release-1.0.0-035316565ad77281a75305515e4682e6c4c6f7ca.jar'.
+            > Could not GET 'https://storage.googleapis.com/download.flutter.io/io/flutter/armeabi_v7a_release/1.0.0-035316565ad77281a75305515e4682e6c4c6f7ca/armeabi_v7a_release-1.0.0-035316565ad77281a75305515e4682e6c4c6f7ca.jar'.
+               > Connect to storage.googleapis.com:443 [storage.googleapis.com/216.58.198.91] failed: Read timed out
+   > Failed to transform arm64_v8a_release-1.0.0-035316565ad77281a75305515e4682e6c4c6f7ca.jar (io.flutter:arm64_v8a_release:1.0.0-035316565ad77281a75305515e4682e6c4c6f7ca) to match attributes {artifactType=android-jni, org.gradle.category=library, org.gradle.libraryelements=jar, org.gradle.status=release, org.gradle.usage=java-runtime}.
+      > Could not download arm64_v8a_release-1.0.0-035316565ad77281a75305515e4682e6c4c6f7ca.jar (io.flutter:arm64_v8a_release:1.0.0-035316565ad77281a75305515e4682e6c4c6f7ca)
+         > Could not get resource 'https://storage.googleapis.com/download.flutter.io/io/flutter/arm64_v8a_release/1.0.0-035316565ad77281a75305515e4682e6c4c6f7ca/arm64_v8a_release-1.0.0-035316565ad77281a75305515e4682e6c4c6f7ca.jar'.
+            > Could not GET 'https://storage.googleapis.com/download.flutter.io/io/flutter/arm64_v8a_release/1.0.0-035316565ad77281a75305515e4682e6c4c6f7ca/arm64_v8a_release-1.0.0-035316565ad77281a75305515e4682e6c4c6f7ca.jar'.
+               > The server may not support the client's requested TLS protocol versions: (TLSv1.2, TLSv1.3). You may need to configure the client to allow other protocols to be used. For more on this, please refer to https://docs.gradle.org/8.12/userguide/build_environment.html#sec:gradle_system_properties in the Gradle documentation.
+                  > Remote host terminated the handshake
+   > Failed to transform x86_64_release-1.0.0-035316565ad77281a75305515e4682e6c4c6f7ca.jar (io.flutter:x86_64_release:1.0.0-035316565ad77281a75305515e4682e6c4c6f7ca) to match attributes {artifactType=android-jni, org.gradle.category=library, org.gradle.libraryelements=jar, org.gradle.status=release, org.gradle.usage=java-runtime}.
+      > Could not download x86_64_release-1.0.0-035316565ad77281a75305515e4682e6c4c6f7ca.jar (io.flutter:x86_64_release:1.0.0-035316565ad77281a75305515e4682e6c4c6f7ca)
+         > Could not get resource 'https://storage.googleapis.com/download.flutter.io/io/flutter/x86_64_release/1.0.0-035316565ad77281a75305515e4682e6c4c6f7ca/x86_64_release-1.0.0-035316565ad77281a75305515e4682e6c4c6f7ca.jar'.
+            > Could not GET 'https://storage.googleapis.com/download.flutter.io/io/flutter/x86_64_release/1.0.0-035316565ad77281a75305515e4682e6c4c6f7ca/x86_64_release-1.0.0-035316565ad77281a75305515e4682e6c4c6f7ca.jar'.
+               > Connect to storage.googleapis.com:443 [storage.googleapis.com/216.58.198.91] failed: Read timed out
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 5m 38s
+Running Gradle task 'assembleRelease'...                          358.0s
+[!] Gradle threw an error while downloading artifacts from the network.
+Retrying Gradle Build: #1, wait time: 100ms
+Running Gradle task 'assembleRelease'...                        

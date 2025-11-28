@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Yustam UI Preview</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600&family=Poppins:wght@600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <style>
+        :root {
+            --emerald: #004D40;
+            --emerald-dark: #003d34;
+            --orange: #F3731E;
+            --bg-light: #F5EDE5;
+            --white: #FFFFFF;
+            --text-primary: #111111;
+            --text-secondary: rgba(17, 17, 17, 0.7);
+            --gray-200: #E5E7EB;
+            --shadow-sm: 0 2px 4px rgba(0,0,0,0.05);
+            --shadow-md: 0 4px 8px rgba(0,0,0,0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: #333;
+            font-family: 'Inter', sans-serif;
+            padding: 40px;
+            display: flex;
+            gap: 40px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        /* Phone Frame */
+        .phone-frame {
+            width: 375px;
+            height: 812px;
+            background: var(--bg-light);
+            border-radius: 40px;
+            overflow: hidden;
+            position: relative;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+            border: 12px solid #1a1a1a;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Screen 1: Login */
+        .login-screen {
+            padding: 24px;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            background: var(--bg-light);
+        }
+
+        .logo-box {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, var(--emerald), var(--emerald-dark));
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 60px auto 32px;
+            color: white;
+            box-shadow: var(--shadow-md);
+        }
+
+        .login-title {
+            font-family: 'Poppins', sans-serif;
+            font-size: 24px;
+            font-weight: 600;
+            text-align: center;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+        }
+
+        .login-subtitle {
+            text-align: center;
+            color: var(--text-secondary);
+            margin-bottom: 40px;
+            font-size: 14px;
+        }
+
+        .input-group {
+            margin-bottom: 16px;
+        }
+
+        .input-field {
+            width: 100%;
+            padding: 16px;
+            border: 1px solid var(--gray-200);
+            border-radius: 12px;
+            background: var(--white);
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .btn-primary {
+            background: var(--emerald);
+            color: white;
+            border: none;
+            width: 100%;
+            padding: 16px;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 16px;
+            margin-top: 24px;
+            cursor: pointer;
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 1px solid var(--gray-200);
+            width: 100%;
+            padding: 16px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-top: 24px;
+            font-weight: 500;
+        }
+
+        /* Screen 2: Home */
+        .home-screen {
+            background: var(--bg-light);
+            height: 100%;
+            overflow: hidden;
+        }
+
+        .header {
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo-sm {
+            width: 40px;
+            height: 40px;
+            background: white;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: var(--emerald);
+        }
+
+        .app-name {
+            font-family: 'Anton', sans-serif;
+            font-size: 24px;
+            color: var(--emerald);
+            letter-spacing: 1.5px;
+        }
+
+        .action-btn {
+            width: 40px;
+            height: 40px;
+            background: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: var(--shadow-sm);
+            position: relative;
+        }
+
+        .badge {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            width: 8px;
+            height: 8px;
+            background: var(--orange);
+            border-radius: 50%;
+        }
+
+        .greeting {
+            padding: 0 20px;
+            font-family: 'Anton', sans-serif;
+            font-size: 32px;
+            color: var(--text-primary);
+            line-height: 1.2;
+        }
+
+        .powered-by {
+            padding: 4px 20px 24px;
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .search-container {
+            padding: 0 20px 24px;
+        }
+
+        .search-bar {
+            background: white;
+            border-radius: 16px;
+            padding: 4px 8px 4px 16px;
+            display: flex;
+            align-items: center;
+            box-shadow: var(--shadow-md);
+            gap: 12px;
+        }
+
+        .search-btn {
+            background: var(--emerald);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .banners {
+            display: flex;
+            gap: 12px;
+            overflow-x: hidden;
+            padding: 0 20px 24px;
+        }
+
+        .banner-card {
+            min-width: 200px;
+            padding: 16px;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: white;
+        }
+
+        .cat-grid {
+            margin: 0 20px;
+            background: white;
+            border-radius: 20px;
+            padding: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            justify-content: space-between;
+        }
+
+        .cat-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 60px;
+        }
+
+        .cat-icon {
+            width: 50px;
+            height: 50px;
+            background: #FAEFE6;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--orange);
+            margin-bottom: 8px;
+        }
+
+        /* Screen 3: Detail */
+        .detail-screen {
+            background: white;
+            height: 100%;
+            position: relative;
+        }
+
+        .product-image {
+            height: 40%;
+            background: #f0f0f0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #999;
+            font-size: 48px;
+        }
+
+        .detail-content {
+            padding: 20px;
+        }
+
+        .prod-title {
+            font-family: 'Anton', sans-serif;
+            font-size: 28px;
+            color: var(--text-primary);
+            margin-bottom: 12px;
+        }
+
+        .price-row {
+            display: flex;
+            align-items: baseline;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .price-main {
+            font-family: 'Anton', sans-serif;
+            font-size: 32px;
+            color: var(--text-primary);
+        }
+
+        .price-old {
+            text-decoration: line-through;
+            color: var(--text-secondary);
+        }
+
+        .chips-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 24px;
+        }
+
+        .chip {
+            padding: 8px 12px;
+            background: var(--bg-light);
+            border-radius: 20px;
+            border: 1px solid var(--gray-200);
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            color: var(--text-secondary);
+        }
+
+        .seller-card {
+            border: 1px solid var(--gray-200);
+            border-radius: 16px;
+            padding: 16px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            background: var(--bg-light);
+            margin-top: 24px;
+        }
+
+        .bottom-bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 16px 20px 32px;
+            background: white;
+            box-shadow: 0 -4px 20px rgba(0,0,0,0.05);
+            display: flex;
+            gap: 12px;
+        }
+
+        .status-bar {
+            height: 44px;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 24px;
+            align-items: center;
+            font-size: 12px;
+            font-weight: 600;
+            color: #000;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- SCREEN 1: LOGIN -->
+    <div class="phone-frame">
+        <div class="status-bar">
+            <span>9:41</span>
+            <span class="material-icons" style="font-size: 16px;">wifi battery_full</span>
+        </div>
+        <div class="login-screen">
+            <div class="logo-box">
+                <span class="material-icons" style="font-size: 40px;">shopping_bag</span>
+            </div>
+            
+            <h1 class="login-title">Welcome Back</h1>
+            <p class="login-subtitle">Sign in to continue</p>
+
+            <div class="input-group">
+                <div class="input-field">
+                    <span class="material-icons" style="color: #999;">email</span>
+                    <span style="color: #333;">user@example.com</span>
+                </div>
+            </div>
+
+            <div class="input-group">
+                <div class="input-field">
+                    <span class="material-icons" style="color: #999;">lock</span>
+                    <span style="color: #333;">••••••••</span>
+                    <span class="material-icons" style="margin-left: auto; color: #999;">visibility_off</span>
+                </div>
+            </div>
+
+            <div style="text-align: right; color: var(--orange); font-size: 14px; font-weight: 500;">
+                Forgot Password?
+            </div>
+
+            <button class="btn-primary">Sign In</button>
+
+            <div style="display: flex; align-items: center; gap: 16px; margin: 24px 0;">
+                <div style="height: 1px; background: #eee; flex: 1;"></div>
+                <span style="color: #999; font-size: 12px;">OR</span>
+                <div style="height: 1px; background: #eee; flex: 1;"></div>
+            </div>
+
+            <button class="btn-outline">
+                <span class="material-icons">g_mobiledata</span>
+                Continue with Google
+            </button>
+        </div>
+    </div>
+
+    <!-- SCREEN 2: HOME -->
+    <div class="phone-frame">
+        <div class="status-bar">
+            <span>9:41</span>
+            <span class="material-icons" style="font-size: 16px;">wifi battery_full</span>
+        </div>
+        <div class="home-screen">
+            <div class="header">
+                <div class="logo-row">
+                    <div class="logo-sm">Y</div>
+                    <span class="app-name">YUSTAM</span>
+                </div>
+                <div class="logo-row">
+                    <div class="action-btn">
+                        <span class="material-icons" style="font-size: 20px;">search</span>
+                    </div>
+                    <div class="action-btn">
+                        <span class="material-icons" style="font-size: 20px;">notifications_none</span>
+                        <div class="badge"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="greeting">Hi there,</div>
+            <div class="powered-by">
+                Powered by <span style="color: var(--orange); font-weight: bold;">AI</span> • Nigeria's No.1
+            </div>
+
+            <div class="search-container">
+                <div class="search-bar">
+                    <span class="material-icons" style="color: #999;">search</span>
+                    <input type="text" placeholder="Search deals..." style="border: none; outline: none; flex: 1; font-size: 14px;">
+                    <div class="search-btn">Search</div>
+                </div>
+            </div>
+
+            <div class="banners">
+                <div class="banner-card" style="background: #22242E;">
+                    <div style="width: 32px; height: 32px; background: rgba(255,255,255,0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+                        <span class="material-icons" style="font-size: 16px;">casino</span>
+                    </div>
+                    <div>
+                        <div style="font-weight: 600;">Gacha Bonanza</div>
+                        <div style="font-size: 10px; opacity: 0.8;">Spin & Win</div>
+                    </div>
+                </div>
+                <div class="banner-card" style="background: #0B7A61;">
+                    <div style="width: 32px; height: 32px; background: rgba(255,255,255,0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+                        <span class="material-icons" style="font-size: 16px;">confirmation_number</span>
+                    </div>
+                    <div>
+                        <div style="font-weight: 600;">Coupon Rain</div>
+                        <div style="font-size: 10px; opacity: 0.8;">Daily Vouchers</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="cat-grid">
+                <div style="width: 100%; font-weight: 600; margin-bottom: 8px;">Browse by category</div>
+                <div class="cat-item">
+                    <div class="cat-icon"><span class="material-icons">phone_android</span></div>
+                    <span style="font-size: 11px;">Phones</span>
+                </div>
+                <div class="cat-item">
+                    <div class="cat-icon"><span class="material-icons">tv</span></div>
+                    <span style="font-size: 11px;">Electronics</span>
+                </div>
+                <div class="cat-item">
+                    <div class="cat-icon"><span class="material-icons">checkroom</span></div>
+                    <span style="font-size: 11px;">Fashion</span>
+                </div>
+                <div class="cat-item">
+                    <div class="cat-icon"><span class="material-icons">home</span></div>
+                    <span style="font-size: 11px;">Property</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SCREEN 3: DETAIL -->
+    <div class="phone-frame">
+        <div class="status-bar">
+            <span>9:41</span>
+            <span class="material-icons" style="font-size: 16px;">wifi battery_full</span>
+        </div>
+        <div class="detail-screen">
+            <div class="product-image">
+                <span class="material-icons" style="font-size: 64px; color: #ccc;">image</span>
+                <div style="position: absolute; top: 50px; left: 20px; width: 40px; height: 40px; background: rgba(255,255,255,0.9); border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+                    <span class="material-icons" style="font-size: 20px;">arrow_back</span>
+                </div>
+            </div>
+
+            <div class="detail-content">
+                <h2 class="prod-title">iPhone 13 Pro Max</h2>
+                
+                <div class="price-row">
+                    <div class="price-main">₦450,000</div>
+                    <div class="price-old">₦500,000</div>
+                </div>
+
+                <div class="chips-row">
+                    <div class="chip">
+                        <span class="material-icons" style="font-size: 14px;">location_on</span>
+                        Lagos
+                    </div>
+                    <div class="chip">
+                        <span class="material-icons" style="font-size: 14px;">verified</span>
+                        Used
+                    </div>
+                    <div class="chip">
+                        <span class="material-icons" style="font-size: 14px;">visibility</span>
+                        1.2k views
+                    </div>
+                </div>
+
+                <div style="font-family: 'Anton'; font-size: 20px; margin-bottom: 12px;">Description</div>
+                <p style="font-size: 14px; color: var(--text-secondary); line-height: 1.6;">
+                    Brand new iPhone 13 Pro Max in excellent condition. Comes with original box, charger, and accessories.
+                </p>
+
+                <div class="seller-card">
+                    <div style="width: 48px; height: 48px; background: var(--emerald); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white;">
+                        <span class="material-icons">storefront</span>
+                    </div>
+                    <div style="flex: 1;">
+                        <div style="font-weight: 600;">Tech Store Nigeria</div>
+                        <div style="font-size: 12px; color: var(--emerald); display: flex; align-items: center; gap: 4px;">
+                            <span class="material-icons" style="font-size: 12px;">verified</span> Verified Seller
+                        </div>
+                    </div>
+                    <span class="material-icons" style="font-size: 16px; color: #999;">arrow_forward_ios</span>
+                </div>
+            </div>
+
+            <div class="bottom-bar">
+                <button style="flex: 1; border: 2px solid var(--emerald); background: white; color: var(--emerald); padding: 16px; border-radius: 12px; font-weight: 600; display: flex; justify-content: center; gap: 8px;">
+                    <span class="material-icons">chat_bubble_outline</span> Chat
+                </button>
+                <button style="flex: 2; background: var(--orange); border: none; color: white; padding: 16px; border-radius: 12px; font-weight: 600; display: flex; justify-content: center; gap: 8px;">
+                    <span class="material-icons">shopping_bag</span> Buy Now
+                </button>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>
