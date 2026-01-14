@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <title>Account Deletion Request | YUSTAM Marketplace</title>
+  <meta name="description" content="Request account deletion for YUSTAM Marketplace. Learn how to delete your account in-app or submit a deletion request, with clear timelines and data retention details." />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet" />
+
+  <style>
+    :root {
+      --emerald: #004D40;
+      --emerald-deep: #0b3f35;
+      --emerald-bright: #00725f;
+      --orange: #F3731E;
+      --orange-bright: #FF8A3C;
+      --beige: #EADCCF;
+      --ink: #0F1A17;
+      --white: #FFFFFF;
+      --glass-bg: rgba(255, 255, 255, 0.78);
+      --glass-border: rgba(255, 255, 255, 0.28);
+      --radius-lg: 22px;
+      --shadow-soft: 0 20px 50px rgba(0, 35, 28, 0.18);
+      --transition-base: all 240ms cubic-bezier(.2, .8, .2, 1);
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      min-height: 100vh;
+      font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      color: var(--ink);
+      background: radial-gradient(circle at top left, rgba(255, 255, 255, 0.95), rgba(234, 220, 207, 0.85) 40%, rgba(0, 77, 64, 0.1) 100%),
+        linear-gradient(135deg, rgba(234, 220, 207, 0.9), rgba(255, 255, 255, 0.95));
+      -webkit-font-smoothing: antialiased;
+      padding-bottom: 64px;
+    }
+
+    img {
+      max-width: 100%;
+      display: block;
+    }
+
+    h1, h2, h3 {
+      font-family: 'Anton', sans-serif;
+      color: var(--emerald);
+      letter-spacing: 0.5px;
+    }
+
+    p {
+      line-height: 1.7;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .page-shell {
+      width: min(980px, 92%);
+      margin: 0 auto;
+    }
+
+    .glass-card {
+      background: var(--glass-bg);
+      backdrop-filter: blur(20px);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-soft);
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: linear-gradient(135deg, rgba(0, 77, 64, 0.95), rgba(0, 120, 100, 0.85));
+      border-bottom: 3px solid var(--orange);
+      box-shadow: 0 12px 28px rgba(0, 35, 28, 0.2);
+    }
+
+    .header-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 18px 20px;
+      max-width: 1080px;
+      margin: 0 auto;
+    }
+
+    .logo {
+      font-family: 'Anton', sans-serif;
+      font-size: clamp(1.4rem, 3vw, 1.9rem);
+      color: var(--white);
+      letter-spacing: 1px;
+    }
+
+    .header-title {
+      font-size: clamp(1.1rem, 3vw, 1.6rem);
+      color: var(--white);
+    }
+
+    .icon-link {
+      width: 42px;
+      height: 42px;
+      border-radius: 14px;
+      display: grid;
+      place-items: center;
+      background: rgba(255, 255, 255, 0.18);
+      color: var(--white);
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      transition: var(--transition-base);
+    }
+
+    .icon-link:hover,
+    .icon-link:focus-visible {
+      background: rgba(255, 255, 255, 0.32);
+      transform: translateY(-2px);
+      outline: none;
+    }
+
+    main {
+      padding: 40px 0 72px;
+    }
+
+    .fade-up {
+      opacity: 0;
+      transform: translateY(36px);
+      transition: opacity 480ms ease, transform 480ms ease;
+    }
+
+    .fade-up.in-view {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .hero {
+      display: grid;
+      gap: 18px;
+      text-align: center;
+      color: var(--white);
+      padding: clamp(36px, 10vw, 56px);
+      position: relative;
+      overflow: hidden;
+      background: linear-gradient(135deg, rgba(0, 77, 64, 0.9), rgba(0, 135, 112, 0.82));
+    }
+
+    .hero::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at top, rgba(255, 255, 255, 0.3), transparent 70%);
+      opacity: 0.5;
+    }
+
+    .hero-content {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      gap: 14px;
+      justify-items: center;
+    }
+
+    .hero-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.2);
+      color: rgba(255, 255, 255, 0.95);
+      font-size: 0.9rem;
+    }
+
+    .hero-title {
+      font-size: clamp(2.2rem, 5vw, 3.2rem);
+      color: var(--white);
+    }
+
+    .hero-text {
+      color: rgba(255, 255, 255, 0.88);
+      max-width: 60ch;
+    }
+
+    .grid {
+      display: grid;
+      gap: 24px;
+    }
+
+    .grid.two {
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    }
+
+    .grid.three {
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    }
+
+    .card {
+      padding: clamp(22px, 4vw, 32px);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card-title {
+      font-size: 1.5rem;
+      margin-bottom: 12px;
+    }
+
+    .step-list {
+      display: grid;
+      gap: 16px;
+    }
+
+    .step {
+      display: grid;
+      gap: 8px;
+      padding: 16px 18px;
+      border-radius: 16px;
+      background: rgba(0, 77, 64, 0.08);
+      border: 1px solid rgba(0, 77, 64, 0.15);
+    }
+
+    .step strong {
+      font-weight: 700;
+      color: var(--emerald);
+    }
+
+    .highlight {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(243, 115, 30, 0.15);
+      border: 1px solid rgba(243, 115, 30, 0.3);
+      padding: 8px 14px;
+      border-radius: 999px;
+      color: var(--emerald-deep);
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+
+    .info-list {
+      display: grid;
+      gap: 12px;
+    }
+
+    .info-item {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+
+    .info-item i {
+      color: var(--orange);
+      font-size: 1.1rem;
+      margin-top: 2px;
+    }
+
+    .form-layout {
+      display: grid;
+      gap: 16px;
+    }
+
+    .form-group {
+      display: grid;
+      gap: 8px;
+    }
+
+    label {
+      font-weight: 600;
+    }
+
+    input, select, textarea {
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 12px;
+      border: 1px solid rgba(0, 77, 64, 0.2);
+      background: rgba(255, 255, 255, 0.9);
+      font-family: inherit;
+      font-size: 1rem;
+      transition: var(--transition-base);
+    }
+
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: var(--emerald-bright);
+      box-shadow: 0 0 0 3px rgba(0, 114, 95, 0.18);
+    }
+
+    textarea {
+      min-height: 120px;
+      resize: vertical;
+    }
+
+    .form-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      align-items: center;
+    }
+
+    .btn-primary {
+      padding: 12px 20px;
+      border-radius: 999px;
+      border: none;
+      background: linear-gradient(135deg, var(--orange), var(--orange-bright));
+      color: var(--white);
+      font-weight: 700;
+      cursor: pointer;
+      transition: var(--transition-base);
+    }
+
+    .btn-primary:hover,
+    .btn-primary:focus-visible {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 22px rgba(243, 115, 30, 0.35);
+      outline: none;
+    }
+
+    .btn-outline {
+      padding: 10px 18px;
+      border-radius: 999px;
+      border: 1px solid rgba(0, 77, 64, 0.3);
+      background: transparent;
+      color: var(--emerald-deep);
+      font-weight: 600;
+      cursor: pointer;
+      transition: var(--transition-base);
+    }
+
+    .btn-outline:hover,
+    .btn-outline:focus-visible {
+      border-color: var(--emerald-bright);
+      color: var(--emerald-bright);
+      outline: none;
+      transform: translateY(-1px);
+    }
+
+    .form-note {
+      font-size: 0.95rem;
+      color: rgba(15, 26, 23, 0.7);
+    }
+
+    .status-message {
+      display: none;
+      padding: 10px 14px;
+      border-radius: 12px;
+      background: rgba(0, 77, 64, 0.1);
+      color: var(--emerald-deep);
+      font-weight: 600;
+    }
+
+    .status-message.visible {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .cta-card {
+      background: linear-gradient(130deg, rgba(0, 77, 64, 0.92), rgba(0, 135, 112, 0.86));
+      color: var(--white);
+      padding: clamp(26px, 5vw, 36px);
+      border-radius: var(--radius-lg);
+      display: grid;
+      gap: 12px;
+    }
+
+    .cta-card h3 {
+      color: var(--white);
+    }
+
+    .cta-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .cta-links a {
+      color: var(--white);
+      font-weight: 600;
+      text-decoration: underline;
+      text-decoration-color: rgba(255, 255, 255, 0.5);
+    }
+
+    footer {
+      margin-top: 48px;
+      text-align: center;
+      color: rgba(15, 26, 23, 0.6);
+      font-size: 0.95rem;
+    }
+
+    @media (max-width: 720px) {
+      .header-title {
+        display: none;
+      }
+
+      .form-actions {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .btn-primary,
+      .btn-outline {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="header-inner">
+      <a class="logo" href="index.html" aria-label="YUSTAM Marketplace">YUSTAM</a>
+      <div class="header-title">Account Deletion Request</div>
+      <a class="icon-link" href="contact.html#support-form" aria-label="Contact support">
+        <i class="ri-customer-service-2-line" aria-hidden="true"></i>
+      </a>
+    </div>
+  </header>
+
+  <main>
+    <div class="page-shell">
+      <section class="hero glass-card fade-up">
+        <div class="hero-content">
+          <span class="hero-tag"><i class="ri-shield-user-line" aria-hidden="true"></i> Google Play Account Deletion</span>
+          <h1 class="hero-title">Delete your YUSTAM account in minutes.</h1>
+          <p class="hero-text">You can remove your account and personal data from YUSTAM Marketplace at any time. Use the in-app option for the fastest result or submit a deletion request here.</p>
+        </div>
+      </section>
+
+      <section class="card glass-card fade-up" style="margin-top: 28px;">
+        <div class="highlight"><i class="ri-flashlight-line" aria-hidden="true"></i> Fastest option: delete inside the app</div>
+        <div class="grid two">
+          <div>
+            <h2 class="card-title">In-app deletion steps</h2>
+            <p class="form-note">To delete your Yustam account yourself, open the app, go to Settings &gt; Profile &gt; Delete Account, and follow the instructions. For assistance, contact support at <a href="mailto:support@yustam.com.ng">support@yustam.com.ng</a>.</p>
+            <div class="step-list">
+              <div class="step">
+                <strong>Step 1</strong>
+                <div>Open the YUSTAM app and sign in.</div>
+              </div>
+              <div class="step">
+                <strong>Step 2</strong>
+                <div>Go to Profile or Settings and tap <strong>Delete Account</strong>.</div>
+              </div>
+              <div class="step">
+                <strong>Step 3</strong>
+                <div>Confirm the request to permanently delete your account.</div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <h2 class="card-title">Who can use this</h2>
+            <ul class="info-list">
+              <li class="info-item"><i class="ri-user-3-line" aria-hidden="true"></i><span>Buyers and vendors can request deletion.</span></li>
+              <li class="info-item"><i class="ri-lock-2-line" aria-hidden="true"></i><span>We verify ownership before processing any request.</span></li>
+              <li class="info-item"><i class="ri-time-line" aria-hidden="true"></i><span>Typical completion: within 30 days of confirmation.</span></li>
+              <li class="info-item"><i class="ri-mail-send-line" aria-hidden="true"></i><span>Need help? Use the request form below.</span></li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="grid two" style="margin-top: 28px;">
+        <div class="card glass-card fade-up">
+          <h2 class="card-title">Submit a deletion request</h2>
+          <p class="form-note">Fill in the details below and we will email you to confirm ownership before deleting your account.</p>
+          <form class="form-layout" id="deletionForm" novalidate>
+            <div class="form-group">
+              <label for="email">Account email</label>
+              <input type="email" id="email" name="email" autocomplete="email" placeholder="you@example.com" required />
+            </div>
+            <div class="form-group">
+              <label for="reason">Reason for deletion (optional)</label>
+              <textarea id="reason" name="reason" placeholder="Tell us why you want to delete your account."></textarea>
+            </div>
+            <div class="form-actions">
+              <button class="btn-primary" type="button" id="requestBtn">Generate Email Request</button>
+              <a class="btn-outline" href="mailto:support@yustam.com.ng?subject=Account%20deletion%20request" aria-label="Email support">Email support directly</a>
+              <span class="status-message" id="statusMessage"><i class="ri-checkbox-circle-line" aria-hidden="true"></i>Email draft created.</span>
+            </div>
+          </form>
+        </div>
+
+        <div class="card glass-card fade-up">
+          <h2 class="card-title">What happens after you request deletion</h2>
+          <ul class="info-list">
+            <li class="info-item"><i class="ri-shield-check-line" aria-hidden="true"></i><span>We confirm account ownership via email or phone.</span></li>
+            <li class="info-item"><i class="ri-shut-down-line" aria-hidden="true"></i><span>Your account is deactivated immediately after confirmation.</span></li>
+            <li class="info-item"><i class="ri-database-2-line" aria-hidden="true"></i><span>Personal data is deleted from active systems within 30 days.</span></li>
+            <li class="info-item"><i class="ri-archive-line" aria-hidden="true"></i><span>Backups are overwritten within 90 days unless legally required.</span></li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="grid two" style="margin-top: 28px;">
+        <div class="card glass-card fade-up">
+          <h2 class="card-title">Data that will be deleted</h2>
+          <ul class="info-list">
+            <li class="info-item"><i class="ri-check-line" aria-hidden="true"></i><span>Profile details such as name, photo, and contact info.</span></li>
+            <li class="info-item"><i class="ri-check-line" aria-hidden="true"></i><span>Saved items, listings, storefront data, and chat history.</span></li>
+            <li class="info-item"><i class="ri-check-line" aria-hidden="true"></i><span>Support tickets and in-app preferences.</span></li>
+          </ul>
+        </div>
+        <div class="card glass-card fade-up">
+          <h2 class="card-title">Data we may retain</h2>
+          <ul class="info-list">
+            <li class="info-item"><i class="ri-information-line" aria-hidden="true"></i><span>Transaction records required for tax, audit, or legal compliance.</span></li>
+            <li class="info-item"><i class="ri-information-line" aria-hidden="true"></i><span>Dispute and fraud prevention records tied to completed orders.</span></li>
+            <li class="info-item"><i class="ri-information-line" aria-hidden="true"></i><span>Minimal identifiers to honor opt-out and deletion requests.</span></li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="cta-card fade-up" style="margin-top: 28px;">
+        <h3>Need more help?</h3>
+        <p>Our support team can guide you through the process or verify your identity if you cannot access the app.</p>
+        <div class="cta-links">
+          <a href="contact.html#support-form">Contact support</a>
+          <a href="privacy.html">Privacy policy</a>
+          <a href="help.html">Help center</a>
+        </div>
+      </section>
+
+      <footer>
+        © 2025 YUSTAM Marketplace. Account deletion support for Google Play compliance.
+      </footer>
+    </div>
+  </main>
+
+  <script src="account-deletion.js"></script>
+</body>
+</html>
